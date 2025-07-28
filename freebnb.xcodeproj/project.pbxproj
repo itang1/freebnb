@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FC38E38B2E382811000906CA /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = FC38E3892E382803000906CA /* .gitignore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		FC3EE6C52E3360EE004B2E1B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		FC38E3892E382803000906CA /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		FC3EE6B62E3360ED004B2E1B /* freebnb.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = freebnb.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC3EE6C42E3360EE004B2E1B /* freebnbTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = freebnbTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC3EE6CE2E3360EE004B2E1B /* freebnbUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = freebnbUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -79,6 +84,7 @@
 				FC3EE6C72E3360EE004B2E1B /* freebnbTests */,
 				FC3EE6D12E3360EE004B2E1B /* freebnbUITests */,
 				FC3EE6B72E3360ED004B2E1B /* Products */,
+				FC38E3892E382803000906CA /* .gitignore */,
 			);
 			sourceTree = "<group>";
 		};
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FC38E38B2E382811000906CA /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
