@@ -93,55 +93,56 @@ struct HomeCard: View {
                     }
 
                     Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundColor(.black)
 
                     // Icons section (split in two rows if needed)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             if listing.hasWifi {
-                                IconView(systemName: "wifi.circle", color: .black)
+                                IconView(systemName: "wifi.square.fill", color: .indigo)
                             }
                             if listing.hasTV {
-                                IconView(systemName: "tv.circle", color: .blue)
+                                IconView(systemName: "tv", color: .indigo)
                             }
                             if listing.hasKitchen {
-                                IconView(systemName: "fork.knife.circle", color: .green)
+                                IconView(systemName: "stove", color: .indigo)
                             }
                             if listing.hasMicrowave {
-                                IconView(systemName: "microwave.circle", color: .orange)
+                                IconView(systemName: "microwave.fill", color: .indigo)
                             }
                             if listing.hasFridgeSpace {
-                                IconView(systemName: "cube.box.fill", color: .cyan)
+                                IconView(systemName: "carrot", color: .indigo)
                             }
                             if listing.hasAC {
-                                IconView(systemName: "wind.circle", color: .mint)
+                                IconView(systemName: "wind.snow", color: .indigo)
                             }
                             if listing.hasHeating {
-                                IconView(systemName: "flame.circle", color: .red)
+                                IconView(systemName: "heat.waves", color: .indigo)
                             }
                         }
 
                         HStack(spacing: 8) {
                             if listing.petsAllowed {
-                                IconView(systemName: "pawprint.circle", color: .brown)
+                                IconView(systemName: "pawprint.fill", color: .blue)
                             }
                             if listing.kidsAllowed {
-                                IconView(systemName: "figure.2.circle", color: .pink)
+                                IconView(systemName: "figure.and.child.holdinghands", color: .blue)
                             }
                             if listing.hasPrivateGuestBathroom {
-                                IconView(systemName: "toilet.circle", color: .blue)
+                                IconView(systemName: "toilet.fill", color: .blue)
                             }
                             if listing.hasInUnitLaundry {
-                                IconView(systemName: "washer.circle", color: .indigo)
-                            } else if listing.hasCoinLaundry {
-                                IconView(systemName: "dollarsign.circle", color: .gray)
+                                IconView(systemName: "washer.fill", color: .blue)
+                            }
+                            if listing.hasCoinLaundry {
+                                IconView(systemName: "washer.fill", color: .blue)
                             }
                             if listing.providesPillows {
-                                IconView(systemName: "pillow", color: .teal)
+                                IconView(systemName: "bed.double", color: .blue)
                             }
                             if listing.providesTowels {
-                                IconView(systemName: "drop.circle", color: .blue)
+                                IconView(systemName: "shower.fill", color: .blue)
                             }
                         }
                     }
