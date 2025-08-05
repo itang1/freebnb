@@ -12,7 +12,7 @@ struct FeatureCard: View {
     let description: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 20) {
+        HStack(alignment: .top, spacing: 40) {
             ZStack {
                 Rectangle()
                     .fill(Color.clear)

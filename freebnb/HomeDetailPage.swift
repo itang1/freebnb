@@ -26,24 +26,45 @@ struct HomeDetailPage: View {
                     .font(.body)
                     .foregroundColor(.secondary)
                 
+                Spacer(minLength: 10)
+
                 Text("Details")
                     .font(.headline)
                 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Rooms: \(home.numRooms)")
-                    Text("Guests: \(home.maxGuests)")
-                    Text("Pet Friendly: \(home.isPetFriendly ? "Yes" : "No")")
-                    Text("Private Guest Bathroom: \(home.hasGuestBathroom ? "Yes" : "No")")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Guest Rooms: \(home.numGuestRooms)")
+                    Text("Max Guests: \(home.maxGuests)")
+                    Text("Max Stay: \(home.maxStayLengthDays) night\(home.maxStayLengthDays == 1 ? "" : "s")")
+                    Text("Kids Allowed: \(home.kidsAllowed ? "Yes" : "No")")
+                    Text("Pets Allowed: \(home.petsAllowed ? "Yes" : "No")")
+                    Text("Pets on Premises: \(home.petsOnPremises ? "Yes" : "No")")
+                    Text("Private Guest Bathroom: \(home.hasPrivateGuestBathroom ? "Yes" : "No")")
                     Text("In-unit Laundry: \(home.hasInUnitLaundry ? "Yes" : "No")")
+                    Text("Coin Laundry Nearby: \(home.hasCoinLaundry ? "Yes" : "No")")
+                    Text("Air Conditioning: \(home.hasAC ? "Yes" : "No")")
+                    Text("Heating: \(home.hasHeating ? "Yes" : "No")")
+                    Text("Kitchen: \(home.hasKitchen ? "Yes" : "No")")
+                    Text("Fridge Space: \(home.hasFridgeSpace ? "Yes" : "No")")
+                    Text("TV: \(home.hasTV ? "Yes" : "No")")
+                    Text("Wifi: \(home.hasWifi ? "Yes" : "No")")
+                    Text("Microwave: \(home.hasMicrowave ? "Yes" : "No")")
+                    Text("Pillows Provided: \(home.providesPillows ? "Yes" : "No")")
+                    Text("Blankets Provided: \(home.providesBlankets ? "Yes" : "No")")
+                    Text("Towels Provided: \(home.providesTowels ? "Yes" : "No")")
+                    Text("Toiletries Provided: \(home.providesToiletries ? "Yes" : "No")")
                 }
                 .font(.subheadline)
                 
+                
                 if let description = home.description, !description.isEmpty {
-                    Text(description)
-                        .padding(.top, 10)
+                        Spacer(minLength: 10)
+                        Text("Memo")
+                            .bold(true)
+                        Text(description)
                 }
                 
                 if isLoaded {
+                    Spacer(minLength: 10)
                     Map(initialPosition: .region(region)) {
                         ForEach(mapItems, id: \.self) { item in
                             Marker(item.name ?? "Location", coordinate: item.placemark.coordinate)
@@ -99,5 +120,5 @@ struct HomeDetailPage: View {
 
 
 #Preview {
-    HomeDetailPage(home: sampleData.first!)
+    HomeDetailPage(home: sampleData.last!)
 }

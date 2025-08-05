@@ -17,13 +17,13 @@ struct HomesPage: View {
     var filteredListings: [Home] {
         var result = listings
 
-        if selectedFilter == "Pet Friendly" {
-            result = result.filter { $0.isPetFriendly }
+        if selectedFilter == "Pets Allowed" {
+            result = result.filter { $0.petsAllowed }
         }
 
         switch selectedSort {
-        case "Most Rooms":
-            return result.sorted { $0.numRooms > $1.numRooms }
+        case "Most Guest Rooms":
+            return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
         case "Most Guests":
             return result.sorted { $0.maxGuests > $1.maxGuests }
         default:
