@@ -22,21 +22,18 @@ struct HomesPage: View {
         }
 
         switch selectedSort {
-        case "Most Guest Rooms":
-            return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
-        case "Most Guests":
-            return result.sorted { $0.maxGuests > $1.maxGuests }
-        default:
-            return result
+            case "Most Rooms":
+                return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
+            case "Most Guests":
+                return result.sorted { $0.maxGuests > $1.maxGuests }
+            default:
+                return result
         }
     }
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Available FreeBNBs")
-                .font(.title)
-                .fontWeight(.semibold)
-
+            // Sort and Filter
             HStack {
                 Menu("Filter: \(selectedFilter)") {
                     Button("All", action: { selectedFilter = "All" })
@@ -50,8 +47,9 @@ struct HomesPage: View {
                 }
             }
 
+            // Listings
             ScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: 15) {
                     ForEach(filteredListings) { listing in
                         Button {
                             onSelectHome(listing)
@@ -61,10 +59,10 @@ struct HomesPage: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding()
             }
         }
         .padding()
+        .background(.creamWhite)
         .navigationTitle("Available FreeBNBs")
     }
 }

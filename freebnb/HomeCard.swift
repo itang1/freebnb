@@ -70,33 +70,48 @@ struct Home: Identifiable, Hashable, Equatable {
 }
 
 
-
 struct HomeCard: View {
     let listing: Home
 
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
+                // House icon
                 Image(systemName: "house.circle")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 50, height: 50)
                     .padding(.trailing, 8)
+                    .foregroundColor(.coralPink)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 10) {
+                    
+                    // Name and Location
+                    HStack(spacing: 4) {
                         Text(listing.hostName)
                             .font(.headline)
-                        Text(" | \(listing.address.city), \(listing.address.state)")
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .layoutPriority(1)
+                        
+                        Text(" | ")
                             .font(.headline)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
+                        
+                        Text("\(listing.address.city), \(listing.address.state)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .layoutPriority(0)
                     }
-
+                    
+                    // Guest count
                     Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")")
                         .font(.subheadline)
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
 
-                    // Icons section (split in two rows if needed)
+                    // Icons
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             if listing.hasWifi {
@@ -153,10 +168,10 @@ struct HomeCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 12)
-                .foregroundStyle(.tint)
-                .opacity(0.25)
-                .brightness(-0.1)
+                .fill(Color.skyBlue)
+                .opacity(0.5)
         }
+
     }
 }
 
@@ -173,5 +188,5 @@ struct IconView: View {
 }
 
 #Preview {
-    HomeCard(listing: sampleData.last!)
+    HomeCard(listing: sampleData.randomElement()!)
 }

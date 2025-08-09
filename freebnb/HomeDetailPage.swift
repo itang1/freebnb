@@ -81,8 +81,8 @@ struct HomeDetailPage: View {
                     Text("Open in Apple Maps")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
+                        .background(.mintGreen)
+                        .flippedPrimaryColor()
                         .cornerRadius(10)
                 }
             }
@@ -100,7 +100,9 @@ struct HomeDetailPage: View {
             }
         }
         .navigationTitle(home.hostName)
+        .background(Color.creamWhite)
     }
+    
     
     func openInMaps() {
         guard let coordinate = mapItems.first?.placemark.coordinate else { return }
@@ -120,5 +122,5 @@ struct HomeDetailPage: View {
 
 
 #Preview {
-    HomeDetailPage(home: sampleData.last!)
+    HomeDetailPage(home: sampleData.randomElement()!)
 }

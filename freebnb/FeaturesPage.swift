@@ -12,7 +12,7 @@ struct FeatureCard: View {
     let description: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 40) {
+        HStack(alignment: .top, spacing: 35) {
             ZStack {
                 Rectangle()
                     .fill(Color.clear)
@@ -22,7 +22,7 @@ struct FeatureCard: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 40, height: 40)
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(.primary)
             }
             .frame(width: 60, height: 60)
 
@@ -42,22 +42,26 @@ struct FeaturesPage: View {
     var body: some View {
         VStack {
             ScrollView {
-                VStack(spacing: 30) {
+                VStack(spacing: 35) {
                     FeatureCard(
                         iconName: "figure.ice.skating",
                         description: "Hosts can mark when their guest room is available. Set limits for stay length, number of guests, etc."
                     )
                     FeatureCard(
                         iconName: "figure.outdoor.rowing",
-                        description: "Guests can see where their loved ones are. Browse available stays from people you know, and request one in just a few taps."
+                        description: "Guests can browse available stays. Request one in just a few taps."
                     )
                     FeatureCard(
                         iconName: "ruler",
-                        description: "View photos, room descriptions, amenities, and house rules before you stay."
+                        description: "View photos, room descriptions, amenities, and house rules."
                     )
                     FeatureCard(
                         iconName: "person.badge.shield.checkmark",
                         description: "Your listing is only visible to people you've approved."
+                    )
+                    FeatureCard(
+                        iconName: "bell.fill",
+                        description: "Set simple reminders to visit friends or reconnect with people you haven’t seen in a while."
                     )
                     FeatureCard(
                         iconName: "heart.slash.circle",
@@ -65,27 +69,27 @@ struct FeaturesPage: View {
                     )
                 }
                 .frame(maxWidth: 600)
-                .padding(40)
+                .padding(50)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
 
             Button(action: {
-                print("View Listings tapped!")
                 onViewListings()
             }) {
                 Text("View Listings")
                     .font(.headline)
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color.accentColor)
-                    .foregroundColor(.white)
+                    .background(.mintGreen)
+                    .flippedPrimaryColor()
                     .cornerRadius(12)
                     .padding(.horizontal)
+                    .padding(.bottom, 20)
             }
 
-            Spacer(minLength: 60)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.creamWhite)
         .navigationTitle("Features")
     }
 }
