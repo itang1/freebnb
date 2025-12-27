@@ -107,7 +107,7 @@ struct HomeCard: View {
                     }
                     
                     // Guest count
-                    Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")")
+                    Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s"), \(listing.maxStayLengthDays) days max")
                         .font(.subheadline)
                         .foregroundColor(.primary)
 
