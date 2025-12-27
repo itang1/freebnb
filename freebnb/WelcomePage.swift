@@ -32,14 +32,14 @@ struct WelcomePage: View {
                         .multilineTextAlignment(.center)
                     
                     Text("The guest rooms of people you know")
-                        .font(.subheadline)
+                        .font(.headline)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     
                     Image(systemName: "house.lodge.fill")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 200, height: 200)
+                        .frame(width: 250, height: 200)
                         .symbolRenderingMode(.palette)
                         .foregroundColor(.mintGreen)
                 }

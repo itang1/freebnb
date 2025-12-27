@@ -4,17 +4,18 @@
 //
 //  Created by Irene Tang on 7/25/25.
 //
-// Shows a list of Home listings. Lets the user filter them. Lets the user sort them. Tells its parent which home was tapped.
+//  Shows a list of Home listings. Lets the user filter them. Lets the user sort them. Tells its parent which home was tapped.
 
 
 import SwiftUI
 
-// Represents all possible filters. Each case is one filter option, and its string is the value that gets shown in the UI
+// Represents all possible filters
 enum HomeFilter: String, CaseIterable, Identifiable {
+    case hasWifi = "Has Wifi"
     case petsAllowed = "Pets Allowed"
     case privateGuestRoom = "Private Guest Room"
+    case inUnitLaundry = "In-unit Laundry"
 
-    // creates an id because ForEach needs each item to be uniquely identifiaale
     var id: String { rawValue }
 }
 
@@ -26,29 +27,33 @@ struct HomesPage: View {
     var listings: [Home]
     var onSelectHome: (Home) -> Void
 
-    // Set of filters
     var filteredListings: [Home] {
         var result = listings
 
         // Apply filters
+        if selectedFilters.contains(.hasWifi) {
+            result = result.filter { $0.hasWifi }
+        }
         if selectedFilters.contains(.petsAllowed) {
             result = result.filter { $0.petsAllowed }
         }
-
         if selectedFilters.contains(.privateGuestRoom) {
             result = result.filter { $0.numGuestRooms > 0 }
         }
-
+        if selectedFilters.contains(.inUnitLaundry) {
+            result = result.filter { $0.hasInUnitLaundry }
+        }
+        
         // Apply sorting
         switch selectedSort {
-        case "Most Rooms":
-            return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
-        case "Most Guests":
-            return result.sorted { $0.maxGuests > $1.maxGuests }
-        case "Most Days":
-            return result.sorted { $0.maxStayLengthDays > $1.maxStayLengthDays }
-        default:
-            return result
+            case "Most Days":
+                return result.sorted { $0.maxStayLengthDays > $1.maxStayLengthDays }
+            case "Most Guests":
+                return result.sorted { $0.maxGuests > $1.maxGuests }
+            case "Most Rooms":
+                return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
+            default:
+                return result
         }
     }
 
@@ -56,7 +61,7 @@ struct HomesPage: View {
         VStack(spacing: 20) {
 
             HStack {
-                // Filter Menu
+                // Display the Filter Menu
                 Menu {
                     ForEach(HomeFilter.allCases) { filter in
                         Button {
@@ -79,17 +84,33 @@ struct HomesPage: View {
                     Text(filterLabel)
                 }
 
-                // Sort Menu
+                // Display the Sort Menu
                 Menu("Sort: \(selectedSort)") {
                     Button("Default") { selectedSort = "Default" }
                     Button("Most Rooms") { selectedSort = "Most Rooms" }
                     Button("Most Guests") { selectedSort = "Most Guests" }
                     Button("Most Days") { selectedSort = "Most Days" }
                 }
+                
+            }
+            
+            // Display the selected filters
+            if !selectedFilters.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        ForEach(Array(selectedFilters)) { filter in
+                            Text(filter.rawValue)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.gray.opacity(0.2))
+                                .cornerRadius(20)
+                        }
+                    }
+                }
             }
 
-            // Display the listings
             ScrollView {
+                // Display the listings
                 LazyVStack(spacing: 15) {
                     ForEach(filteredListings) { listing in
                         Button {
@@ -100,6 +121,12 @@ struct HomesPage: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
+                
+                // Display a message if there are no matching listings
+                if filteredListings.isEmpty {
+                    Text("No homes match your filters")
+                        .multilineTextAlignment(.center)
+                }
             }
         }
         .padding()
@@ -107,7 +134,7 @@ struct HomesPage: View {
         .navigationTitle("Available FreeBNBs")
     }
 
-    // Toggle the filter
+    // Helper function to toggle the filter
     private func toggleFilter(_ filter: HomeFilter) {
         if selectedFilters.contains(filter) {
             selectedFilters.remove(filter)
@@ -116,10 +143,11 @@ struct HomesPage: View {
         }
     }
 
+    // Helper function to display how many filters are applied
     private var filterLabel: String {
         selectedFilters.isEmpty
-            ? "Filter: All"
-            : "Filter: \(selectedFilters.count)"
+            ? "Filters: None"
+            : "Filters: \(selectedFilters.count)"
     }
 }
 
