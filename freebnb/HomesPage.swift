@@ -9,20 +9,43 @@
 
 import SwiftUI
 
-// Represents all possible filters
-enum HomeFilter: String, CaseIterable, Identifiable {
+// All possible filter options
+enum FilterOption: String, CaseIterable, Identifiable {
     case hasWifi = "Has Wifi"
     case petsAllowed = "Pets Allowed"
     case privateGuestRoom = "Private Guest Room"
     case inUnitLaundry = "In-unit Laundry"
 
     var id: String { rawValue }
+    
+    func applies(to home: Home) -> Bool {
+        switch self {
+        case .petsAllowed:
+            return home.petsAllowed
+        case .privateGuestRoom:
+            return home.numGuestRooms > 0
+        case .hasWifi:
+            return home.hasWifi
+        case .inUnitLaundry:
+            return home.hasInUnitLaundry
+        }
+    }
+}
+
+// All possible sort options
+enum SortOption: String, CaseIterable, Identifiable {
+    case `default` = "Default"
+    case mostRooms = "Most Rooms"
+    case mostGuests = "Most Guests"
+    case mostDays = "Most Days"
+
+    var id: String { rawValue }
 }
 
 // View to define a new SwiftUI screen
 struct HomesPage: View {
-    @State private var selectedSort = "Default"
-    @State private var selectedFilters: Set<HomeFilter> = []
+    @State private var selectedFilters: Set<FilterOption> = []
+    @State private var selectedSort: SortOption = .default
 
     var listings: [Home]
     var onSelectHome: (Home) -> Void
@@ -31,29 +54,20 @@ struct HomesPage: View {
         var result = listings
 
         // Apply filters
-        if selectedFilters.contains(.hasWifi) {
-            result = result.filter { $0.hasWifi }
-        }
-        if selectedFilters.contains(.petsAllowed) {
-            result = result.filter { $0.petsAllowed }
-        }
-        if selectedFilters.contains(.privateGuestRoom) {
-            result = result.filter { $0.numGuestRooms > 0 }
-        }
-        if selectedFilters.contains(.inUnitLaundry) {
-            result = result.filter { $0.hasInUnitLaundry }
+        for filter in selectedFilters {
+            result = result.filter { filter.applies(to: $0) }
         }
         
         // Apply sorting
         switch selectedSort {
-            case "Most Days":
-                return result.sorted { $0.maxStayLengthDays > $1.maxStayLengthDays }
-            case "Most Guests":
-                return result.sorted { $0.maxGuests > $1.maxGuests }
-            case "Most Rooms":
-                return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
-            default:
-                return result
+        case .mostDays:
+            return result.sorted { $0.maxStayLengthDays > $1.maxStayLengthDays }
+        case .mostGuests:
+            return result.sorted { $0.maxGuests > $1.maxGuests }
+        case .mostRooms:
+            return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
+        default:
+            return result
         }
     }
 
@@ -62,8 +76,8 @@ struct HomesPage: View {
 
             HStack {
                 // Display the Filter Menu
-                Menu {
-                    ForEach(HomeFilter.allCases) { filter in
+                Menu (filterLabel) {
+                    ForEach(FilterOption.allCases) { filter in
                         Button {
                             toggleFilter(filter)
                         } label: {
@@ -79,19 +93,17 @@ struct HomesPage: View {
                     Button("Clear Filters") {
                         selectedFilters.removeAll()
                     }
-
-                } label: {
-                    Text(filterLabel)
-                }
-
-                // Display the Sort Menu
-                Menu("Sort: \(selectedSort)") {
-                    Button("Default") { selectedSort = "Default" }
-                    Button("Most Rooms") { selectedSort = "Most Rooms" }
-                    Button("Most Guests") { selectedSort = "Most Guests" }
-                    Button("Most Days") { selectedSort = "Most Days" }
                 }
                 
+                Text("|")
+
+                // Display the Sort Menu
+                Menu ("Sort: \(selectedSort.rawValue)") {
+                    Button("Default") { selectedSort = .default }
+                    Button("Most Rooms") { selectedSort = .mostRooms }
+                    Button("Most Guests") { selectedSort = .mostGuests }
+                    Button("Most Days") { selectedSort = .mostDays }
+                }
             }
             
             // Display the selected filters
@@ -126,6 +138,7 @@ struct HomesPage: View {
                 if filteredListings.isEmpty {
                     Text("No homes match your filters")
                         .multilineTextAlignment(.center)
+                        .padding()
                 }
             }
         }
@@ -135,7 +148,7 @@ struct HomesPage: View {
     }
 
     // Helper function to toggle the filter
-    private func toggleFilter(_ filter: HomeFilter) {
+    private func toggleFilter(_ filter: FilterOption) {
         if selectedFilters.contains(filter) {
             selectedFilters.remove(filter)
         } else {
@@ -143,12 +156,13 @@ struct HomesPage: View {
         }
     }
 
-    // Helper function to display how many filters are applied
+    // Helper function to display the filter menu
     private var filterLabel: String {
         selectedFilters.isEmpty
             ? "Filters: None"
             : "Filters: \(selectedFilters.count)"
     }
+    
 }
 
 #Preview {
