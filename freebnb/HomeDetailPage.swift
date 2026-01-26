@@ -63,8 +63,12 @@ struct HomeDetailPage: View {
                         Text(description)
                 }
                 
+                Spacer(minLength: 10)
+                
+                Text("View on Map")
+                    .font(.headline)
+                
                 if isLoaded {
-                    Spacer(minLength: 10)
                     Map(initialPosition: .region(region)) {
                         ForEach(mapItems, id: \.self) { item in
                             Marker(item.name ?? "Location", coordinate: item.placemark.coordinate)
