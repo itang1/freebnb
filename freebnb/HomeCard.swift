@@ -24,15 +24,15 @@ enum SleepingSurface: String, Hashable {
 }
 
 struct Home: Identifiable, Hashable, Equatable {
-    // Unique identifier
+    // MARK: Unique identifier
     let id = UUID()
     
-    // Host and location
+    // MARK: Host and location
     var hostName: String
     var address: Address
     var description: String?
     
-    // Capacity
+    // MARK: Capacity
     var numGuestRooms: Int
     var maxGuests: Int
     var maxStayLengthDays: Int
@@ -41,7 +41,7 @@ struct Home: Identifiable, Hashable, Equatable {
     var petsAllowed: Bool
     var petsOnPremises: Bool
     
-    // Comfort and amenities
+    // MARK: Comfort and amenities
     var hasAC: Bool
     var hasHeating: Bool
     var hasKitchen: Bool
@@ -50,22 +50,37 @@ struct Home: Identifiable, Hashable, Equatable {
     var hasTV: Bool
     var hasWifi: Bool
     
-    // Other rooms
+    // MARK: Other rooms
     var hasPrivateGuestBathroom: Bool
     var parkingDetails: String
     var hasInUnitLaundry: Bool
     var hasCoinLaundry: Bool
     
-    // Provisions
+    // MARK: Provisions
     var providesPillows: Bool
     var providesBlankets: Bool
     var providesTowels: Bool
     var providesToiletries: Bool
     
     
-    // Function to  determine when two Home instances are considered equal
+    // Function to determine when two Home instances are considered equal
     static func == (lhs: Home, rhs: Home) -> Bool {
         return lhs.id == rhs.id
+    }
+}
+
+func AmenityRow(
+    isVisible: Bool,
+    @ViewBuilder content: () -> some View
+) -> some View {
+    Group {
+        if isVisible {
+            HStack(spacing: 8) {
+                content()
+            }
+        } else {
+            EmptyView()
+        }
     }
 }
 
@@ -85,7 +100,7 @@ struct HomeCard: View {
                     .foregroundColor(.coralPink)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    
+
                     // Name and Location
                     HStack(spacing: 4) {
                         Text(listing.hostName)
@@ -112,55 +127,90 @@ struct HomeCard: View {
                         .foregroundColor(.primary)
 
                     // Icons
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            if listing.hasWifi {
-                                IconView(systemName: "wifi.square.fill", color: .indigo)
+                    VStack(alignment: .leading, spacing: 10) {
+                        // MARK: Capacity
+                        AmenityRow(
+                            isVisible: listing.kidsAllowed ||
+                                       listing.petsAllowed ||
+                                       listing.petsOnPremises || listing.hasPrivateGuestBathroom ||
+                            listing.hasInUnitLaundry ||
+                            listing.hasCoinLaundry
+                        ) {
+                            if listing.kidsAllowed {
+                                IconView(systemName: "figure.2.and.child.holdinghands", color: .purple)
                             }
-                            if listing.hasTV {
-                                IconView(systemName: "tv", color: .indigo)
+                            if listing.petsAllowed {
+                                IconView(systemName: "pawprint.fill", color: .purple)
                             }
-                            if listing.hasKitchen {
-                                IconView(systemName: "stove", color: .indigo)
+                            if listing.petsOnPremises {
+                                IconView(systemName: "pet.carrier.fill", color: .purple)
                             }
-                            if listing.hasMicrowave {
-                                IconView(systemName: "microwave.fill", color: .indigo)
+                            if listing.hasPrivateGuestBathroom {
+                                IconView(systemName: "toilet.fill", color: .purple)
                             }
-                            if listing.hasFridgeSpace {
-                                IconView(systemName: "carrot", color: .indigo)
+                            if listing.hasInUnitLaundry {
+                                IconView(systemName: "washer.fill", color: .purple)
                             }
-                            if listing.hasAC {
-                                IconView(systemName: "wind.snow", color: .indigo)
-                            }
-                            if listing.hasHeating {
-                                IconView(systemName: "heat.waves", color: .indigo)
+                            if listing.hasCoinLaundry {
+                                IconView(systemName: "washer.circle.fill", color: .purple)
                             }
                         }
 
-                        HStack(spacing: 8) {
-                            if listing.petsAllowed {
-                                IconView(systemName: "pawprint.fill", color: .blue)
+                        // MARK: Comfort & Amenities
+                        AmenityRow(
+                            isVisible: listing.hasAC ||
+                                       listing.hasHeating ||
+                                       listing.hasKitchen ||
+                                       listing.hasFridgeSpace ||
+                                       listing.hasMicrowave ||
+                                       listing.hasTV ||
+                                       listing.hasWifi
+                        ) {
+                            if listing.hasAC {
+                                IconView(systemName: "snowflake", color: .blue)
                             }
-                            if listing.kidsAllowed {
-                                IconView(systemName: "figure.and.child.holdinghands", color: .blue)
+                            if listing.hasHeating {
+                                IconView(systemName: "heat.waves", color: .blue)
                             }
-                            if listing.hasPrivateGuestBathroom {
-                                IconView(systemName: "toilet.fill", color: .blue)
+                            if listing.hasKitchen {
+                                IconView(systemName: "stove", color: .blue)
                             }
-                            if listing.hasInUnitLaundry {
-                                IconView(systemName: "washer.fill", color: .blue)
+                            if listing.hasFridgeSpace {
+                                IconView(systemName: "refrigerator.fill", color: .blue)
                             }
-                            if listing.hasCoinLaundry {
-                                IconView(systemName: "washer.fill", color: .blue)
+                            if listing.hasMicrowave {
+                                IconView(systemName: "microwave.fill", color: .blue)
                             }
+                            if listing.hasTV {
+                                IconView(systemName: "tv.fill", color: .blue)
+                            }
+                            if listing.hasWifi {
+                                IconView(systemName: "wifi", color: .blue)
+                            }
+                        }
+
+                        // MARK: Provisions
+                        AmenityRow(
+                            isVisible: listing.providesPillows ||
+                                       listing.providesBlankets ||
+                                       listing.providesTowels ||
+                                       listing.providesToiletries
+                        ) {
                             if listing.providesPillows {
-                                IconView(systemName: "bed.double", color: .blue)
+                                IconView(systemName: "bed.double.fill", color: .green)
+                            }
+                            if listing.providesBlankets {
+                                IconView(systemName: "rectangle.portrait.and.arrow.right", color: .green)
                             }
                             if listing.providesTowels {
-                                IconView(systemName: "shower.fill", color: .blue)
+                                IconView(systemName: "shower.fill", color: .green)
+                            }
+                            if listing.providesToiletries {
+                                IconView(systemName: "bubbles.and.sparkles.fill", color: .green)
                             }
                         }
                     }
+
                 }
             }
         }
@@ -190,3 +240,4 @@ struct IconView: View {
 #Preview {
     HomeCard(listing: sampleData.randomElement()!)
 }
+
