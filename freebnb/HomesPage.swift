@@ -6,28 +6,45 @@
 //
 //  Shows a list of Home listings. Lets the user filter them. Lets the user sort them. Tells its parent which home was tapped.
 
+//  TODO: have a calendar availability and way to reserve, create user accounts
 
 import SwiftUI
 
 // All possible filter options
 enum FilterOption: String, CaseIterable, Identifiable {
     case hasWifi = "Has Wifi"
-    case petsAllowed = "Pets Allowed"
     case privateGuestRoom = "Private Guest Room"
+    case privateGuestBathroom = "Private Guest Bathroom"
+    case sleepingBed = "Guest has bed"
+    case petsAllowed = "Pets Allowed"
+    case petsOnPremises = "Pets On Premises"
     case inUnitLaundry = "In-unit Laundry"
-
+    case blanketsProvided = "Blankets provided"
+    case toiletriesProvided = "Toiletries provided"
+    
     var id: String { rawValue }
     
     func applies(to home: Home) -> Bool {
         switch self {
-        case .petsAllowed:
-            return home.petsAllowed
-        case .privateGuestRoom:
-            return home.numGuestRooms > 0
         case .hasWifi:
             return home.hasWifi
+        case .privateGuestRoom:
+            return home.numGuestRooms > 0
+        case .privateGuestBathroom:
+            return home.hasPrivateGuestBathroom
+        case .sleepingBed:
+            return home.hasWifi
+//            return home.sleepingArrangements.bed > 0
+        case .petsAllowed:
+            return home.petsAllowed
+        case .petsOnPremises:
+            return home.petsOnPremises
         case .inUnitLaundry:
             return home.hasInUnitLaundry
+        case .blanketsProvided:
+            return home.providesBlankets
+        case .toiletriesProvided:
+            return home.providesToiletries
         }
     }
 }
@@ -76,16 +93,21 @@ struct HomesPage: View {
 
             HStack {
                 // Display the Filter Menu
-                Menu (filterLabel) {
+                Menu(filterLabel) {
                     ForEach(FilterOption.allCases) { filter in
-                        Button {
-                            toggleFilter(filter)
-                        } label: {
-                            Label(
-                                filter.rawValue,
-                                systemImage: selectedFilters.contains(filter) ? "checkmark" : ""
+                        Toggle(
+                            filter.rawValue,
+                            isOn: Binding(
+                                get: { selectedFilters.contains(filter) },
+                                set: { isOn in
+                                    if isOn {
+                                        selectedFilters.insert(filter)
+                                    } else {
+                                        selectedFilters.remove(filter)
+                                    }
+                                }
                             )
-                        }
+                        )
                     }
 
                     Divider()
@@ -94,6 +116,9 @@ struct HomesPage: View {
                         selectedFilters.removeAll()
                     }
                 }
+                #if os(iOS) || os(tvOS) || os(visionOS)
+                .menuActionDismissBehavior(.disabled)
+                #endif
                 
                 Text("|")
 
