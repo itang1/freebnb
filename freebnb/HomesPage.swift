@@ -6,48 +6,78 @@
 //
 //  Shows a list of Home listings. Lets the user filter them. Lets the user sort them. Tells its parent which home was tapped.
 
-//  TODO: have a calendar availability and way to reserve, create user accounts
+//  TODO: have a calendar availability and way to reserve, create user accounts, store data securely, tips on being a great house guest
 
 import SwiftUI
 
 // All possible filter options
 enum FilterOption: String, CaseIterable, Identifiable {
-    case hasWifi = "Has Wifi"
-    case privateGuestRoom = "Private Guest Room"
-    case privateGuestBathroom = "Private Guest Bathroom"
-    case sleepingBed = "Guest has bed"
+    case guestRooms = "Guest has Private Room"
+    case kidsAllowed = "Kids Allowed"
     case petsAllowed = "Pets Allowed"
-    case petsOnPremises = "Pets On Premises"
+    case petsOnPremises = "Host has Pets"
+    case privateGuestBathroom = "Private Guest Bathroom"
     case inUnitLaundry = "In-unit Laundry"
-    case blanketsProvided = "Blankets provided"
-    case toiletriesProvided = "Toiletries provided"
+    case coinLaundryNearby = "Coin Laundry Nearby"
+    case airConditioning = "Air Conditioning"
+    case heating = "Heating"
+    case kitchen = "Kitchen"
+    case fridgeSpace = "Fridge Space"
+    case tv = "TV"
+    case wifi = "Wifi"
+    case microwave = "Microwave"
+    case sleepingBed = "Guest has Bed"
+    case pillowsProvided = "Pillows Provided"
+    case blanketsProvided = "Blankets Provided"
+    case towelsProvided = "Towels Provided"
+    case toiletriesProvided = "Toiletries Provided"
     
     var id: String { rawValue }
     
     func applies(to home: Home) -> Bool {
         switch self {
-        case .hasWifi:
-            return home.hasWifi
-        case .privateGuestRoom:
+        case .guestRooms:
             return home.numGuestRooms > 0
-        case .privateGuestBathroom:
-            return home.hasPrivateGuestBathroom
-        case .sleepingBed:
-            return home.hasWifi
-//            return home.sleepingArrangements.bed > 0
+        case .kidsAllowed:
+            return home.kidsAllowed
         case .petsAllowed:
             return home.petsAllowed
         case .petsOnPremises:
             return home.petsOnPremises
+        case .privateGuestBathroom:
+            return home.hasPrivateGuestBathroom
         case .inUnitLaundry:
             return home.hasInUnitLaundry
+        case .coinLaundryNearby:
+            return home.hasCoinLaundry
+        case .airConditioning:
+            return home.hasAC
+        case .heating:
+            return home.hasHeating
+        case .kitchen:
+            return home.hasKitchen
+        case .fridgeSpace:
+            return home.hasFridgeSpace
+        case .tv:
+            return home.hasTV
+        case .wifi:
+            return home.hasWifi
+        case .microwave:
+            return home.hasMicrowave
+        case .sleepingBed:
+            return (home.sleepingArrangements[.bed] ?? 0) > 0
+        case .pillowsProvided:
+            return home.providesPillows
         case .blanketsProvided:
             return home.providesBlankets
+        case .towelsProvided:
+            return home.providesTowels
         case .toiletriesProvided:
             return home.providesToiletries
         }
     }
 }
+
 
 // All possible sort options
 enum SortOption: String, CaseIterable, Identifiable {
@@ -58,6 +88,7 @@ enum SortOption: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 }
+
 
 // View to define a new SwiftUI screen
 struct HomesPage: View {

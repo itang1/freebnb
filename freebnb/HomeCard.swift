@@ -219,7 +219,7 @@ struct HomeCard: View {
         .background {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.skyBlue)
-                .opacity(0.5)
+//                .opacity(0.5)
         }
 
     }
