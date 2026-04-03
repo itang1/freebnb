@@ -19,7 +19,7 @@ struct AboutPage: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 80, height: 80)
-                            .foregroundColor(.mintGreen)
+                            .foregroundColor(.appTeal)
 
                         Text("FreeBNB")
                             .font(.title)
@@ -47,7 +47,7 @@ struct AboutPage: View {
                 // How it started
                 SectionBlock(
                     title: "How It Started",
-                    text: "We kept running into the same problem: some want to travel and others want to be visited, but trips never got off the ground. High lodging costs, the fear of being a burden, the awkwardness of asking, not knowing who's actually open to connecting—it is all discouraging. FreeBNB fixes that by showing you exactly who in your circle is ready to host or travel, so \"we should hang out sometime\" finally becomes \"go book your flight.\""
+                    text: "We kept running into the same problem: some want to travel and others want to be visited, but trips never got off the ground. High lodging costs, the fear of being a burden, the awkwardness of asking, not knowing who's actually open to connecting—all of that is discouraging. FreeBNB fixes that by showing you exactly who in your circle is ready to host or travel, so \"we should hang out sometime\" finally becomes \"go book your flight.\""
                 )
 
                 // Why free

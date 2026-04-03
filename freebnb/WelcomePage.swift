@@ -41,7 +41,7 @@ struct WelcomePage: View {
                         .scaledToFit()
                         .frame(width: 250, height: 200)
                         .symbolRenderingMode(.palette)
-                        .foregroundColor(.mintGreen)
+                        .foregroundStyle(Color("AppTeal"))
                 }
                 
                 Spacer()
@@ -51,7 +51,7 @@ struct WelcomePage: View {
                         .font(.headline)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Color.mintGreen)
+                        .background(Color("Coral"))
                         .flippedPrimaryColor()
                         .cornerRadius(12)
                         .padding(.horizontal)

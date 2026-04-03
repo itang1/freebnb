@@ -85,7 +85,7 @@ struct HomeDetailPage: View {
                     Text("Open in Apple Maps")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(.mintGreen)
+                        .background(Color("Coral"))
                         .flippedPrimaryColor()
                         .cornerRadius(10)
                 }

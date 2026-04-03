@@ -170,7 +170,7 @@ struct HomesPage: View {
                             Text(filter.rawValue)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.gray.opacity(0.2))
+                                .background(Color.appTeal.opacity(0.2))
                                 .cornerRadius(20)
                         }
                     }
@@ -198,7 +198,7 @@ struct HomesPage: View {
                 }
             }
         }
-        .padding()
+        .padding(30)
         .background(.creamWhite)
         .navigationTitle("Available FreeBNBs")
     }

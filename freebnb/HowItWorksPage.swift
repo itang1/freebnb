@@ -96,12 +96,12 @@ struct StepRow: View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(Color.mintGreen.opacity(0.2))
-                    .overlay(Circle().stroke(Color.black, lineWidth: 1))
+                    .fill(Color.appTeal.opacity(0.2))
+                    .overlay(Circle().stroke(Color.appTeal, lineWidth: 1))
                     .frame(width: 40, height: 40)
                 Text("\(number)")
                     .font(.headline)
-//                    .foregroundColor(.mintGreen)
+//                    .foregroundColor(.teal)
             }
             .padding(.top, 2)
 

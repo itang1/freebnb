@@ -22,7 +22,7 @@ struct FeatureCard: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 40, height: 40)
-                    .foregroundColor(.mintGreen)
+                    .foregroundColor(.appTeal)
             }
             .frame(width: 60, height: 60)
 

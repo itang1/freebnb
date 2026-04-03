@@ -72,7 +72,7 @@ struct GuestTipsPage: View {
                     HStack(alignment: .top, spacing: 14) {
                         Image(systemName: tip.icon)
                             .font(.title3)
-                            .foregroundColor(.mintGreen)
+                            .foregroundColor(.appTeal)
                             .frame(width: 30, alignment: .center)
                             .padding(.top, 2)
 
