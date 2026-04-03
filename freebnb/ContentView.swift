@@ -7,39 +7,37 @@
 
 import SwiftUI
 
-enum AppScreen: Hashable {
-    case welcome
-    case features
-    case homes
-    case homeDetail(Home)
-}
-
 struct ContentView: View {
-    @State private var path = NavigationPath()
+    @State private var showTabs = false
+    @State private var listingsPath = NavigationPath()
     let listings = sampleData
 
     var body: some View {
-        NavigationStack(path: $path) {
-            WelcomePage {
-                path.append(AppScreen.features)
-            }
-            .navigationDestination(for: AppScreen.self) { screen in
-                switch screen {
-                case .welcome:
-                    WelcomePage {
-                        path.append(AppScreen.features)
-                    }
-                case .features:
-                    FeaturesPage {
-                        path.append(AppScreen.homes)
-                    }
-                case .homes:
-                    HomesPage(listings: listings) { home in
-                        path.append(AppScreen.homeDetail(home))
-                    }
-                case .homeDetail(let home):
-                    HomeDetailPage(home: home)
+        if showTabs {
+            TabView {
+                NavigationStack {
+                    InfoPage()
                 }
+                .tabItem {
+                    Label("Info", systemImage: "book.fill")
+                }
+
+                NavigationStack(path: $listingsPath) {
+                    HomesPage(listings: listings) { home in
+                        listingsPath.append(home)
+                    }
+                    .navigationDestination(for: Home.self) { home in
+                        HomeDetailPage(home: home)
+                    }
+                }
+                .tabItem {
+                    Label("Listings", systemImage: "house")
+                }
+            }
+            .tint(.mintGreen)
+        } else {
+            WelcomePage {
+                showTabs = true
             }
         }
     }

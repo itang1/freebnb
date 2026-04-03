@@ -22,14 +22,13 @@ struct FeatureCard: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 40, height: 40)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.mintGreen)
             }
             .frame(width: 60, height: 60)
 
             Text(description)
                 .multilineTextAlignment(.leading)
-                .font(.body)
-                .foregroundColor(.primary)
+                .font(.subheadline)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cornerRadius(12)
@@ -37,8 +36,6 @@ struct FeatureCard: View {
 }
 
 struct FeaturesPage: View {
-    var onViewListings: () -> Void
-
     var body: some View {
         VStack {
             ScrollView {
@@ -61,7 +58,7 @@ struct FeaturesPage: View {
                     )
                     FeatureCard(
                         iconName: "bell.fill",
-                        description: "Set simple reminders to visit friends or reconnect with people you haven’t seen in a while."
+                        description: "Set simple reminders to visit friends or reconnect with people you haven't seen in a while."
                     )
                     FeatureCard(
                         iconName: "heart.slash.circle",
@@ -69,22 +66,8 @@ struct FeaturesPage: View {
                     )
                 }
                 .frame(maxWidth: 600)
-                .padding(50)
+                .padding(30)
                 .frame(maxWidth: .infinity, alignment: .center)
-            }
-
-            Button(action: {
-                onViewListings()
-            }) {
-                Text("View Listings")
-                    .font(.headline)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(.mintGreen)
-                    .flippedPrimaryColor()
-                    .cornerRadius(12)
-                    .padding(.horizontal)
-                    .padding(.bottom, 20)
             }
 
         }
@@ -95,7 +78,7 @@ struct FeaturesPage: View {
 }
 
 #Preview {
-    FeaturesPage(onViewListings: {
-        print("Preview: onViewListings triggered")
-    })
+    NavigationStack {
+        FeaturesPage()
+    }
 }

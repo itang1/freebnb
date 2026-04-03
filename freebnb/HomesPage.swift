@@ -6,7 +6,7 @@
 //
 //  Shows a list of Home listings. Lets the user filter them. Lets the user sort them. Tells its parent which home was tapped.
 
-//  TODO: have a calendar availability and way to reserve, create user accounts, store data securely, tips on being a great house guest
+//  TODO: have a calendar availability and way to reserve, create user accounts, store data securely
 
 import SwiftUI
 
