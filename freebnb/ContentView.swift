@@ -34,7 +34,7 @@ struct ContentView: View {
                     Label("Listings", systemImage: "house")
                 }
             }
-            .tint(Color.appTeal)
+            .tint(Color("AppTeal"))
         } else {
             WelcomePage {
                 showTabs = true

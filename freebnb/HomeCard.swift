@@ -97,7 +97,7 @@ struct HomeCard: View {
                     .scaledToFit()
                     .frame(width: 50, height: 50)
                     .padding(.trailing, 8)
-                    .foregroundColor(.appTeal)
+                    .foregroundColor(Color("AppTeal"))
 
                 VStack(alignment: .leading, spacing: 10) {
 

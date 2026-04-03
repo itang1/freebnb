@@ -83,7 +83,7 @@ struct InfoCard: View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.title)
-                .foregroundColor(.appTeal)
+                .foregroundColor(Color("AppTeal"))
                 .frame(width: 44)
 
             VStack(alignment: .leading, spacing: 4) {

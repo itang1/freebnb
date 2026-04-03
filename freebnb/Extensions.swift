@@ -16,10 +16,6 @@ struct FlippedPrimaryColor: ViewModifier {
     }
 }
 
-extension Color {
-    static let appTeal = Color("AppTeal")
-}
-
 extension View {
     func flippedPrimaryColor() -> some View {
         self.modifier(FlippedPrimaryColor())

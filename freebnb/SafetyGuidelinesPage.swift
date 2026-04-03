@@ -62,7 +62,7 @@ struct SafetyGuidelinesPage: View {
                     HStack(alignment: .top, spacing: 14) {
                         Image(systemName: guideline.icon)
                             .font(.title3)
-                            .foregroundColor(.appTeal)
+                            .foregroundColor(Color("AppTeal"))
                             .frame(width: 30, alignment: .center)
                             .padding(.top, 2)
 
