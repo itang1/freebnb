@@ -6,7 +6,7 @@
 //
 //  Shows a list of Home listings. Lets the user filter them. Lets the user sort them. Tells its parent which home was tapped.
 
-//  TODO: have a calendar availability and way to reserve, create user accounts, store data securely, tips on being a great house guest
+//  TODO: refactor pets variable name, have a calendar availability and way to reserve, create user accounts, store data securely, tips on being a great house guest
 
 import SwiftUI
 
@@ -14,8 +14,8 @@ import SwiftUI
 enum FilterOption: String, CaseIterable, Identifiable {
     case guestRooms = "Guest has Private Room"
     case kidsAllowed = "Kids Allowed"
-    case petsAllowed = "Pets Allowed"
-    case petsOnPremises = "Host has Pets"
+    case petsOfGuests = "Guest May Bring Pets"
+    case petsHost = "Host has Pets"
     case privateGuestBathroom = "Private Guest Bathroom"
     case inUnitLaundry = "In-unit Laundry"
     case coinLaundryNearby = "Coin Laundry Nearby"
@@ -40,9 +40,9 @@ enum FilterOption: String, CaseIterable, Identifiable {
             return home.numGuestRooms > 0
         case .kidsAllowed:
             return home.kidsAllowed
-        case .petsAllowed:
+        case .petsOfGuests:
             return home.petsAllowed
-        case .petsOnPremises:
+        case .petsHost:
             return home.petsOnPremises
         case .privateGuestBathroom:
             return home.hasPrivateGuestBathroom
