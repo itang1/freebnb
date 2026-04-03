@@ -18,10 +18,6 @@ struct HomeDetailPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(home.hostName)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
                 Text("\(home.address.street), \(home.address.city), \(home.address.state) \(home.address.zip)")
                     .font(.body)
                     .foregroundColor(.secondary)

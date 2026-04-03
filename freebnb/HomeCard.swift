@@ -97,7 +97,7 @@ struct HomeCard: View {
                     .scaledToFit()
                     .frame(width: 50, height: 50)
                     .padding(.trailing, 8)
-                    .foregroundColor(Color("Coral"))
+                    .foregroundColor(.appTeal)
 
                 VStack(alignment: .leading, spacing: 10) {
 
@@ -197,16 +197,16 @@ struct HomeCard: View {
                                        listing.providesToiletries
                         ) {
                             if listing.providesPillows {
-                                IconView(systemName: "bed.double.fill", color: .appTeal)
+                                IconView(systemName: "bed.double.fill", color: Color("Coral"))
                             }
                             if listing.providesBlankets {
-                                IconView(systemName: "rectangle.portrait.and.arrow.right", color: .appTeal)
+                                IconView(systemName: "rectangle.portrait.and.arrow.right", color: Color("Coral"))
                             }
                             if listing.providesTowels {
-                                IconView(systemName: "shower.fill", color: .appTeal)
+                                IconView(systemName: "shower.fill", color: Color("Coral"))
                             }
                             if listing.providesToiletries {
-                                IconView(systemName: "bubbles.and.sparkles.fill", color: .appTeal)
+                                IconView(systemName: "bubbles.and.sparkles.fill", color: Color("Coral"))
                             }
                         }
                     }

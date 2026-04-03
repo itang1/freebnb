@@ -41,7 +41,7 @@ struct WelcomePage: View {
                         .scaledToFit()
                         .frame(width: 250, height: 200)
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(Color("AppTeal"))
+                        .foregroundStyle(.appTeal)
                 }
                 
                 Spacer()
