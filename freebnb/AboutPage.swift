@@ -35,43 +35,30 @@ struct AboutPage: View {
                 // Mission
                 SectionBlock(
                     title: "Our Mission",
-                    text: "Freebnb helps people stay connected across cities, time, and life changes. Completely free. No fees. No transactions. No pressure. Just people opening their doors to those they care about."
-                )
-
-                // What makes us different
-                SectionBlock(
-                    title: "A Different Kind of Platform",
-                    text: "Most platforms take. Freebnb gives. No fees. No commissions. No incentives to turn homes into businesses. Just a simple idea: if you have space, and someone you trust needs it, then you can help."
-                )
-
-                // How it started
-                SectionBlock(
-                    title: "How It Started",
-                    text: "We kept running into the same problem: some want to travel and others want to be visited, but trips never got off the ground. High lodging costs, the fear of being a burden, the awkwardness of asking, not knowing who's actually open to connecting—all of that is discouraging. FreeBNB fixes that by showing you exactly who in your circle is ready to host or travel, so \"we should hang out sometime\" finally becomes \"go book your flight.\""
+                    text: "Freebnb helps people stay connected across cities, time, and life changes. We support people opening their doors to those they care about, with no fees and no pressure."
                 )
 
                 // Why free
                 SectionBlock(
                     title: "Why Free?",
-                    text: "With hotels being expensive and short-term rental platforms requiring excessive fees, cost often prohibits us from visiting the people we love. Freebnb chips away at that barrier. Hosts share their space because they want to see you too, not because they want to profit."
-                )
-
-                // Values
-                SectionBlock(
-                    title: "What We Believe",
-                    text: "Generosity is contagious. A good guest becomes a great host. Community is built one spare room at a time. Business should bring people closer, not extract profit from them."
+                    text: "Some people want to travel, and others want to be visited. But with high lodging costs, the fear of being a burden, and the awkwardness of asking without knowing who's actually open to connecting, so many trips often don't happen.\n\nFreeBNB tears down this barrier by showing you exactly who in your circle is ready to host or travel, so that connections can happen without those discouragements."
                 )
                 
                 // Big Picture
                 SectionBlock(
-                    title: "The Bigger Idea",
-                    text: "We live in a world where people move constantly to new cities, new jobs, new chapters, new circles. Slowly, without realizing it, we lose touch. Freebnb is a way to reconnect and make the distance feel smaller. Turn scattered friendships back into real, living relationships."
+                    title: "A Fragmented Society",
+                    text: "In our current era, people are constantly moving to new cities, jobs, life stages, and circles—sometimes even every few years.\n\nWhile this nomadic lifestyle brings valuable exposure to different cultures and geographic terrains, it comes at a piercing cost: the abiltiy to build and maintain deep and lasting relationships with people who will, with time, know us fully to the core and walk through life with us.\n\nThis type of good community takes time and presence to build. It is a commitment that is at odds with a lifestyle of constant movement and surface-level interactions. We want to see you connect with the people who call you out when you’re making a mistak, hold your hand through struggles like grief, addiction, or failure, and celebrate with you in areas of wildest joy.\n\nBy simplifying travel and hosting, Freebnb increases the frequency of real-life interactions with loved ones, helping strengthen scattered acquaintenceships into real, thriving relationships."
                 )
                 
                 // Future Work
                 SectionBlock(
                     title: "Beyond Friends and Family (Coming Soon)",
-                    text: "Freebnb isn't just about personal networks. Soon, hosts will be able to offer their spaces to nonprofits, traveling volunteers, community groups, and people in need of temporary housing. Unused space can do real good, and we want to unlock that potential. We're actively exploring how to make that happen while staying true to our mission and values."
+                    text: "Freebnb will expand beyond personal networks. Soon, hosts will be able to offer their spaces (such as cabins, vacation homes, or anything in between) to nonprofits, traveling volunteers, community groups, and people in need of temporary housing."
+                )
+                
+                SectionBlock(
+                    title: "Equipment Share (Coming Soon)",
+                    text: "Freebnb will soon allow you to share items (like small appliances) with your local community. Similar to how you connect with people for stays, you’ll be able to see who’s open to lending or borrowing, making it easy to match with others and share what you have."
                 )
             }
             .frame(maxWidth: 600)
