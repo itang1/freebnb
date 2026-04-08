@@ -154,9 +154,10 @@ struct HomesPage: View {
     var body: some View {
         VStack(spacing: 20) {
 
+
             HStack {
-                // Display the Filter Menu with category sections
-                Menu(filterLabel) {
+                // Filter pill button
+                Menu {
                     ForEach(FilterCategory.allCases, id: \.self) { category in
                         Section(category.rawValue) {
                             ForEach(FilterOption.options(for: category)) { filter in
@@ -182,20 +183,60 @@ struct HomesPage: View {
                     Button("Clear Filters") {
                         selectedFilters.removeAll()
                     }
+                } label: {
+                    Label(filterLabel, systemImage: "line.3.horizontal.decrease")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.appTeal.opacity(0.15), in: Capsule())
+                        .foregroundColor(Color.appTeal)
                 }
                 #if os(iOS) || os(tvOS) || os(visionOS)
                 .menuActionDismissBehavior(.disabled)
                 #endif
 
-                Text("|")
-
-                // Display the Sort Menu
-                Menu("Sort: \(selectedSort.rawValue)") {
+                // Sort pill button
+                Menu {
                     Button("Default") { selectedSort = .default }
                     Button("Most Rooms") { selectedSort = .mostRooms }
                     Button("Most Guests") { selectedSort = .mostGuests }
                     Button("Most Days") { selectedSort = .mostDays }
+                } label: {
+                    Label(selectedSort == .default ? "Sort" : "Sort: \(selectedSort.rawValue)", systemImage: "arrow.up.arrow.down")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.appTeal.opacity(0.15), in: Capsule())
+                        .foregroundColor(Color.appTeal)
                 }
+                .transaction { t in t.animation = nil }
+
+                Spacer()
+            }
+
+            HStack {
+                if !selectedFilters.isEmpty || selectedSort != .default {
+                    Button {
+                        selectedFilters.removeAll()
+                        selectedSort = .default
+                    } label: {
+                        Label("Reset", systemImage: "arrow.counterclockwise")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                // Results count
+                let count = filteredListings.count
+                Text("\(count) home\(count == 1 ? "" : "s")")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
             }
 
             // Display the selected filters as wrapping chips
@@ -220,20 +261,6 @@ struct HomesPage: View {
                     }
                 }
             }
-
-            // Results count
-            HStack(spacing: 6) {
-                Image(systemName: "house.fill")
-                    .font(.caption)
-                    .foregroundColor(Color.appTeal)
-                
-                let count = filteredListings.count
-                Text("\(count) home\(count == 1 ? "" : "s") available")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity)
 
             ScrollView {
                 // Display the listings
@@ -298,8 +325,8 @@ struct HomesPage: View {
     // Helper to display the filter menu label
     private var filterLabel: String {
         selectedFilters.isEmpty
-            ? "Filters: None"
-            : "Filters: \(selectedFilters.count)"
+            ? "Filter"
+            : "Filter (\(selectedFilters.count))"
     }
     
 }
