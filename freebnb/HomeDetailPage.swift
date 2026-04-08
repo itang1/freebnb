@@ -24,30 +24,63 @@ struct HomeDetailPage: View {
                 
                 Spacer(minLength: 10)
 
+                // MARK: Details
                 Text("Details")
                     .font(.headline)
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Guest Rooms: \(home.numGuestRooms)")
                     Text("Max Guests: \(home.maxGuests)")
-                    Text("Max Stay: \(home.maxStayLengthDays) night\(home.maxStayLengthDays == 1 ? "" : "s")")
-                    Text("Kids Allowed: \(home.kidsAllowed ? "Yes" : "No")")
-                    Text("Guest Can Bring Pets: \(home.petsAllowed ? "Yes" : "No")")
-                    Text("Host Has Pets: \(home.petsOnPremises ? "Yes" : "No")")
-                    Text("Private Guest Bathroom: \(home.hasPrivateGuestBathroom ? "Yes" : "No")")
-                    Text("In-unit Laundry: \(home.hasInUnitLaundry ? "Yes" : "No")")
-                    Text("Coin Laundry Nearby: \(home.hasCoinLaundry ? "Yes" : "No")")
-                    Text("Air Conditioning: \(home.hasAC ? "Yes" : "No")")
-                    Text("Heating: \(home.hasHeating ? "Yes" : "No")")
-                    Text("Kitchen: \(home.hasKitchen ? "Yes" : "No")")
-                    Text("Fridge Space: \(home.hasFridgeSpace ? "Yes" : "No")")
-                    Text("TV: \(home.hasTV ? "Yes" : "No")")
-                    Text("Wifi: \(home.hasWifi ? "Yes" : "No")")
-                    Text("Microwave: \(home.hasMicrowave ? "Yes" : "No")")
-                    Text("Pillows Provided: \(home.providesPillows ? "Yes" : "No")")
-                    Text("Blankets Provided: \(home.providesBlankets ? "Yes" : "No")")
-                    Text("Towels Provided: \(home.providesTowels ? "Yes" : "No")")
-                    Text("Toiletries Provided: \(home.providesToiletries ? "Yes" : "No")")
+                    Text("Max Stay: \(home.maxStayDays) night\(home.maxStayDays == 1 ? "" : "s")")
+                }
+                .font(.subheadline)
+
+                // MARK: Guests & Space
+                Text("Guests & Space")
+                    .font(.headline)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    amenityRow("Kids Allowed", available: home.kidsAllowed)
+                    amenityRow("Guest Can Bring Pets", available: home.guestPetsAllowed)
+                    amenityRow("Host Has Pets", available: home.hostHasPets)
+                }
+                .font(.subheadline)
+
+                // MARK: Amenities
+                Text("Amenities")
+                    .font(.headline)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    amenityRow("Air Conditioning", available: home.hasAC)
+                    amenityRow("Heating", available: home.hasHeating)
+                    amenityRow("Kitchen", available: home.hasKitchen)
+                    amenityRow("Fridge Space", available: home.hasFridgeSpace)
+                    amenityRow("Microwave", available: home.hasMicrowave)
+                    amenityRow("TV", available: home.hasTV)
+                    amenityRow("Wifi", available: home.hasWifi)
+                }
+                .font(.subheadline)
+
+                // MARK: Rooms & Laundry
+                Text("Rooms & Laundry")
+                    .font(.headline)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    amenityRow("Private Guest Bathroom", available: home.hasPrivateGuestBathroom)
+                    amenityRow("In-unit Laundry", available: home.hasInUnitLaundry)
+                    amenityRow("Coin Laundry Nearby", available: home.hasCoinLaundryNearby)
+                }
+                .font(.subheadline)
+
+                // MARK: Provisions
+                Text("Provisions")
+                    .font(.headline)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    amenityRow("Pillows", available: home.providesPillows)
+                    amenityRow("Blankets", available: home.providesBlankets)
+                    amenityRow("Towels", available: home.providesTowels)
+                    amenityRow("Toiletries", available: home.providesToiletries)
                 }
                 .font(.subheadline)
                 
@@ -104,6 +137,15 @@ struct HomeDetailPage: View {
     }
     
     
+    private func amenityRow(_ label: String, available: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle")
+                .foregroundColor(available ? .green : .secondary.opacity(0.5))
+            Text(label)
+                .foregroundColor(available ? .primary : .secondary.opacity(0.5))
+        }
+    }
+
     func openInMaps() {
         guard let coordinate = mapItems.first?.placemark.coordinate else { return }
         let placemark = MKPlacemark(coordinate: coordinate)

@@ -35,11 +35,11 @@ struct Home: Identifiable, Hashable, Equatable {
     // MARK: Capacity
     var numGuestRooms: Int
     var maxGuests: Int
-    var maxStayLengthDays: Int
+    var maxStayDays: Int
     var sleepingArrangements: [SleepingSurface: Int]
     var kidsAllowed: Bool
-    var petsAllowed: Bool
-    var petsOnPremises: Bool
+    var guestPetsAllowed: Bool
+    var hostHasPets: Bool
     
     // MARK: Comfort and amenities
     var hasAC: Bool
@@ -54,7 +54,7 @@ struct Home: Identifiable, Hashable, Equatable {
     var hasPrivateGuestBathroom: Bool
     var parkingDetails: String
     var hasInUnitLaundry: Bool
-    var hasCoinLaundry: Bool
+    var hasCoinLaundryNearby: Bool
     
     // MARK: Provisions
     var providesPillows: Bool
@@ -122,27 +122,27 @@ struct HomeCard: View {
                     }
                     
                     // Guest count
-                    Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s"), \(listing.maxStayLengthDays) days max")
+                    Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s"), \(listing.maxStayDays) days max")
                         .font(.subheadline)
                         .foregroundColor(.primary)
 
                     // Icons
                     VStack(alignment: .leading, spacing: 10) {
-                        // MARK: Capacity
+                        // MARK: Guests, Space & Laundry
                         AmenityRow(
                             isVisible: listing.kidsAllowed ||
-                                       listing.petsAllowed ||
-                                       listing.petsOnPremises || listing.hasPrivateGuestBathroom ||
+                                       listing.guestPetsAllowed ||
+                                       listing.hostHasPets || listing.hasPrivateGuestBathroom ||
                             listing.hasInUnitLaundry ||
-                            listing.hasCoinLaundry
+                            listing.hasCoinLaundryNearby
                         ) {
                             if listing.kidsAllowed {
                                 IconView(systemName: "figure.2.and.child.holdinghands", color: .purple)
                             }
-                            if listing.petsAllowed {
+                            if listing.guestPetsAllowed {
                                 IconView(systemName: "pawprint.fill", color: .purple)
                             }
-                            if listing.petsOnPremises {
+                            if listing.hostHasPets {
                                 IconView(systemName: "pet.carrier.fill", color: .purple)
                             }
                             if listing.hasPrivateGuestBathroom {
@@ -151,7 +151,7 @@ struct HomeCard: View {
                             if listing.hasInUnitLaundry {
                                 IconView(systemName: "washer.fill", color: .purple)
                             }
-                            if listing.hasCoinLaundry {
+                            if listing.hasCoinLaundryNearby {
                                 IconView(systemName: "washer.circle.fill", color: .purple)
                             }
                         }

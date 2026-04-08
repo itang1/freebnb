@@ -10,46 +10,74 @@
 
 import SwiftUI
 
-// All possible filter options
+// Filter categories matching the Home model structure
+enum FilterCategory: String, CaseIterable {
+    case guestsAndSpace = "Guests & Space"
+    case amenities = "Amenities"
+    case roomsAndLaundry = "Rooms & Laundry"
+    case provisions = "Provisions"
+}
+
+// All possible filter options, ordered to match Home model declaration
 enum FilterOption: String, CaseIterable, Identifiable {
+    // Guests & Space (Home model: Capacity)
     case guestRooms = "Guest has Private Room"
+    case sleepingBed = "Guest has Bed"
     case kidsAllowed = "Kids Allowed"
     case guestPetsAllowed = "Guest Can Bring Pets"
-    case petsOnPremises = "Host Has Pets"
-    case privateGuestBathroom = "Private Guest Bathroom"
-    case inUnitLaundry = "In-unit Laundry"
-    case coinLaundryNearby = "Coin Laundry Nearby"
+    case hostHasPets = "Host Has Pets"
+
+    // Amenities (Home model: Comfort and amenities)
     case airConditioning = "Air Conditioning"
     case heating = "Heating"
     case kitchen = "Kitchen"
     case fridgeSpace = "Fridge Space"
+    case microwave = "Microwave"
     case tv = "TV"
     case wifi = "Wifi"
-    case microwave = "Microwave"
-    case sleepingBed = "Guest has Bed"
+
+    // Rooms & Laundry (Home model: Other rooms)
+    case privateGuestBathroom = "Private Guest Bathroom"
+    case inUnitLaundry = "In-unit Laundry"
+    case coinLaundryNearby = "Coin Laundry Nearby"
+
+    // Provisions (Home model: Provisions)
     case pillowsProvided = "Pillows Provided"
     case blanketsProvided = "Blankets Provided"
     case towelsProvided = "Towels Provided"
     case toiletriesProvided = "Toiletries Provided"
-    
+
     var id: String { rawValue }
-    
+
+    var category: FilterCategory {
+        switch self {
+        case .guestRooms, .sleepingBed, .kidsAllowed, .guestPetsAllowed, .hostHasPets:
+            return .guestsAndSpace
+        case .airConditioning, .heating, .kitchen, .fridgeSpace, .microwave, .tv, .wifi:
+            return .amenities
+        case .privateGuestBathroom, .inUnitLaundry, .coinLaundryNearby:
+            return .roomsAndLaundry
+        case .pillowsProvided, .blanketsProvided, .towelsProvided, .toiletriesProvided:
+            return .provisions
+        }
+    }
+
+    static func options(for category: FilterCategory) -> [FilterOption] {
+        allCases.filter { $0.category == category }
+    }
+
     func applies(to home: Home) -> Bool {
         switch self {
         case .guestRooms:
             return home.numGuestRooms > 0
+        case .sleepingBed:
+            return (home.sleepingArrangements[.bed] ?? 0) > 0
         case .kidsAllowed:
             return home.kidsAllowed
         case .guestPetsAllowed:
-            return home.petsAllowed
-        case .petsOnPremises:
-            return home.petsOnPremises
-        case .privateGuestBathroom:
-            return home.hasPrivateGuestBathroom
-        case .inUnitLaundry:
-            return home.hasInUnitLaundry
-        case .coinLaundryNearby:
-            return home.hasCoinLaundry
+            return home.guestPetsAllowed
+        case .hostHasPets:
+            return home.hostHasPets
         case .airConditioning:
             return home.hasAC
         case .heating:
@@ -58,14 +86,18 @@ enum FilterOption: String, CaseIterable, Identifiable {
             return home.hasKitchen
         case .fridgeSpace:
             return home.hasFridgeSpace
+        case .microwave:
+            return home.hasMicrowave
         case .tv:
             return home.hasTV
         case .wifi:
             return home.hasWifi
-        case .microwave:
-            return home.hasMicrowave
-        case .sleepingBed:
-            return (home.sleepingArrangements[.bed] ?? 0) > 0
+        case .privateGuestBathroom:
+            return home.hasPrivateGuestBathroom
+        case .inUnitLaundry:
+            return home.hasInUnitLaundry
+        case .coinLaundryNearby:
+            return home.hasCoinLaundryNearby
         case .pillowsProvided:
             return home.providesPillows
         case .blanketsProvided:
@@ -109,7 +141,7 @@ struct HomesPage: View {
         // Apply sorting
         switch selectedSort {
         case .mostDays:
-            return result.sorted { $0.maxStayLengthDays > $1.maxStayLengthDays }
+            return result.sorted { $0.maxStayDays > $1.maxStayDays }
         case .mostGuests:
             return result.sorted { $0.maxGuests > $1.maxGuests }
         case .mostRooms:
@@ -123,22 +155,26 @@ struct HomesPage: View {
         VStack(spacing: 20) {
 
             HStack {
-                // Display the Filter Menu
+                // Display the Filter Menu with category sections
                 Menu(filterLabel) {
-                    ForEach(FilterOption.allCases) { filter in
-                        Toggle(
-                            filter.rawValue,
-                            isOn: Binding(
-                                get: { selectedFilters.contains(filter) },
-                                set: { isOn in
-                                    if isOn {
-                                        selectedFilters.insert(filter)
-                                    } else {
-                                        selectedFilters.remove(filter)
-                                    }
-                                }
-                            )
-                        )
+                    ForEach(FilterCategory.allCases, id: \.self) { category in
+                        Section(category.rawValue) {
+                            ForEach(FilterOption.options(for: category)) { filter in
+                                Toggle(
+                                    filter.rawValue,
+                                    isOn: Binding(
+                                        get: { selectedFilters.contains(filter) },
+                                        set: { isOn in
+                                            if isOn {
+                                                selectedFilters.insert(filter)
+                                            } else {
+                                                selectedFilters.remove(filter)
+                                            }
+                                        }
+                                    )
+                                )
+                            }
+                        }
                     }
 
                     Divider()
@@ -150,29 +186,37 @@ struct HomesPage: View {
                 #if os(iOS) || os(tvOS) || os(visionOS)
                 .menuActionDismissBehavior(.disabled)
                 #endif
-                
+
                 Text("|")
 
                 // Display the Sort Menu
-                Menu ("Sort: \(selectedSort.rawValue)") {
+                Menu("Sort: \(selectedSort.rawValue)") {
                     Button("Default") { selectedSort = .default }
                     Button("Most Rooms") { selectedSort = .mostRooms }
                     Button("Most Guests") { selectedSort = .mostGuests }
                     Button("Most Days") { selectedSort = .mostDays }
                 }
             }
-            
-            // Display the selected filters
+
+            // Display the selected filters as wrapping chips
             if !selectedFilters.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach(Array(selectedFilters)) { filter in
+                FlowLayout(spacing: 8) {
+                    ForEach(sortedSelectedFilters) { filter in
+                        HStack(spacing: 4) {
                             Text(filter.rawValue)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.appTeal.opacity(0.2))
-                                .cornerRadius(20)
+                                .font(.caption)
+                            Button {
+                                selectedFilters.remove(filter)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.appTeal.opacity(0.2))
+                        .cornerRadius(20)
                     }
                 }
             }
@@ -203,16 +247,12 @@ struct HomesPage: View {
         .navigationTitle("Available FreeBNBs")
     }
 
-    // Helper function to toggle the filter
-    private func toggleFilter(_ filter: FilterOption) {
-        if selectedFilters.contains(filter) {
-            selectedFilters.remove(filter)
-        } else {
-            selectedFilters.insert(filter)
-        }
+    // Selected filters sorted in the same order as the menu
+    private var sortedSelectedFilters: [FilterOption] {
+        FilterOption.allCases.filter { selectedFilters.contains($0) }
     }
 
-    // Helper function to display the filter menu
+    // Helper to display the filter menu label
     private var filterLabel: String {
         selectedFilters.isEmpty
             ? "Filters: None"
