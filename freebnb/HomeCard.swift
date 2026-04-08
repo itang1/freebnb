@@ -89,45 +89,47 @@ struct HomeCard: View {
     let listing: Home
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header strip
             HStack {
-                // House icon
-                Image(systemName: "house.circle")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 50, height: 50)
-                    .padding(.trailing, 8)
-                    .foregroundColor(Color("AppTeal"))
+                Image(systemName: "house.fill")
+                    .font(.subheadline)
 
-                VStack(alignment: .leading, spacing: 10) {
+                Text(listing.hostName)
+                    .font(.headline)
 
-                    // Name and Location
-                    HStack(spacing: 4) {
-                        Text(listing.hostName)
-                            .font(.headline)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .layoutPriority(1)
-                        
-                        Text(" | ")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
-                        Text("\(listing.address.city), \(listing.address.state)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .layoutPriority(0)
-                    }
-                    
-                    // Guest count
-                    Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s"), \(listing.maxStayDays) days max")
-                        .font(.subheadline)
-                        .foregroundColor(.primary)
+                Text("—")
+                    .font(.subheadline)
+                    .opacity(0.8)
 
-                    // Icons
-                    VStack(alignment: .leading, spacing: 10) {
+                Text("\(listing.address.city), \(listing.address.state)")
+                    .font(.subheadline)
+                    .opacity(0.8)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.subheadline)
+                    .opacity(0.8)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.appTeal)
+
+            // Body
+            VStack(alignment: .leading, spacing: 10) {
+                // Guest count in a pill
+                Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s"), \(listing.maxStayDays) days max")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.appTeal.opacity(0.15))
+                    .cornerRadius(12)
+
+                // Amenity icons in colored chips
+                VStack(alignment: .leading, spacing: 8) {
                         // MARK: Guests, Space & Laundry
                         AmenityRow(
                             isVisible: listing.kidsAllowed ||
@@ -137,22 +139,22 @@ struct HomeCard: View {
                             listing.hasCoinLaundryNearby
                         ) {
                             if listing.kidsAllowed {
-                                IconView(systemName: "figure.2.and.child.holdinghands", color: .purple)
+                                ChipIcon(systemName: "figure.2.and.child.holdinghands", color: .purple)
                             }
                             if listing.guestPetsAllowed {
-                                IconView(systemName: "pawprint.fill", color: .purple)
+                                ChipIcon(systemName: "pawprint.fill", color: .purple)
                             }
                             if listing.hostHasPets {
-                                IconView(systemName: "pet.carrier.fill", color: .purple)
+                                ChipIcon(systemName: "pet.carrier.fill", color: .purple)
                             }
                             if listing.hasPrivateGuestBathroom {
-                                IconView(systemName: "toilet.fill", color: .purple)
+                                ChipIcon(systemName: "toilet.fill", color: .purple)
                             }
                             if listing.hasInUnitLaundry {
-                                IconView(systemName: "washer.fill", color: .purple)
+                                ChipIcon(systemName: "washer.fill", color: .purple)
                             }
                             if listing.hasCoinLaundryNearby {
-                                IconView(systemName: "washer.circle.fill", color: .purple)
+                                ChipIcon(systemName: "washer.circle.fill", color: .purple)
                             }
                         }
 
@@ -167,25 +169,25 @@ struct HomeCard: View {
                                        listing.hasWifi
                         ) {
                             if listing.hasAC {
-                                IconView(systemName: "snowflake", color: .blue)
+                                ChipIcon(systemName: "snowflake", color: .blue)
                             }
                             if listing.hasHeating {
-                                IconView(systemName: "heat.waves", color: .blue)
+                                ChipIcon(systemName: "heat.waves", color: .blue)
                             }
                             if listing.hasKitchen {
-                                IconView(systemName: "stove", color: .blue)
+                                ChipIcon(systemName: "stove", color: .blue)
                             }
                             if listing.hasFridgeSpace {
-                                IconView(systemName: "refrigerator.fill", color: .blue)
+                                ChipIcon(systemName: "refrigerator.fill", color: .blue)
                             }
                             if listing.hasMicrowave {
-                                IconView(systemName: "microwave.fill", color: .blue)
+                                ChipIcon(systemName: "microwave.fill", color: .blue)
                             }
                             if listing.hasTV {
-                                IconView(systemName: "tv.fill", color: .blue)
+                                ChipIcon(systemName: "tv.fill", color: .blue)
                             }
                             if listing.hasWifi {
-                                IconView(systemName: "wifi", color: .blue)
+                                ChipIcon(systemName: "wifi", color: .blue)
                             }
                         }
 
@@ -197,43 +199,43 @@ struct HomeCard: View {
                                        listing.providesToiletries
                         ) {
                             if listing.providesPillows {
-                                IconView(systemName: "bed.double.fill", color: Color("Coral"))
+                                ChipIcon(systemName: "bed.double.fill", color: Color("Coral"))
                             }
                             if listing.providesBlankets {
-                                IconView(systemName: "rectangle.portrait.and.arrow.right", color: Color("Coral"))
+                                ChipIcon(systemName: "rectangle.portrait.and.arrow.right", color: Color("Coral"))
                             }
                             if listing.providesTowels {
-                                IconView(systemName: "shower.fill", color: Color("Coral"))
+                                ChipIcon(systemName: "shower.fill", color: Color("Coral"))
                             }
                             if listing.providesToiletries {
-                                IconView(systemName: "bubbles.and.sparkles.fill", color: Color("Coral"))
+                                ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color("Coral"))
                             }
                         }
                     }
-
                 }
+                .padding(16)
             }
-        }
-        .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.skyBlue.opacity(0.5))
-//                .opacity(0.5)
-        }
+        .background(Color.skyBlue.opacity(0.35))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: Color.appTeal.opacity(0.15), radius: 8, x: 0, y: 5)
 
     }
 }
 
-// Reusable icon view
-struct IconView: View {
+// Amenity icon in a colored chip
+struct ChipIcon: View {
     let systemName: String
     let color: Color
 
     var body: some View {
         Image(systemName: systemName)
+            .font(.footnote)
+            .fontWeight(.semibold)
             .foregroundColor(color)
-            .imageScale(.large)
+            .padding(6)
+            .background(color.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

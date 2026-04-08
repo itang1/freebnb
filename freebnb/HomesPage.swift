@@ -221,6 +221,20 @@ struct HomesPage: View {
                 }
             }
 
+            // Results count
+            HStack(spacing: 6) {
+                Image(systemName: "house.fill")
+                    .font(.caption)
+                    .foregroundColor(Color.appTeal)
+                
+                let count = filteredListings.count
+                Text("\(count) home\(count == 1 ? "" : "s") available")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+
             ScrollView {
                 // Display the listings
                 LazyVStack(spacing: 15) {
@@ -230,15 +244,44 @@ struct HomesPage: View {
                         } label: {
                             HomeCard(listing: listing)
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(CardButtonStyle())
                     }
                 }
                 
-                // Display a message if there are no matching listings
+                // Display a friendly message if there are no matching listings
                 if filteredListings.isEmpty {
-                    Text("No homes match your filters")
-                        .multilineTextAlignment(.center)
-                        .padding()
+                    VStack(spacing: 16) {
+                        Spacer()
+                            .frame(height: 40)
+                        
+                        Image(systemName: "house.lodge.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 80, height: 80)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.appTeal.opacity(0.4), Color.appTeal],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        
+                        Text("No homes found")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        
+                        Text("Try removing some filters to see more results!")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                        
+                        Button("Clear All Filters") {
+                            selectedFilters.removeAll()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.appTeal)
+                    }
+                    .padding()
                 }
             }
         }
@@ -259,6 +302,15 @@ struct HomesPage: View {
             : "Filters: \(selectedFilters.count)"
     }
     
+}
+
+// A button style that scales down slightly when pressed for a tactile 3D feel
+struct CardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
 }
 
 #Preview {
