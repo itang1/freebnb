@@ -53,7 +53,7 @@ struct AboutPage: View {
                 // Future Work
                 SectionBlock(
                     title: "Beyond Friends and Family (Coming Soon)",
-                    text: "Freebnb will expand beyond personal networks. Soon, hosts will be able to offer their spaces (such as cabins, vacation homes, or anything in between) to nonprofits, traveling volunteers, community groups, and people in need of temporary housing."
+                    text: "Freebnb will expand beyond personal networks. Soon, hosts will be able to offer their spaces (such as cabins, vacation homes, or anything in between) to nonprofits, traveling volunteers, community groups, and individuals in transitional situations."
                 )
                 
                 SectionBlock(

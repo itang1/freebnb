@@ -18,12 +18,6 @@ struct HomeDetailPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("\(home.address.street), \(home.address.city), \(home.address.state) \(home.address.zip)")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                
-                Spacer(minLength: 10)
-
                 // MARK: Details
                 Text("Details")
                     .font(.headline)
@@ -32,6 +26,9 @@ struct HomeDetailPage: View {
                     Text("Guest Rooms: \(home.numGuestRooms)")
                     Text("Max Guests: \(home.maxGuests)")
                     Text("Max Stay: \(home.maxStayDays) night\(home.maxStayDays == 1 ? "" : "s")")
+                    if !home.sleepingArrangements.isEmpty {
+                        Text("Sleeping Arrangements: \(home.sleepingArrangements.sorted(by: { $0.key.rawValue < $1.key.rawValue }).map { "\($0.value) \(sleepingLabel(for: $0.key))" }.joined(separator: ", "))")
+                    }
                 }
                 .font(.subheadline)
 
@@ -88,14 +85,19 @@ struct HomeDetailPage: View {
                 if let description = home.description, !description.isEmpty {
                         Spacer(minLength: 10)
                         Text("Memo")
-                            .bold(true)
+                            .font(.headline)
                         Text(description)
+                            .font(.subheadline)
                 }
                 
                 Spacer(minLength: 10)
                 
                 Text("View on Map")
                     .font(.headline)
+                
+                Text("\(home.address.street), \(home.address.city), \(home.address.state) \(home.address.zip)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
                 
                 if isLoaded {
                     Map(initialPosition: .region(region)) {
@@ -137,6 +139,16 @@ struct HomeDetailPage: View {
     }
     
     
+    private func sleepingLabel(for surface: SleepingSurface) -> String {
+        switch surface {
+        case .bed: return "bed"
+        case .airMattress: return "air mattress"
+        case .couch: return "couch"
+        case .futon: return "futon"
+        case .floorMat: return "floor mat"
+        }
+    }
+
     private func amenityRow(_ label: String, available: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle")

@@ -25,7 +25,7 @@ struct FAQPage: View {
         ),
         FAQItem(
             question: "How long can I stay?",
-            answer: "Each host sets their own maximum stay length. You'll see this on the listing. Respect the limit, and if you need more time, ask your host."
+            answer: "Each host sets their own maximum stay length. You'll see this on the listing. Please respect the limit."
         ),
         FAQItem(
             question: "Can I bring my pet?",

@@ -95,16 +95,14 @@ struct HomeCard: View {
                 Image(systemName: "house.fill")
                     .font(.subheadline)
 
-                Text(listing.hostName)
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(listing.hostName)
+                        .font(.headline)
 
-                Text("—")
-                    .font(.subheadline)
-                    .opacity(0.8)
-
-                Text("\(listing.address.city), \(listing.address.state)")
-                    .font(.subheadline)
-                    .opacity(0.8)
+                    Text("\(listing.address.city), \(listing.address.state)")
+                        .font(.caption)
+                        .opacity(0.85)
+                }
 
                 Spacer()
 
@@ -114,19 +112,17 @@ struct HomeCard: View {
             }
             .foregroundColor(.white)
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .background(Color.appTeal)
 
             // Body
             VStack(alignment: .leading, spacing: 10) {
-                // Guest count in a pill
-                Text("\(listing.numGuestRooms) guest room\(listing.numGuestRooms == 1 ? "" : "s"), \(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s"), \(listing.maxStayDays) days max")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.appTeal.opacity(0.15))
-                    .cornerRadius(12)
+                // Summary pills
+                HStack(spacing: 6) {
+                    SummaryPill(icon: "door.left.hand.open", text: "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")")
+                    SummaryPill(icon: "person.fill", text: "\(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")")
+                    SummaryPill(icon: "calendar", text: "\(listing.maxStayDays) days")
+                }
 
                 // Amenity icons in colored chips
                 VStack(alignment: .leading, spacing: 8) {
@@ -202,7 +198,7 @@ struct HomeCard: View {
                                 ChipIcon(systemName: "bed.double.fill", color: Color("Coral"))
                             }
                             if listing.providesBlankets {
-                                ChipIcon(systemName: "rectangle.portrait.and.arrow.right", color: Color("Coral"))
+                                ChipIcon(systemName: "square.stack.fill", color: Color("Coral"))
                             }
                             if listing.providesTowels {
                                 ChipIcon(systemName: "shower.fill", color: Color("Coral"))
@@ -220,6 +216,25 @@ struct HomeCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: Color.appTeal.opacity(0.15), radius: 8, x: 0, y: 5)
 
+    }
+}
+
+struct SummaryPill: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(text)
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.appTeal.opacity(0.15))
+        .clipShape(Capsule())
     }
 }
 

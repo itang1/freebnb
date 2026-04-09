@@ -80,30 +80,39 @@ struct InfoCard: View {
     let subtitle: String
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
+            // Icon in a soft teal bubble
             Image(systemName: icon)
-                .font(.title)
-                .foregroundColor(Color("AppTeal"))
-                .frame(width: 44)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+                .frame(width: 46, height: 46)
+                .background(
+                    Circle()
+                        .fill(Color.appTeal.opacity(0.85))
+                )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.headline)
                     .foregroundColor(.primary)
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.leading)
             }
 
             Spacer()
 
             Image(systemName: "chevron.right")
-                .foregroundColor(.primary)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(Color.appTeal.opacity(0.6))
         }
-        .padding()
-        .background(Color.skyBlue.opacity(0.5))
-        .cornerRadius(12)
+        .padding(14)
+        .background(Color.skyBlue.opacity(0.35))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: Color.appTeal.opacity(0.25), radius: 10, x: 0, y: 5)
     }
 }
 

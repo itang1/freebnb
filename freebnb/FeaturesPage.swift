@@ -61,8 +61,8 @@ struct FeaturesPage: View {
                         description: "Set simple reminders to visit friends or reconnect with people you haven't seen in a while."
                     )
                     FeatureCard(
-                        iconName: "heart.slash.circle",
-                        description: "No landlords. No price gouging. No platform fees. Just free."
+                        iconName: "gift.fill",
+                        description: "No fees, middlemen, or hidden costs. Just free."
                     )
                 }
                 .frame(maxWidth: 600)
