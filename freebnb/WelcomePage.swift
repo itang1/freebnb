@@ -14,8 +14,9 @@ struct WelcomePage: View {
         ZStack {
             LinearGradient(
                 gradient: Gradient(colors: [
+                    Color("AppTeal").opacity(0.15),
                     .creamWhite,
-                    .seafoamBlue
+                    Color("AppTeal").opacity(0.3)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
@@ -51,7 +52,7 @@ struct WelcomePage: View {
                         .font(.headline)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Color("Coral"))
+                        .background(Color("AppTeal"))
                         .flippedPrimaryColor()
                         .cornerRadius(12)
                         .padding(.horizontal)

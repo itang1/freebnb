@@ -15,6 +15,13 @@ struct Address: Codable, Hashable {
     var zip: String
 }
 
+enum FoodProvision: String, CaseIterable, Hashable, Codable {
+    case all = "All meals provided"
+    case some = "Some food provided"
+    case bareMinimum = "Bare minimum provided"
+    case none = "No food provided"
+}
+
 enum SleepingSurface: String, Hashable {
     case bed
     case airMattress
@@ -61,6 +68,7 @@ struct Home: Identifiable, Hashable, Equatable {
     var providesBlankets: Bool
     var providesTowels: Bool
     var providesToiletries: Bool
+    var foodProvision: FoodProvision
     
     
     // Function to determine when two Home instances are considered equal

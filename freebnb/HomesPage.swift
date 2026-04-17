@@ -16,6 +16,7 @@ enum FilterCategory: String, CaseIterable {
     case amenities = "Amenities"
     case roomsAndLaundry = "Rooms & Laundry"
     case provisions = "Provisions"
+    case food = "Food"
 }
 
 // All possible filter options, ordered to match Home model declaration
@@ -47,6 +48,12 @@ enum FilterOption: String, CaseIterable, Identifiable {
     case towelsProvided = "Towels Provided"
     case toiletriesProvided = "Toiletries Provided"
 
+    // Food
+    case foodAll = "All Meals Provided"
+    case foodSome = "Some Food Provided"
+    case foodBareMinimum = "Bare Minimum Provided"
+    case foodNone = "No Food Provided"
+
     var id: String { rawValue }
 
     var category: FilterCategory {
@@ -59,6 +66,8 @@ enum FilterOption: String, CaseIterable, Identifiable {
             return .roomsAndLaundry
         case .pillowsProvided, .blanketsProvided, .towelsProvided, .toiletriesProvided:
             return .provisions
+        case .foodAll, .foodSome, .foodBareMinimum, .foodNone:
+            return .food
         }
     }
 
@@ -106,6 +115,14 @@ enum FilterOption: String, CaseIterable, Identifiable {
             return home.providesTowels
         case .toiletriesProvided:
             return home.providesToiletries
+        case .foodAll:
+            return home.foodProvision == .all
+        case .foodSome:
+            return home.foodProvision == .some
+        case .foodBareMinimum:
+            return home.foodProvision == .bareMinimum
+        case .foodNone:
+            return home.foodProvision == .none
         }
     }
 }
@@ -126,12 +143,13 @@ enum SortOption: String, CaseIterable, Identifiable {
 struct HomesPage: View {
     @State private var selectedFilters: Set<FilterOption> = []
     @State private var selectedSort: SortOption = .default
+    @State private var shuffledListings: [Home] = []
 
     var listings: [Home]
     var onSelectHome: (Home) -> Void
 
     var filteredListings: [Home] {
-        var result = listings
+        var result = shuffledListings
 
         // Apply filters
         for filter in selectedFilters {
@@ -315,6 +333,11 @@ struct HomesPage: View {
         .padding(30)
         .background(.creamWhite)
         .navigationTitle("Available FreeBNBs")
+        .onAppear {
+            if shuffledListings.isEmpty {
+                shuffledListings = listings.shuffled()
+            }
+        }
     }
 
     // Selected filters sorted in the same order as the menu

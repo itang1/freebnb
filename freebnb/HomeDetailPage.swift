@@ -78,6 +78,12 @@ struct HomeDetailPage: View {
                     amenityRow("Blankets", available: home.providesBlankets)
                     amenityRow("Towels", available: home.providesTowels)
                     amenityRow("Toiletries", available: home.providesToiletries)
+                    HStack(spacing: 8) {
+                        Image(systemName: "fork.knife")
+                            .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.5) : .green)
+                        Text("Food: \(home.foodProvision.rawValue)")
+                            .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.5) : .primary)
+                    }
                 }
                 .font(.subheadline)
                 
