@@ -219,7 +219,7 @@ private enum PasswordHasher {
 
     static func generateSalt() -> Data {
         var bytes = [UInt8](repeating: 0, count: saltLength)
-        SecRandomCopyBytes(kSecRandomDefault, saltLength, &bytes)
+        _ = SecRandomCopyBytes(kSecRandomDefault, saltLength, &bytes)
         return Data(bytes)
     }
 

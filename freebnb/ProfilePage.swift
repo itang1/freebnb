@@ -11,6 +11,7 @@ struct ProfilePage: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("appearance") private var appearance = "system"
 
+    @Environment(\.openURL) private var openURL
     @State private var showEditName = false
     @State private var showDeleteConfirm = false
 
@@ -28,7 +29,8 @@ struct ProfilePage: View {
                 } else {
                     sectionLabel("Account")
                     VStack(spacing: 0) {
-                        SettingsRow(icon: "pencil", label: "Edit Name", chevron: true) {
+                        SettingsRow(icon: "pencil", label: "Edit Name", chevron: true,
+                                    trailingText: authManager.userName.isEmpty ? nil : authManager.userName) {
                             showEditName = true
                         }
                         if !authManager.userEmail.isEmpty {
@@ -82,26 +84,30 @@ struct ProfilePage: View {
                 VStack(spacing: 0) {
                     SettingsRow(icon: "number", label: "Version", trailingText: appVersion)
                     rowDivider
-                    SettingsRow(icon: "hand.raised", label: "Privacy Policy", chevron: true)
+                    SettingsRow(icon: "hand.raised", label: "Privacy Policy", chevron: true) {
+                        openURL(URL(string: "https://freebnb.app/privacy")!)
+                    }
                     rowDivider
-                    SettingsRow(icon: "doc.text", label: "Terms of Service", chevron: true)
+                    SettingsRow(icon: "doc.text", label: "Terms of Service", chevron: true) {
+                        openURL(URL(string: "https://freebnb.app/terms")!)
+                    }
                 }
                 .sectionCard()
                 .padding(.bottom, 20)
 
-                VStack(spacing: 10) {
-                    Button(role: .destructive) {
-                        authManager.signOut()
-                    } label: {
-                        Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.red.opacity(0.08))
-                            .foregroundColor(.red)
-                            .cornerRadius(12)
-                    }
+                if authManager.authMethod != .guest {
+                    VStack(spacing: 10) {
+                        Button(role: .destructive) {
+                            authManager.signOut()
+                        } label: {
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.red.opacity(0.08))
+                                .foregroundColor(.red)
+                                .cornerRadius(12)
+                        }
 
-                    if authManager.authMethod != .guest {
                         Button(role: .destructive) {
                             showDeleteConfirm = true
                         } label: {
@@ -111,9 +117,9 @@ struct ProfilePage: View {
                         }
                         .padding(.top, 2)
                     }
+                    .padding(.horizontal)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 24)
             }
             .padding(.top, 16)
             .frame(maxWidth: 500)
@@ -158,10 +164,9 @@ struct ProfilePage: View {
                     Text("Browsing without an account")
                         .font(.subheadline).foregroundColor(.secondary)
                 } else {
-                    if !authManager.userName.isEmpty {
-                        Text(authManager.userName)
-                            .font(.title2).fontWeight(.semibold)
-                    }
+                    Text(authManager.userName.isEmpty ? "No Name" : authManager.userName)
+                        .font(.title2).fontWeight(.semibold)
+                        .foregroundColor(authManager.userName.isEmpty ? .secondary : .primary)
                     if !authManager.userEmail.isEmpty {
                         Text(authManager.userEmail)
                             .font(.subheadline).foregroundColor(.secondary)
@@ -318,7 +323,9 @@ private struct EditNameSheet: View {
                 }
             }
             .navigationTitle("Edit Name")
+            #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -328,7 +335,8 @@ private struct EditNameSheet: View {
                         authManager.updateName(name)
                         dismiss()
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty ||
+                              name.trimmingCharacters(in: .whitespaces) == authManager.userName)
                 }
             }
             .onAppear { name = authManager.userName }
