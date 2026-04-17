@@ -102,6 +102,7 @@ struct HomeCard: View {
             HStack {
                 Image(systemName: "house.fill")
                     .font(.subheadline)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(listing.hostName)
@@ -117,6 +118,7 @@ struct HomeCard: View {
                 Image(systemName: "chevron.right")
                     .font(.subheadline)
                     .opacity(0.8)
+                    .accessibilityHidden(true)
             }
             .foregroundColor(.white)
             .padding(.horizontal, 16)
@@ -129,8 +131,9 @@ struct HomeCard: View {
                 HStack(spacing: 6) {
                     SummaryPill(icon: "door.left.hand.open", text: "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")")
                     SummaryPill(icon: "person.fill", text: "\(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")")
-                    SummaryPill(icon: "calendar", text: "\(listing.maxStayDays) days")
+                    SummaryPill(icon: "calendar", text: "up to \(listing.maxStayDays) days")
                 }
+                .accessibilityElement(children: .combine)
 
                 // Amenity icons in colored chips
                 VStack(alignment: .leading, spacing: 8) {
@@ -143,22 +146,22 @@ struct HomeCard: View {
                             listing.hasCoinLaundryNearby
                         ) {
                             if listing.kidsAllowed {
-                                ChipIcon(systemName: "figure.2.and.child.holdinghands", color: .purple)
+                                ChipIcon(systemName: "figure.2.and.child.holdinghands", color: .purple, label: "Kids allowed")
                             }
                             if listing.guestPetsAllowed {
-                                ChipIcon(systemName: "pawprint.fill", color: .purple)
+                                ChipIcon(systemName: "pawprint.fill", color: .purple, label: "Guest pets allowed")
                             }
                             if listing.hostHasPets {
-                                ChipIcon(systemName: "pet.carrier.fill", color: .purple)
+                                ChipIcon(systemName: "pet.carrier.fill", color: .purple, label: "Host has pets")
                             }
                             if listing.hasPrivateGuestBathroom {
-                                ChipIcon(systemName: "toilet.fill", color: .purple)
+                                ChipIcon(systemName: "toilet.fill", color: .purple, label: "Private guest bathroom")
                             }
                             if listing.hasInUnitLaundry {
-                                ChipIcon(systemName: "washer.fill", color: .purple)
+                                ChipIcon(systemName: "washer.fill", color: .purple, label: "In-unit laundry")
                             }
                             if listing.hasCoinLaundryNearby {
-                                ChipIcon(systemName: "washer.circle.fill", color: .purple)
+                                ChipIcon(systemName: "washer.circle.fill", color: .purple, label: "Coin laundry nearby")
                             }
                         }
 
@@ -173,25 +176,25 @@ struct HomeCard: View {
                                        listing.hasWifi
                         ) {
                             if listing.hasAC {
-                                ChipIcon(systemName: "snowflake", color: .blue)
+                                ChipIcon(systemName: "snowflake", color: .blue, label: "Air conditioning")
                             }
                             if listing.hasHeating {
-                                ChipIcon(systemName: "heat.waves", color: .blue)
+                                ChipIcon(systemName: "heat.waves", color: .blue, label: "Heating")
                             }
                             if listing.hasKitchen {
-                                ChipIcon(systemName: "stove", color: .blue)
+                                ChipIcon(systemName: "stove", color: .blue, label: "Kitchen")
                             }
                             if listing.hasFridgeSpace {
-                                ChipIcon(systemName: "refrigerator.fill", color: .blue)
+                                ChipIcon(systemName: "refrigerator.fill", color: .blue, label: "Fridge space")
                             }
                             if listing.hasMicrowave {
-                                ChipIcon(systemName: "microwave.fill", color: .blue)
+                                ChipIcon(systemName: "microwave.fill", color: .blue, label: "Microwave")
                             }
                             if listing.hasTV {
-                                ChipIcon(systemName: "tv.fill", color: .blue)
+                                ChipIcon(systemName: "tv.fill", color: .blue, label: "TV")
                             }
                             if listing.hasWifi {
-                                ChipIcon(systemName: "wifi", color: .blue)
+                                ChipIcon(systemName: "wifi", color: .blue, label: "WiFi")
                             }
                         }
 
@@ -203,16 +206,16 @@ struct HomeCard: View {
                                        listing.providesToiletries
                         ) {
                             if listing.providesPillows {
-                                ChipIcon(systemName: "bed.double.fill", color: Color("Coral"))
+                                ChipIcon(systemName: "bed.double.fill", color: Color("Coral"), label: "Pillows provided")
                             }
                             if listing.providesBlankets {
-                                ChipIcon(systemName: "square.stack.fill", color: Color("Coral"))
+                                ChipIcon(systemName: "square.stack.fill", color: Color("Coral"), label: "Blankets provided")
                             }
                             if listing.providesTowels {
-                                ChipIcon(systemName: "shower.fill", color: Color("Coral"))
+                                ChipIcon(systemName: "shower.fill", color: Color("Coral"), label: "Towels provided")
                             }
                             if listing.providesToiletries {
-                                ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color("Coral"))
+                                ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color("Coral"), label: "Toiletries provided")
                             }
                         }
                     }
@@ -235,6 +238,7 @@ struct SummaryPill: View {
         HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.caption2)
+                .accessibilityHidden(true)
             Text(text)
                 .font(.caption)
                 .fontWeight(.medium)
@@ -250,6 +254,7 @@ struct SummaryPill: View {
 struct ChipIcon: View {
     let systemName: String
     let color: Color
+    let label: String
 
     var body: some View {
         Image(systemName: systemName)
@@ -259,6 +264,7 @@ struct ChipIcon: View {
             .padding(6)
             .background(color.opacity(0.15))
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .accessibilityLabel(label)
     }
 }
 

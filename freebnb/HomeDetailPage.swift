@@ -80,10 +80,12 @@ struct HomeDetailPage: View {
                     amenityRow("Toiletries", available: home.providesToiletries)
                     HStack(spacing: 8) {
                         Image(systemName: "fork.knife")
-                            .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.5) : .green)
+                            .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.75) : .green)
+                            .accessibilityHidden(true)
                         Text("Food: \(home.foodProvision.rawValue)")
-                            .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.5) : .primary)
+                            .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.75) : .primary)
                     }
+                    .accessibilityElement(children: .combine)
                 }
                 .font(.subheadline)
                 
@@ -158,10 +160,12 @@ struct HomeDetailPage: View {
     private func amenityRow(_ label: String, available: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle")
-                .foregroundColor(available ? .green : .secondary.opacity(0.5))
-            Text(label)
-                .foregroundColor(available ? .primary : .secondary.opacity(0.5))
+                .foregroundColor(available ? .green : .secondary.opacity(0.75))
+                .accessibilityHidden(true)
+            Text(available ? label : "\(label) (not available)")
+                .foregroundColor(available ? .primary : .secondary.opacity(0.75))
         }
+        .accessibilityElement(children: .combine)
     }
 
     func openInMaps() {

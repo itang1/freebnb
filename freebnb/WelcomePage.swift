@@ -43,6 +43,7 @@ struct WelcomePage: View {
                         .frame(width: 250, height: 200)
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(Color("AppTeal"))
+                        .accessibilityHidden(true)
                 }
                 
                 Spacer()
@@ -52,7 +53,7 @@ struct WelcomePage: View {
                         .font(.headline)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Color("AppTeal"))
+                        .background(Color("Coral"))
                         .flippedPrimaryColor()
                         .cornerRadius(12)
                         .padding(.horizontal)

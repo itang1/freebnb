@@ -271,6 +271,7 @@ struct HomesPage: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
+                            .accessibilityLabel("Remove \(filter.rawValue) filter")
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -290,6 +291,7 @@ struct HomesPage: View {
                             HomeCard(listing: listing)
                         }
                         .buttonStyle(CardButtonStyle())
+                        .accessibilityLabel("\(listing.hostName), \(listing.address.city), \(listing.address.state)")
                     }
                 }
                 
