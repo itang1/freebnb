@@ -84,7 +84,7 @@ class AuthManager: NSObject, ObservableObject {
 
         var errorDescription: String? {
             switch self {
-            case .emailInUse:          return "An account with that email already exists."
+            case .emailInUse:          return "An account already exists on this device. Sign out first to use a different account."
             case .invalidCredentials:  return "Incorrect email or password."
             case .emptyFields:         return "Please fill in all fields."
             case .passwordMismatch:    return "Passwords do not match."
@@ -96,7 +96,7 @@ class AuthManager: NSObject, ObservableObject {
     func signUp(name: String, email: String, password: String, confirm: String) throws {
         guard !name.isEmpty, !email.isEmpty, !password.isEmpty else { throw EmailAuthError.emptyFields }
         guard password == confirm else { throw EmailAuthError.passwordMismatch }
-        if let existing = UserDefaults.standard.string(forKey: emailAccountKey), existing == email {
+        if UserDefaults.standard.string(forKey: emailAccountKey) != nil {
             throw EmailAuthError.emailInUse
         }
         let salt = PasswordHasher.generateSalt()
@@ -150,7 +150,9 @@ class AuthManager: NSObject, ObservableObject {
     // MARK: - Sign out / delete
 
     func signOut() {
-        UserDefaults.standard.removeObject(forKey: appleUserIDKey)
+        for key in [appleUserIDKey, emailAccountKey, userNameKey, userEmailKey] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
         isSignedIn = false
         authMethod  = .none
         userName    = ""
