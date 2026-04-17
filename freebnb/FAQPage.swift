@@ -24,6 +24,10 @@ struct FAQPage: View {
             answer: "Only people you've approved. Your listing is never visible to the general public or to strangers."
         ),
         FAQItem(
+            question: "How is FreeBNB different from Couchsurfing or other home-sharing platforms?",
+            answer: "FreeBNB is built around trust, not strangers. Unlike Couchsurfing or similar platforms where you open your home to the public, FreeBNB is invite-only: you only see listings from people already in your network of trusted contacts. There's no public marketplace, no reviews from strangers, and no algorithm matching you with random people. Your guests are people you already know or are at most a step removed from, not strangers you met online."
+        ),
+        FAQItem(
             question: "How long can I stay?",
             answer: "Each host sets their own maximum stay length. You'll see this on the listing. Please respect the limit."
         ),
