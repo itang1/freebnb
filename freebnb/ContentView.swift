@@ -9,12 +9,12 @@ import SwiftUI
 
 
 struct ContentView: View {
-    @State private var showTabs = false
+    @EnvironmentObject var authManager: AuthManager
     @State private var listingsPath = NavigationPath()
     let listings = sampleData
 
     var body: some View {
-        if showTabs {
+        if authManager.isSignedIn {
             TabView {
                 NavigationStack {
                     InfoPage()
@@ -34,11 +34,18 @@ struct ContentView: View {
                 .tabItem {
                     Label("Listings", systemImage: "house")
                 }
+
+                NavigationStack {
+                    ProfilePage()
+                }
+                .tabItem {
+                    Label("Profile", systemImage: "person.fill")
+                }
             }
             .tint(Color("AppTeal"))
         } else {
-            WelcomePage {
-                showTabs = true
+            NavigationStack {
+                WelcomePage()
             }
         }
     }
@@ -47,4 +54,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(AuthManager())
 }

@@ -6,9 +6,10 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct WelcomePage: View {
-    var onEnter: () -> Void
+    @EnvironmentObject var authManager: AuthManager
 
     var body: some View {
         ZStack {
@@ -22,21 +23,21 @@ struct WelcomePage: View {
                 endPoint: .bottom
             )
             .ignoresSafeArea()
-            
+
             VStack {
                 Spacer()
-                
+
                 VStack(spacing: 20) {
                     Text("Welcome to FreeBNB")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
-                    
+
                     Text("The guest rooms of people you know")
                         .font(.headline)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
-                    
+
                     Image(systemName: "house.lodge.fill")
                         .resizable()
                         .scaledToFit()
@@ -45,26 +46,49 @@ struct WelcomePage: View {
                         .foregroundStyle(Color("AppTeal"))
                         .accessibilityHidden(true)
                 }
-                
+
                 Spacer()
-                
-                Button(action: onEnter) {
-                    Text("Enter")
-                        .font(.headline)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color("Coral"))
-                        .flippedPrimaryColor()
-                        .cornerRadius(12)
-                        .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    SignInWithAppleButton(.signIn) { request in
+                        request.requestedScopes = [.fullName, .email]
+                    } onCompletion: { result in
+                        authManager.handleAuthorization(result)
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 50)
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+
+                    NavigationLink {
+                        EmailAuthPage()
+                    } label: {
+                        Text("Continue with Email")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color("Coral"))
+                            .flippedPrimaryColor()
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                    }
+
+                    Button("Continue as Guest") {
+                        authManager.continueAsGuest()
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
                 }
                 .padding(.bottom, 20)
             }
-
         }
+        .navigationBarHidden(true)
     }
 }
 
 #Preview {
-    WelcomePage(onEnter: {})
+    NavigationStack {
+        WelcomePage()
+            .environmentObject(AuthManager())
+    }
 }
