@@ -9,7 +9,7 @@ import SwiftUI
 
 struct Message: Identifiable {
     let id = UUID()
-    let senderIsGuest: Bool
+    let senderUserID: String
     let text: String
     let timestamp: Date
 }
@@ -27,8 +27,8 @@ class MessageStore: ObservableObject {
         !(conversations[homeID]?.isEmpty ?? true)
     }
 
-    func send(text: String, to homeID: UUID) {
-        let msg = Message(senderIsGuest: true, text: text, timestamp: Date())
+    func send(text: String, to homeID: UUID, senderUserID: String) {
+        let msg = Message(senderUserID: senderUserID, text: text, timestamp: Date())
         conversations[homeID, default: []].append(msg)
     }
 }
@@ -38,10 +38,12 @@ class MessageStore: ObservableObject {
 struct MessagingPage: View {
     let home: Home
     @EnvironmentObject var messageStore: MessageStore
+    @EnvironmentObject var authManager: AuthManager
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
 
     private var messages: [Message] { messageStore.messages(for: home.id) }
+    private var currentUserID: String { authManager.userID }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,7 +59,7 @@ struct MessagingPage: View {
                                 .padding(.horizontal, 24)
                         }
                         ForEach(messages) { message in
-                            MessageBubble(message: message)
+                            MessageBubble(message: message, currentUserID: currentUserID)
                                 .id(message.id)
                         }
                     }
@@ -105,7 +107,7 @@ struct MessagingPage: View {
     private func sendMessage() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        messageStore.send(text: trimmed, to: home.id)
+        messageStore.send(text: trimmed, to: home.id, senderUserID: currentUserID)
         draft = ""
     }
 }
@@ -114,17 +116,20 @@ struct MessagingPage: View {
 
 private struct MessageBubble: View {
     let message: Message
+    let currentUserID: String
+
+    private var isFromMe: Bool { message.senderUserID == currentUserID }
 
     var body: some View {
         HStack {
-            if message.senderIsGuest { Spacer(minLength: 60) }
+            if isFromMe { Spacer(minLength: 60) }
 
-            VStack(alignment: message.senderIsGuest ? .trailing : .leading, spacing: 3) {
+            VStack(alignment: isFromMe ? .trailing : .leading, spacing: 3) {
                 Text(message.text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(message.senderIsGuest ? Color("AppTeal") : Color.secondary.opacity(0.15))
-                    .foregroundColor(message.senderIsGuest ? .white : .primary)
+                    .background(isFromMe ? Color("AppTeal") : Color.secondary.opacity(0.15))
+                    .foregroundColor(isFromMe ? .white : .primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 Text(message.timestamp, style: .time)
@@ -132,7 +137,7 @@ private struct MessageBubble: View {
                     .foregroundColor(.secondary)
             }
 
-            if !message.senderIsGuest { Spacer(minLength: 60) }
+            if !isFromMe { Spacer(minLength: 60) }
         }
     }
 }
@@ -141,6 +146,7 @@ private struct MessageBubble: View {
 
 struct MessagesTab: View {
     @EnvironmentObject var messageStore: MessageStore
+    @EnvironmentObject var authManager: AuthManager
     let listings: [Home]
 
     private var activeConversations: [Home] {
@@ -172,7 +178,8 @@ struct MessagesTab: View {
                         } label: {
                             ConversationRow(
                                 home: home,
-                                lastMessage: messageStore.messages(for: home.id).last!
+                                lastMessage: messageStore.messages(for: home.id).last!,
+                                currentUserID: authManager.userID
                             )
                         }
                     }
@@ -188,6 +195,7 @@ struct MessagesTab: View {
 private struct ConversationRow: View {
     let home: Home
     let lastMessage: Message
+    let currentUserID: String
 
     var body: some View {
         HStack(spacing: 12) {
@@ -205,7 +213,7 @@ private struct ConversationRow: View {
                 Text(home.hostName)
                     .font(.headline)
                 HStack(spacing: 2) {
-                    if lastMessage.senderIsGuest {
+                    if lastMessage.senderUserID == currentUserID {
                         Text("You: ")
                             .font(.subheadline)
                             .foregroundColor(.secondary)

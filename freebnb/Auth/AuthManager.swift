@@ -12,13 +12,15 @@ enum AuthMethod {
 
 class AuthManager: NSObject, ObservableObject {
     @Published var isSignedIn = false
+    @Published var userID = ""
     @Published var userName = ""
     @Published var userEmail = ""
     @Published var authMethod: AuthMethod = .none
 
-    private let appleUserIDKey = "appleUserID"
-    private let userNameKey    = "userName"
-    private let userEmailKey   = "userEmail"
+    private let appleUserIDKey  = "appleUserID"
+    private let userNameKey     = "userName"
+    private let userEmailKey    = "userEmail"
+    private let guestUserIDKey  = "guestUserID"
 
     override init() {
         super.init()
@@ -33,6 +35,7 @@ class AuthManager: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
                 if state == .authorized {
+                    self.userID     = appleID
                     self.userName   = UserDefaults.standard.string(forKey: self.userNameKey) ?? ""
                     self.userEmail  = UserDefaults.standard.string(forKey: self.userEmailKey) ?? ""
                     self.authMethod = .apple
@@ -59,6 +62,7 @@ class AuthManager: NSObject, ObservableObject {
         if let email = credential.email, !email.isEmpty { UserDefaults.standard.set(email, forKey: userEmailKey) }
 
         DispatchQueue.main.async {
+            self.userID     = credential.user
             self.userName   = UserDefaults.standard.string(forKey: self.userNameKey) ?? ""
             self.userEmail  = UserDefaults.standard.string(forKey: self.userEmailKey) ?? ""
             self.authMethod = .apple
@@ -76,6 +80,10 @@ class AuthManager: NSObject, ObservableObject {
     // MARK: - Guest
 
     func continueAsGuest() {
+        let stored = UserDefaults.standard.string(forKey: guestUserIDKey)
+        let guestID = stored ?? UUID().uuidString
+        if stored == nil { UserDefaults.standard.set(guestID, forKey: guestUserIDKey) }
+        userID     = guestID
         authMethod = .guest
         isSignedIn = true
     }
@@ -93,11 +101,12 @@ class AuthManager: NSObject, ObservableObject {
     }
 
     private func clearLocalSession() {
-        for key in [appleUserIDKey, userNameKey, userEmailKey] {
+        for key in [appleUserIDKey, userNameKey, userEmailKey, guestUserIDKey] {
             UserDefaults.standard.removeObject(forKey: key)
         }
         isSignedIn = false
         authMethod = .none
+        userID     = ""
         userName   = ""
         userEmail  = ""
     }

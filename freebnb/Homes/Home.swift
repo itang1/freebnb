@@ -36,6 +36,7 @@ struct Home: Identifiable, Hashable {
     let id = UUID()
 
     // MARK: Host and location
+    var hostUserID: String
     var hostName: String
     var address: Address
     var description: String?
