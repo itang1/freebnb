@@ -203,18 +203,16 @@ struct ProfilePage: View {
             .cornerRadius(12)
             .padding(.horizontal)
 
-            NavigationLink {
-                EmailAuthPage()
-            } label: {
-                Text("Sign Up with Email")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color("Coral"))
-                    .flippedPrimaryColor()
-                    .cornerRadius(12)
-                    .padding(.horizontal)
+            HStack(spacing: 6) {
+                Image(systemName: "lock.shield")
+                    .font(.caption)
+                Text("FreeBNB never sees or stores your password. Sign-in is handled entirely by Apple.")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
             }
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 24)
+            .padding(.top, 4)
         }
     }
 

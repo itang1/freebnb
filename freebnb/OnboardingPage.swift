@@ -27,6 +27,11 @@ struct OnboardingPage: View {
             body: "FreeBNB is invite-only. You only see listings from your network of trusted contacts, not the general public."
         ),
         Slide(
+            icon: "lock.shield.fill",
+            title: "Your Privacy is Protected",
+            body: "Sign in with Apple so FreeBNB never sees your password. We don't track your location or sell your data. Ever."
+        ),
+        Slide(
             icon: "calendar.badge.checkmark",
             title: "Request a Stay",
             body: "Find a listing, send a request with your dates, and your host confirms. Pack your bags and go."
