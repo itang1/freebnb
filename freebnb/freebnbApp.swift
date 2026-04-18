@@ -10,12 +10,14 @@ import SwiftUI
 @main
 struct freebnbApp: App {
     @StateObject private var authManager = AuthManager()
+    @StateObject private var messageStore = MessageStore()
     @AppStorage("appearance") private var appearance = "system"
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(authManager)
+                .environmentObject(messageStore)
                 .onAppear { applyAppearance(appearance) }
                 .onChange(of: appearance) { _, newValue in applyAppearance(newValue) }
         }

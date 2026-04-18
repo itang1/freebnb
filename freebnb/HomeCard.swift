@@ -30,14 +30,21 @@ enum SleepingSurface: String, Hashable {
     case floorMat
 }
 
+enum HostContactPreference {
+    case inApp
+    case contactInfo
+}
+
 struct Home: Identifiable, Hashable, Equatable {
     // MARK: Unique identifier
     let id = UUID()
-    
+
     // MARK: Host and location
     var hostName: String
     var address: Address
     var description: String?
+    var contactPreference: HostContactPreference
+    var hostContactInfo: String?
     
     // MARK: Capacity
     var numGuestRooms: Int

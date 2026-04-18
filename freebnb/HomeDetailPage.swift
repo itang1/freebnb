@@ -10,7 +10,8 @@ import MapKit
 
 struct HomeDetailPage: View {
     let home: Home
-    
+
+    @EnvironmentObject var messageStore: MessageStore
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var isLoaded = false
@@ -99,15 +100,22 @@ struct HomeDetailPage: View {
                 
                 
                 if let description = home.description, !description.isEmpty {
-                        Spacer(minLength: 10)
-                        Text("Memo")
-                            .font(.headline)
-                        Text(description)
-                            .font(.subheadline)
+                    Spacer(minLength: 10)
+                    Text("Memo")
+                        .font(.headline)
+                    Text(description)
+                        .font(.subheadline)
                 }
-                
+
                 Spacer(minLength: 10)
-                
+
+                Text("Contact Host")
+                    .font(.headline)
+
+                contactSection
+
+                Spacer(minLength: 10)
+
                 Text("View on Map")
                     .font(.headline)
                 
@@ -155,6 +163,42 @@ struct HomeDetailPage: View {
     }
     
     
+    @ViewBuilder
+    private var contactSection: some View {
+        switch home.contactPreference {
+        case .inApp:
+            NavigationLink {
+                MessagingPage(home: home)
+            } label: {
+                Label("Message \(home.hostName)", systemImage: "message.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color("AppTeal"))
+                    .flippedPrimaryColor()
+                    .cornerRadius(10)
+            }
+        case .contactInfo:
+            VStack(alignment: .leading, spacing: 8) {
+                Text("\(home.hostName) prefers to be contacted directly:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                if let info = home.hostContactInfo, !info.isEmpty {
+                    HStack(spacing: 10) {
+                        Image(systemName: "person.crop.circle")
+                            .foregroundColor(Color("AppTeal"))
+                        Text(info)
+                            .font(.subheadline)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.secondary.opacity(0.08))
+                    .cornerRadius(10)
+                }
+            }
+        }
+    }
+
     private func sleepingLabel(for surface: SleepingSurface) -> String {
         switch surface {
         case .bed: return "bed"
@@ -194,5 +238,8 @@ struct HomeDetailPage: View {
 
 
 #Preview {
-    HomeDetailPage(home: sampleData.randomElement()!)
+    NavigationStack {
+        HomeDetailPage(home: sampleData.randomElement()!)
+            .environmentObject(MessageStore())
+    }
 }

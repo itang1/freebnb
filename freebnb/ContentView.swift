@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var messageStore: MessageStore
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
@@ -38,6 +39,13 @@ struct ContentView: View {
                 }
 
                 NavigationStack {
+                    MessagesTab(listings: listings)
+                }
+                .tabItem {
+                    Label("Messages", systemImage: "message")
+                }
+
+                NavigationStack {
                     ProfilePage()
                 }
                 .tabItem {
@@ -63,4 +71,5 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environmentObject(AuthManager())
+        .environmentObject(MessageStore())
 }
