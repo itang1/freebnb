@@ -10,6 +10,8 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
     let listings = sampleData
 
@@ -43,6 +45,12 @@ struct ContentView: View {
                 }
             }
             .tint(Color("AppTeal"))
+            .sheet(isPresented: $showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
+                OnboardingPage(isPresented: $showOnboarding)
+            }
+            .onAppear {
+                if !hasSeenOnboarding { showOnboarding = true }
+            }
         } else {
             NavigationStack {
                 WelcomePage()

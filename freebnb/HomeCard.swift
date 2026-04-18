@@ -131,7 +131,7 @@ struct HomeCard: View {
                 HStack(spacing: 6) {
                     SummaryPill(icon: "door.left.hand.open", text: "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")")
                     SummaryPill(icon: "person.fill", text: "\(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")")
-                    SummaryPill(icon: "calendar", text: "up to \(listing.maxStayDays) days")
+                    SummaryPill(icon: "calendar", text: "up to \(listing.maxStayDays) night\(listing.maxStayDays == 1 ? "" : "s")")
                 }
                 .accessibilityElement(children: .combine)
 

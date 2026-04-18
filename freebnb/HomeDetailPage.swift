@@ -69,6 +69,14 @@ struct HomeDetailPage: View {
                 }
                 .font(.subheadline)
 
+                // MARK: Parking
+                if !home.parkingDetails.isEmpty {
+                    Text("Parking")
+                        .font(.headline)
+                    Text(home.parkingDetails)
+                        .font(.subheadline)
+                }
+
                 // MARK: Provisions
                 Text("Provisions")
                     .font(.headline)
