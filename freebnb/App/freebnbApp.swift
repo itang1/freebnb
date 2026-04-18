@@ -18,16 +18,15 @@ struct freebnbApp: App {
             ContentView()
                 .environmentObject(authManager)
                 .environmentObject(messageStore)
-                .onAppear { applyAppearance(appearance) }
-                .onChange(of: appearance) { _, newValue in applyAppearance(newValue) }
+                .preferredColorScheme(preferredScheme)
         }
     }
 
-    private func applyAppearance(_ value: String) {
-        let style: UIUserInterfaceStyle = value == "dark" ? .dark : (value == "light" ? .light : .unspecified)
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .forEach { $0.overrideUserInterfaceStyle = style }
+    private var preferredScheme: ColorScheme? {
+        switch appearance {
+        case "light": return .light
+        case "dark":  return .dark
+        default:      return nil
+        }
     }
 }

@@ -148,6 +148,7 @@ struct HomeDetailPage: View {
             .padding()
         }
         .onAppear {
+            guard !isLoaded else { return }
             geocodeAddress(home.address) { coordinate in
                 guard let coordinate = coordinate else { return }
                 let placemark = MKPlacemark(coordinate: coordinate)

@@ -6,96 +6,14 @@
 //
 
 import SwiftUI
-import Foundation
 
-struct Address: Codable, Hashable {
-    var street: String
-    var city: String
-    var state: String
-    var zip: String
-}
-
-enum FoodProvision: String, CaseIterable, Hashable, Codable {
-    case all = "All meals provided"
-    case some = "Some food provided"
-    case bareMinimum = "Bare minimum provided"
-    case none = "No food provided"
-}
-
-enum SleepingSurface: String, Hashable {
-    case bed
-    case airMattress
-    case couch
-    case futon
-    case floorMat
-}
-
-enum HostContactPreference {
-    case inApp
-    case contactInfo
-}
-
-struct Home: Identifiable, Hashable, Equatable {
-    // MARK: Unique identifier
-    let id = UUID()
-
-    // MARK: Host and location
-    var hostName: String
-    var address: Address
-    var description: String?
-    var contactPreference: HostContactPreference
-    var hostContactInfo: String?
-    
-    // MARK: Capacity
-    var numGuestRooms: Int
-    var maxGuests: Int
-    var maxStayDays: Int
-    var sleepingArrangements: [SleepingSurface: Int]
-    var kidsAllowed: Bool
-    var guestPetsAllowed: Bool
-    var hostHasPets: Bool
-    
-    // MARK: Comfort and amenities
-    var hasAC: Bool
-    var hasHeating: Bool
-    var hasKitchen: Bool
-    var hasFridgeSpace: Bool
-    var hasMicrowave: Bool
-    var hasTV: Bool
-    var hasWifi: Bool
-    
-    // MARK: Other rooms
-    var hasPrivateGuestBathroom: Bool
-    var parkingDetails: String
-    var hasInUnitLaundry: Bool
-    var hasCoinLaundryNearby: Bool
-    
-    // MARK: Provisions
-    var providesPillows: Bool
-    var providesBlankets: Bool
-    var providesTowels: Bool
-    var providesToiletries: Bool
-    var foodProvision: FoodProvision
-    
-    
-    // Function to determine when two Home instances are considered equal
-    static func == (lhs: Home, rhs: Home) -> Bool {
-        return lhs.id == rhs.id
-    }
-}
-
-func AmenityRow(
+@ViewBuilder
+private func AmenityRow<Content: View>(
     isVisible: Bool,
-    @ViewBuilder content: () -> some View
+    @ViewBuilder content: () -> Content
 ) -> some View {
-    Group {
-        if isVisible {
-            HStack(spacing: 8) {
-                content()
-            }
-        } else {
-            EmptyView()
-        }
+    if isVisible {
+        HStack(spacing: 8) { content() }
     }
 }
 

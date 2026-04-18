@@ -60,19 +60,6 @@ struct WelcomePage: View {
                     .cornerRadius(12)
                     .padding(.horizontal)
 
-                    NavigationLink {
-                        EmailAuthPage()
-                    } label: {
-                        Text("Continue with Email")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color("Coral"))
-                            .flippedPrimaryColor()
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                    }
-
                     Button("Continue as Guest") {
                         authManager.continueAsGuest()
                     }
