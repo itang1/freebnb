@@ -51,7 +51,7 @@ struct WelcomePage: View {
 
                 VStack(spacing: 12) {
                     SignInWithAppleButton(.signIn) { request in
-                        request.requestedScopes = [.fullName, .email]
+                        authManager.prepareAppleSignInRequest(request)
                     } onCompletion: { result in
                         authManager.handleAuthorization(result)
                     }
@@ -59,12 +59,26 @@ struct WelcomePage: View {
                     .frame(height: 50)
                     .cornerRadius(12)
                     .padding(.horizontal)
+                    .disabled(authManager.isLoading)
 
-                    Button("Continue as Guest") {
-                        authManager.continueAsGuest()
+                    if authManager.isLoading {
+                        ProgressView()
+                            .tint(Color("AppTeal"))
+                    } else {
+                        Button("Continue as Guest") {
+                            authManager.continueAsGuest()
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                     }
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+
+                    if let error = authManager.authError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
                 }
                 .padding(.bottom, 20)
             }

@@ -85,11 +85,11 @@ struct ProfilePage: View {
                     SettingsRow(icon: "number", label: "Version", trailingText: appVersion)
                     rowDivider
                     SettingsRow(icon: "hand.raised", label: "Privacy Policy", chevron: true) {
-                        openURL(URL(string: "https://freebnb.app/privacy")!)
+                        if let url = URL(string: "https://freebnb.app/privacy") { openURL(url) }
                     }
                     rowDivider
                     SettingsRow(icon: "doc.text", label: "Terms of Service", chevron: true) {
-                        openURL(URL(string: "https://freebnb.app/terms")!)
+                        if let url = URL(string: "https://freebnb.app/terms") { openURL(url) }
                     }
                 }
                 .sectionCard()

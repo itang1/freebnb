@@ -4,6 +4,8 @@
 //
 
 import AuthenticationServices
+import CryptoKit
+import FirebaseAuth
 import SwiftUI
 
 enum AuthMethod {
@@ -12,15 +14,15 @@ enum AuthMethod {
 
 class AuthManager: NSObject, ObservableObject {
     @Published var isSignedIn = false
+    @Published var isLoading = false
+    @Published var authError: String?
     @Published var userID = ""
     @Published var userName = ""
     @Published var userEmail = ""
     @Published var authMethod: AuthMethod = .none
 
-    private let appleUserIDKey  = "appleUserID"
-    private let userNameKey     = "userName"
-    private let userEmailKey    = "userEmail"
-    private let guestUserIDKey  = "guestUserID"
+    private var currentNonce: String?
+    private let userNameKey = "userName"
 
     override init() {
         super.init()
@@ -30,43 +32,60 @@ class AuthManager: NSObject, ObservableObject {
     // MARK: - Session restore
 
     private func restoreSession() {
-        guard let appleID = UserDefaults.standard.string(forKey: appleUserIDKey) else { return }
-        ASAuthorizationAppleIDProvider().getCredentialState(forUserID: appleID) { [weak self] state, _ in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if state == .authorized {
-                    self.userID     = appleID
-                    self.userName   = UserDefaults.standard.string(forKey: self.userNameKey) ?? ""
-                    self.userEmail  = UserDefaults.standard.string(forKey: self.userEmailKey) ?? ""
-                    self.authMethod = .apple
-                    self.isSignedIn = true
-                } else {
-                    UserDefaults.standard.removeObject(forKey: self.appleUserIDKey)
-                }
-            }
-        }
+        guard let user = Auth.auth().currentUser else { return }
+        userID     = user.uid
+        userName   = UserDefaults.standard.string(forKey: userNameKey) ?? user.displayName ?? ""
+        userEmail  = user.email ?? ""
+        authMethod = user.isAnonymous ? .guest : .apple
+        isSignedIn = true
     }
 
     // MARK: - Sign in with Apple
 
+    func prepareAppleSignInRequest(_ request: ASAuthorizationAppleIDRequest) {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce)
+    }
+
     func handleAuthorization(_ result: Result<ASAuthorization, Error>) {
         guard case .success(let auth) = result,
-              let credential = auth.credential as? ASAuthorizationAppleIDCredential
+              let credential = auth.credential as? ASAuthorizationAppleIDCredential,
+              let nonce = currentNonce,
+              let idTokenData = credential.identityToken,
+              let idToken = String(data: idTokenData, encoding: .utf8)
         else { return }
 
-        UserDefaults.standard.set(credential.user, forKey: appleUserIDKey)
+        let firebaseCredential = OAuthProvider.appleCredential(
+            withIDToken: idToken,
+            rawNonce: nonce,
+            fullName: credential.fullName
+        )
 
-        let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
-            .compactMap { $0 }.joined(separator: " ")
-        if !fullName.isEmpty { UserDefaults.standard.set(fullName, forKey: userNameKey) }
-        if let email = credential.email, !email.isEmpty { UserDefaults.standard.set(email, forKey: userEmailKey) }
-
-        DispatchQueue.main.async {
-            self.userID     = credential.user
-            self.userName   = UserDefaults.standard.string(forKey: self.userNameKey) ?? ""
-            self.userEmail  = UserDefaults.standard.string(forKey: self.userEmailKey) ?? ""
-            self.authMethod = .apple
-            self.isSignedIn = true
+        Task {
+            await MainActor.run { isLoading = true }
+            do {
+                let authResult = try await Auth.auth().signIn(with: firebaseCredential)
+                let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+                    .compactMap { $0 }.joined(separator: " ")
+                if !fullName.isEmpty {
+                    UserDefaults.standard.set(fullName, forKey: userNameKey)
+                }
+                await MainActor.run {
+                    userID     = authResult.user.uid
+                    userName   = UserDefaults.standard.string(forKey: userNameKey) ?? authResult.user.displayName ?? ""
+                    userEmail  = authResult.user.email ?? ""
+                    authMethod = .apple
+                    isLoading  = false
+                    isSignedIn = true
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading  = false
+                    authError  = "Sign in failed. Please try again."
+                }
+            }
         }
     }
 
@@ -74,40 +93,67 @@ class AuthManager: NSObject, ObservableObject {
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         UserDefaults.standard.set(trimmed, forKey: userNameKey)
-        self.userName = trimmed
+        userName = trimmed
     }
 
     // MARK: - Guest
 
     func continueAsGuest() {
-        let stored = UserDefaults.standard.string(forKey: guestUserIDKey)
-        let guestID = stored ?? UUID().uuidString
-        if stored == nil { UserDefaults.standard.set(guestID, forKey: guestUserIDKey) }
-        userID     = guestID
-        authMethod = .guest
-        isSignedIn = true
+        Task {
+            await MainActor.run { isLoading = true }
+            do {
+                let result = try await Auth.auth().signInAnonymously()
+                await MainActor.run {
+                    userID     = result.user.uid
+                    authMethod = .guest
+                    isLoading  = false
+                    isSignedIn = true
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    authError = "Could not continue as guest. Please try again."
+                }
+            }
+        }
     }
 
     // MARK: - Sign out / delete
 
     func signOut() {
+        try? Auth.auth().signOut()
         clearLocalSession()
     }
 
     func deleteAccount() {
-        // Today this only clears local state. When a backend is added,
-        // this will also delete the server-side account.
+        Task { try? await Auth.auth().currentUser?.delete() }
         clearLocalSession()
     }
 
     private func clearLocalSession() {
-        for key in [appleUserIDKey, userNameKey, userEmailKey, guestUserIDKey] {
-            UserDefaults.standard.removeObject(forKey: key)
-        }
+        UserDefaults.standard.removeObject(forKey: userNameKey)
         isSignedIn = false
         authMethod = .none
         userID     = ""
         userName   = ""
         userEmail  = ""
+    }
+
+    // MARK: - Nonce helpers
+
+    private func randomNonceString(length: Int = 32) -> String {
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        if errorCode != errSecSuccess {
+            fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+        }
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        return String(randomBytes.map { charset[Int($0) % charset.count] })
+    }
+
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashed = SHA256.hash(data: inputData)
+        return hashed.compactMap { String(format: "%02x", $0) }.joined()
     }
 }

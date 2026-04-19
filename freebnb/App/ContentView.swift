@@ -30,7 +30,8 @@ struct ContentView: View {
                     HomesPage(listings: listings) { home in
                         listingsPath.append(home)
                     }
-                    .navigationDestination(for: Home.self) { home in
+                    .navigationDestination(for:
+                                            Home.self) { home in
                         HomeDetailPage(home: home)
                     }
                 }

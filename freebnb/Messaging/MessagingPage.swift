@@ -173,14 +173,16 @@ struct MessagesTab: View {
             } else {
                 List {
                     ForEach(activeConversations) { home in
-                        NavigationLink {
-                            MessagingPage(home: home)
-                        } label: {
-                            ConversationRow(
-                                home: home,
-                                lastMessage: messageStore.messages(for: home.id).last!,
-                                currentUserID: authManager.userID
-                            )
+                        if let lastMessage = messageStore.messages(for: home.id).last {
+                            NavigationLink {
+                                MessagingPage(home: home)
+                            } label: {
+                                ConversationRow(
+                                    home: home,
+                                    lastMessage: lastMessage,
+                                    currentUserID: authManager.userID
+                                )
+                            }
                         }
                     }
                 }

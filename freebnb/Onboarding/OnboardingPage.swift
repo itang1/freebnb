@@ -19,17 +19,12 @@ struct OnboardingPage: View {
         Slide(
             icon: "house.lodge.fill",
             title: "Welcome to FreeBNB",
-            body: "Stay with people you know, for free. No booking fees, no strangers, no algorithms."
+            body: "Stay with people you know, for free. No booking fees, no strangers."
         ),
         Slide(
             icon: "person.2.fill",
             title: "People You Know",
-            body: "FreeBNB is invite-only. You only see listings from your network of trusted contacts, not the general public."
-        ),
-        Slide(
-            icon: "lock.shield.fill",
-            title: "Your Privacy is Protected",
-            body: "Sign in with Apple so FreeBNB never sees your password. We don't track your location or sell your data. Ever."
+            body: "You only see listings from people in your network. Hosts control who can view and request their space."
         ),
         Slide(
             icon: "calendar.badge.checkmark",
