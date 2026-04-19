@@ -40,6 +40,14 @@ struct InfoPage: View {
                     )
                 }
 
+                NavigationLink(destination: FAQPage()) {
+                    InfoCard(
+                        icon: "questionmark.circle.fill",
+                        title: "FAQ",
+                        subtitle: "Common questions answered"
+                    )
+                }
+
                 NavigationLink(destination: GuestTipsPage()) {
                     InfoCard(
                         icon: "lightbulb.fill",
@@ -53,14 +61,6 @@ struct InfoPage: View {
                         icon: "shield.checkered",
                         title: "Safety Guidelines",
                         subtitle: "Stay safe and set boundaries"
-                    )
-                }
-
-                NavigationLink(destination: FAQPage()) {
-                    InfoCard(
-                        icon: "questionmark.circle.fill",
-                        title: "FAQ",
-                        subtitle: "Common questions answered"
                     )
                 }
             }

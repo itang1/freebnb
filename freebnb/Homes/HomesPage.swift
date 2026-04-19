@@ -3,14 +3,10 @@
 //  freebnb
 //
 //  Created by Irene Tang on 7/25/25.
-//
 //  Shows a list of Home listings. Lets the user filter them. Lets the user sort them. Tells its parent which home was tapped.
-
-//  TODO: have a calendar availability and way to reserve, create user accounts, store data securely
 
 import SwiftUI
 
-// Filter categories matching the Home model structure
 enum FilterCategory: String, CaseIterable {
     case guestsAndSpace = "Guests & Space"
     case amenities = "Amenities"
@@ -21,14 +17,14 @@ enum FilterCategory: String, CaseIterable {
 
 // All possible filter options, ordered to match Home model declaration
 enum FilterOption: String, CaseIterable, Identifiable {
-    // Guests & Space (Home model: Capacity)
+    // Guests & Space
     case guestRooms = "Guest has Private Room"
     case sleepingBed = "Guest has Bed"
     case kidsAllowed = "Kids Allowed"
     case guestPetsAllowed = "Guest Can Bring Pets"
     case hostHasPets = "Host Has Pets"
 
-    // Amenities (Home model: Comfort and amenities)
+    // Amenities
     case airConditioning = "Air Conditioning"
     case heating = "Heating"
     case kitchen = "Kitchen"
@@ -37,12 +33,12 @@ enum FilterOption: String, CaseIterable, Identifiable {
     case tv = "TV"
     case wifi = "Wifi"
 
-    // Rooms & Laundry (Home model: Other rooms)
+    // Rooms & Laundry
     case privateGuestBathroom = "Private Guest Bathroom"
     case inUnitLaundry = "In-unit Laundry"
     case coinLaundryNearby = "Coin Laundry Nearby"
 
-    // Provisions (Home model: Provisions)
+    // Provisions
     case pillowsProvided = "Pillows Provided"
     case blanketsProvided = "Blankets Provided"
     case towelsProvided = "Towels Provided"
@@ -77,58 +73,33 @@ enum FilterOption: String, CaseIterable, Identifiable {
 
     func applies(to home: Home) -> Bool {
         switch self {
-        case .guestRooms:
-            return home.numGuestRooms > 0
-        case .sleepingBed:
-            return (home.sleepingArrangements[.bed] ?? 0) > 0
-        case .kidsAllowed:
-            return home.kidsAllowed
-        case .guestPetsAllowed:
-            return home.guestPetsAllowed
-        case .hostHasPets:
-            return home.hostHasPets
-        case .airConditioning:
-            return home.hasAC
-        case .heating:
-            return home.hasHeating
-        case .kitchen:
-            return home.hasKitchen
-        case .fridgeSpace:
-            return home.hasFridgeSpace
-        case .microwave:
-            return home.hasMicrowave
-        case .tv:
-            return home.hasTV
-        case .wifi:
-            return home.hasWifi
-        case .privateGuestBathroom:
-            return home.hasPrivateGuestBathroom
-        case .inUnitLaundry:
-            return home.hasInUnitLaundry
-        case .coinLaundryNearby:
-            return home.hasCoinLaundryNearby
-        case .pillowsProvided:
-            return home.providesPillows
-        case .blanketsProvided:
-            return home.providesBlankets
-        case .towelsProvided:
-            return home.providesTowels
-        case .toiletriesProvided:
-            return home.providesToiletries
-        case .foodAll:
-            return home.foodProvision == .all
-        case .foodSome:
-            return home.foodProvision == .some
-        case .foodBareMinimum:
-            return home.foodProvision == .bareMinimum
-        case .foodNone:
-            return home.foodProvision == .none
+        case .guestRooms:          return home.numGuestRooms > 0
+        case .sleepingBed:         return (home.sleepingArrangements[.bed] ?? 0) > 0
+        case .kidsAllowed:         return home.kidsAllowed
+        case .guestPetsAllowed:    return home.guestPetsAllowed
+        case .hostHasPets:         return home.hostHasPets
+        case .airConditioning:     return home.hasAC
+        case .heating:             return home.hasHeating
+        case .kitchen:             return home.hasKitchen
+        case .fridgeSpace:         return home.hasFridgeSpace
+        case .microwave:           return home.hasMicrowave
+        case .tv:                  return home.hasTV
+        case .wifi:                return home.hasWifi
+        case .privateGuestBathroom: return home.hasPrivateGuestBathroom
+        case .inUnitLaundry:       return home.hasInUnitLaundry
+        case .coinLaundryNearby:   return home.hasCoinLaundryNearby
+        case .pillowsProvided:     return home.providesPillows
+        case .blanketsProvided:    return home.providesBlankets
+        case .towelsProvided:      return home.providesTowels
+        case .toiletriesProvided:  return home.providesToiletries
+        case .foodAll:             return home.foodProvision == .all
+        case .foodSome:            return home.foodProvision == .some
+        case .foodBareMinimum:     return home.foodProvision == .bareMinimum
+        case .foodNone:            return home.foodProvision == .none
         }
     }
 }
 
-
-// All possible sort options
 enum SortOption: String, CaseIterable, Identifiable {
     case `default` = "Default"
     case mostRooms = "Most Rooms"
@@ -138,8 +109,6 @@ enum SortOption: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-
-// View to define a new SwiftUI screen
 struct HomesPage: View {
     @State private var selectedFilters: Set<FilterOption> = []
     @State private var selectedSort: SortOption = .default
@@ -150,31 +119,20 @@ struct HomesPage: View {
 
     var filteredListings: [Home] {
         var result = shuffledListings
-
-        // Apply filters
         for filter in selectedFilters {
             result = result.filter { filter.applies(to: $0) }
         }
-        
-        // Apply sorting
         switch selectedSort {
-        case .mostDays:
-            return result.sorted { $0.maxStayDays > $1.maxStayDays }
-        case .mostGuests:
-            return result.sorted { $0.maxGuests > $1.maxGuests }
-        case .mostRooms:
-            return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
-        default:
-            return result
+        case .mostDays:   return result.sorted { $0.maxStayDays > $1.maxStayDays }
+        case .mostGuests: return result.sorted { $0.maxGuests > $1.maxGuests }
+        case .mostRooms:  return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
+        default:          return result
         }
     }
 
     var body: some View {
         VStack(spacing: 20) {
-
-
             HStack {
-                // Filter pill button
                 Menu {
                     ForEach(FilterCategory.allCases, id: \.self) { category in
                         Section(category.rawValue) {
@@ -184,23 +142,16 @@ struct HomesPage: View {
                                     isOn: Binding(
                                         get: { selectedFilters.contains(filter) },
                                         set: { isOn in
-                                            if isOn {
-                                                selectedFilters.insert(filter)
-                                            } else {
-                                                selectedFilters.remove(filter)
-                                            }
+                                            if isOn { selectedFilters.insert(filter) }
+                                            else { selectedFilters.remove(filter) }
                                         }
                                     )
                                 )
                             }
                         }
                     }
-
                     Divider()
-
-                    Button("Clear Filters") {
-                        selectedFilters.removeAll()
-                    }
+                    Button("Clear Filters") { selectedFilters.removeAll() }
                 } label: {
                     Label(filterLabel, systemImage: "line.3.horizontal.decrease")
                         .font(.subheadline)
@@ -214,7 +165,6 @@ struct HomesPage: View {
                 .menuActionDismissBehavior(.disabled)
                 #endif
 
-                // Sort pill button
                 Menu {
                     Button("Default") { selectedSort = .default }
                     Button("Most Rooms") { selectedSort = .mostRooms }
@@ -249,7 +199,6 @@ struct HomesPage: View {
 
                 Spacer()
 
-                // Results count
                 let count = filteredListings.count
                 Text("\(count) home\(count == 1 ? "" : "s")")
                     .font(.subheadline)
@@ -257,7 +206,6 @@ struct HomesPage: View {
                     .foregroundColor(.secondary)
             }
 
-            // Display the selected filters as wrapping chips
             if !selectedFilters.isEmpty {
                 FlowLayout(spacing: 8) {
                     ForEach(sortedSelectedFilters) { filter in
@@ -282,7 +230,6 @@ struct HomesPage: View {
             }
 
             ScrollView {
-                // Display the listings
                 LazyVStack(spacing: 15) {
                     ForEach(filteredListings) { listing in
                         Button {
@@ -294,13 +241,10 @@ struct HomesPage: View {
                         .accessibilityLabel("\(listing.hostName), \(listing.address.city), \(listing.address.state)")
                     }
                 }
-                
-                // Display a friendly message if there are no matching listings
+
                 if filteredListings.isEmpty {
                     VStack(spacing: 16) {
-                        Spacer()
-                            .frame(height: 40)
-                        
+                        Spacer().frame(height: 40)
                         Image(systemName: "house.lodge.fill")
                             .resizable()
                             .scaledToFit()
@@ -312,21 +256,16 @@ struct HomesPage: View {
                                     endPoint: .bottom
                                 )
                             )
-                        
                         Text("No homes found")
                             .font(.title3)
                             .fontWeight(.semibold)
-                        
                         Text("Try removing some filters to see more results!")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                        
-                        Button("Clear All Filters") {
-                            selectedFilters.removeAll()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color.appTeal)
+                        Button("Clear All Filters") { selectedFilters.removeAll() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color.appTeal)
                     }
                     .padding()
                 }
@@ -342,21 +281,16 @@ struct HomesPage: View {
         }
     }
 
-    // Selected filters sorted in the same order as the menu
+    // Selected filters sorted in the same order as the filter menu
     private var sortedSelectedFilters: [FilterOption] {
         FilterOption.allCases.filter { selectedFilters.contains($0) }
     }
 
-    // Helper to display the filter menu label
     private var filterLabel: String {
-        selectedFilters.isEmpty
-            ? "Filter"
-            : "Filter (\(selectedFilters.count))"
+        selectedFilters.isEmpty ? "Filter" : "Filter (\(selectedFilters.count))"
     }
-    
 }
 
-// A button style that scales down slightly when pressed for a tactile 3D feel
 struct CardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

@@ -221,7 +221,7 @@ struct HomeDetailPage: View {
         .accessibilityElement(children: .combine)
     }
 
-    func openInMaps() {
+    private func openInMaps() {
         guard let coordinate = mapItems.first?.placemark.coordinate else { return }
         let placemark = MKPlacemark(coordinate: coordinate)
         let item = MKMapItem(placemark: placemark)
@@ -229,7 +229,7 @@ struct HomeDetailPage: View {
         item.openInMaps(launchOptions: nil)
     }
     
-    func geocodeAddress(_ address: Address, completion: @escaping (CLLocationCoordinate2D?) -> Void) {
+    private func geocodeAddress(_ address: Address, completion: @escaping (CLLocationCoordinate2D?) -> Void) {
         let fullAddress = "\(address.street), \(address.city), \(address.state) \(address.zip)"
         CLGeocoder().geocodeAddressString(fullAddress) { placemarks, error in
             completion(placemarks?.first?.location?.coordinate)

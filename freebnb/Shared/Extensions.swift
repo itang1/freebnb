@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct FlippedPrimaryColor: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
@@ -19,6 +20,33 @@ struct FlippedPrimaryColor: ViewModifier {
 extension View {
     func flippedPrimaryColor() -> some View {
         self.modifier(FlippedPrimaryColor())
+    }
+
+    func appliesStoredAppearance() -> some View {
+        self.modifier(AppearanceModifier())
+    }
+}
+
+private struct AppearanceModifier: ViewModifier {
+    @AppStorage("appearance") private var appearance = "system"
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { apply(appearance) }
+            .onChange(of: appearance) { apply($0) }
+    }
+
+    private func apply(_ value: String) {
+        let style: UIUserInterfaceStyle
+        switch value {
+        case "light": style = .light
+        case "dark":  style = .dark
+        default:      style = .unspecified
+        }
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .forEach { $0.overrideUserInterfaceStyle = style }
     }
 }
 

@@ -101,15 +101,12 @@ struct StepRow: View {
                     .frame(width: 40, height: 40)
                 Text("\(number)")
                     .font(.headline)
-//                    .foregroundColor(.teal)
             }
             .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(.headline)
-                }
+                Text(title)
+                    .font(.headline)
                 Text(detail)
                     .font(.subheadline)
             }
