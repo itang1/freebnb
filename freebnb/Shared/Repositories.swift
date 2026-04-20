@@ -13,7 +13,7 @@ import os
 
 // MARK: - Shared
 
-public protocol RepositoryListener: Sendable {
+protocol RepositoryListener: Sendable {
     func cancel()
 }
 

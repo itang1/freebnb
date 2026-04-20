@@ -15,8 +15,15 @@ struct HomeDetailPage: View {
     @Environment(AuthManager.self) private var authManager
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
-    @State private var isLoaded = false
-    
+    @State private var mapState: MapState = .loading
+    @State private var geocodeTask: Task<Void, Never>?
+
+    private enum MapState {
+        case loading
+        case loaded
+        case failed
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -98,8 +105,7 @@ struct HomeDetailPage: View {
                     .accessibilityElement(children: .combine)
                 }
                 .font(.subheadline)
-                
-                
+
                 if let description = home.description, !description.isEmpty {
                     Spacer(minLength: 10)
                     Text("Memo")
@@ -120,24 +126,13 @@ struct HomeDetailPage: View {
 
                 Text("View on Map")
                     .font(.headline)
-                
-                Text("\(home.address.street), \(home.address.city), \(home.address.state) \(home.address.zip)")
+
+                Text(formattedAddress)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                
-                if isLoaded {
-                    Map(initialPosition: .region(region)) {
-                        ForEach(mapItems, id: \.self) { item in
-                            Marker(item.name ?? "Location", coordinate: item.placemark.coordinate)
-                        }
-                    }
-                    .frame(height: 250)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    ProgressView("Loading map...")
-                        .frame(height: 250)
-                }
-                
+
+                mapSection
+
                 Button(action: openInMaps) {
                     Text("Open in Apple Maps")
                         .frame(maxWidth: .infinity)
@@ -146,26 +141,96 @@ struct HomeDetailPage: View {
                         .flippedPrimaryColor()
                         .cornerRadius(10)
                 }
+                .disabled(mapState != .loaded)
             }
             .padding()
         }
-        .onAppear {
-            guard !isLoaded else { return }
-            geocodeAddress(home.address) { coordinate in
-                guard let coordinate = coordinate else { return }
-                let placemark = MKPlacemark(coordinate: coordinate)
-                let item = MKMapItem(placemark: placemark)
-                item.name = home.hostName
-                mapItems = [item]
-                region = MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01))
-                isLoaded = true
-            }
+        .onAppear(perform: startGeocoding)
+        .onDisappear {
+            geocodeTask?.cancel()
+            geocodeTask = nil
         }
         .navigationTitle(home.hostName)
         .background(Color.creamWhite)
     }
-    
-    
+
+    // MARK: - Map section
+
+    @ViewBuilder
+    private var mapSection: some View {
+        switch mapState {
+        case .loading:
+            ProgressView("Loading map...")
+                .frame(maxWidth: .infinity)
+                .frame(height: 250)
+        case .loaded:
+            Map(initialPosition: .region(region)) {
+                ForEach(mapItems, id: \.self) { item in
+                    Marker(item.name ?? "Location", coordinate: item.placemark.coordinate)
+                }
+            }
+            .frame(height: 250)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        case .failed:
+            HStack(spacing: 8) {
+                Image(systemName: "location.slash")
+                    .foregroundColor(.secondary)
+                Text("Map unavailable — address shown above")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 60)
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // MARK: - Geocoding
+
+    private func startGeocoding() {
+        guard mapState == .loading else { return }
+        geocodeTask = Task {
+            do {
+                let coordinate = try await geocodeAddress(home.address)
+                guard !Task.isCancelled else { return }
+                let placemark = MKPlacemark(coordinate: coordinate)
+                let item = MKMapItem(placemark: placemark)
+                item.name = home.hostName
+                mapItems = [item]
+                region = MKCoordinateRegion(
+                    center: coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                )
+                mapState = .loaded
+            } catch {
+                guard !Task.isCancelled else { return }
+                mapState = .failed
+            }
+        }
+    }
+
+    private func geocodeAddress(_ address: Address) async throws -> CLLocationCoordinate2D {
+        try await withCheckedThrowingContinuation { continuation in
+            CLGeocoder().geocodeAddressString(formattedAddress) { placemarks, error in
+                if let coordinate = placemarks?.first?.location?.coordinate {
+                    continuation.resume(returning: coordinate)
+                } else {
+                    continuation.resume(throwing: error ?? CoordinateError.noResults)
+                }
+            }
+        }
+    }
+
+    private enum CoordinateError: Error {
+        case noResults
+    }
+
+    private var formattedAddress: String {
+        "\(home.address.street), \(home.address.city), \(home.address.state) \(home.address.zip)"
+    }
+
+    // MARK: - Contact section
+
     @ViewBuilder
     private var contactSection: some View {
         switch home.contactPreference {
@@ -202,6 +267,16 @@ struct HomeDetailPage: View {
         }
     }
 
+    // MARK: - Helpers
+
+    private func openInMaps() {
+        guard let coordinate = mapItems.first?.placemark.coordinate else { return }
+        let placemark = MKPlacemark(coordinate: coordinate)
+        let item = MKMapItem(placemark: placemark)
+        item.name = home.hostName
+        item.openInMaps(launchOptions: nil)
+    }
+
     private func sleepingLabel(for rawValue: String) -> String {
         SleepingSurface(rawValue: rawValue)?.displayName ?? rawValue
     }
@@ -215,21 +290,6 @@ struct HomeDetailPage: View {
                 .foregroundColor(available ? .primary : .secondary.opacity(0.75))
         }
         .accessibilityElement(children: .combine)
-    }
-
-    private func openInMaps() {
-        guard let coordinate = mapItems.first?.placemark.coordinate else { return }
-        let placemark = MKPlacemark(coordinate: coordinate)
-        let item = MKMapItem(placemark: placemark)
-        item.name = home.hostName
-        item.openInMaps(launchOptions: nil)
-    }
-    
-    private func geocodeAddress(_ address: Address, completion: @escaping (CLLocationCoordinate2D?) -> Void) {
-        let fullAddress = "\(address.street), \(address.city), \(address.state) \(address.zip)"
-        CLGeocoder().geocodeAddressString(fullAddress) { placemarks, error in
-            completion(placemarks?.first?.location?.coordinate)
-        }
     }
 }
 

@@ -112,14 +112,27 @@ enum SortOption: String, CaseIterable, Identifiable {
 struct HomesPage: View {
     @State private var selectedFilters: Set<FilterOption> = []
     @State private var selectedSort: SortOption = .default
-    @State private var shuffledListings: [Home] = []
+    // Stable shuffle: we track the desired display order as an array of IDs, then
+    // derive the display list from live `listings`. This means content edits to
+    // existing listings always propagate immediately (computed from live data),
+    // while additions/removals update the ID order.
+    @State private var shuffleOrder: [String] = []
 
     var listings: [Home]
     var isLoading: Bool = false
     var isLoadingMore: Bool = false
     var canLoadMore: Bool = false
+    var error: String? = nil
     var onLoadMore: () -> Void = {}
     var onSelectHome: (Home) -> Void
+
+    private var shuffledListings: [Home] {
+        let byID = Dictionary(uniqueKeysWithValues: listings.map { ($0.id, $0) })
+        var result = shuffleOrder.compactMap { byID[$0] }
+        let seen = Set(shuffleOrder)
+        result += listings.filter { !seen.contains($0.id) }
+        return result
+    }
 
     var filteredListings: [Home] {
         var result = shuffledListings
@@ -136,6 +149,20 @@ struct HomesPage: View {
 
     var body: some View {
         VStack(spacing: 20) {
+            if let error {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text(error)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal)
+            }
+
             HStack {
                 Menu {
                     ForEach(FilterCategory.allCases, id: \.self) { category in
@@ -302,24 +329,16 @@ struct HomesPage: View {
         .background(.creamWhite)
         .navigationTitle("Available FreeBNBs")
         .onAppear {
-            if shuffledListings.isEmpty {
-                shuffledListings = listings.shuffled()
+            if shuffleOrder.isEmpty && !listings.isEmpty {
+                shuffleOrder = listings.map { $0.id }.shuffled()
             }
         }
-        .onChange(of: listings.count) { old, new in
-            if old == 0 && new > 0 {
-                // First load from Firestore
-                shuffledListings = listings.shuffled()
-            } else if new > old {
-                // New listing added -- append to end
-                let existing = Set(shuffledListings.map { $0.id })
-                let added = listings.filter { !existing.contains($0.id) }
-                shuffledListings.append(contentsOf: added)
-            } else if new < old {
-                // Listing removed
-                let current = Set(listings.map { $0.id })
-                shuffledListings = shuffledListings.filter { current.contains($0.id) }
-            }
+        .onChange(of: listings.map { $0.id }) { _, newIDs in
+            let newIDSet = Set(newIDs)
+            shuffleOrder = shuffleOrder.filter { newIDSet.contains($0) }
+            let seen = Set(shuffleOrder)
+            let added = newIDs.filter { !seen.contains($0) }.shuffled()
+            shuffleOrder.append(contentsOf: added)
         }
     }
 

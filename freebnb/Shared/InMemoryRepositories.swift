@@ -5,10 +5,15 @@
 //  Lightweight in-memory implementations of the repository protocols for use
 //  in SwiftUI previews and unit tests. They do not talk to Firestore.
 //
+//  @MainActor isolation is intentional: all stores that use these are also
+//  @MainActor, so methods are always called on the main actor. This gives us
+//  genuine Sendable conformance without @unchecked.
+//
 
 import Foundation
 
-final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
+@MainActor
+final class InMemoryHomesRepository: HomesRepository {
     private var homes: [Home]
     init(homes: [Home] = []) { self.homes = homes }
 
@@ -33,7 +38,8 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     }
 }
 
-final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable {
+@MainActor
+final class InMemoryMessagesRepository: MessagesRepository {
     private var messages: [Message]
     init(messages: [Message] = []) { self.messages = messages }
 
@@ -52,7 +58,8 @@ final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable 
     }
 }
 
-final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sendable {
+@MainActor
+final class InMemoryUserProfileRepository: UserProfileRepository {
     private var profiles: [String: UserProfile]
     init(profiles: [String: UserProfile] = [:]) { self.profiles = profiles }
 

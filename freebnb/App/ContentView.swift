@@ -24,6 +24,7 @@ struct ContentView: View {
                             isLoading: homeStore.isLoading,
                             isLoadingMore: homeStore.isLoadingMore,
                             canLoadMore: homeStore.canLoadMore,
+                            error: homeStore.error,
                             onLoadMore: { homeStore.loadMore() }
                         ) { home in
                             listingsPath.append(home)
