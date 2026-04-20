@@ -159,6 +159,8 @@ struct MessagesTab: View {
                         }
                     }
                 }
+                .scrollContentBackground(.hidden)
+                .background(Color.creamWhite.ignoresSafeArea())
             }
         }
         .navigationTitle("Messages")
