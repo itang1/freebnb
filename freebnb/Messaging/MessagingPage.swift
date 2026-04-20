@@ -38,7 +38,9 @@ struct MessagingPage: View {
                             MessageBubble(
                                 message: message,
                                 currentUserID: currentUserID,
-                                isPending: messageStore.isPending(message.id)
+                                state: messageStore.state(of: message.id),
+                                onRetry: { messageStore.retry(message.id) },
+                                onDiscard: { messageStore.discardFailed(message.id) }
                             )
                             .id(message.id)
                         }
@@ -95,9 +97,12 @@ struct MessagingPage: View {
 private struct MessageBubble: View {
     let message: Message
     let currentUserID: String
-    let isPending: Bool
+    let state: MessageState
+    let onRetry: () -> Void
+    let onDiscard: () -> Void
 
     private var isFromMe: Bool { message.senderUserID == currentUserID }
+    private var isFailed: Bool { state == .failed }
 
     var body: some View {
         HStack {
@@ -107,23 +112,57 @@ private struct MessageBubble: View {
                 Text(message.text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(isFromMe ? Color.appTeal : Color.secondary.opacity(0.15))
+                    .background(bubbleBackground)
                     .foregroundColor(isFromMe ? .white : .primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                HStack(spacing: 4) {
-                    if isFromMe && isPending {
-                        Image(systemName: "clock")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(isFailed ? Color.red.opacity(0.5) : .clear, lineWidth: 1)
+                    )
+                    .contextMenu {
+                        if isFailed {
+                            Button("Retry", systemImage: "arrow.clockwise", action: onRetry)
+                            Button("Delete", systemImage: "trash", role: .destructive, action: onDiscard)
+                        }
                     }
-                    Text(message.timestamp ?? Date(), style: .time)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
+
+                footer
             }
 
             if !isFromMe { Spacer(minLength: 60) }
+        }
+    }
+
+    private var bubbleBackground: Color {
+        if isFailed { return Color.red.opacity(0.15) }
+        return isFromMe ? Color.appTeal : Color.secondary.opacity(0.15)
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        HStack(spacing: 4) {
+            if isFromMe {
+                switch state {
+                case .pending:
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                case .failed:
+                    Button(action: onRetry) {
+                        Label("Not delivered, tap to retry", systemImage: "exclamationmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                case .sent:
+                    EmptyView()
+                }
+            }
+            if state != .failed {
+                Text(message.timestamp ?? Date(), style: .time)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }

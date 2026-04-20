@@ -23,14 +23,21 @@ struct ConversationSummary: Identifiable, Hashable, Sendable {
     let lastMessage: Message
 }
 
+enum MessageState: Hashable {
+    case sent
+    case pending
+    case failed
+}
+
 @MainActor
 @Observable
 final class MessageStore {
     private(set) var pendingIDs: Set<String> = []
+    private(set) var failedIDs: Set<String> = []
 
     private var conversations: [String: [Message]] = [:]
+    private var failedMessages: [String: Message] = [:]
     private var currentUserID: String?
-    // Firebase handles are thread-safe to release; keep them reachable from deinit.
     @ObservationIgnored nonisolated(unsafe) private var listener: ListenerRegistration?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let db = Firestore.firestore()
@@ -62,6 +69,8 @@ final class MessageStore {
         guard let userID else {
             conversations = [:]
             pendingIDs = []
+            failedIDs = []
+            failedMessages = [:]
             return
         }
         listener = db.collection("messages")
@@ -106,14 +115,21 @@ final class MessageStore {
     }
 
     func messages(for conversationID: String) -> [Message] {
-        (conversations[conversationID] ?? []).sorted { Self.sortKey($0) < Self.sortKey($1) }
+        let sent = conversations[conversationID] ?? []
+        let failed = failedMessages.values.filter {
+            MessageStore.conversationID(userIDs: $0.participants) == conversationID
+        }
+        return (sent + failed).sorted { Self.sortKey($0) < Self.sortKey($1) }
     }
 
-    func isPending(_ messageID: String) -> Bool {
-        pendingIDs.contains(messageID)
+    func state(of messageID: String) -> MessageState {
+        if failedIDs.contains(messageID) { return .failed }
+        if pendingIDs.contains(messageID) { return .pending }
+        return .sent
     }
 
     // Pending messages (server timestamp not yet resolved) sort to the end.
+    // Failed messages carry a local attempt date so they stay in place.
     private static func sortKey(_ m: Message) -> Date {
         m.timestamp ?? .distantFuture
     }
@@ -127,7 +143,7 @@ final class MessageStore {
         let msg = Message(
             senderUserID: senderUserID,
             text: text,
-            timestamp: nil,       // Firestore fills via @ServerTimestamp
+            timestamp: nil,
             participants: participants
         )
         pendingIDs.insert(msg.id)
@@ -136,15 +152,39 @@ final class MessageStore {
             try ref.setData(from: msg) { [weak self] error in
                 guard let error else { return }
                 Task { @MainActor [weak self] in
-                    self?.log.error("write error: \(error.localizedDescription, privacy: .public)")
-                    self?.pendingIDs.remove(msg.id)
+                    self?.markFailed(msg: msg, error: error)
                 }
             }
         } catch {
             log.error("encode error: \(error.localizedDescription, privacy: .public)")
-            pendingIDs.remove(msg.id)
+            markFailed(msg: msg, error: error)
             return false
         }
         return true
+    }
+
+    func retry(_ messageID: String) {
+        guard let failed = failedMessages.removeValue(forKey: messageID) else { return }
+        failedIDs.remove(messageID)
+        let recipient = failed.participants.first { $0 != failed.senderUserID } ?? ""
+        _ = send(text: failed.text, senderUserID: failed.senderUserID, recipientUserID: recipient)
+    }
+
+    func discardFailed(_ messageID: String) {
+        failedIDs.remove(messageID)
+        failedMessages.removeValue(forKey: messageID)
+    }
+
+    // MARK: - Private
+
+    private func markFailed(msg: Message, error: Error) {
+        log.error("write error \(msg.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        pendingIDs.remove(msg.id)
+        failedIDs.insert(msg.id)
+        // Stamp locally so it sorts next to the time the user hit send rather than at
+        // .distantFuture (which is reserved for still-pending messages).
+        var stamped = msg
+        stamped.timestamp = Date()
+        failedMessages[msg.id] = stamped
     }
 }
