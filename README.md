@@ -1,64 +1,127 @@
 # FreeBNB
 
-A free home-sharing app for iOS, built with SwiftUI.
+A free, network-based home-sharing app for iOS.
 
-FreeBNB helps people stay connected across cities, time, and life changes by making it easy to open your door to people you care about. High travel costs, the fear of being a burden, and the awkwardness of not knowing who is actually open to hosting keep many visits from ever happening. FreeBNB removes those barriers: hosts list their space, guests browse and request stays, and everything is free with no fees or middlemen. Listings are invite-only and never visible to strangers.
+![Platform](https://img.shields.io/badge/iOS-18%2B-black?logo=apple&logoColor=white)
+![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-Firestore%20%2B%20Auth-FFCA28?logo=firebase&logoColor=black)
 
-This README covers technical details for engineers. User-facing features and app information are documented inside the app under the Info tab.
+FreeBNB makes it easy for people to offer their home to friends and friends-of-friends when they travel. Hosts list their space; guests browse and request stays. Everything is free, with no fees or middlemen. Listings are only visible to people in the host's network, never to strangers.
 
-## File Structure
+This README covers technical details for engineers. User-facing documentation lives in the app under the Info tab.
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Setup](#setup)
+- [Architecture](#architecture)
+- [Stack](#stack)
+- [Technical Decisions](#technical-decisions)
+
+---
+
+## Features
+
+| Area | Status |
+|------|--------|
+| Browse listings (real-time, filter, sort) | Live |
+| Listing detail with amenities and map | Live |
+| In-app messaging (real-time, per listing) | Live |
+| Sign in with Apple / anonymous guest sessions | Live |
+| Dark mode, appearance preferences | Live |
+| Host listing creation and editing | Planned |
+| Stay requests, calendar availability | Planned |
+| Friend connections and listing visibility controls | Planned |
+| Discovery: map view, city search, saved listings | Planned |
+| Profiles, trust, reviews, trip history | Planned |
+| Personalized recommendations | Planned |
+| Host dashboard | Planned |
+| Push notifications | Planned |
+
+---
+
+## Setup
+
+The app requires `GoogleService-Info.plist` from the FreeBNB Firebase project. This file is gitignored and must not be committed. Add it to the `freebnb/` folder in Xcode, then open `freebnb.xcodeproj` and build.
+
+---
+
+## Architecture
+
+Organized by feature, structured for MVVM.
 
 ```
 freebnb/
 ├── App/             # Entry point and root tab navigation
 ├── Auth/            # Firebase Auth logic and sign-in screen
-├── Homes/           # Listing data model, browse and filter screen, listing detail
+├── Homes/           # Listing model, browse and filter screen, listing detail
 ├── Messaging/       # In-app chat and conversation list
-├── Profile/         # Account settings and user preferences
+├── Profile/         # Account settings and preferences
 ├── Onboarding/      # First-launch onboarding flow
-├── Info/            # Static informational pages (About, FAQ, tips, safety, etc.)
-└── Shared/          # Types, extensions, and sample data shared across features
+├── Info/            # Static pages (About, FAQ, tips, safety)
+└── Shared/          # Types, extensions, and utilities shared across features
 ```
 
-The structure is organized by feature and is set up to support the [MVVM](https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93viewmodel) pattern.
+State is managed through `ObservableObject` stores injected as environment objects at the app root:
+
+| Store | Responsibility |
+|-------|---------------|
+| `HomeStore` | Real-time listing feed from Firestore |
+| `MessageStore` | Real-time conversations from Firestore |
+| `AuthManager` | Auth state, user ID, sign-in and sign-out |
+
+---
 
 ## Stack
 
-- **[SwiftUI](https://developer.apple.com/xcode/swiftui/)** (Apple) for all UI, targeting iOS 17+
-- **[Firebase Auth](https://firebase.google.com/docs/auth)** (Google) for authentication, supporting Sign in with Apple and anonymous guest sessions
-- **[Firebase Firestore](https://firebase.google.com/docs/firestore)** (Google) is the planned backend for listings and messages
-- **[MapKit](https://developer.apple.com/documentation/mapkit)** and **[CLGeocoder](https://developer.apple.com/documentation/corelocation/clgeocoder)** (Apple) for address-to-map display on listing detail pages
-- **[CryptoKit](https://developer.apple.com/documentation/cryptokit)** (Apple) for SHA-256 nonce hashing required by Sign in with Apple
-- **[AuthenticationServices](https://developer.apple.com/documentation/authenticationservices)** (Apple) for the Sign in with Apple button and credential flow
+| Technology | Role |
+|-----------|------|
+| [SwiftUI](https://developer.apple.com/xcode/swiftui/) | All UI, every screen |
+| [Firebase Auth](https://firebase.google.com/docs/auth) | Sign in with Apple, anonymous sessions |
+| [Firebase Firestore](https://firebase.google.com/docs/firestore) | Real-time database for listings and messages |
+| [MapKit](https://developer.apple.com/documentation/mapkit/) | Address map on listing detail |
+
+**SwiftUI** uses a declarative style: describe what the UI should look like, and Apple handles rendering and state updates.
+
+**Firebase** is Google's backend-as-a-service. App data lives on Google's global cloud infrastructure rather than on hardware FreeBNB needs to maintain, with automatic scaling and no server to manage. A Firebase project is actually a Google Cloud project behind the scenes.
+
+**MapKit** geocodes the host's street address on Apple's servers to produce map coordinates. The app never requests the user's device location.
+
+---
 
 ## Technical Decisions
 
-**Authentication: [Firebase Auth](https://firebase.google.com/docs/auth) with [Sign in with Apple](https://developer.apple.com/sign-in-with-apple/)**
-The Apple credential is exchanged for a Firebase UID via `OAuthProvider.appleCredential`, giving every user a stable cross-device identity without storing passwords. Guest sessions use Firebase anonymous auth so guests also get a real UID, which keeps permission logic consistent and makes the Firestore transition easier. The nonce is SHA-256 hashed with [CryptoKit](https://developer.apple.com/documentation/cryptokit) before being sent to Apple, as required by the Sign in with Apple spec.
+**Authentication: Firebase Auth with Sign in with Apple**
+Sign in with Apple exchanges an Apple credential for a Firebase UID, a stable ID that works across devices and never changes. Anonymous guest sessions also produce a real UID, so permission logic is identical for both user types. The nonce required by Apple is generated in `AuthManager`, hashed with SHA-256, and passed to Firebase to verify the token.
 
-**Appearance: [UIKit](https://developer.apple.com/documentation/uikit) window override instead of SwiftUI `preferredColorScheme`**
-`preferredColorScheme` on a view inside `WindowGroup` does not reliably update when `@AppStorage` is written from a child view. The app instead calls `overrideUserInterfaceStyle` on every `UIWindowScene` window directly. This logic lives in `AppearanceModifier` (in `Shared/Extensions.swift`) as a `ViewModifier` so any view can opt in with `.appliesStoredAppearance()`. The profile picker and the modifier both read and write the same `@AppStorage("appearance")` key.
+**Appearance: UIKit window override instead of `preferredColorScheme`**
+SwiftUI's `preferredColorScheme` doesn't reliably update when `@AppStorage` changes from a child view. The app instead calls `overrideUserInterfaceStyle` on every `UIWindowScene` window directly. This is encapsulated in `AppearanceModifier` (`Shared/Extensions.swift`) so any view can opt in with `.appliesStoredAppearance()`.
 
-**Adaptive colors: Xcode asset catalog with explicit dark variants**
-All background colors are defined as named color sets in `Assets.xcassets` with separate light and dark entries. Dark mode works automatically for background fills without any conditional logic in views.
+**Adaptive colors: asset catalog with explicit dark variants**
+Named color sets in `Assets.xcassets` carry separate light and dark entries. Background fills adapt to the color scheme automatically with no conditional logic in views.
 
-**Messaging: in-memory only, designed to swap to [Firestore](https://firebase.google.com/docs/firestore)**
-`MessageStore` is an `ObservableObject` injected at the app level via environment so it survives tab switches. Messages are not persisted between sessions yet. The public interface (`messages(for:)`, `hasMessages(for:)`, `send(text:to:senderUserID:)`) is intentionally narrow so the backing store can be replaced with Firestore without touching any views.
+**Listings: live Firestore listener, shuffled on first load**
+`HomeStore` attaches a real-time Firestore listener on launch. Results are shuffled on first load for variety. When listings are added or removed, shuffle order is preserved for existing items and new entries are appended to the end, so the list doesn't re-randomize on every change.
+
+**Data model: `Codable` with a JSON bridge instead of `FirebaseFirestoreSwift`**
+`Home` and `Message` conform to `Codable`. Serialization goes through `JSONEncoder`/`JSONDecoder` with `JSONSerialization` as a bridge to Firestore's `[String: Any]` format. This avoids an extra dependency and keeps the models usable in non-Firestore contexts (such as `NavigationPath`). Document IDs are injected into the decoded dictionary before decoding so `id` is always populated.
+
+**Messaging: collection group query across all conversations**
+`MessageStore` uses a Firestore collection group query across all `conversations/{homeID}/messages` subcollections. A single listener covers all conversations without knowing their IDs up front. Messages are sorted by timestamp on read and grouped by `homeID` in memory for fast lookup.
+
+**User identity: Firebase UID, not a boolean flag**
+Messages store `senderUserID` (a Firebase UID) rather than a boolean `senderIsGuest`. This is consistent across Apple and anonymous auth users and won't break as host-side replies and full accounts are added.
 
 **Filter logic: owned by the enum, not the view**
-`FilterOption` is an enum that knows how to evaluate itself against a `Home` via `applies(to:)`. The view just iterates selected filters and calls that method. Adding a new filter option only requires adding a case to the enum.
+`FilterOption` evaluates itself against a `Home` via `applies(to:)`. The view iterates selected filters and calls that method. Adding a new filter requires only a new enum case with no changes to any view.
 
-**Navigation: programmatic path for listings, declarative elsewhere**
-The listings tab uses a `NavigationPath` owned by `ContentView` so the parent controls navigation and `HomeDetailPage` can be pushed without the list knowing about it. All other tabs use declarative `NavigationLink` since they don't need external push control.
+**Navigation: programmatic `NavigationPath` for listings, declarative elsewhere**
+The listings tab uses a `NavigationPath` owned by `ContentView` so the parent controls navigation and can push `HomeDetailPage` without the list knowing about it. All other tabs use declarative `NavigationLink` since they don't need external push control.
 
-**Map: forward geocoding via [CLGeocoder](https://developer.apple.com/documentation/corelocation/clgeocoder), no location permission required**
-`HomeDetailPage` converts the listing's street address to coordinates using `CLGeocoder`, which does server-side geocoding without accessing the device's location. The app never prompts for location permission.
+**Map: forward geocoding, no location permission**
+`HomeDetailPage` converts the listing's street address to coordinates using `CLGeocoder`, which runs on Apple's servers without accessing the device's location. The app never prompts for location permission.
 
-**Listings: shuffled once on first appear**
-`HomesPage` shuffles the listings array into `@State` on first appear so the order feels varied. The state survives re-renders but resets on fresh launch, which is intentional until listings come from Firestore.
-
-**User identity in messages: Firebase UID, not a guest flag**
-Messages store `senderUserID` (a Firebase UID) rather than a boolean `senderIsGuest`. This makes sender identity work the same way for Apple and anonymous auth users and avoids a flag that would break once real accounts exist.
-
-**Persistence: `@AppStorage` for lightweight preferences**
-Appearance mode, notification preference, and onboarding state are stored with `@AppStorage` (UserDefaults). Anything that needs to sync across devices or associate with a user account is intentionally not stored here yet.
+**Preferences: `@AppStorage` for lightweight local state**
+Appearance mode, notification preference, and onboarding completion are stored in `UserDefaults` via `@AppStorage`. Anything that needs to sync across devices or associate with a user account is not stored here.
