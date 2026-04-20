@@ -17,7 +17,7 @@ struct FeatureCard: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 40, height: 40)
-                .foregroundColor(Color("AppTeal"))
+                .foregroundColor(Color.appTeal)
                 .frame(width: 60, height: 60)
 
             Text(description)

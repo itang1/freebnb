@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var authManager: AuthManager
-    @EnvironmentObject var homeStore: HomeStore
+    @Environment(AuthManager.self) private var authManager
+    @Environment(HomeStore.self) private var homeStore
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
@@ -51,7 +51,7 @@ struct ContentView: View {
                         Label("Info", systemImage: "book.fill")
                     }
                 }
-                .tint(Color("AppTeal"))
+                .tint(.appTeal)
                 .sheet(isPresented: $showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
                     OnboardingPage(isPresented: $showOnboarding)
                 }
@@ -70,7 +70,7 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environmentObject(AuthManager())
-        .environmentObject(HomeStore())
-        .environmentObject(MessageStore())
+        .environment(AuthManager())
+        .environment(HomeStore())
+        .environment(MessageStore())
 }

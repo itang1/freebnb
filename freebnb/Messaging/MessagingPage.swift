@@ -9,8 +9,8 @@ struct MessagingPage: View {
     let otherUserID: String
     let otherName: String
 
-    @EnvironmentObject var messageStore: MessageStore
-    @EnvironmentObject var authManager: AuthManager
+    @Environment(MessageStore.self) private var messageStore
+    @Environment(AuthManager.self) private var authManager
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
 
@@ -19,6 +19,7 @@ struct MessagingPage: View {
         MessageStore.conversationID(userIDs: [currentUserID, otherUserID])
     }
     private var messages: [Message] { messageStore.messages(for: conversationID) }
+    private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,13 +67,9 @@ struct MessagingPage: View {
                 Button(action: sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
-                        .foregroundColor(
-                            draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                ? .secondary.opacity(0.4)
-                                : Color("AppTeal")
-                        )
+                        .foregroundColor(trimmedDraft.isEmpty ? .secondary.opacity(0.4) : .appTeal)
                 }
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(trimmedDraft.isEmpty)
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
@@ -81,13 +78,15 @@ struct MessagingPage: View {
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle(otherName)
         .navigationBarTitleDisplayMode(.inline)
+        .task { inputFocused = true }
     }
 
     private func sendMessage() {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = trimmedDraft
         guard !trimmed.isEmpty else { return }
-        let sent = messageStore.send(text: trimmed, senderUserID: currentUserID, recipientUserID: otherUserID)
-        if sent { draft = "" }
+        if messageStore.send(text: trimmed, senderUserID: currentUserID, recipientUserID: otherUserID) {
+            draft = ""
+        }
     }
 }
 
@@ -108,7 +107,7 @@ private struct MessageBubble: View {
                 Text(message.text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(isFromMe ? Color("AppTeal") : Color.secondary.opacity(0.15))
+                    .background(isFromMe ? Color.appTeal : Color.secondary.opacity(0.15))
                     .foregroundColor(isFromMe ? .white : .primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
@@ -132,8 +131,8 @@ private struct MessageBubble: View {
 // MARK: - Conversation list tab
 
 struct MessagesTab: View {
-    @EnvironmentObject var messageStore: MessageStore
-    @EnvironmentObject var authManager: AuthManager
+    @Environment(MessageStore.self) private var messageStore
+    @Environment(AuthManager.self) private var authManager
     let listings: [Home]
 
     // Resolve a display name for a user ID: check if they're a known host, else "Guest".
@@ -145,19 +144,12 @@ struct MessagesTab: View {
         let summaries = messageStore.conversationSummaries
         Group {
             if summaries.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "message")
-                        .font(.system(size: 48))
-                        .foregroundColor(Color("AppTeal").opacity(0.35))
-                    Text("No conversations yet")
-                        .font(.headline)
+                ContentUnavailableView {
+                    Label("No conversations yet", systemImage: "message")
+                        .foregroundStyle(Color.appTeal)
+                } description: {
                     Text("Open a listing and message the host to get started.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.creamWhite.ignoresSafeArea())
             } else {
                 List {
@@ -193,11 +185,11 @@ private struct ConversationRow: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color("AppTeal").opacity(0.15))
+                    .fill(Color.appTeal.opacity(0.15))
                     .frame(width: 44, height: 44)
                 Text(String(otherName.prefix(1)))
                     .font(.headline)
-                    .foregroundColor(Color("AppTeal"))
+                    .foregroundColor(.appTeal)
             }
             .accessibilityHidden(true)
 

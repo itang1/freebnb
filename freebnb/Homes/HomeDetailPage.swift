@@ -11,8 +11,8 @@ import MapKit
 struct HomeDetailPage: View {
     let home: Home
 
-    @EnvironmentObject var messageStore: MessageStore
-    @EnvironmentObject var authManager: AuthManager
+    @Environment(MessageStore.self) private var messageStore
+    @Environment(AuthManager.self) private var authManager
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var isLoaded = false
@@ -142,7 +142,7 @@ struct HomeDetailPage: View {
                     Text("Open in Apple Maps")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color("Coral"))
+                        .background(Color.coral)
                         .flippedPrimaryColor()
                         .cornerRadius(10)
                 }
@@ -177,7 +177,7 @@ struct HomeDetailPage: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color("AppTeal"))
+                    .background(Color.appTeal)
                     .flippedPrimaryColor()
                     .cornerRadius(10)
             }
@@ -189,7 +189,7 @@ struct HomeDetailPage: View {
                 if let info = home.hostContactInfo, !info.isEmpty {
                     HStack(spacing: 10) {
                         Image(systemName: "person.crop.circle")
-                            .foregroundColor(Color("AppTeal"))
+                            .foregroundColor(Color.appTeal)
                         Text(info)
                             .font(.subheadline)
                     }
@@ -237,7 +237,7 @@ struct HomeDetailPage: View {
 #Preview {
     NavigationStack {
         HomeDetailPage(home: sampleData.randomElement()!)
-            .environmentObject(MessageStore())
-            .environmentObject(AuthManager())
+            .environment(MessageStore())
+            .environment(AuthManager())
     }
 }

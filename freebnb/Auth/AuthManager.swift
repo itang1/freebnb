@@ -6,30 +6,52 @@
 import AuthenticationServices
 import CryptoKit
 import FirebaseAuth
+import Observation
 import SwiftUI
+import os
 
 enum AuthMethod {
     case apple, guest, none
 }
 
-class AuthManager: NSObject, ObservableObject {
-    @Published var isSignedIn = false
-    @Published var isLoading = false
-    @Published var authError: String?
-    @Published var userID = ""
-    @Published var userName = ""
-    @Published var userEmail = ""
-    @Published var authMethod: AuthMethod = .none
+enum AuthError: LocalizedError, Equatable {
+    case cancelled
+    case invalidToken
+    case signInFailed
+    case guestFailed
+    case deleteFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .cancelled:     return "Sign in was cancelled."
+        case .invalidToken:  return "Sign in returned an invalid token."
+        case .signInFailed:  return "Sign in failed. Please try again."
+        case .guestFailed:   return "Could not continue as guest. Please try again."
+        case .deleteFailed:  return "Could not delete account. Please try again."
+        }
+    }
+}
+
+@MainActor
+@Observable
+final class AuthManager {
+    private(set) var isSignedIn = false
+    private(set) var isLoading = false
+    var authError: AuthError?
+    private(set) var userID = ""
+    private(set) var userName = ""
+    private(set) var userEmail = ""
+    private(set) var authMethod: AuthMethod = .none
 
     private var currentNonce: String?
-    private var authHandle: AuthStateDidChangeListenerHandle?
+    @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     private let userNameKey = "userName"
+    @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "auth")
 
-    override init() {
-        super.init()
-        // Firebase fires this immediately with current state, so no separate restoreSession().
+    init() {
+        // Firebase fires this immediately with the current user, so no separate restoreSession().
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            DispatchQueue.main.async { self?.applyAuthState(user) }
+            Task { @MainActor in self?.applyAuthState(user) }
         }
     }
 
@@ -37,7 +59,7 @@ class AuthManager: NSObject, ObservableObject {
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
-    // MARK: - Single source of truth for auth state
+    // MARK: - Single source of truth
 
     private func applyAuthState(_ user: User?) {
         if let user {
@@ -71,7 +93,7 @@ class AuthManager: NSObject, ObservableObject {
               let idTokenData = credential.identityToken,
               let idToken = String(data: idTokenData, encoding: .utf8)
         else {
-            Task { @MainActor in authError = "Sign in was cancelled or returned an invalid token." }
+            authError = .invalidToken
             return
         }
 
@@ -80,23 +102,21 @@ class AuthManager: NSObject, ObservableObject {
             rawNonce: nonce,
             fullName: credential.fullName
         )
+        let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+            .compactMap { $0 }.joined(separator: " ")
 
-        Task {
-            await MainActor.run { isLoading = true }
+        Task { @MainActor in
+            isLoading = true
+            defer { isLoading = false }
             do {
                 _ = try await Auth.auth().signIn(with: firebaseCredential)
-                let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
-                    .compactMap { $0 }.joined(separator: " ")
                 if !fullName.isEmpty {
                     UserDefaults.standard.set(fullName, forKey: userNameKey)
                 }
-                // The auth state listener will populate isSignedIn/userID/etc.
-                await MainActor.run { isLoading = false }
+                // Auth state listener populates the rest.
             } catch {
-                await MainActor.run {
-                    isLoading = false
-                    authError = "Sign in failed. Please try again."
-                }
+                log.error("apple sign in failed: \(error.localizedDescription, privacy: .public)")
+                authError = .signInFailed
             }
         }
     }
@@ -111,16 +131,14 @@ class AuthManager: NSObject, ObservableObject {
     // MARK: - Guest
 
     func continueAsGuest() {
-        Task {
-            await MainActor.run { isLoading = true }
+        Task { @MainActor in
+            isLoading = true
+            defer { isLoading = false }
             do {
                 _ = try await Auth.auth().signInAnonymously()
-                await MainActor.run { isLoading = false }
             } catch {
-                await MainActor.run {
-                    isLoading = false
-                    authError = "Could not continue as guest. Please try again."
-                }
+                log.error("anonymous sign in failed: \(error.localizedDescription, privacy: .public)")
+                authError = .guestFailed
             }
         }
     }
@@ -129,17 +147,19 @@ class AuthManager: NSObject, ObservableObject {
 
     func signOut() {
         UserDefaults.standard.removeObject(forKey: userNameKey)
-        try? Auth.auth().signOut()
-        // Listener will clear the rest.
+        do { try Auth.auth().signOut() }
+        catch { log.error("sign out failed: \(error.localizedDescription, privacy: .public)") }
+        // Listener clears published state.
     }
 
     func deleteAccount() {
-        Task {
+        Task { @MainActor in
             do {
                 try await Auth.auth().currentUser?.delete()
-                await MainActor.run { UserDefaults.standard.removeObject(forKey: userNameKey) }
+                UserDefaults.standard.removeObject(forKey: userNameKey)
             } catch {
-                await MainActor.run { authError = "Could not delete account. Please try again." }
+                log.error("delete account failed: \(error.localizedDescription, privacy: .public)")
+                authError = .deleteFailed
             }
         }
     }

@@ -19,7 +19,7 @@ struct AboutPage: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 80, height: 80)
-                            .foregroundColor(Color("AppTeal"))
+                            .foregroundColor(Color.appTeal)
 
                         Text("FreeBNB")
                             .font(.title)

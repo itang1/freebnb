@@ -4,15 +4,20 @@
 //
 
 import FirebaseFirestore
+import Observation
 import SwiftUI
+import os
 
-class HomeStore: ObservableObject {
-    @Published var listings: [Home] = []
-    @Published var isLoading = true
-    @Published var error: String?
+@MainActor
+@Observable
+final class HomeStore {
+    private(set) var listings: [Home] = []
+    private(set) var isLoading = true
+    private(set) var error: String?
 
-    private var listener: ListenerRegistration?
-    private let db = Firestore.firestore()
+    @ObservationIgnored nonisolated(unsafe) private var listener: ListenerRegistration?
+    @ObservationIgnored private let db = Firestore.firestore()
+    @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "homes")
 
     init() { startListening() }
     deinit { listener?.remove() }
@@ -21,22 +26,29 @@ class HomeStore: ObservableObject {
 
     private func startListening() {
         listener = db.collection("homes").addSnapshotListener { [weak self] snapshot, error in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                if let error {
-                    print("HomeStore error: \(error)")
-                    self.error = error.localizedDescription
-                    self.isLoading = false
-                    return
-                }
-                let docs = snapshot?.documents ?? []
-                self.listings = docs.compactMap { doc -> Home? in
-                    do { return try doc.data(as: Home.self) }
-                    catch { print("HomeStore decode error \(doc.documentID): \(error)"); return nil }
-                }
-                self.isLoading = false
+            Task { @MainActor [weak self] in
+                self?.apply(snapshot: snapshot, error: error)
             }
         }
+    }
+
+    private func apply(snapshot: QuerySnapshot?, error: Error?) {
+        if let error {
+            log.error("snapshot error: \(error.localizedDescription, privacy: .public)")
+            self.error = error.localizedDescription
+            isLoading = false
+            return
+        }
+        self.error = nil
+        let docs = snapshot?.documents ?? []
+        listings = docs.compactMap { doc -> Home? in
+            do { return try doc.data(as: Home.self) }
+            catch {
+                log.error("decode error \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                return nil
+            }
+        }
+        isLoading = false
     }
 
     // MARK: - Write
@@ -45,7 +57,7 @@ class HomeStore: ObservableObject {
         do {
             try db.collection("homes").document(home.id).setData(from: home)
         } catch {
-            print("HomeStore encode error: \(error)")
+            log.error("encode error: \(error.localizedDescription, privacy: .public)")
         }
     }
 

@@ -36,7 +36,7 @@ struct OnboardingPage: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color("AppTeal").opacity(0.15), .creamWhite, Color("AppTeal").opacity(0.3)],
+                colors: [Color.appTeal.opacity(0.15), .creamWhite, Color.appTeal.opacity(0.3)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -56,7 +56,7 @@ struct OnboardingPage: View {
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color("AppTeal"))
+                            .background(Color.appTeal)
                             .flippedPrimaryColor()
                             .cornerRadius(12)
                     }
@@ -82,14 +82,14 @@ struct OnboardingPage: View {
 
             ZStack {
                 Circle()
-                    .fill(Color("AppTeal").opacity(0.15))
+                    .fill(Color.appTeal.opacity(0.15))
                     .frame(width: 140, height: 140)
                 Image(systemName: slide.icon)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 64, height: 64)
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(Color("AppTeal"))
+                    .foregroundStyle(Color.appTeal)
             }
             .accessibilityHidden(true)
 

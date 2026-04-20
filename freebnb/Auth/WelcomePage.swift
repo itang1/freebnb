@@ -9,15 +9,15 @@ import SwiftUI
 import AuthenticationServices
 
 struct WelcomePage: View {
-    @EnvironmentObject var authManager: AuthManager
+    @Environment(AuthManager.self) private var authManager
 
     var body: some View {
         ZStack {
             LinearGradient(
                 gradient: Gradient(colors: [
-                    Color("AppTeal").opacity(0.15),
+                    Color.appTeal.opacity(0.15),
                     .creamWhite,
-                    Color("AppTeal").opacity(0.3)
+                    Color.appTeal.opacity(0.3)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
@@ -43,7 +43,7 @@ struct WelcomePage: View {
                         .scaledToFit()
                         .frame(width: 250, height: 200)
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(Color("AppTeal"))
+                        .foregroundStyle(Color.appTeal)
                         .accessibilityHidden(true)
                 }
 
@@ -63,7 +63,7 @@ struct WelcomePage: View {
 
                     if authManager.isLoading {
                         ProgressView()
-                            .tint(Color("AppTeal"))
+                            .tint(Color.appTeal)
                     } else {
                         Button("Continue as Guest") {
                             authManager.continueAsGuest()
@@ -73,7 +73,7 @@ struct WelcomePage: View {
                     }
 
                     if let error = authManager.authError {
-                        Text(error)
+                        Text(error.localizedDescription)
                             .font(.caption)
                             .foregroundColor(.red)
                             .multilineTextAlignment(.center)
@@ -90,6 +90,6 @@ struct WelcomePage: View {
 #Preview {
     NavigationStack {
         WelcomePage()
-            .environmentObject(AuthManager())
+            .environment(AuthManager())
     }
 }

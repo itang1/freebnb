@@ -6,8 +6,10 @@
 import FirebaseAuth
 import FirebaseFirestore
 import Foundation
+import Observation
+import os
 
-struct Message: Identifiable, Codable {
+struct Message: Identifiable, Codable, Hashable, Sendable {
     var id: String = UUID().uuidString
     let senderUserID: String
     let text: String
@@ -15,24 +17,28 @@ struct Message: Identifiable, Codable {
     let participants: [String]  // always sorted [userA, userB]
 }
 
-struct ConversationSummary: Identifiable {
+struct ConversationSummary: Identifiable, Hashable, Sendable {
     let id: String          // conversationID = sorted participants joined by "_"
     let otherUserID: String
     let lastMessage: Message
 }
 
-class MessageStore: ObservableObject {
-    @Published private var conversations: [String: [Message]] = [:]
-    @Published private(set) var pendingIDs: Set<String> = []
+@MainActor
+@Observable
+final class MessageStore {
+    private(set) var pendingIDs: Set<String> = []
 
+    private var conversations: [String: [Message]] = [:]
     private var currentUserID: String?
-    private var listener: ListenerRegistration?
-    private var authHandle: AuthStateDidChangeListenerHandle?
-    private let db = Firestore.firestore()
+    // Firebase handles are thread-safe to release; keep them reachable from deinit.
+    @ObservationIgnored nonisolated(unsafe) private var listener: ListenerRegistration?
+    @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
+    @ObservationIgnored private let db = Firestore.firestore()
+    @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "messaging")
 
     init() {
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            self?.restartListener(userID: user?.uid)
+            Task { @MainActor in self?.restartListener(userID: user?.uid) }
         }
     }
 
@@ -54,31 +60,35 @@ class MessageStore: ObservableObject {
         listener?.remove()
         listener = nil
         guard let userID else {
-            DispatchQueue.main.async {
-                self.conversations = [:]
-                self.pendingIDs = []
-            }
+            conversations = [:]
+            pendingIDs = []
             return
         }
         listener = db.collection("messages")
             .whereField("participants", arrayContains: userID)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self else { return }
-                DispatchQueue.main.async {
-                    if let error {
-                        print("MessageStore error: \(error)")
-                        return
-                    }
-                    let all = (snapshot?.documents ?? []).compactMap { doc -> Message? in
-                        do { return try doc.data(as: Message.self) }
-                        catch { print("MessageStore decode error \(doc.documentID): \(error)"); return nil }
-                    }
-                    self.pendingIDs.subtract(Set(all.map { $0.id }))
-                    self.conversations = Dictionary(grouping: all) {
-                        MessageStore.conversationID(userIDs: $0.participants)
-                    }
+                Task { @MainActor [weak self] in
+                    self?.apply(snapshot: snapshot, error: error)
                 }
             }
+    }
+
+    private func apply(snapshot: QuerySnapshot?, error: Error?) {
+        if let error {
+            log.error("snapshot error: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        let all = (snapshot?.documents ?? []).compactMap { doc -> Message? in
+            do { return try doc.data(as: Message.self) }
+            catch {
+                log.error("decode error \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                return nil
+            }
+        }
+        pendingIDs.subtract(Set(all.map { $0.id }))
+        conversations = Dictionary(grouping: all) {
+            MessageStore.conversationID(userIDs: $0.participants)
+        }
     }
 
     // MARK: - Public interface
@@ -108,7 +118,6 @@ class MessageStore: ObservableObject {
         m.timestamp ?? .distantFuture
     }
 
-    // Returns false if the write cannot be attempted. Caller should not clear the draft.
     @discardableResult
     func send(text: String, senderUserID: String, recipientUserID: String) -> Bool {
         guard senderUserID != recipientUserID,
@@ -122,15 +131,17 @@ class MessageStore: ObservableObject {
             participants: participants
         )
         pendingIDs.insert(msg.id)
+        let ref = db.collection("messages").document(msg.id)
         do {
-            try db.collection("messages").document(msg.id).setData(from: msg) { [weak self] error in
-                if let error {
-                    print("MessageStore write error: \(error)")
-                    DispatchQueue.main.async { self?.pendingIDs.remove(msg.id) }
+            try ref.setData(from: msg) { [weak self] error in
+                guard let error else { return }
+                Task { @MainActor [weak self] in
+                    self?.log.error("write error: \(error.localizedDescription, privacy: .public)")
+                    self?.pendingIDs.remove(msg.id)
                 }
             }
         } catch {
-            print("MessageStore encode error: \(error)")
+            log.error("encode error: \(error.localizedDescription, privacy: .public)")
             pendingIDs.remove(msg.id)
             return false
         }

@@ -131,16 +131,16 @@ struct HomeCard: View {
                                        listing.providesToiletries
                         ) {
                             if listing.providesPillows {
-                                ChipIcon(systemName: "bed.double.fill", color: Color("Coral"), label: "Pillows provided")
+                                ChipIcon(systemName: "bed.double.fill", color: Color.coral, label: "Pillows provided")
                             }
                             if listing.providesBlankets {
-                                ChipIcon(systemName: "square.stack.fill", color: Color("Coral"), label: "Blankets provided")
+                                ChipIcon(systemName: "square.stack.fill", color: Color.coral, label: "Blankets provided")
                             }
                             if listing.providesTowels {
-                                ChipIcon(systemName: "shower.fill", color: Color("Coral"), label: "Towels provided")
+                                ChipIcon(systemName: "shower.fill", color: Color.coral, label: "Towels provided")
                             }
                             if listing.providesToiletries {
-                                ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color("Coral"), label: "Toiletries provided")
+                                ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color.coral, label: "Toiletries provided")
                             }
                         }
                     }

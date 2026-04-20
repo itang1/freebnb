@@ -7,7 +7,7 @@ import SwiftUI
 import AuthenticationServices
 
 struct ProfilePage: View {
-    @EnvironmentObject var authManager: AuthManager
+    @Environment(AuthManager.self) private var authManager
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("appearance") private var appearance = "system"
 
@@ -48,12 +48,12 @@ struct ProfilePage: View {
                     HStack(spacing: 12) {
                         Image(systemName: "bell")
                             .frame(width: 28)
-                            .foregroundColor(Color("AppTeal"))
+                            .foregroundColor(Color.appTeal)
                         Text("Notifications")
                         Spacer()
                         Toggle("", isOn: $notificationsEnabled)
                             .labelsHidden()
-                            .tint(Color("AppTeal"))
+                            .tint(Color.appTeal)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
@@ -64,7 +64,7 @@ struct ProfilePage: View {
                         HStack(spacing: 12) {
                             Image(systemName: "circle.lefthalf.filled")
                                 .frame(width: 28)
-                                .foregroundColor(Color("AppTeal"))
+                                .foregroundColor(Color.appTeal)
                             Text("Appearance")
                         }
                         Picker("Appearance", selection: $appearance) {
@@ -128,7 +128,7 @@ struct ProfilePage: View {
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle("Profile")
         .sheet(isPresented: $showEditName) {
-            EditNameSheet().environmentObject(authManager)
+            EditNameSheet().environment(authManager)
         }
         .confirmationDialog(
             "Delete your account?",
@@ -147,13 +147,13 @@ struct ProfilePage: View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .fill(Color("AppTeal").opacity(0.15))
+                    .fill(Color.appTeal.opacity(0.15))
                     .frame(width: 100, height: 100)
                 Image(systemName: authManager.authMethod == .guest ? "person.slash" : "person.fill")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 44, height: 44)
-                    .foregroundColor(Color("AppTeal"))
+                    .foregroundColor(Color.appTeal)
             }
             .padding(.top, 16)
 
@@ -176,8 +176,8 @@ struct ProfilePage: View {
                     .font(.caption)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color("AppTeal").opacity(0.12))
-                    .foregroundColor(Color("AppTeal"))
+                    .background(Color.appTeal.opacity(0.12))
+                    .foregroundColor(Color.appTeal)
                     .clipShape(Capsule())
                     .padding(.top, 4)
             }
@@ -280,7 +280,7 @@ private struct SettingsRow: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .frame(width: 28)
-                    .foregroundColor(Color("AppTeal"))
+                    .foregroundColor(Color.appTeal)
                 Text(label)
                     .foregroundColor(.primary)
                 Spacer()
@@ -306,7 +306,7 @@ private struct SettingsRow: View {
 // MARK: - Edit name sheet
 
 private struct EditNameSheet: View {
-    @EnvironmentObject var authManager: AuthManager
+    @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) var dismiss
     @State private var name = ""
 
@@ -343,6 +343,6 @@ private struct EditNameSheet: View {
 #Preview {
     NavigationStack {
         ProfilePage()
-            .environmentObject(AuthManager())
+            .environment(AuthManager())
     }
 }
