@@ -13,27 +13,46 @@ struct Address: Codable, Hashable {
 }
 
 enum FoodProvision: String, CaseIterable, Hashable, Codable {
-    case all = "All meals provided"
-    case some = "Some food provided"
-    case bareMinimum = "Bare minimum provided"
-    case none = "No food provided"
+    case all         = "all"
+    case some        = "some"
+    case bareMinimum = "bareMinimum"
+    case none        = "none"
+
+    var displayName: String {
+        switch self {
+        case .all:         return "All meals provided"
+        case .some:        return "Some food provided"
+        case .bareMinimum: return "Bare minimum provided"
+        case .none:        return "No food provided"
+        }
+    }
 }
 
-enum SleepingSurface: String, Hashable {
-    case bed
-    case airMattress
-    case couch
-    case futon
-    case floorMat
+enum SleepingSurface: String, CaseIterable, Hashable, Codable {
+    case bed         = "bed"
+    case airMattress = "airMattress"
+    case couch       = "couch"
+    case futon       = "futon"
+    case floorMat    = "floorMat"
+
+    var displayName: String {
+        switch self {
+        case .bed:         return "bed"
+        case .airMattress: return "air mattress"
+        case .couch:       return "couch"
+        case .futon:       return "futon"
+        case .floorMat:    return "floor mat"
+        }
+    }
 }
 
-enum HostContactPreference {
-    case inApp
-    case contactInfo
+enum HostContactPreference: String, Hashable, Codable {
+    case inApp       = "inApp"
+    case contactInfo = "contactInfo"
 }
 
-struct Home: Identifiable, Hashable {
-    let id = UUID()
+struct Home: Identifiable, Hashable, Codable {
+    var id: String = UUID().uuidString
 
     // MARK: Host and location
     var hostUserID: String
@@ -47,7 +66,7 @@ struct Home: Identifiable, Hashable {
     var numGuestRooms: Int
     var maxGuests: Int
     var maxStayDays: Int
-    var sleepingArrangements: [SleepingSurface: Int]
+    var sleepingArrangements: [String: Int]  // Keys are SleepingSurface.rawValue
     var kidsAllowed: Bool
     var guestPetsAllowed: Bool
     var hostHasPets: Bool

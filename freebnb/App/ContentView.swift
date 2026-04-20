@@ -9,17 +9,17 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var homeStore: HomeStore
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
-    let listings = sampleData
 
     var body: some View {
         Group {
             if authManager.isSignedIn {
                 TabView {
                     NavigationStack(path: $listingsPath) {
-                        HomesPage(listings: listings) { home in
+                        HomesPage(listings: homeStore.listings, isLoading: homeStore.isLoading) { home in
                             listingsPath.append(home)
                         }
                         .navigationDestination(for: Home.self) { home in
@@ -31,7 +31,7 @@ struct ContentView: View {
                     }
 
                     NavigationStack {
-                        MessagesTab(listings: listings)
+                        MessagesTab(listings: homeStore.listings)
                     }
                     .tabItem {
                         Label("Messages", systemImage: "message")
@@ -71,5 +71,6 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environmentObject(AuthManager())
+        .environmentObject(HomeStore())
         .environmentObject(MessageStore())
 }

@@ -21,12 +21,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct freebnbApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authManager = AuthManager()
+    @StateObject private var homeStore = HomeStore()
     @StateObject private var messageStore = MessageStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(authManager)
+                .environmentObject(homeStore)
                 .environmentObject(messageStore)
         }
     }

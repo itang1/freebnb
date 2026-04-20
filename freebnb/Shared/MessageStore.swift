@@ -13,17 +13,17 @@ struct Message: Identifiable {
 }
 
 class MessageStore: ObservableObject {
-    @Published private var conversations: [UUID: [Message]] = [:]
+    @Published private var conversations: [String: [Message]] = [:]
 
-    func messages(for homeID: UUID) -> [Message] {
+    func messages(for homeID: String) -> [Message] {
         conversations[homeID] ?? []
     }
 
-    func hasMessages(for homeID: UUID) -> Bool {
+    func hasMessages(for homeID: String) -> Bool {
         !(conversations[homeID]?.isEmpty ?? true)
     }
 
-    func send(text: String, to homeID: UUID, senderUserID: String) {
+    func send(text: String, to homeID: String, senderUserID: String) {
         let msg = Message(senderUserID: senderUserID, text: text, timestamp: Date())
         conversations[homeID, default: []].append(msg)
     }

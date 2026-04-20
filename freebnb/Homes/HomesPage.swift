@@ -74,7 +74,7 @@ enum FilterOption: String, CaseIterable, Identifiable {
     func applies(to home: Home) -> Bool {
         switch self {
         case .guestRooms:          return home.numGuestRooms > 0
-        case .sleepingBed:         return (home.sleepingArrangements[.bed] ?? 0) > 0
+        case .sleepingBed:         return (home.sleepingArrangements[SleepingSurface.bed.rawValue] ?? 0) > 0
         case .kidsAllowed:         return home.kidsAllowed
         case .guestPetsAllowed:    return home.guestPetsAllowed
         case .hostHasPets:         return home.hostHasPets
@@ -115,6 +115,7 @@ struct HomesPage: View {
     @State private var shuffledListings: [Home] = []
 
     var listings: [Home]
+    var isLoading: Bool = false
     var onSelectHome: (Home) -> Void
 
     var filteredListings: [Home] {
@@ -242,7 +243,17 @@ struct HomesPage: View {
                     }
                 }
 
-                if filteredListings.isEmpty {
+                if isLoading {
+                    VStack(spacing: 16) {
+                        Spacer().frame(height: 60)
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Loading listings...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                } else if filteredListings.isEmpty {
                     VStack(spacing: 16) {
                         Spacer().frame(height: 40)
                         Image(systemName: "house.lodge.fill")
@@ -259,13 +270,15 @@ struct HomesPage: View {
                         Text("No homes found")
                             .font(.title3)
                             .fontWeight(.semibold)
-                        Text("Try removing some filters to see more results!")
+                        Text(selectedFilters.isEmpty ? "No listings yet. Check back soon!" : "Try removing some filters to see more results!")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                        Button("Clear All Filters") { selectedFilters.removeAll() }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color.appTeal)
+                        if !selectedFilters.isEmpty {
+                            Button("Clear All Filters") { selectedFilters.removeAll() }
+                                .buttonStyle(.borderedProminent)
+                                .tint(Color.appTeal)
+                        }
                     }
                     .padding()
                 }
@@ -277,6 +290,21 @@ struct HomesPage: View {
         .onAppear {
             if shuffledListings.isEmpty {
                 shuffledListings = listings.shuffled()
+            }
+        }
+        .onChange(of: listings.count) { old, new in
+            if old == 0 && new > 0 {
+                // First load from Firestore
+                shuffledListings = listings.shuffled()
+            } else if new > old {
+                // New listing added -- append to end
+                let existing = Set(shuffledListings.map { $0.id })
+                let added = listings.filter { !existing.contains($0.id) }
+                shuffledListings.append(contentsOf: added)
+            } else if new < old {
+                // Listing removed
+                let current = Set(listings.map { $0.id })
+                shuffledListings = shuffledListings.filter { current.contains($0.id) }
             }
         }
     }

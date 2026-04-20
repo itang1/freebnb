@@ -33,7 +33,7 @@ private struct AppearanceModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onAppear { apply(appearance) }
-            .onChange(of: appearance) { apply($0) }
+            .onChange(of: appearance) { _, newValue in apply(newValue) }
     }
 
     private func apply(_ value: String) {

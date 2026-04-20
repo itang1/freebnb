@@ -28,7 +28,7 @@ struct HomeDetailPage: View {
                     Text("Max Guests: \(home.maxGuests)")
                     Text("Max Stay: \(home.maxStayDays) night\(home.maxStayDays == 1 ? "" : "s")")
                     if !home.sleepingArrangements.isEmpty {
-                        Text("Sleeping Arrangements: \(home.sleepingArrangements.sorted(by: { $0.key.rawValue < $1.key.rawValue }).map { "\($0.value) \(sleepingLabel(for: $0.key))" }.joined(separator: ", "))")
+                        Text("Sleeping Arrangements: \(home.sleepingArrangements.sorted(by: { $0.key < $1.key }).map { "\($0.value) \(sleepingLabel(for: $0.key))" }.joined(separator: ", "))")
                     }
                 }
                 .font(.subheadline)
@@ -91,7 +91,7 @@ struct HomeDetailPage: View {
                         Image(systemName: "fork.knife")
                             .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.75) : .green)
                             .accessibilityHidden(true)
-                        Text("Food: \(home.foodProvision.rawValue)")
+                        Text("Food: \(home.foodProvision.displayName)")
                             .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.75) : .primary)
                     }
                     .accessibilityElement(children: .combine)
@@ -200,14 +200,8 @@ struct HomeDetailPage: View {
         }
     }
 
-    private func sleepingLabel(for surface: SleepingSurface) -> String {
-        switch surface {
-        case .bed: return "bed"
-        case .airMattress: return "air mattress"
-        case .couch: return "couch"
-        case .futon: return "futon"
-        case .floorMat: return "floor mat"
-        }
+    private func sleepingLabel(for rawValue: String) -> String {
+        SleepingSurface(rawValue: rawValue)?.displayName ?? rawValue
     }
 
     private func amenityRow(_ label: String, available: Bool) -> some View {
