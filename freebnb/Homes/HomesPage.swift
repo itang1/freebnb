@@ -116,6 +116,9 @@ struct HomesPage: View {
 
     var listings: [Home]
     var isLoading: Bool = false
+    var isLoadingMore: Bool = false
+    var canLoadMore: Bool = false
+    var onLoadMore: () -> Void = {}
     var onSelectHome: (Home) -> Void
 
     var filteredListings: [Home] {
@@ -240,6 +243,17 @@ struct HomesPage: View {
                         }
                         .buttonStyle(CardButtonStyle())
                         .accessibilityLabel("\(listing.hostName), \(listing.address.city), \(listing.address.state)")
+                    }
+
+                    if canLoadMore && !filteredListings.isEmpty {
+                        Color.clear
+                            .frame(height: 1)
+                            .onAppear { onLoadMore() }
+                    }
+
+                    if isLoadingMore {
+                        ProgressView()
+                            .padding(.vertical, 16)
                     }
                 }
 

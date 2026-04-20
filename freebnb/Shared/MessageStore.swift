@@ -73,8 +73,15 @@ final class MessageStore {
             failedMessages = [:]
             return
         }
+        // Cap the listener at the most-recent N messages across all conversations.
+        // Power users with more than this won't see older history on resume, but the
+        // app also can't scale past a few hundred threads with a single global listener
+        // anyway. The long-term fix is a conversations/{cid} summary collection plus
+        // per-conversation listeners; tracked in TODO.md.
         listener = db.collection("messages")
             .whereField("participants", arrayContains: userID)
+            .order(by: "timestamp", descending: true)
+            .limit(to: 200)
             .addSnapshotListener { [weak self] snapshot, error in
                 Task { @MainActor [weak self] in
                     self?.apply(snapshot: snapshot, error: error)

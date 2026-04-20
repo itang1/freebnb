@@ -19,7 +19,13 @@ struct ContentView: View {
             if authManager.isSignedIn {
                 TabView {
                     NavigationStack(path: $listingsPath) {
-                        HomesPage(listings: homeStore.listings, isLoading: homeStore.isLoading) { home in
+                        HomesPage(
+                            listings: homeStore.listings,
+                            isLoading: homeStore.isLoading,
+                            isLoadingMore: homeStore.isLoadingMore,
+                            canLoadMore: homeStore.canLoadMore,
+                            onLoadMore: { homeStore.loadMore() }
+                        ) { home in
                             listingsPath.append(home)
                         }
                         .navigationDestination(for: Home.self) { home in

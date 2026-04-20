@@ -13,23 +13,40 @@ import os
 final class HomeStore {
     private(set) var listings: [Home] = []
     private(set) var isLoading = true
+    private(set) var isLoadingMore = false
+    private(set) var canLoadMore = true
     private(set) var error: String?
 
     @ObservationIgnored nonisolated(unsafe) private var listener: ListenerRegistration?
     @ObservationIgnored private let db = Firestore.firestore()
     @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "homes")
+    @ObservationIgnored private let pageSize = 20
+    @ObservationIgnored private var currentLimit: Int
 
-    init() { startListening() }
+    init() {
+        currentLimit = pageSize
+        restartListener()
+    }
+
     deinit { listener?.remove() }
 
-    // MARK: - Real-time listener
+    // MARK: - Paginated listener
+    //
+    // We keep a single live listener whose limit grows as the user scrolls. This
+    // way all loaded listings stay in sync with real-time edits. The trade-off is
+    // that each loadMore re-reads the whole loaded prefix; acceptable up to a few
+    // hundred docs. Beyond that, split into per-page one-shot queries.
 
-    private func startListening() {
-        listener = db.collection("homes").addSnapshotListener { [weak self] snapshot, error in
-            Task { @MainActor [weak self] in
-                self?.apply(snapshot: snapshot, error: error)
+    private func restartListener() {
+        listener?.remove()
+        listener = db.collection("homes")
+            .order(by: FieldPath.documentID())
+            .limit(to: currentLimit)
+            .addSnapshotListener { [weak self] snapshot, error in
+                Task { @MainActor [weak self] in
+                    self?.apply(snapshot: snapshot, error: error)
+                }
             }
-        }
     }
 
     private func apply(snapshot: QuerySnapshot?, error: Error?) {
@@ -37,6 +54,7 @@ final class HomeStore {
             log.error("snapshot error: \(error.localizedDescription, privacy: .public)")
             self.error = error.localizedDescription
             isLoading = false
+            isLoadingMore = false
             return
         }
         self.error = nil
@@ -48,7 +66,16 @@ final class HomeStore {
                 return nil
             }
         }
+        canLoadMore = docs.count >= currentLimit
         isLoading = false
+        isLoadingMore = false
+    }
+
+    func loadMore() {
+        guard !isLoadingMore, canLoadMore else { return }
+        isLoadingMore = true
+        currentLimit += pageSize
+        restartListener()
     }
 
     // MARK: - Write
