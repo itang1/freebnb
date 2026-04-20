@@ -17,5 +17,5 @@ include/
 pyvenv.cfg
 
 # Project
-freebnb/sampleData.swift
+freebnb/Shared/sampleData.swift
 freebnb/GoogleService-Info.plist

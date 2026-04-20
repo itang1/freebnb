@@ -18,13 +18,6 @@ struct ContentView: View {
         Group {
             if authManager.isSignedIn {
                 TabView {
-                    NavigationStack {
-                        InfoPage()
-                    }
-                    .tabItem {
-                        Label("Info", systemImage: "book.fill")
-                    }
-
                     NavigationStack(path: $listingsPath) {
                         HomesPage(listings: listings) { home in
                             listingsPath.append(home)
@@ -49,6 +42,13 @@ struct ContentView: View {
                     }
                     .tabItem {
                         Label("Profile", systemImage: "person.fill")
+                    }
+
+                    NavigationStack {
+                        InfoPage()
+                    }
+                    .tabItem {
+                        Label("Info", systemImage: "book.fill")
                     }
                 }
                 .tint(Color("AppTeal"))
