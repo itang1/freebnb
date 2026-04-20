@@ -38,19 +38,22 @@ final class MessageStore {
     private var conversations: [String: [Message]] = [:]
     private var failedMessages: [String: Message] = [:]
     private var currentUserID: String?
-    @ObservationIgnored nonisolated(unsafe) private var listener: ListenerRegistration?
-    @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
-    @ObservationIgnored private let db = Firestore.firestore()
-    @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "messaging")
 
-    init() {
+    @ObservationIgnored private let repository: MessagesRepository
+    @ObservationIgnored private var activeListener: RepositoryListener?
+    @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
+    @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "messaging")
+    @ObservationIgnored private let historyLimit = 200
+
+    init(repository: MessagesRepository = FirestoreMessagesRepository()) {
+        self.repository = repository
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in self?.restartListener(userID: user?.uid) }
         }
     }
 
     deinit {
-        listener?.remove()
+        activeListener?.cancel()
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
@@ -64,8 +67,8 @@ final class MessageStore {
 
     private func restartListener(userID: String?) {
         currentUserID = userID
-        listener?.remove()
-        listener = nil
+        activeListener?.cancel()
+        activeListener = nil
         guard let userID else {
             conversations = [:]
             pendingIDs = []
@@ -73,37 +76,22 @@ final class MessageStore {
             failedMessages = [:]
             return
         }
-        // Cap the listener at the most-recent N messages across all conversations.
-        // Power users with more than this won't see older history on resume, but the
-        // app also can't scale past a few hundred threads with a single global listener
-        // anyway. The long-term fix is a conversations/{cid} summary collection plus
-        // per-conversation listeners; tracked in TODO.md.
-        listener = db.collection("messages")
-            .whereField("participants", arrayContains: userID)
-            .order(by: "timestamp", descending: true)
-            .limit(to: 200)
-            .addSnapshotListener { [weak self] snapshot, error in
-                Task { @MainActor [weak self] in
-                    self?.apply(snapshot: snapshot, error: error)
-                }
+        activeListener = repository.listenToMessages(userID: userID, limit: historyLimit) { [weak self] result in
+            Task { @MainActor [weak self] in
+                self?.apply(result: result)
             }
+        }
     }
 
-    private func apply(snapshot: QuerySnapshot?, error: Error?) {
-        if let error {
+    private func apply(result: Result<[Message], Error>) {
+        switch result {
+        case .failure(let error):
             log.error("snapshot error: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        let all = (snapshot?.documents ?? []).compactMap { doc -> Message? in
-            do { return try doc.data(as: Message.self) }
-            catch {
-                log.error("decode error \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                return nil
+        case .success(let all):
+            pendingIDs.subtract(Set(all.map { $0.id }))
+            conversations = Dictionary(grouping: all) {
+                MessageStore.conversationID(userIDs: $0.participants)
             }
-        }
-        pendingIDs.subtract(Set(all.map { $0.id }))
-        conversations = Dictionary(grouping: all) {
-            MessageStore.conversationID(userIDs: $0.participants)
         }
     }
 
@@ -136,7 +124,6 @@ final class MessageStore {
     }
 
     // Pending messages (server timestamp not yet resolved) sort to the end.
-    // Failed messages carry a local attempt date so they stay in place.
     private static func sortKey(_ m: Message) -> Date {
         m.timestamp ?? .distantFuture
     }
@@ -154,16 +141,13 @@ final class MessageStore {
             participants: participants
         )
         pendingIDs.insert(msg.id)
-        let ref = db.collection("messages").document(msg.id)
         do {
-            try ref.setData(from: msg) { [weak self] error in
-                guard let error else { return }
+            try repository.send(msg) { [weak self] error in
                 Task { @MainActor [weak self] in
                     self?.markFailed(msg: msg, error: error)
                 }
             }
         } catch {
-            log.error("encode error: \(error.localizedDescription, privacy: .public)")
             markFailed(msg: msg, error: error)
             return false
         }
@@ -182,14 +166,10 @@ final class MessageStore {
         failedMessages.removeValue(forKey: messageID)
     }
 
-    // MARK: - Private
-
     private func markFailed(msg: Message, error: Error) {
         log.error("write error \(msg.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
         pendingIDs.remove(msg.id)
         failedIDs.insert(msg.id)
-        // Stamp locally so it sorts next to the time the user hit send rather than at
-        // .distantFuture (which is reserved for still-pending messages).
         var stamped = msg
         stamped.timestamp = Date()
         failedMessages[msg.id] = stamped

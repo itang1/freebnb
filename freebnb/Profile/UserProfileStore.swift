@@ -23,20 +23,21 @@ final class UserProfileStore {
     private(set) var currentProfile: UserProfile?
     private(set) var profileCache: [String: UserProfile] = [:]
 
-    @ObservationIgnored nonisolated(unsafe) private var currentListener: ListenerRegistration?
+    @ObservationIgnored private let repository: UserProfileRepository
+    @ObservationIgnored private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private var inFlight: Set<String> = []
-    @ObservationIgnored private let db = Firestore.firestore()
     @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "profile")
 
-    init() {
+    init(repository: UserProfileRepository = FirestoreUserProfileRepository()) {
+        self.repository = repository
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in self?.restartCurrentListener(user: user) }
         }
     }
 
     deinit {
-        currentListener?.remove()
+        activeListener?.cancel()
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
@@ -47,8 +48,8 @@ final class UserProfileStore {
     // MARK: - Current user listener
 
     private func restartCurrentListener(user: User?) {
-        currentListener?.remove()
-        currentListener = nil
+        activeListener?.cancel()
+        activeListener = nil
         currentProfile = nil
         guard let user, !user.isAnonymous else { return }
 
@@ -56,54 +57,35 @@ final class UserProfileStore {
         let email = user.email
         let seedName = UserDefaults.standard.string(forKey: "userName") ?? user.displayName ?? ""
 
-        currentListener = db.collection("users").document(userID)
-            .addSnapshotListener { [weak self] snapshot, error in
-                Task { @MainActor [weak self] in
-                    self?.handleCurrentSnapshot(
-                        snapshot: snapshot,
-                        error: error,
-                        userID: userID,
-                        email: email,
-                        seedName: seedName
-                    )
-                }
+        activeListener = repository.listenToCurrentProfile(userID: userID) { [weak self] result in
+            Task { @MainActor [weak self] in
+                self?.handleCurrentProfile(result: result, userID: userID, email: email, seedName: seedName)
             }
+        }
     }
 
-    private func handleCurrentSnapshot(
-        snapshot: DocumentSnapshot?,
-        error: Error?,
+    private func handleCurrentProfile(
+        result: Result<UserProfile?, Error>,
         userID: String,
         email: String?,
         seedName: String
     ) {
-        if let error {
+        switch result {
+        case .failure(let error):
             log.error("profile snapshot error: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        guard let snapshot else { return }
-        if snapshot.exists {
-            do {
-                let profile = try snapshot.data(as: UserProfile.self)
+        case .success(let profile):
+            if let profile {
                 currentProfile = profile
                 profileCache[userID] = profile
-            } catch {
-                log.error("profile decode error \(userID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            } else {
+                Task { await self.createInitialProfile(userID: userID, displayName: seedName, email: email) }
             }
-        } else {
-            Task { await self.createInitialProfile(userID: userID, displayName: seedName, email: email) }
         }
     }
 
     private func createInitialProfile(userID: String, displayName: String, email: String?) async {
-        var data: [String: Any] = [
-            "displayName": displayName,
-            "createdAt": FieldValue.serverTimestamp(),
-            "updatedAt": FieldValue.serverTimestamp()
-        ]
-        if let email { data["email"] = email }
         do {
-            try await db.collection("users").document(userID).setData(data)
+            try await repository.createInitialProfile(userID: userID, displayName: displayName, email: email)
         } catch {
             log.error("profile create error: \(error.localizedDescription, privacy: .public)")
         }
@@ -115,10 +97,7 @@ final class UserProfileStore {
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, let userID = Auth.auth().currentUser?.uid else { return }
         do {
-            try await db.collection("users").document(userID).setData([
-                "displayName": trimmed,
-                "updatedAt": FieldValue.serverTimestamp()
-            ], merge: true)
+            try await repository.updateDisplayName(userID: userID, newName: trimmed)
             UserDefaults.standard.set(trimmed, forKey: "userName")
         } catch {
             log.error("profile update error: \(error.localizedDescription, privacy: .public)")
@@ -144,10 +123,9 @@ final class UserProfileStore {
             guard let self else { return }
             defer { self.inFlight.remove(userID) }
             do {
-                let snap = try await self.db.collection("users").document(userID).getDocument()
-                guard snap.exists else { return }
-                let profile = try snap.data(as: UserProfile.self)
-                self.profileCache[userID] = profile
+                if let profile = try await self.repository.fetchProfile(userID: userID) {
+                    self.profileCache[userID] = profile
+                }
             } catch {
                 self.log.error("profile fetch error \(userID, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
