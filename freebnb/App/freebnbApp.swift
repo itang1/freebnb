@@ -6,23 +6,20 @@
 //
 
 import SwiftUI
-import UIKit
 import FirebaseCore
-
-class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication,
-                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        FirebaseApp.configure()
-        return true
-    }
-}
 
 @main
 struct freebnbApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @State private var authManager = AuthManager()
-    @State private var homeStore = HomeStore()
-    @State private var messageStore = MessageStore()
+    @State private var authManager: AuthManager
+    @State private var homeStore: HomeStore
+    @State private var messageStore: MessageStore
+
+    init() {
+        FirebaseApp.configure()
+        _authManager = State(initialValue: AuthManager())
+        _homeStore = State(initialValue: HomeStore())
+        _messageStore = State(initialValue: MessageStore())
+    }
 
     var body: some Scene {
         WindowGroup {

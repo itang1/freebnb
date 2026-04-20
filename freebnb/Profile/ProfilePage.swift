@@ -135,9 +135,11 @@ struct ProfilePage: View {
             isPresented: $showDeleteConfirm,
             titleVisibility: .visible
         ) {
-            Button("Delete Account", role: .destructive) { authManager.deleteAccount() }
+            Button("Delete Account", role: .destructive) {
+                Task { await authManager.deleteAccount() }
+            }
         } message: {
-            Text("This permanently removes your account and all saved data. It cannot be undone.")
+            Text("This permanently removes your account and all saved data. It cannot be undone. Sign in with Apple will prompt again to confirm.")
         }
     }
 

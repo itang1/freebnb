@@ -72,8 +72,9 @@ struct WelcomePage: View {
                         .foregroundColor(.secondary)
                     }
 
-                    if let error = authManager.authError {
-                        Text(error.localizedDescription)
+                    if let error = authManager.authError,
+                       let description = error.errorDescription {
+                        Text(description)
                             .font(.caption)
                             .foregroundColor(.red)
                             .multilineTextAlignment(.center)
