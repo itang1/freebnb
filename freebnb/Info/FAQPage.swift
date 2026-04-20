@@ -38,6 +38,10 @@ struct FAQPage: View {
         FAQItem(
             question: "What data does FreeBNB actually store about me?",
             answer: "Only what you choose to share: your display name and email address (if you share them via Sign in with Apple). FreeBNB does not store passwords, payment information, or location data. You can delete your account at any time from the Profile page, which removes all stored data."
+        ),
+        FAQItem(
+            question: "Can I browse and message hosts without creating an account?",
+            answer: "Yes. When you tap \"Continue as Guest\", FreeBNB quietly creates an invisible account for you behind the scenes with a random ID. You never have to pick a username or password. That ID is saved on your device, so your messages and session persist across app opens. Messages you send are tied to that ID, and if a host replies, you'll see it in real time. The only limitation is that your guest ID is device-specific: if you switch phones or reinstall the app, you'll get a new ID and won't be able to recover your old messages."
         )
     ]
 

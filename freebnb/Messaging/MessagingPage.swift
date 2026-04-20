@@ -77,7 +77,10 @@ struct MessagingPage: View {
     private func sendMessage() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        messageStore.send(text: trimmed, to: home.id, senderUserID: currentUserID)
+        // Reuse participants from an existing message so both sides always stay in sync.
+        // First message in a new thread derives participants from sender + host.
+        let participants = messages.first?.participants ?? [currentUserID, home.hostUserID]
+        messageStore.send(text: trimmed, to: home.id, senderUserID: currentUserID, participants: participants)
         draft = ""
     }
 }
