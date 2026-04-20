@@ -12,6 +12,7 @@ struct HomeDetailPage: View {
     let home: Home
 
     @EnvironmentObject var messageStore: MessageStore
+    @EnvironmentObject var authManager: AuthManager
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var isLoaded = false
@@ -109,10 +110,11 @@ struct HomeDetailPage: View {
 
                 Spacer(minLength: 10)
 
-                Text("Contact Host")
-                    .font(.headline)
-
-                contactSection
+                if authManager.userID != home.hostUserID {
+                    Text("Contact Host")
+                        .font(.headline)
+                    contactSection
+                }
 
                 Spacer(minLength: 10)
 
@@ -169,7 +171,7 @@ struct HomeDetailPage: View {
         switch home.contactPreference {
         case .inApp:
             NavigationLink {
-                MessagingPage(home: home)
+                MessagingPage(otherUserID: home.hostUserID, otherName: home.hostName)
             } label: {
                 Label("Message \(home.hostName)", systemImage: "message.fill")
                     .font(.headline)
@@ -236,5 +238,6 @@ struct HomeDetailPage: View {
     NavigationStack {
         HomeDetailPage(home: sampleData.randomElement()!)
             .environmentObject(MessageStore())
+            .environmentObject(AuthManager())
     }
 }

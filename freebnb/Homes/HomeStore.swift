@@ -30,14 +30,9 @@ class HomeStore: ObservableObject {
                     return
                 }
                 let docs = snapshot?.documents ?? []
-                print("HomeStore: received \(docs.count) documents")
-                self.listings = docs.compactMap { doc in
-                    if let home = self.decode(doc) {
-                        return home
-                    } else {
-                        print("HomeStore: failed to decode document \(doc.documentID): \(doc.data())")
-                        return nil
-                    }
+                self.listings = docs.compactMap { doc -> Home? in
+                    do { return try doc.data(as: Home.self) }
+                    catch { print("HomeStore decode error \(doc.documentID): \(error)"); return nil }
                 }
                 self.isLoading = false
             }
@@ -47,29 +42,14 @@ class HomeStore: ObservableObject {
     // MARK: - Write
 
     func save(_ home: Home) {
-        guard let data = encoded(home) else { return }
-        db.collection("homes").document(home.id).setData(data)
+        do {
+            try db.collection("homes").document(home.id).setData(from: home)
+        } catch {
+            print("HomeStore encode error: \(error)")
+        }
     }
 
     func delete(_ home: Home) {
         db.collection("homes").document(home.id).delete()
-    }
-
-    // MARK: - Codable helpers
-
-    private func decode(_ document: QueryDocumentSnapshot) -> Home? {
-        var data = document.data()
-        data["id"] = document.documentID
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-              let home = try? JSONDecoder().decode(Home.self, from: jsonData)
-        else { return nil }
-        return home
-    }
-
-    private func encoded(_ home: Home) -> [String: Any]? {
-        guard let data = try? JSONEncoder().encode(home),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        return dict
     }
 }

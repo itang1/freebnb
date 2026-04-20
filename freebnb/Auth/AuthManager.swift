@@ -22,22 +22,37 @@ class AuthManager: NSObject, ObservableObject {
     @Published var authMethod: AuthMethod = .none
 
     private var currentNonce: String?
+    private var authHandle: AuthStateDidChangeListenerHandle?
     private let userNameKey = "userName"
 
     override init() {
         super.init()
-        restoreSession()
+        // Firebase fires this immediately with current state, so no separate restoreSession().
+        authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            DispatchQueue.main.async { self?.applyAuthState(user) }
+        }
     }
 
-    // MARK: - Session restore
+    deinit {
+        if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
+    }
 
-    private func restoreSession() {
-        guard let user = Auth.auth().currentUser else { return }
-        userID     = user.uid
-        userName   = UserDefaults.standard.string(forKey: userNameKey) ?? user.displayName ?? ""
-        userEmail  = user.email ?? ""
-        authMethod = user.isAnonymous ? .guest : .apple
-        isSignedIn = true
+    // MARK: - Single source of truth for auth state
+
+    private func applyAuthState(_ user: User?) {
+        if let user {
+            userID     = user.uid
+            userName   = UserDefaults.standard.string(forKey: userNameKey) ?? user.displayName ?? ""
+            userEmail  = user.email ?? ""
+            authMethod = user.isAnonymous ? .guest : .apple
+            isSignedIn = true
+        } else {
+            userID     = ""
+            userName   = ""
+            userEmail  = ""
+            authMethod = .none
+            isSignedIn = false
+        }
     }
 
     // MARK: - Sign in with Apple
@@ -55,7 +70,10 @@ class AuthManager: NSObject, ObservableObject {
               let nonce = currentNonce,
               let idTokenData = credential.identityToken,
               let idToken = String(data: idTokenData, encoding: .utf8)
-        else { return }
+        else {
+            Task { @MainActor in authError = "Sign in was cancelled or returned an invalid token." }
+            return
+        }
 
         let firebaseCredential = OAuthProvider.appleCredential(
             withIDToken: idToken,
@@ -66,24 +84,18 @@ class AuthManager: NSObject, ObservableObject {
         Task {
             await MainActor.run { isLoading = true }
             do {
-                let authResult = try await Auth.auth().signIn(with: firebaseCredential)
+                _ = try await Auth.auth().signIn(with: firebaseCredential)
                 let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
                     .compactMap { $0 }.joined(separator: " ")
                 if !fullName.isEmpty {
                     UserDefaults.standard.set(fullName, forKey: userNameKey)
                 }
-                await MainActor.run {
-                    userID     = authResult.user.uid
-                    userName   = UserDefaults.standard.string(forKey: userNameKey) ?? authResult.user.displayName ?? ""
-                    userEmail  = authResult.user.email ?? ""
-                    authMethod = .apple
-                    isLoading  = false
-                    isSignedIn = true
-                }
+                // The auth state listener will populate isSignedIn/userID/etc.
+                await MainActor.run { isLoading = false }
             } catch {
                 await MainActor.run {
-                    isLoading  = false
-                    authError  = "Sign in failed. Please try again."
+                    isLoading = false
+                    authError = "Sign in failed. Please try again."
                 }
             }
         }
@@ -102,13 +114,8 @@ class AuthManager: NSObject, ObservableObject {
         Task {
             await MainActor.run { isLoading = true }
             do {
-                let result = try await Auth.auth().signInAnonymously()
-                await MainActor.run {
-                    userID     = result.user.uid
-                    authMethod = .guest
-                    isLoading  = false
-                    isSignedIn = true
-                }
+                _ = try await Auth.auth().signInAnonymously()
+                await MainActor.run { isLoading = false }
             } catch {
                 await MainActor.run {
                     isLoading = false
@@ -121,22 +128,20 @@ class AuthManager: NSObject, ObservableObject {
     // MARK: - Sign out / delete
 
     func signOut() {
+        UserDefaults.standard.removeObject(forKey: userNameKey)
         try? Auth.auth().signOut()
-        clearLocalSession()
+        // Listener will clear the rest.
     }
 
     func deleteAccount() {
-        Task { try? await Auth.auth().currentUser?.delete() }
-        clearLocalSession()
-    }
-
-    private func clearLocalSession() {
-        UserDefaults.standard.removeObject(forKey: userNameKey)
-        isSignedIn = false
-        authMethod = .none
-        userID     = ""
-        userName   = ""
-        userEmail  = ""
+        Task {
+            do {
+                try await Auth.auth().currentUser?.delete()
+                await MainActor.run { UserDefaults.standard.removeObject(forKey: userNameKey) }
+            } catch {
+                await MainActor.run { authError = "Could not delete account. Please try again." }
+            }
+        }
     }
 
     // MARK: - Nonce helpers

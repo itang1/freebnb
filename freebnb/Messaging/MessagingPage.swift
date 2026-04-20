@@ -6,14 +6,19 @@
 import SwiftUI
 
 struct MessagingPage: View {
-    let home: Home
+    let otherUserID: String
+    let otherName: String
+
     @EnvironmentObject var messageStore: MessageStore
     @EnvironmentObject var authManager: AuthManager
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
 
-    private var messages: [Message] { messageStore.messages(for: home.id) }
     private var currentUserID: String { authManager.userID }
+    private var conversationID: String {
+        MessageStore.conversationID(userIDs: [currentUserID, otherUserID])
+    }
+    private var messages: [Message] { messageStore.messages(for: conversationID) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,7 +26,7 @@ struct MessagingPage: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         if messages.isEmpty {
-                            Text("Send \(home.hostName) a message to get started.")
+                            Text("Send \(otherName) a message to get started.")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
@@ -29,8 +34,12 @@ struct MessagingPage: View {
                                 .padding(.horizontal, 24)
                         }
                         ForEach(messages) { message in
-                            MessageBubble(message: message, currentUserID: currentUserID)
-                                .id(message.id)
+                            MessageBubble(
+                                message: message,
+                                currentUserID: currentUserID,
+                                isPending: messageStore.isPending(message.id)
+                            )
+                            .id(message.id)
                         }
                     }
                     .padding()
@@ -45,7 +54,7 @@ struct MessagingPage: View {
             Divider()
 
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Message \(home.hostName)...", text: $draft, axis: .vertical)
+                TextField("Message \(otherName)...", text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -70,18 +79,15 @@ struct MessagingPage: View {
             .background(Color.creamWhite)
         }
         .background(Color.creamWhite.ignoresSafeArea())
-        .navigationTitle(home.hostName)
+        .navigationTitle(otherName)
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private func sendMessage() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        // Reuse participants from an existing message so both sides always stay in sync.
-        // First message in a new thread derives participants from sender + host.
-        let participants = messages.first?.participants ?? [currentUserID, home.hostUserID]
-        messageStore.send(text: trimmed, to: home.id, senderUserID: currentUserID, participants: participants)
-        draft = ""
+        let sent = messageStore.send(text: trimmed, senderUserID: currentUserID, recipientUserID: otherUserID)
+        if sent { draft = "" }
     }
 }
 
@@ -90,6 +96,7 @@ struct MessagingPage: View {
 private struct MessageBubble: View {
     let message: Message
     let currentUserID: String
+    let isPending: Bool
 
     private var isFromMe: Bool { message.senderUserID == currentUserID }
 
@@ -105,9 +112,16 @@ private struct MessageBubble: View {
                     .foregroundColor(isFromMe ? .white : .primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                Text(message.timestamp, style: .time)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    if isFromMe && isPending {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(message.timestamp ?? Date(), style: .time)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
 
             if !isFromMe { Spacer(minLength: 60) }
@@ -122,13 +136,15 @@ struct MessagesTab: View {
     @EnvironmentObject var authManager: AuthManager
     let listings: [Home]
 
-    private var activeConversations: [Home] {
-        listings.filter { messageStore.hasMessages(for: $0.id) }
+    // Resolve a display name for a user ID: check if they're a known host, else "Guest".
+    private func displayName(for userID: String) -> String {
+        listings.first { $0.hostUserID == userID }?.hostName ?? "Guest"
     }
 
     var body: some View {
+        let summaries = messageStore.conversationSummaries
         Group {
-            if activeConversations.isEmpty {
+            if summaries.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "message")
                         .font(.system(size: 48))
@@ -145,17 +161,16 @@ struct MessagesTab: View {
                 .background(Color.creamWhite.ignoresSafeArea())
             } else {
                 List {
-                    ForEach(activeConversations) { home in
-                        if let lastMessage = messageStore.messages(for: home.id).last {
-                            NavigationLink {
-                                MessagingPage(home: home)
-                            } label: {
-                                ConversationRow(
-                                    home: home,
-                                    lastMessage: lastMessage,
-                                    currentUserID: authManager.userID
-                                )
-                            }
+                    ForEach(summaries) { summary in
+                        let name = displayName(for: summary.otherUserID)
+                        NavigationLink {
+                            MessagingPage(otherUserID: summary.otherUserID, otherName: name)
+                        } label: {
+                            ConversationRow(
+                                otherName: name,
+                                lastMessage: summary.lastMessage,
+                                currentUserID: authManager.userID
+                            )
                         }
                     }
                 }
@@ -170,7 +185,7 @@ struct MessagesTab: View {
 // MARK: - Conversation row
 
 private struct ConversationRow: View {
-    let home: Home
+    let otherName: String
     let lastMessage: Message
     let currentUserID: String
 
@@ -180,14 +195,14 @@ private struct ConversationRow: View {
                 Circle()
                     .fill(Color("AppTeal").opacity(0.15))
                     .frame(width: 44, height: 44)
-                Text(String(home.hostName.prefix(1)))
+                Text(String(otherName.prefix(1)))
                     .font(.headline)
                     .foregroundColor(Color("AppTeal"))
             }
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(home.hostName)
+                Text(otherName)
                     .font(.headline)
                 HStack(spacing: 2) {
                     if lastMessage.senderUserID == currentUserID {
@@ -204,7 +219,7 @@ private struct ConversationRow: View {
 
             Spacer()
 
-            Text(lastMessage.timestamp, style: .time)
+            Text(lastMessage.timestamp ?? Date(), style: .time)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
