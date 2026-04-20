@@ -6,6 +6,29 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // User profiles. Any signed-in user can read (for showing names in chat/listings);
+    // only the owner can create/update their own doc. Deletes are forbidden by default;
+    // a Cloud Function should tombstone on account deletion.
+    match /users/{userID} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+          && request.auth.uid == userID
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() < 200
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+      allow update: if isSignedIn()
+          && request.auth.uid == userID
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() < 200
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
     // Listings: any signed-in user can read; only the host can write their own
     match /homes/{homeID} {
       allow read: if isSignedIn();

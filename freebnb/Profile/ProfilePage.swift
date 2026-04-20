@@ -8,6 +8,7 @@ import AuthenticationServices
 
 struct ProfilePage: View {
     @Environment(AuthManager.self) private var authManager
+    @Environment(UserProfileStore.self) private var userProfileStore
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("appearance") private var appearance = "system"
 
@@ -30,7 +31,7 @@ struct ProfilePage: View {
                     sectionLabel("Account")
                     VStack(spacing: 0) {
                         SettingsRow(icon: "pencil", label: "Edit Name", chevron: true,
-                                    trailingText: authManager.userName.isEmpty ? nil : authManager.userName) {
+                                    trailingText: userProfileStore.displayName.isEmpty ? nil : userProfileStore.displayName) {
                             showEditName = true
                         }
                         if !authManager.userEmail.isEmpty {
@@ -128,7 +129,8 @@ struct ProfilePage: View {
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle("Profile")
         .sheet(isPresented: $showEditName) {
-            EditNameSheet().environment(authManager)
+            EditNameSheet()
+                .environment(userProfileStore)
         }
         .confirmationDialog(
             "Delete your account?",
@@ -166,9 +168,9 @@ struct ProfilePage: View {
                     Text("Browsing without an account")
                         .font(.subheadline).foregroundColor(.secondary)
                 } else {
-                    Text(authManager.userName.isEmpty ? "No Name" : authManager.userName)
+                    Text(userProfileStore.displayName.isEmpty ? "No Name" : userProfileStore.displayName)
                         .font(.title2).fontWeight(.semibold)
-                        .foregroundColor(authManager.userName.isEmpty ? .secondary : .primary)
+                        .foregroundColor(userProfileStore.displayName.isEmpty ? .secondary : .primary)
                     if !authManager.userEmail.isEmpty {
                         Text(authManager.userEmail)
                             .font(.subheadline).foregroundColor(.secondary)
@@ -308,7 +310,7 @@ private struct SettingsRow: View {
 // MARK: - Edit name sheet
 
 private struct EditNameSheet: View {
-    @Environment(AuthManager.self) private var authManager
+    @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(\.dismiss) var dismiss
     @State private var name = ""
 
@@ -330,14 +332,14 @@ private struct EditNameSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        authManager.updateName(name)
+                        Task { await userProfileStore.updateDisplayName(name) }
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty ||
-                              name.trimmingCharacters(in: .whitespaces) == authManager.userName)
+                              name.trimmingCharacters(in: .whitespaces) == userProfileStore.displayName)
                 }
             }
-            .onAppear { name = authManager.userName }
+            .onAppear { name = userProfileStore.displayName }
         }
     }
 }
@@ -346,5 +348,6 @@ private struct EditNameSheet: View {
     NavigationStack {
         ProfilePage()
             .environment(AuthManager())
+            .environment(UserProfileStore())
     }
 }

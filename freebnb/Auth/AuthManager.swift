@@ -41,13 +41,11 @@ final class AuthManager {
     private(set) var isLoading = false
     var authError: AuthError?
     private(set) var userID = ""
-    private(set) var userName = ""
     private(set) var userEmail = ""
     private(set) var authMethod: AuthMethod = .none
 
     private var currentNonce: String?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
-    private let userNameKey = "userName"
     @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "auth")
 
     init() {
@@ -65,13 +63,11 @@ final class AuthManager {
     private func applyAuthState(_ user: User?) {
         if let user {
             userID     = user.uid
-            userName   = UserDefaults.standard.string(forKey: userNameKey) ?? user.displayName ?? ""
             userEmail  = user.email ?? ""
             authMethod = user.isAnonymous ? .guest : .apple
             isSignedIn = true
         } else {
             userID     = ""
-            userName   = ""
             userEmail  = ""
             authMethod = .none
             isSignedIn = false
@@ -121,7 +117,7 @@ final class AuthManager {
                 do {
                     _ = try await Auth.auth().signIn(with: firebaseCredential)
                     if !fullName.isEmpty {
-                        UserDefaults.standard.set(fullName, forKey: userNameKey)
+                        UserDefaults.standard.set(fullName, forKey: "userName")
                     }
                 } catch {
                     log.error("apple sign in failed: \(error.localizedDescription, privacy: .public)")
@@ -129,13 +125,6 @@ final class AuthManager {
                 }
             }
         }
-    }
-
-    func updateName(_ newName: String) {
-        let trimmed = newName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        UserDefaults.standard.set(trimmed, forKey: userNameKey)
-        userName = trimmed
     }
 
     // MARK: - Guest
@@ -156,7 +145,7 @@ final class AuthManager {
     // MARK: - Sign out / delete
 
     func signOut() {
-        UserDefaults.standard.removeObject(forKey: userNameKey)
+        UserDefaults.standard.removeObject(forKey: "userName")
         do { try Auth.auth().signOut() }
         catch { log.error("sign out failed: \(error.localizedDescription, privacy: .public)") }
     }
@@ -170,7 +159,7 @@ final class AuthManager {
                 try await revokeAppleAndReauthenticate(user: user)
             }
             try await user.delete()
-            UserDefaults.standard.removeObject(forKey: userNameKey)
+            UserDefaults.standard.removeObject(forKey: "userName")
         } catch AuthError.cancelled {
             return
         } catch {

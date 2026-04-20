@@ -133,11 +133,15 @@ private struct MessageBubble: View {
 struct MessagesTab: View {
     @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
+    @Environment(UserProfileStore.self) private var userProfileStore
     let listings: [Home]
 
-    // Resolve a display name for a user ID: check if they're a known host, else "Guest".
+    // Prefer the profile store (works for any user), fall back to the host name
+    // from listings if we happen to know them that way, else a neutral placeholder.
     private func displayName(for userID: String) -> String {
-        listings.first { $0.hostUserID == userID }?.hostName ?? "Guest"
+        if let name = userProfileStore.displayName(for: userID), !name.isEmpty { return name }
+        if let host = listings.first(where: { $0.hostUserID == userID })?.hostName { return host }
+        return "FreeBNB User"
     }
 
     var body: some View {
