@@ -10,11 +10,25 @@ import Observation
 import os
 
 struct Message: Identifiable, Codable, Hashable, Sendable {
-    var id: String = UUID().uuidString
+    let id: String
     let senderUserID: String
     let text: String
     @ServerTimestamp var timestamp: Date?
     let participants: [String]  // always sorted [userA, userB]
+
+    init(
+        id: String = UUID().uuidString,
+        senderUserID: String,
+        text: String,
+        timestamp: Date? = nil,
+        participants: [String]
+    ) {
+        self.id = id
+        self.senderUserID = senderUserID
+        self.text = text
+        self.timestamp = timestamp
+        self.participants = participants
+    }
 }
 
 struct ConversationSummary: Identifiable, Hashable, Sendable {

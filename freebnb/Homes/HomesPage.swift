@@ -74,7 +74,7 @@ enum FilterOption: String, CaseIterable, Identifiable {
     func applies(to home: Home) -> Bool {
         switch self {
         case .guestRooms:          return home.numGuestRooms > 0
-        case .sleepingBed:         return (home.sleepingArrangements[SleepingSurface.bed.rawValue] ?? 0) > 0
+        case .sleepingBed:         return (home.sleepingCounts[.bed] ?? 0) > 0
         case .kidsAllowed:         return home.kidsAllowed
         case .guestPetsAllowed:    return home.guestPetsAllowed
         case .hostHasPets:         return home.hostHasPets

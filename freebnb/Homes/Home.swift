@@ -52,7 +52,7 @@ enum HostContactPreference: String, Hashable, Codable {
 }
 
 struct Home: Identifiable, Hashable, Codable {
-    var id: String = UUID().uuidString
+    let id: String = UUID().uuidString
 
     // MARK: Host and location
     var hostUserID: String
@@ -66,7 +66,8 @@ struct Home: Identifiable, Hashable, Codable {
     var numGuestRooms: Int
     var maxGuests: Int
     var maxStayDays: Int
-    var sleepingArrangements: [String: Int]  // Keys are SleepingSurface.rawValue
+    // Firestore-compatible storage; access through `sleepingCounts` for a typed view.
+    var sleepingArrangements: [String: Int]
     var kidsAllowed: Bool
     var guestPetsAllowed: Bool
     var hostHasPets: Bool
@@ -96,4 +97,22 @@ struct Home: Identifiable, Hashable, Codable {
     // Identity-based equality and hashing, kept consistent per Hashable contract.
     static func == (lhs: Home, rhs: Home) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
+    // Typed view of `sleepingArrangements`; unknown raw keys are dropped.
+    var sleepingCounts: [SleepingSurface: Int] {
+        var result: [SleepingSurface: Int] = [:]
+        for (raw, count) in sleepingArrangements {
+            if let surface = SleepingSurface(rawValue: raw), count > 0 {
+                result[surface] = count
+            }
+        }
+        return result
+    }
+
+    var sleepingArrangementsDescription: String {
+        sleepingCounts
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { "\($0.value) \($0.key.displayName)" }
+            .joined(separator: ", ")
+    }
 }

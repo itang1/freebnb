@@ -35,8 +35,8 @@ struct HomeDetailPage: View {
                     Text("Guest Rooms: \(home.numGuestRooms)")
                     Text("Max Guests: \(home.maxGuests)")
                     Text("Max Stay: \(home.maxStayDays) night\(home.maxStayDays == 1 ? "" : "s")")
-                    if !home.sleepingArrangements.isEmpty {
-                        Text("Sleeping Arrangements: \(home.sleepingArrangements.sorted(by: { $0.key < $1.key }).map { "\($0.value) \(sleepingLabel(for: $0.key))" }.joined(separator: ", "))")
+                    if !home.sleepingCounts.isEmpty {
+                        Text("Sleeping Arrangements: \(home.sleepingArrangementsDescription)")
                     }
                 }
                 .font(.subheadline)
@@ -275,10 +275,6 @@ struct HomeDetailPage: View {
         let item = MKMapItem(placemark: placemark)
         item.name = home.hostName
         item.openInMaps(launchOptions: nil)
-    }
-
-    private func sleepingLabel(for rawValue: String) -> String {
-        SleepingSurface(rawValue: rawValue)?.displayName ?? rawValue
     }
 
     private func amenityRow(_ label: String, available: Bool) -> some View {
