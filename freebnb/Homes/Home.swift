@@ -154,12 +154,10 @@ struct Home: Identifiable, Hashable, Codable {
             .joined(separator: ", ")
     }
 
-    // MARK: - Codable
-
-    // Explicit CodingKeys + custom init so that fields added after existing
-    // Firestore documents were written (e.g. hostMotivation, photoURLs) fall
-    // back to sensible defaults instead of throwing and being silently dropped
-    // by the repository's compactMap.
+    // CodingKeys must live in the struct body (not an extension) so that Swift
+    // can use them to synthesize encode(to:). The matching init(from:) lives in
+    // the extension below so that the memberwise initializer is preserved for
+    // call sites that construct Home values directly.
     enum CodingKeys: String, CodingKey {
         case id, hostUserID, hostName, address, description
         case contactPreference, hostContactInfo, hostMotivation
@@ -171,6 +169,14 @@ struct Home: Identifiable, Hashable, Codable {
         case photoURLs
     }
 
+}
+
+// MARK: - Custom Decodable
+
+// In an extension so the memberwise initializer is preserved. Fields added
+// after the initial schema use decodeIfPresent so existing Firestore documents
+// without those keys decode successfully instead of being silently dropped.
+extension Home {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id                      = try c.decodeIfPresent(String.self,                  forKey: .id)                    ?? UUID().uuidString
