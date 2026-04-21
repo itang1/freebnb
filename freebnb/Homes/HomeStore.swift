@@ -34,7 +34,9 @@ final class HomeStore {
 
     private func restartListener() {
         activeListener?.cancel()
-        activeListener = repository.listenToListings(limit: currentLimit) { [weak self] result in
+        // Fetch one past the limit so we can tell "page full, more exist" apart
+        // from "page full, nothing more" without an extra round trip.
+        activeListener = repository.listenToListings(limit: currentLimit + 1) { [weak self] result in
             Task { @MainActor [weak self] in
                 self?.apply(result: result)
             }
@@ -50,8 +52,8 @@ final class HomeStore {
             isLoadingMore = false
         case .success(let homes):
             self.error = nil
-            listings = homes
-            canLoadMore = homes.count >= currentLimit
+            canLoadMore = homes.count > currentLimit
+            listings = Array(homes.prefix(currentLimit))
             isLoading = false
             isLoadingMore = false
         }
