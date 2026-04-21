@@ -15,7 +15,6 @@ struct ProfilePage: View {
     @Environment(\.openURL) private var openURL
     @State private var showEditName = false
     @State private var showDeleteConfirm = false
-    @State private var showCreateListing = false
 
     var body: some View {
         ScrollView {
@@ -46,8 +45,22 @@ struct ProfilePage: View {
 
                     sectionLabel("Hosting")
                     VStack(spacing: 0) {
-                        SettingsRow(icon: "plus.circle", label: "Create a Listing", chevron: true) {
-                            showCreateListing = true
+                        NavigationLink {
+                            YourListingsPage()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "house.fill")
+                                    .frame(width: 28)
+                                    .foregroundColor(Color.appTeal)
+                                Text("Your Listings")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
                         }
                     }
                     .sectionCard()
@@ -141,9 +154,6 @@ struct ProfilePage: View {
         .sheet(isPresented: $showEditName) {
             EditNameSheet()
                 .environment(userProfileStore)
-        }
-        .sheet(isPresented: $showCreateListing) {
-            CreateListingPage()
         }
         .confirmationDialog(
             "Delete your account?",
