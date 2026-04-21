@@ -44,6 +44,39 @@ struct ProfilePage: View {
                     .sectionCard()
                     .padding(.bottom, 20)
 
+                    sectionLabel("Traveling")
+                    VStack(spacing: 0) {
+                        NavigationLink {
+                            YourStaysPage()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "suitcase.fill")
+                                    .frame(width: 28)
+                                    .foregroundColor(Color.appTeal)
+                                Text("Your Stays")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if stayRequestStore.pendingOutgoingCount > 0 {
+                                    Text("\(stayRequestStore.pendingOutgoingCount)")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Color.orange.opacity(0.15))
+                                        .foregroundColor(.orange)
+                                        .clipShape(Capsule())
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
+                    }
+                    .sectionCard()
+                    .padding(.bottom, 20)
+
                     sectionLabel("Hosting")
                     VStack(spacing: 0) {
                         NavigationLink {

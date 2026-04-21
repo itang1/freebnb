@@ -127,6 +127,10 @@ final class StayRequestStore {
         incomingRequests.filter { $0.status == .pending }.count
     }
 
+    var pendingOutgoingCount: Int {
+        outgoingRequests.filter { $0.status == .pending }.count
+    }
+
     // MARK: - Private
 
     private func update(requestID: String, status: StayRequestStatus, hostNote: String?) async throws {

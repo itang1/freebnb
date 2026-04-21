@@ -180,7 +180,7 @@ private struct RequestRow: View {
 
 // MARK: - Status badge
 
-private struct StatusBadge: View {
+struct StatusBadge: View {
     let status: StayRequestStatus
 
     var body: some View {
