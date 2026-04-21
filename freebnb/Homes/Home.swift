@@ -153,4 +153,57 @@ struct Home: Identifiable, Hashable, Codable {
             .map { "\($0.value) \($0.key.displayName)" }
             .joined(separator: ", ")
     }
+
+    // MARK: - Codable
+
+    // Explicit CodingKeys + custom init so that fields added after existing
+    // Firestore documents were written (e.g. hostMotivation, photoURLs) fall
+    // back to sensible defaults instead of throwing and being silently dropped
+    // by the repository's compactMap.
+    enum CodingKeys: String, CodingKey {
+        case id, hostUserID, hostName, address, description
+        case contactPreference, hostContactInfo, hostMotivation
+        case numGuestRooms, maxGuests, maxStayDays, sleepingArrangements
+        case kidsAllowed, guestPetsAllowed, hostHasPets
+        case hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi
+        case hasPrivateGuestBathroom, parkingDetails, hasInUnitLaundry, hasCoinLaundryNearby
+        case providesPillows, providesBlankets, providesTowels, providesToiletries, foodProvision
+        case photoURLs
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id                      = try c.decodeIfPresent(String.self,                  forKey: .id)                    ?? UUID().uuidString
+        hostUserID              = try c.decode(String.self,                            forKey: .hostUserID)
+        hostName                = try c.decode(String.self,                            forKey: .hostName)
+        address                 = try c.decode(Address.self,                           forKey: .address)
+        description             = try c.decodeIfPresent(String.self,                  forKey: .description)
+        contactPreference       = try c.decodeIfPresent(HostContactPreference.self,   forKey: .contactPreference)     ?? .inApp
+        hostContactInfo         = try c.decodeIfPresent(String.self,                  forKey: .hostContactInfo)
+        hostMotivation          = try c.decodeIfPresent(HostMotivation.self,          forKey: .hostMotivation)        ?? .open
+        numGuestRooms           = try c.decode(Int.self,                              forKey: .numGuestRooms)
+        maxGuests               = try c.decode(Int.self,                              forKey: .maxGuests)
+        maxStayDays             = try c.decode(Int.self,                              forKey: .maxStayDays)
+        sleepingArrangements    = try c.decodeIfPresent([String: Int].self,           forKey: .sleepingArrangements)  ?? [:]
+        kidsAllowed             = try c.decode(Bool.self,                             forKey: .kidsAllowed)
+        guestPetsAllowed        = try c.decode(Bool.self,                             forKey: .guestPetsAllowed)
+        hostHasPets             = try c.decode(Bool.self,                             forKey: .hostHasPets)
+        hasAC                   = try c.decode(Bool.self,                             forKey: .hasAC)
+        hasHeating              = try c.decode(Bool.self,                             forKey: .hasHeating)
+        hasKitchen              = try c.decode(Bool.self,                             forKey: .hasKitchen)
+        hasFridgeSpace          = try c.decode(Bool.self,                             forKey: .hasFridgeSpace)
+        hasMicrowave            = try c.decode(Bool.self,                             forKey: .hasMicrowave)
+        hasTV                   = try c.decode(Bool.self,                             forKey: .hasTV)
+        hasWifi                 = try c.decode(Bool.self,                             forKey: .hasWifi)
+        hasPrivateGuestBathroom = try c.decode(Bool.self,                             forKey: .hasPrivateGuestBathroom)
+        parkingDetails          = try c.decodeIfPresent(String.self,                  forKey: .parkingDetails)        ?? ""
+        hasInUnitLaundry        = try c.decode(Bool.self,                             forKey: .hasInUnitLaundry)
+        hasCoinLaundryNearby    = try c.decode(Bool.self,                             forKey: .hasCoinLaundryNearby)
+        providesPillows         = try c.decode(Bool.self,                             forKey: .providesPillows)
+        providesBlankets        = try c.decode(Bool.self,                             forKey: .providesBlankets)
+        providesTowels          = try c.decode(Bool.self,                             forKey: .providesTowels)
+        providesToiletries      = try c.decode(Bool.self,                             forKey: .providesToiletries)
+        foodProvision           = try c.decodeIfPresent(FoodProvision.self,           forKey: .foodProvision)         ?? .none
+        photoURLs               = try c.decodeIfPresent([String].self,                forKey: .photoURLs)
+    }
 }
