@@ -422,5 +422,6 @@ private struct EditNameSheet: View {
         ProfilePage()
             .environment(AuthManager())
             .environment(UserProfileStore())
+            .environment(StayRequestStore())
     }
 }

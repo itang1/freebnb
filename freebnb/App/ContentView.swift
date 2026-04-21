@@ -79,4 +79,5 @@ struct ContentView: View {
         .environment(HomeStore())
         .environment(MessageStore())
         .environment(UserProfileStore())
+        .environment(StayRequestStore())
 }

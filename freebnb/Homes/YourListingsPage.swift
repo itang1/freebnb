@@ -183,5 +183,6 @@ private struct ListingRow: View {
         YourListingsPage()
             .environment(HomeStore())
             .environment(AuthManager())
+            .environment(StayRequestStore())
     }
 }

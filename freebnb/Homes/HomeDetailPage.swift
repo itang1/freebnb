@@ -329,5 +329,6 @@ struct HomeDetailPage: View {
         HomeDetailPage(home: sampleData.randomElement()!)
             .environment(MessageStore())
             .environment(AuthManager())
+            .environment(StayRequestStore())
     }
 }
