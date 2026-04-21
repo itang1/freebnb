@@ -2,8 +2,6 @@
 //  freebnbUITests.swift
 //  freebnbUITests
 //
-//  Created by Irene Tang on 7/24/25.
-//
 
 import XCTest
 

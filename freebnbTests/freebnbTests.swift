@@ -2,8 +2,6 @@
 //  freebnbTests.swift
 //  freebnbTests
 //
-//  Created by Irene Tang on 7/24/25.
-//
 
 import Testing
 

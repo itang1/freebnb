@@ -2,8 +2,6 @@
 //  GuestTipsPage.swift
 //  freebnb
 //
-//  Created by Irene Tang on 4/2/26.
-//
 
 import SwiftUI
 

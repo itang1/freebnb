@@ -2,8 +2,6 @@
 //  Extensions.swift
 //  freebnb
 //
-//  Created by Irene Tang on 8/9/25.
-//
 
 import SwiftUI
 import UIKit

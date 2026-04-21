@@ -2,8 +2,6 @@
 //  HomeCard.swift
 //  freebnb
 //
-//  Created by Irene Tang on 7/25/25.
-//
 
 import SwiftUI
 

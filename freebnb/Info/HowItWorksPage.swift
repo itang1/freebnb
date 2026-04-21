@@ -2,8 +2,6 @@
 //  HowItWorksPage.swift
 //  freebnb
 //
-//  Created by Irene Tang on 4/3/26.
-//
 
 import SwiftUI
 
