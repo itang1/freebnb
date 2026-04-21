@@ -189,13 +189,15 @@ struct HomeDetailPage: View {
 
     private func startGeocoding() {
         guard mapState == .loading else { return }
+        let address = formattedAddress
+        let hostName = home.hostName
         geocodeTask = Task {
             do {
-                let coordinate = try await geocodeAddress(home.address)
+                let coordinate = try await GeocodingCache.shared.coordinate(for: address)
                 guard !Task.isCancelled else { return }
                 let placemark = MKPlacemark(coordinate: coordinate)
                 let item = MKMapItem(placemark: placemark)
-                item.name = home.hostName
+                item.name = hostName
                 mapItems = [item]
                 region = MKCoordinateRegion(
                     center: coordinate,
@@ -207,22 +209,6 @@ struct HomeDetailPage: View {
                 mapState = .failed
             }
         }
-    }
-
-    private func geocodeAddress(_ address: Address) async throws -> CLLocationCoordinate2D {
-        try await withCheckedThrowingContinuation { continuation in
-            CLGeocoder().geocodeAddressString(formattedAddress) { placemarks, error in
-                if let coordinate = placemarks?.first?.location?.coordinate {
-                    continuation.resume(returning: coordinate)
-                } else {
-                    continuation.resume(throwing: error ?? CoordinateError.noResults)
-                }
-            }
-        }
-    }
-
-    private enum CoordinateError: Error {
-        case noResults
     }
 
     private var formattedAddress: String {
