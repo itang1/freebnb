@@ -9,6 +9,7 @@ struct RequestStaySheet: View {
     let listing: Home
 
     @Environment(StayRequestStore.self) private var requestStore
+    @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
@@ -89,9 +90,22 @@ struct RequestStaySheet: View {
                 checkOut: checkOut,
                 guestNote: note.isEmpty ? nil : note
             )
+            messageStore.send(
+                text: "📅 Requested to stay · \(dateRangeText(from: checkIn, to: checkOut, nights: nights))",
+                senderUserID: authManager.userID,
+                recipientUserID: listing.hostUserID
+            )
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private static let shortDate: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
+    }()
+
+    private func dateRangeText(from start: Date, to end: Date, nights: Int) -> String {
+        "\(Self.shortDate.string(from: start)) – \(Self.shortDate.string(from: end)) · \(nights) night\(nights == 1 ? "" : "s")"
     }
 }

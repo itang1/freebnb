@@ -9,6 +9,8 @@ import SwiftUI
 // (as a traveler) and incoming requests (as a host) in one unified view.
 struct StaysTab: View {
     @Environment(StayRequestStore.self) private var requestStore
+    @Environment(MessageStore.self) private var messageStore
+    @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
     @State private var respondingTo: StayRequest?
     @State private var actionError: String?
@@ -114,14 +116,29 @@ struct StaysTab: View {
 
     private func cancel(_ request: StayRequest) async {
         actionError = nil
-        do { try await requestStore.cancel(request) }
-        catch { actionError = error.localizedDescription }
+        do {
+            try await requestStore.cancel(request)
+            messageStore.send(
+                text: "Request cancelled · \(dateRangeText(request))",
+                senderUserID: authManager.userID,
+                recipientUserID: request.hostUserID
+            )
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 
     private func accept(_ request: StayRequest, hostNote: String?) async {
         actionError = nil
         do {
             try await requestStore.accept(request, hostNote: hostNote)
+            var text = "✅ Stay accepted · \(dateRangeText(request))"
+            if let note = hostNote, !note.isEmpty { text += "\n\(note)" }
+            messageStore.send(
+                text: text,
+                senderUserID: authManager.userID,
+                recipientUserID: request.guestUserID
+            )
             respondingTo = nil
         } catch {
             actionError = error.localizedDescription
@@ -130,12 +147,30 @@ struct StaysTab: View {
 
     private func decline(_ request: StayRequest) async {
         actionError = nil
-        do { try await requestStore.decline(request) }
-        catch { actionError = error.localizedDescription }
+        do {
+            try await requestStore.decline(request)
+            messageStore.send(
+                text: "Stay request declined · \(dateRangeText(request))",
+                senderUserID: authManager.userID,
+                recipientUserID: request.guestUserID
+            )
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 
     private func guestName(for request: StayRequest) -> String {
         userProfileStore.displayName(for: request.guestUserID) ?? "FreeBNB User"
+    }
+
+    // MARK: - Helpers
+
+    private static let shortDate: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
+    }()
+
+    private func dateRangeText(_ request: StayRequest) -> String {
+        "\(Self.shortDate.string(from: request.checkIn)) – \(Self.shortDate.string(from: request.checkOut))"
     }
 }
 
