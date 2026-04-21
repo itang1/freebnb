@@ -41,6 +41,35 @@ service cloud.firestore {
           && resource.data.hostUserID == request.auth.uid;
     }
 
+    // Stay requests: guests create requests, hosts accept/decline, guests can cancel.
+    match /stayRequests/{requestID} {
+      allow read: if isSignedIn()
+          && (request.auth.uid == resource.data.guestUserID
+              || request.auth.uid == resource.data.hostUserID);
+
+      allow create: if isSignedIn()
+          && request.resource.data.guestUserID == request.auth.uid
+          && request.resource.data.status == "pending"
+          && request.resource.data.hostUserID is string
+          && request.resource.data.listingID is string
+          && request.resource.data.checkIn is timestamp
+          && request.resource.data.checkOut is timestamp
+          && request.resource.data.checkOut > request.resource.data.checkIn;
+
+      // Host can accept or decline; guest can cancel.
+      allow update: if isSignedIn() && (
+          (request.auth.uid == resource.data.hostUserID
+              && request.resource.data.status in ["accepted", "declined"]
+              && resource.data.status == "pending")
+          ||
+          (request.auth.uid == resource.data.guestUserID
+              && request.resource.data.status == "cancelled"
+              && resource.data.status in ["pending", "accepted"])
+      );
+
+      allow delete: if false;
+    }
+
     // Messages: user-to-user, not tied to any listing.
     // participants is always sorted [userA, userB], both signed-in user IDs.
     match /messages/{messageID} {

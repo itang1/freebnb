@@ -59,6 +59,31 @@ final class InMemoryMessagesRepository: MessagesRepository {
 }
 
 @MainActor
+final class InMemoryStayRequestsRepository: StayRequestsRepository {
+    private var requests: [StayRequest] = []
+
+    func listenToRequests(
+        userID: String,
+        role: StayRequestRole,
+        handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
+    ) -> RepositoryListener {
+        let filtered = requests.filter { role == .host ? $0.hostUserID == userID : $0.guestUserID == userID }
+        handler(.success(filtered))
+        return NoopListener()
+    }
+
+    func create(_ request: StayRequest) async throws {
+        requests.append(request)
+    }
+
+    func updateStatus(requestID: String, status: StayRequestStatus, hostNote: String?) async throws {
+        guard let i = requests.firstIndex(where: { $0.id == requestID }) else { return }
+        requests[i].status = status
+        if let hostNote { requests[i].hostNote = hostNote }
+    }
+}
+
+@MainActor
 final class InMemoryUserProfileRepository: UserProfileRepository {
     private var profiles: [String: UserProfile]
     init(profiles: [String: UserProfile] = [:]) { self.profiles = profiles }

@@ -9,6 +9,7 @@ import AuthenticationServices
 struct ProfilePage: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(StayRequestStore.self) private var stayRequestStore
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("appearance") private var appearance = "system"
 
@@ -55,6 +56,34 @@ struct ProfilePage: View {
                                 Text("Your Listings")
                                     .foregroundColor(.primary)
                                 Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
+                        rowDivider
+                        NavigationLink {
+                            IncomingRequestsPage()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "calendar.badge.clock")
+                                    .frame(width: 28)
+                                    .foregroundColor(Color.appTeal)
+                                Text("Incoming Requests")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if stayRequestStore.pendingIncomingCount > 0 {
+                                    Text("\(stayRequestStore.pendingIncomingCount)")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Color.orange.opacity(0.15))
+                                        .foregroundColor(.orange)
+                                        .clipShape(Capsule())
+                                }
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
                                     .foregroundColor(.secondary.opacity(0.5))

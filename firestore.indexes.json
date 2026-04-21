@@ -7,6 +7,22 @@
         { "fieldPath": "participants", "arrayConfig": "CONTAINS" },
         { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "stayRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "guestUserID", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stayRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hostUserID", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

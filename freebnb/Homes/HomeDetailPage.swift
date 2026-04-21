@@ -11,6 +11,8 @@ struct HomeDetailPage: View {
 
     @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
+    @Environment(StayRequestStore.self) private var requestStore
+    @State private var showRequestSheet = false
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var mapState: MapState = .loading
@@ -230,16 +232,35 @@ struct HomeDetailPage: View {
     private var contactSection: some View {
         switch home.contactPreference {
         case .inApp:
-            NavigationLink {
-                MessagingPage(otherUserID: home.hostUserID, otherName: home.hostName)
-            } label: {
-                Label("Message \(home.hostName)", systemImage: "message.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.appTeal)
-                    .flippedPrimaryColor()
-                    .cornerRadius(10)
+            let existing = requestStore.activeRequest(for: home.id, guestUserID: authManager.userID)
+            VStack(spacing: 10) {
+                if let existing {
+                    existingRequestBanner(existing)
+                } else {
+                    Button { showRequestSheet = true } label: {
+                        Label("Request to Stay", systemImage: "calendar.badge.plus")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.coral)
+                            .flippedPrimaryColor()
+                            .cornerRadius(10)
+                    }
+                }
+                NavigationLink {
+                    MessagingPage(otherUserID: home.hostUserID, otherName: home.hostName)
+                } label: {
+                    Label("Message \(home.hostName)", systemImage: "message.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.appTeal)
+                        .flippedPrimaryColor()
+                        .cornerRadius(10)
+                }
+            }
+            .sheet(isPresented: $showRequestSheet) {
+                RequestStaySheet(listing: home)
             }
         case .contactInfo:
             VStack(alignment: .leading, spacing: 8) {
@@ -260,6 +281,28 @@ struct HomeDetailPage: View {
                 }
             }
         }
+    }
+
+    // MARK: - Existing request banner
+
+    private func existingRequestBanner(_ request: StayRequest) -> some View {
+        let dateFormatter: DateFormatter = {
+            let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+        }()
+        return HStack(spacing: 10) {
+            Image(systemName: request.status == .accepted ? "checkmark.circle.fill" : "clock")
+                .foregroundColor(request.status == .accepted ? .green : .orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(request.status == .accepted ? "Stay accepted" : "Request pending")
+                    .font(.subheadline).fontWeight(.semibold)
+                Text("\(dateFormatter.string(from: request.checkIn)) – \(dateFormatter.string(from: request.checkOut))")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .padding()
+        .background((request.status == .accepted ? Color.green : Color.orange).opacity(0.1))
+        .cornerRadius(10)
     }
 
     // MARK: - Helpers

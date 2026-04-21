@@ -159,6 +159,61 @@ struct FirestoreMessagesRepository: MessagesRepository {
     }
 }
 
+// MARK: - Stay requests
+
+protocol StayRequestsRepository: Sendable {
+    func listenToRequests(
+        userID: String,
+        role: StayRequestRole,
+        handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
+    ) -> RepositoryListener
+
+    func create(_ request: StayRequest) async throws
+    func updateStatus(requestID: String, status: StayRequestStatus, hostNote: String?) async throws
+}
+
+struct FirestoreStayRequestsRepository: StayRequestsRepository {
+    private let db: Firestore
+    init(db: Firestore = .firestore()) { self.db = db }
+
+    func listenToRequests(
+        userID: String,
+        role: StayRequestRole,
+        handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
+    ) -> RepositoryListener {
+        let field = role == .guest ? "guestUserID" : "hostUserID"
+        let reg = db.collection("stayRequests")
+            .whereField(field, isEqualTo: userID)
+            .order(by: "createdAt", descending: true)
+            .addSnapshotListener { snapshot, error in
+                if let error { handler(.failure(error)); return }
+                let docs = snapshot?.documents ?? []
+                let requests: [StayRequest] = docs.compactMap { doc in
+                    do { return try doc.data(as: StayRequest.self) }
+                    catch {
+                        repoLog.error("request decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        return nil
+                    }
+                }
+                handler(.success(requests))
+            }
+        return FirestoreListenerBox(reg)
+    }
+
+    func create(_ request: StayRequest) async throws {
+        try db.collection("stayRequests").document(request.id).setData(from: request)
+    }
+
+    func updateStatus(requestID: String, status: StayRequestStatus, hostNote: String?) async throws {
+        var data: [String: Any] = [
+            "status": status.rawValue,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+        if let hostNote { data["hostNote"] = hostNote }
+        try await db.collection("stayRequests").document(requestID).updateData(data)
+    }
+}
+
 // MARK: - User profiles
 
 protocol UserProfileRepository: Sendable {
