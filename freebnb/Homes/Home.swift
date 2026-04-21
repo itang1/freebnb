@@ -67,11 +67,11 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
     var description: String {
         switch self {
         case .eager:
-            return "You're looking forward to having guests and building connections."
+            return "This host is actively looking to welcome guests and make connections."
         case .open:
-            return "You're comfortable hosting but it's not a priority."
+            return "This host is happy to have guests, though it isn't a top priority."
         case .selective:
-            return "You'd host the right person, but you're particular about it."
+            return "This host is particular about guests and has limited availability."
         }
     }
 }
