@@ -94,6 +94,11 @@ struct Home: Identifiable, Hashable, Codable {
     var providesToiletries: Bool
     var foodProvision: FoodProvision
 
+    // MARK: Photos
+    // Optional on the wire so documents created before photo support decode
+    // cleanly. Access through `photos` for a non-optional view.
+    var photoURLs: [String]? = nil
+
     // Identity-based equality and hashing, kept consistent per Hashable contract.
     static func == (lhs: Home, rhs: Home) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -108,6 +113,9 @@ struct Home: Identifiable, Hashable, Codable {
         }
         return result
     }
+
+    // Non-optional view of photo URLs for view code.
+    var photos: [String] { photoURLs ?? [] }
 
     var sleepingArrangementsDescription: String {
         sleepingCounts

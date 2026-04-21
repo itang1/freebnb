@@ -17,6 +17,7 @@ final class HomeStore {
     private(set) var error: String?
 
     @ObservationIgnored private let repository: HomesRepository
+    @ObservationIgnored private let photoUploader: PhotoUploader
     // `nonisolated(unsafe)` because `deinit` is nonisolated and must cancel
     // the listener. The property is only assigned from @MainActor contexts,
     // and `RepositoryListener.cancel()` is thread-safe per Firebase's docs
@@ -26,8 +27,12 @@ final class HomeStore {
     @ObservationIgnored private let pageSize = 20
     @ObservationIgnored private var currentLimit: Int
 
-    init(repository: HomesRepository = FirestoreHomesRepository()) {
+    init(
+        repository: HomesRepository = FirestoreHomesRepository(),
+        photoUploader: PhotoUploader = NoopPhotoUploader()
+    ) {
         self.repository = repository
+        self.photoUploader = photoUploader
         self.currentLimit = pageSize
         restartListener()
     }
@@ -81,6 +86,34 @@ final class HomeStore {
         } catch {
             log.error("save error: \(error.localizedDescription, privacy: .public)")
             throw error
+        }
+    }
+
+    /// Uploads any attached images in parallel, then saves the listing with
+    /// the resulting URLs. If `images` is empty the upload step is skipped.
+    /// Errors from either step propagate so the caller can show them.
+    func createListing(home: Home, images: [Data]) async throws {
+        var updated = home
+        if !images.isEmpty {
+            let urls = try await uploadImages(images, for: home)
+            updated.photoURLs = urls.map(\.absoluteString)
+        }
+        try await save(updated)
+    }
+
+    private func uploadImages(_ images: [Data], for home: Home) async throws -> [URL] {
+        let uploader = photoUploader
+        let listingID = home.id
+        let hostUserID = home.hostUserID
+        return try await withThrowingTaskGroup(of: URL.self) { group in
+            for data in images {
+                group.addTask {
+                    try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID)
+                }
+            }
+            var urls: [URL] = []
+            for try await url in group { urls.append(url) }
+            return urls
         }
     }
 

@@ -11,6 +11,7 @@
 		FCA1F5762F94741C00045A12 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F5752F94741C00045A12 /* FirebaseCore */; };
 		FCA1F5782F94742D00045A12 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F5772F94742D00045A12 /* FirebaseAuth */; };
 		FCA1F5802F960DE000045A12 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F57F2F960DE000045A12 /* FirebaseFirestore */; };
+		FCA1F5902F97273B00045A12 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F58F2F97273B00045A12 /* FirebaseStorage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +62,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FCA1F5762F94741C00045A12 /* FirebaseCore in Frameworks */,
+				FCA1F5902F97273B00045A12 /* FirebaseStorage in Frameworks */,
 				FCA1F5782F94742D00045A12 /* FirebaseAuth in Frameworks */,
 				FCA1F5802F960DE000045A12 /* FirebaseFirestore in Frameworks */,
 			);
@@ -135,6 +137,7 @@
 				FCA1F5752F94741C00045A12 /* FirebaseCore */,
 				FCA1F5772F94742D00045A12 /* FirebaseAuth */,
 				FCA1F57F2F960DE000045A12 /* FirebaseFirestore */,
+				FCA1F58F2F97273B00045A12 /* FirebaseStorage */,
 			);
 			productName = freebnb;
 			productReference = FC3EE6B62E3360ED004B2E1B /* freebnb.app */;
@@ -651,6 +654,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		FCA1F58F2F97273B00045A12 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

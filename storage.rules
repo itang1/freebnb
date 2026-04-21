@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Listing photos: organized as /listings/{hostUserID}/{listingID}/{file}.
+// Any signed-in user can read (visibility narrows later, once friend
+// connections land). Only the host may write, only up to 10 MB per image,
+// and only image content types.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{hostUserID}/{listingID}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid == hostUserID
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Nothing else is readable or writable from the client.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
