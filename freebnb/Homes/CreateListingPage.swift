@@ -11,51 +11,90 @@ struct CreateListingPage: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(\.dismiss) private var dismiss
 
+    // When non-nil, the form edits this listing instead of creating a new one.
+    private let editing: Home?
+
     // Location
-    @State private var street = ""
-    @State private var city = ""
-    @State private var stateField = ""
-    @State private var zip = ""
+    @State private var street: String
+    @State private var city: String
+    @State private var stateField: String
+    @State private var zip: String
 
     // Capacity
-    @State private var numGuestRooms = 1
-    @State private var maxGuests = 2
-    @State private var maxStayDays = 7
-    @State private var sleepingCounts: [SleepingSurface: Int] = [:]
-    @State private var kidsAllowed = true
-    @State private var guestPetsAllowed = false
-    @State private var hostHasPets = false
+    @State private var numGuestRooms: Int
+    @State private var maxGuests: Int
+    @State private var maxStayDays: Int
+    @State private var sleepingCounts: [SleepingSurface: Int]
+    @State private var kidsAllowed: Bool
+    @State private var guestPetsAllowed: Bool
+    @State private var hostHasPets: Bool
 
     // Amenities
-    @State private var hasAC = false
-    @State private var hasHeating = false
-    @State private var hasKitchen = false
-    @State private var hasFridgeSpace = false
-    @State private var hasMicrowave = false
-    @State private var hasTV = false
-    @State private var hasWifi = false
+    @State private var hasAC: Bool
+    @State private var hasHeating: Bool
+    @State private var hasKitchen: Bool
+    @State private var hasFridgeSpace: Bool
+    @State private var hasMicrowave: Bool
+    @State private var hasTV: Bool
+    @State private var hasWifi: Bool
 
     // Rooms and laundry
-    @State private var hasPrivateGuestBathroom = false
-    @State private var parkingDetails = ""
-    @State private var hasInUnitLaundry = false
-    @State private var hasCoinLaundryNearby = false
+    @State private var hasPrivateGuestBathroom: Bool
+    @State private var parkingDetails: String
+    @State private var hasInUnitLaundry: Bool
+    @State private var hasCoinLaundryNearby: Bool
 
     // Provisions
-    @State private var providesPillows = false
-    @State private var providesBlankets = false
-    @State private var providesTowels = false
-    @State private var providesToiletries = false
-    @State private var foodProvision: FoodProvision = .none
+    @State private var providesPillows: Bool
+    @State private var providesBlankets: Bool
+    @State private var providesTowels: Bool
+    @State private var providesToiletries: Bool
+    @State private var foodProvision: FoodProvision
 
     // Host and contact
-    @State private var description = ""
-    @State private var contactPreference: HostContactPreference = .inApp
-    @State private var hostContactInfo = ""
+    @State private var description: String
+    @State private var contactPreference: HostContactPreference
+    @State private var hostContactInfo: String
+    @State private var hostMotivation: HostMotivation
 
     // State
     @State private var isSaving = false
     @State private var errorMessage: String?
+
+    init(editing: Home? = nil) {
+        self.editing = editing
+        _street = State(initialValue: editing?.address.street ?? "")
+        _city = State(initialValue: editing?.address.city ?? "")
+        _stateField = State(initialValue: editing?.address.state ?? "")
+        _zip = State(initialValue: editing?.address.zip ?? "")
+        _numGuestRooms = State(initialValue: editing?.numGuestRooms ?? 1)
+        _maxGuests = State(initialValue: editing?.maxGuests ?? 2)
+        _maxStayDays = State(initialValue: editing?.maxStayDays ?? 7)
+        _sleepingCounts = State(initialValue: editing?.sleepingCounts ?? [:])
+        _kidsAllowed = State(initialValue: editing?.kidsAllowed ?? true)
+        _guestPetsAllowed = State(initialValue: editing?.guestPetsAllowed ?? false)
+        _hostHasPets = State(initialValue: editing?.hostHasPets ?? false)
+        _hasAC = State(initialValue: editing?.hasAC ?? false)
+        _hasHeating = State(initialValue: editing?.hasHeating ?? false)
+        _hasKitchen = State(initialValue: editing?.hasKitchen ?? false)
+        _hasFridgeSpace = State(initialValue: editing?.hasFridgeSpace ?? false)
+        _hasMicrowave = State(initialValue: editing?.hasMicrowave ?? false)
+        _hasTV = State(initialValue: editing?.hasTV ?? false)
+        _hasWifi = State(initialValue: editing?.hasWifi ?? false)
+        _hasPrivateGuestBathroom = State(initialValue: editing?.hasPrivateGuestBathroom ?? false)
+        _parkingDetails = State(initialValue: editing?.parkingDetails ?? "")
+        _hasInUnitLaundry = State(initialValue: editing?.hasInUnitLaundry ?? false)
+        _hasCoinLaundryNearby = State(initialValue: editing?.hasCoinLaundryNearby ?? false)
+        _providesPillows = State(initialValue: editing?.providesPillows ?? false)
+        _providesBlankets = State(initialValue: editing?.providesBlankets ?? false)
+        _providesTowels = State(initialValue: editing?.providesTowels ?? false)
+        _providesToiletries = State(initialValue: editing?.providesToiletries ?? false)
+        _foodProvision = State(initialValue: editing?.foodProvision ?? .none)
+        _description = State(initialValue: editing?.description ?? "")
+        _contactPreference = State(initialValue: editing?.contactPreference ?? .inApp)
+        _hostContactInfo = State(initialValue: editing?.hostContactInfo ?? "")
+        _hostMotivation = State(initialValue: editing?.hostMotivation ?? .open)
+    }
 
     var body: some View {
         NavigationStack {
@@ -76,6 +115,7 @@ struct CreateListingPage: View {
                 roomsAndLaundrySection
                 provisionsSection
                 contactSection
+                motivationSection
                 descriptionSection
 
                 if let errorMessage {
@@ -86,7 +126,7 @@ struct CreateListingPage: View {
                     }
                 }
             }
-            .navigationTitle("New Listing")
+            .navigationTitle(editing == nil ? "New Listing" : "Edit Listing")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -210,6 +250,30 @@ struct CreateListingPage: View {
         }
     }
 
+    private var motivationSection: some View {
+        Section("How eager are you to host?") {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(HostMotivation.allCases, id: \.self) { motivation in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Image(systemName: hostMotivation == motivation ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(hostMotivation == motivation ? .appTeal : .secondary.opacity(0.5))
+                            Text(motivation.displayName)
+                                .font(.body)
+                        }
+                        Text(motivation.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 28)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { hostMotivation = motivation }
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
     private var descriptionSection: some View {
         Section("Memo (optional)") {
             TextField("Anything guests should know", text: $description, axis: .vertical)
@@ -250,7 +314,7 @@ struct CreateListingPage: View {
             acc[pair.key.rawValue] = pair.value
         }
 
-        let home = Home(
+        var home = Home(
             hostUserID: authManager.userID,
             hostName: userProfileStore.displayName,
             address: Address(
@@ -262,6 +326,7 @@ struct CreateListingPage: View {
             description: trimmedDescription.isEmpty ? nil : trimmedDescription,
             contactPreference: contactPreference,
             hostContactInfo: contactPreference == .contactInfo && !trimmedContactInfo.isEmpty ? trimmedContactInfo : nil,
+            hostMotivation: hostMotivation,
             numGuestRooms: numGuestRooms,
             maxGuests: maxGuests,
             maxStayDays: maxStayDays,
@@ -286,6 +351,8 @@ struct CreateListingPage: View {
             providesToiletries: providesToiletries,
             foodProvision: foodProvision
         )
+        // Preserve the listing id when editing
+        if let existing = editing { home.id = existing.id }
 
         do {
             try await homeStore.save(home)

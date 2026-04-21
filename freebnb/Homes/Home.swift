@@ -51,8 +51,37 @@ enum HostContactPreference: String, Hashable, Codable {
     case contactInfo = "contactInfo"
 }
 
+enum HostMotivation: String, CaseIterable, Hashable, Codable {
+    case eager      = "eager"
+    case open       = "open"
+    case selective  = "selective"
+
+    var displayName: String {
+        switch self {
+        case .eager:     return "I'd love to host"
+        case .open:      return "I'm open to hosting"
+        case .selective: return "I have limited availability"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .eager:
+            return "You're looking forward to having guests and building connections."
+        case .open:
+            return "You're comfortable hosting but it's not a priority."
+        case .selective:
+            return "You'd host the right person, but you're particular about it."
+        }
+    }
+}
+
 struct Home: Identifiable, Hashable, Codable {
-    let id: String = UUID().uuidString
+    // `var` rather than `let` so the edit path can construct a Home with an
+    // existing listing's id (the memberwise init doesn't expose `let`
+    // properties that have default values). Treat as immutable after
+    // creation; identity-based equality in this file depends on it.
+    var id: String = UUID().uuidString
 
     // MARK: Host and location
     var hostUserID: String
@@ -61,6 +90,7 @@ struct Home: Identifiable, Hashable, Codable {
     var description: String?
     var contactPreference: HostContactPreference
     var hostContactInfo: String?
+    var hostMotivation: HostMotivation
 
     // MARK: Capacity
     var numGuestRooms: Int

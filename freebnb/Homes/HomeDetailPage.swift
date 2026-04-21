@@ -25,6 +25,17 @@ struct HomeDetailPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // MARK: Host motivation
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(home.hostMotivation.displayName, systemImage: "heart.fill")
+                        .font(.headline)
+                        .foregroundColor(home.hostMotivation == .eager ? .red : home.hostMotivation == .open ? .orange : .secondary)
+                    Text(home.hostMotivation.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.bottom, 8)
+
                 // MARK: Details
                 Text("Details")
                     .font(.headline)
