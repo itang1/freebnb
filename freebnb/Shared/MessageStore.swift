@@ -56,7 +56,7 @@ final class MessageStore {
     @ObservationIgnored private let repository: MessagesRepository
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
-    @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "messaging")
+    @ObservationIgnored private let log = AppLog.logger("messaging")
     @ObservationIgnored private let historyLimit = 200
 
     init(repository: MessagesRepository = FirestoreMessagesRepository()) {

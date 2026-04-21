@@ -13,6 +13,13 @@ import os
 
 // MARK: - Shared
 
+enum AppLog {
+    static let subsystem = "com.freebnb.app"
+    static func logger(_ category: String) -> Logger {
+        Logger(subsystem: subsystem, category: category)
+    }
+}
+
 protocol RepositoryListener: Sendable {
     func cancel()
 }
@@ -27,7 +34,7 @@ final class FirestoreListenerBox: RepositoryListener, @unchecked Sendable {
     func cancel() { inner.remove() }
 }
 
-private let repoLog = Logger(subsystem: "com.freebnb.app", category: "repository")
+private let repoLog = AppLog.logger("repository")
 
 // MARK: - Homes
 

@@ -9,7 +9,7 @@ import SwiftUI
 import FirebaseCore
 
 @main
-struct freebnbApp: App {
+struct FreeBNBApp: App {
     @State private var authManager: AuthManager
     @State private var homeStore: HomeStore
     @State private var messageStore: MessageStore

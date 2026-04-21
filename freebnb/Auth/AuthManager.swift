@@ -46,7 +46,7 @@ final class AuthManager {
 
     private var currentNonce: String?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
-    @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "auth")
+    @ObservationIgnored private let log = AppLog.logger("auth")
 
     init() {
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in

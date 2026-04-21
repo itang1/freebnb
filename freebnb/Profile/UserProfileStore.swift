@@ -27,7 +27,7 @@ final class UserProfileStore {
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private var inFlight: Set<String> = []
-    @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "profile")
+    @ObservationIgnored private let log = AppLog.logger("profile")
 
     init(repository: UserProfileRepository = FirestoreUserProfileRepository()) {
         self.repository = repository
