@@ -134,10 +134,9 @@ struct HomesPage: View {
         return result
     }
 
-    var filteredListings: [Home] {
-        var result = shuffledListings
-        for filter in selectedFilters {
-            result = result.filter { filter.applies(to: $0) }
+    private var filteredListings: [Home] {
+        let result = shuffledListings.filter { home in
+            selectedFilters.allSatisfy { $0.applies(to: home) }
         }
         switch selectedSort {
         case .mostDays:   return result.sorted { $0.maxStayDays > $1.maxStayDays }

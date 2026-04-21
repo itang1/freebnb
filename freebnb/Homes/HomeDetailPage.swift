@@ -270,11 +270,7 @@ struct HomeDetailPage: View {
     // MARK: - Helpers
 
     private func openInMaps() {
-        guard let coordinate = mapItems.first?.placemark.coordinate else { return }
-        let placemark = MKPlacemark(coordinate: coordinate)
-        let item = MKMapItem(placemark: placemark)
-        item.name = home.hostName
-        item.openInMaps(launchOptions: nil)
+        mapItems.first?.openInMaps(launchOptions: nil)
     }
 
     private func amenityRow(_ label: String, available: Bool) -> some View {

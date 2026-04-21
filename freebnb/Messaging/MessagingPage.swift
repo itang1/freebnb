@@ -47,9 +47,9 @@ struct MessagingPage: View {
                     }
                     .padding()
                 }
-                .onChange(of: messages.count) { _, _ in
-                    if let last = messages.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                .onChange(of: messages.last?.id) { _, lastID in
+                    if let lastID {
+                        withAnimation { proxy.scrollTo(lastID, anchor: .bottom) }
                     }
                 }
             }
