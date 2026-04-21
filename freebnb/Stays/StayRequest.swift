@@ -82,3 +82,18 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     static func == (lhs: StayRequest, rhs: StayRequest) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
+
+extension [StayRequest] {
+    /// Newest first. Requests without a server timestamp yet sort to the front
+    /// so newly created pending items appear immediately.
+    func sortedByDate() -> [StayRequest] {
+        sorted {
+            switch ($0.createdAt, $1.createdAt) {
+            case (nil, nil):   return false
+            case (nil, _):     return true   // pending write floats up
+            case (_, nil):     return false
+            case (let a, let b): return a! > b!
+            }
+        }
+    }
+}

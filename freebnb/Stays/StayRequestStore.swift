@@ -49,7 +49,7 @@ final class StayRequestStore {
                 case .failure(let error):
                     self?.log.error("incoming snapshot error: \(error.localizedDescription, privacy: .public)")
                 case .success(let requests):
-                    self?.incomingRequests = requests
+                    self?.incomingRequests = requests.sortedByDate()
                 }
             }
         }
@@ -60,7 +60,7 @@ final class StayRequestStore {
                 case .failure(let error):
                     self?.log.error("outgoing snapshot error: \(error.localizedDescription, privacy: .public)")
                 case .success(let requests):
-                    self?.outgoingRequests = requests
+                    self?.outgoingRequests = requests.sortedByDate()
                 }
             }
         }
