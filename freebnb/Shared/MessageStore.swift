@@ -40,7 +40,7 @@ final class MessageStore {
     private var currentUserID: String?
 
     @ObservationIgnored private let repository: MessagesRepository
-    @ObservationIgnored private var activeListener: RepositoryListener?
+    @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "messaging")
     @ObservationIgnored private let historyLimit = 200

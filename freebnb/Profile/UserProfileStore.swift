@@ -24,7 +24,7 @@ final class UserProfileStore {
     private(set) var profileCache: [String: UserProfile] = [:]
 
     @ObservationIgnored private let repository: UserProfileRepository
-    @ObservationIgnored private var activeListener: RepositoryListener?
+    @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private var inFlight: Set<String> = []
     @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "profile")

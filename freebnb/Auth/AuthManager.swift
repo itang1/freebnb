@@ -84,6 +84,9 @@ final class AuthManager {
     }
 
     func handleAuthorization(_ result: Result<ASAuthorization, Error>) {
+        let nonce = currentNonce
+        currentNonce = nil
+
         switch result {
         case .failure(let error):
             if let authError = error as? ASAuthorizationError, authError.code == .canceled {
@@ -95,7 +98,7 @@ final class AuthManager {
 
         case .success(let auth):
             guard let credential = auth.credential as? ASAuthorizationAppleIDCredential,
-                  let nonce = currentNonce,
+                  let nonce,
                   let idTokenData = credential.identityToken,
                   let idToken = String(data: idTokenData, encoding: .utf8)
             else {

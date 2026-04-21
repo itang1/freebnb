@@ -17,7 +17,7 @@ final class HomeStore {
     private(set) var error: String?
 
     @ObservationIgnored private let repository: HomesRepository
-    @ObservationIgnored private var activeListener: RepositoryListener?
+    @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored private let log = Logger(subsystem: "com.freebnb.app", category: "homes")
     @ObservationIgnored private let pageSize = 20
     @ObservationIgnored private var currentLimit: Int
