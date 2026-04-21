@@ -131,6 +131,11 @@ final class StayRequestStore {
         outgoingRequests.filter { $0.status == .pending }.count
     }
 
+    /// Total shown as the Stays tab badge: pending requests in either direction.
+    var pendingStaysTabCount: Int {
+        pendingIncomingCount + pendingOutgoingCount
+    }
+
     // MARK: - Private
 
     private func update(requestID: String, status: StayRequestStatus, hostNote: String?) async throws {

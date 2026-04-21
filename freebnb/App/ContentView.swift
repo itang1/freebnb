@@ -8,6 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(HomeStore.self) private var homeStore
+    @Environment(StayRequestStore.self) private var stayRequestStore
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
@@ -34,6 +35,14 @@ struct ContentView: View {
                     .tabItem {
                         Label("Listings", systemImage: "house")
                     }
+
+                    NavigationStack {
+                        StaysTab()
+                    }
+                    .tabItem {
+                        Label("Stays", systemImage: "suitcase")
+                    }
+                    .badge(stayRequestStore.pendingStaysTabCount)
 
                     NavigationStack {
                         MessagesTab(listings: homeStore.listings)
