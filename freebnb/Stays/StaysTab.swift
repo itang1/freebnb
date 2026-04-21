@@ -262,6 +262,32 @@ struct IncomingRequestRow: View {
     }
 }
 
+// MARK: - Status badge
+
+struct StatusBadge: View {
+    let status: StayRequestStatus
+
+    var body: some View {
+        Text(status.displayName)
+            .font(.caption)
+            .fontWeight(.medium)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(badgeColor.opacity(0.15))
+            .foregroundColor(badgeColor)
+            .clipShape(Capsule())
+    }
+
+    private var badgeColor: Color {
+        switch status {
+        case .pending:   return .orange
+        case .accepted:  return .green
+        case .declined:  return .secondary
+        case .cancelled: return .secondary
+        }
+    }
+}
+
 // MARK: - Accept sheet (lets host add an optional note)
 
 private struct AcceptSheet: View {
