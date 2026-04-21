@@ -17,6 +17,10 @@ final class HomeStore {
     private(set) var error: String?
 
     @ObservationIgnored private let repository: HomesRepository
+    // `nonisolated(unsafe)` because `deinit` is nonisolated and must cancel
+    // the listener. The property is only assigned from @MainActor contexts,
+    // and `RepositoryListener.cancel()` is thread-safe per Firebase's docs
+    // for `ListenerRegistration.remove()`.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored private let log = AppLog.logger("homes")
     @ObservationIgnored private let pageSize = 20

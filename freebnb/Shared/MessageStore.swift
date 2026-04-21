@@ -54,6 +54,10 @@ final class MessageStore {
     private var currentUserID: String?
 
     @ObservationIgnored private let repository: MessagesRepository
+    // `nonisolated(unsafe)` because `deinit` is nonisolated and must tear
+    // these down. Both are only assigned from @MainActor contexts, and
+    // Firebase's `ListenerRegistration.remove()` and
+    // `Auth.removeStateDidChangeListener(_:)` are thread-safe.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("messaging")

@@ -45,6 +45,9 @@ final class AuthManager {
     private(set) var authMethod: AuthMethod = .none
 
     private var currentNonce: String?
+    // `nonisolated(unsafe)` because `deinit` is nonisolated and must remove
+    // the listener. Only assigned from @MainActor contexts, and
+    // `Auth.removeStateDidChangeListener(_:)` is thread-safe.
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("auth")
 

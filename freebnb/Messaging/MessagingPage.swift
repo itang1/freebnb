@@ -72,6 +72,7 @@ struct MessagingPage: View {
                         .foregroundColor(trimmedDraft.isEmpty ? .secondary.opacity(0.4) : .appTeal)
                 }
                 .disabled(trimmedDraft.isEmpty)
+                .accessibilityLabel("Send message")
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
@@ -147,6 +148,7 @@ private struct MessageBubble: View {
                     Image(systemName: "clock")
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                        .accessibilityLabel("Sending")
                 case .failed:
                     Button(action: onRetry) {
                         Label("Not delivered, tap to retry", systemImage: "exclamationmark.circle.fill")

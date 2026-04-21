@@ -2,8 +2,9 @@
 //  HomesPage.swift
 //  freebnb
 //
-//  Created by Irene Tang on 7/25/25.
-//  Shows a list of Home listings. Lets the user filter them. Lets the user sort them. Tells its parent which home was tapped.
+//  Shows a list of Home listings. Lets the user filter them. Lets the user
+//  sort them. Tells its parent which home was tapped.
+//
 
 import SwiftUI
 
@@ -255,7 +256,9 @@ struct HomesPage: View {
                             HomeCard(listing: listing)
                         }
                         .buttonStyle(CardButtonStyle())
-                        .accessibilityLabel("\(listing.hostName), \(listing.address.city), \(listing.address.state)")
+                        .accessibilityLabel("\(listing.hostName) in \(listing.address.city), \(listing.address.state)")
+                        .accessibilityValue(accessibilitySummary(for: listing))
+                        .accessibilityHint("Opens listing details")
                     }
 
                     if canLoadMore && !filteredListings.isEmpty {
@@ -335,6 +338,13 @@ struct HomesPage: View {
 
     private var filterLabel: String {
         selectedFilters.isEmpty ? "Filter" : "Filter (\(selectedFilters.count))"
+    }
+
+    private func accessibilitySummary(for listing: Home) -> String {
+        let rooms = "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")"
+        let guests = "\(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")"
+        let nights = "up to \(listing.maxStayDays) night\(listing.maxStayDays == 1 ? "" : "s")"
+        return "\(rooms), \(guests), \(nights)"
     }
 }
 
