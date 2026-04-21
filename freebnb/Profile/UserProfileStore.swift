@@ -93,14 +93,30 @@ final class UserProfileStore {
 
     // MARK: - Writes
 
-    func updateDisplayName(_ newName: String) async {
+    enum ProfileUpdateError: LocalizedError {
+        case emptyName
+        case notSignedIn
+        case underlying(Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .emptyName:          return "Name can’t be empty."
+            case .notSignedIn:        return "You need to be signed in to update your profile."
+            case .underlying(let e):  return e.localizedDescription
+            }
+        }
+    }
+
+    func updateDisplayName(_ newName: String) async throws {
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, let userID = Auth.auth().currentUser?.uid else { return }
+        guard !trimmed.isEmpty else { throw ProfileUpdateError.emptyName }
+        guard let userID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         do {
             try await repository.updateDisplayName(userID: userID, newName: trimmed)
             UserDefaults.standard.set(trimmed, forKey: "userName")
         } catch {
             log.error("profile update error: \(error.localizedDescription, privacy: .public)")
+            throw ProfileUpdateError.underlying(error)
         }
     }
 

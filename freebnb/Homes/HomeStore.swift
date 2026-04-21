@@ -68,17 +68,24 @@ final class HomeStore {
 
     // MARK: - Writes
 
-    func save(_ home: Home) {
-        Task {
-            do { try await repository.save(home) }
-            catch { log.error("save error: \(error.localizedDescription, privacy: .public)") }
+    // Both writes throw on failure so the caller can surface an error in the
+    // UI. The store logs regardless, so failures are never silent.
+
+    func save(_ home: Home) async throws {
+        do {
+            try await repository.save(home)
+        } catch {
+            log.error("save error: \(error.localizedDescription, privacy: .public)")
+            throw error
         }
     }
 
-    func delete(_ home: Home) {
-        Task {
-            do { try await repository.delete(homeID: home.id) }
-            catch { log.error("delete error: \(error.localizedDescription, privacy: .public)") }
+    func delete(_ home: Home) async throws {
+        do {
+            try await repository.delete(homeID: home.id)
+        } catch {
+            log.error("delete error: \(error.localizedDescription, privacy: .public)")
+            throw error
         }
     }
 }

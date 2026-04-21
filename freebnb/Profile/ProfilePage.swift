@@ -313,6 +313,8 @@ private struct EditNameSheet: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(\.dismiss) var dismiss
     @State private var name = ""
+    @State private var errorMessage: String?
+    @State private var isSaving = false
 
     var body: some View {
         NavigationStack {
@@ -320,6 +322,14 @@ private struct EditNameSheet: View {
                 Section("Display Name") {
                     TextField("Name", text: $name)
                         .autocorrectionDisabled()
+                        .disabled(isSaving)
+                }
+                if let errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.red)
+                    }
                 }
             }
             .navigationTitle("Edit Name")
@@ -329,17 +339,28 @@ private struct EditNameSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task { await userProfileStore.updateDisplayName(name) }
-                        dismiss()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty ||
-                              name.trimmingCharacters(in: .whitespaces) == userProfileStore.displayName)
+                    Button("Save") { Task { await save() } }
+                        .disabled(isSaving ||
+                                  name.trimmingCharacters(in: .whitespaces).isEmpty ||
+                                  name.trimmingCharacters(in: .whitespaces) == userProfileStore.displayName)
                 }
             }
             .onAppear { name = userProfileStore.displayName }
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        do {
+            try await userProfileStore.updateDisplayName(name)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }
