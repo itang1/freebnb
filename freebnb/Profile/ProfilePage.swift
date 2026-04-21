@@ -15,6 +15,7 @@ struct ProfilePage: View {
     @Environment(\.openURL) private var openURL
     @State private var showEditName = false
     @State private var showDeleteConfirm = false
+    @State private var showCreateListing = false
 
     var body: some View {
         ScrollView {
@@ -38,6 +39,15 @@ struct ProfilePage: View {
                             rowDivider
                             SettingsRow(icon: "envelope", label: "Email",
                                         trailingText: authManager.userEmail)
+                        }
+                    }
+                    .sectionCard()
+                    .padding(.bottom, 20)
+
+                    sectionLabel("Hosting")
+                    VStack(spacing: 0) {
+                        SettingsRow(icon: "plus.circle", label: "Create a Listing", chevron: true) {
+                            showCreateListing = true
                         }
                     }
                     .sectionCard()
@@ -131,6 +141,9 @@ struct ProfilePage: View {
         .sheet(isPresented: $showEditName) {
             EditNameSheet()
                 .environment(userProfileStore)
+        }
+        .sheet(isPresented: $showCreateListing) {
+            CreateListingPage()
         }
         .confirmationDialog(
             "Delete your account?",
