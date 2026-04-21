@@ -15,88 +15,75 @@ enum FilterCategory: String, CaseIterable {
     case food = "Food"
 }
 
-// All possible filter options, ordered to match Home model declaration
-enum FilterOption: String, CaseIterable, Identifiable {
-    // Guests & Space
-    case guestRooms = "Guest has Private Room"
-    case sleepingBed = "Guest has Bed"
-    case kidsAllowed = "Kids Allowed"
-    case guestPetsAllowed = "Guest Can Bring Pets"
-    case hostHasPets = "Host Has Pets"
+// A filter is a (label, category, predicate) triple. Adding a new filter
+// means one line in `FilterOption.all` instead of edits in three places.
+struct FilterOption: Identifiable, Hashable, Sendable {
+    let id: String
+    let label: String
+    let category: FilterCategory
+    let matches: @Sendable (Home) -> Bool
 
-    // Amenities
-    case airConditioning = "Air Conditioning"
-    case heating = "Heating"
-    case kitchen = "Kitchen"
-    case fridgeSpace = "Fridge Space"
-    case microwave = "Microwave"
-    case tv = "TV"
-    case wifi = "Wifi"
+    static func == (lhs: FilterOption, rhs: FilterOption) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
 
-    // Rooms & Laundry
-    case privateGuestBathroom = "Private Guest Bathroom"
-    case inUnitLaundry = "In-unit Laundry"
-    case coinLaundryNearby = "Coin Laundry Nearby"
-
-    // Provisions
-    case pillowsProvided = "Pillows Provided"
-    case blanketsProvided = "Blankets Provided"
-    case towelsProvided = "Towels Provided"
-    case toiletriesProvided = "Toiletries Provided"
-
-    // Food
-    case foodAll = "All Meals Provided"
-    case foodSome = "Some Food Provided"
-    case foodBareMinimum = "Bare Minimum Provided"
-    case foodNone = "No Food Provided"
-
-    var id: String { rawValue }
-
-    var category: FilterCategory {
-        switch self {
-        case .guestRooms, .sleepingBed, .kidsAllowed, .guestPetsAllowed, .hostHasPets:
-            return .guestsAndSpace
-        case .airConditioning, .heating, .kitchen, .fridgeSpace, .microwave, .tv, .wifi:
-            return .amenities
-        case .privateGuestBathroom, .inUnitLaundry, .coinLaundryNearby:
-            return .roomsAndLaundry
-        case .pillowsProvided, .blanketsProvided, .towelsProvided, .toiletriesProvided:
-            return .provisions
-        case .foodAll, .foodSome, .foodBareMinimum, .foodNone:
-            return .food
-        }
+extension FilterOption {
+    // Convenience for the common "this Bool field on Home" case.
+    fileprivate static func bool(
+        _ id: String,
+        _ label: String,
+        _ category: FilterCategory,
+        _ keyPath: KeyPath<Home, Bool>
+    ) -> FilterOption {
+        FilterOption(id: id, label: label, category: category) { $0[keyPath: keyPath] }
     }
+
+    fileprivate static func food(
+        _ id: String,
+        _ label: String,
+        _ value: FoodProvision
+    ) -> FilterOption {
+        FilterOption(id: id, label: label, category: .food) { $0.foodProvision == value }
+    }
+
+    // Source of truth. Declaration order drives menu order and chip order.
+    static let all: [FilterOption] = [
+        // Guests & Space
+        FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.numGuestRooms > 0 },
+        FilterOption(id: "sleepingBed", label: "Guest has Bed", category: .guestsAndSpace) { ($0.sleepingCounts[.bed] ?? 0) > 0 },
+        .bool("kidsAllowed", "Kids Allowed", .guestsAndSpace, \.kidsAllowed),
+        .bool("guestPetsAllowed", "Guest Can Bring Pets", .guestsAndSpace, \.guestPetsAllowed),
+        .bool("hostHasPets", "Host Has Pets", .guestsAndSpace, \.hostHasPets),
+
+        // Amenities
+        .bool("ac", "Air Conditioning", .amenities, \.hasAC),
+        .bool("heating", "Heating", .amenities, \.hasHeating),
+        .bool("kitchen", "Kitchen", .amenities, \.hasKitchen),
+        .bool("fridgeSpace", "Fridge Space", .amenities, \.hasFridgeSpace),
+        .bool("microwave", "Microwave", .amenities, \.hasMicrowave),
+        .bool("tv", "TV", .amenities, \.hasTV),
+        .bool("wifi", "Wifi", .amenities, \.hasWifi),
+
+        // Rooms & Laundry
+        .bool("privateGuestBathroom", "Private Guest Bathroom", .roomsAndLaundry, \.hasPrivateGuestBathroom),
+        .bool("inUnitLaundry", "In-unit Laundry", .roomsAndLaundry, \.hasInUnitLaundry),
+        .bool("coinLaundryNearby", "Coin Laundry Nearby", .roomsAndLaundry, \.hasCoinLaundryNearby),
+
+        // Provisions
+        .bool("pillows", "Pillows Provided", .provisions, \.providesPillows),
+        .bool("blankets", "Blankets Provided", .provisions, \.providesBlankets),
+        .bool("towels", "Towels Provided", .provisions, \.providesTowels),
+        .bool("toiletries", "Toiletries Provided", .provisions, \.providesToiletries),
+
+        // Food
+        .food("foodAll", "All Meals Provided", .all),
+        .food("foodSome", "Some Food Provided", .some),
+        .food("foodBareMinimum", "Bare Minimum Provided", .bareMinimum),
+        .food("foodNone", "No Food Provided", FoodProvision.none),
+    ]
 
     static func options(for category: FilterCategory) -> [FilterOption] {
-        allCases.filter { $0.category == category }
-    }
-
-    func applies(to home: Home) -> Bool {
-        switch self {
-        case .guestRooms:          return home.numGuestRooms > 0
-        case .sleepingBed:         return (home.sleepingCounts[.bed] ?? 0) > 0
-        case .kidsAllowed:         return home.kidsAllowed
-        case .guestPetsAllowed:    return home.guestPetsAllowed
-        case .hostHasPets:         return home.hostHasPets
-        case .airConditioning:     return home.hasAC
-        case .heating:             return home.hasHeating
-        case .kitchen:             return home.hasKitchen
-        case .fridgeSpace:         return home.hasFridgeSpace
-        case .microwave:           return home.hasMicrowave
-        case .tv:                  return home.hasTV
-        case .wifi:                return home.hasWifi
-        case .privateGuestBathroom: return home.hasPrivateGuestBathroom
-        case .inUnitLaundry:       return home.hasInUnitLaundry
-        case .coinLaundryNearby:   return home.hasCoinLaundryNearby
-        case .pillowsProvided:     return home.providesPillows
-        case .blanketsProvided:    return home.providesBlankets
-        case .towelsProvided:      return home.providesTowels
-        case .toiletriesProvided:  return home.providesToiletries
-        case .foodAll:             return home.foodProvision == .all
-        case .foodSome:            return home.foodProvision == .some
-        case .foodBareMinimum:     return home.foodProvision == .bareMinimum
-        case .foodNone:            return home.foodProvision == .none
-        }
+        all.filter { $0.category == category }
     }
 }
 
@@ -136,7 +123,7 @@ struct HomesPage: View {
 
     private var filteredListings: [Home] {
         let result = shuffledListings.filter { home in
-            selectedFilters.allSatisfy { $0.applies(to: home) }
+            selectedFilters.allSatisfy { $0.matches(home) }
         }
         switch selectedSort {
         case .mostDays:   return result.sorted { $0.maxStayDays > $1.maxStayDays }
@@ -168,7 +155,7 @@ struct HomesPage: View {
                         Section(category.rawValue) {
                             ForEach(FilterOption.options(for: category)) { filter in
                                 Toggle(
-                                    filter.rawValue,
+                                    filter.label,
                                     isOn: Binding(
                                         get: { selectedFilters.contains(filter) },
                                         set: { isOn in
@@ -240,7 +227,7 @@ struct HomesPage: View {
                 FlowLayout(spacing: 8) {
                     ForEach(sortedSelectedFilters) { filter in
                         HStack(spacing: 4) {
-                            Text(filter.rawValue)
+                            Text(filter.label)
                                 .font(.caption)
                             Button {
                                 selectedFilters.remove(filter)
@@ -249,7 +236,7 @@ struct HomesPage: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                            .accessibilityLabel("Remove \(filter.rawValue) filter")
+                            .accessibilityLabel("Remove \(filter.label) filter")
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -341,9 +328,9 @@ struct HomesPage: View {
         }
     }
 
-    // Selected filters sorted in the same order as the filter menu
+    // Selected filters sorted in the same order as the filter menu.
     private var sortedSelectedFilters: [FilterOption] {
-        FilterOption.allCases.filter { selectedFilters.contains($0) }
+        FilterOption.all.filter { selectedFilters.contains($0) }
     }
 
     private var filterLabel: String {
