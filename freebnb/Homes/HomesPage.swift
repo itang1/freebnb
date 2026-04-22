@@ -9,6 +9,7 @@
 import SwiftUI
 
 enum FilterCategory: String, CaseIterable {
+    case host = "Host"
     case guestsAndSpace = "Guests & Space"
     case amenities = "Amenities"
     case roomsAndLaundry = "Rooms & Laundry"
@@ -49,6 +50,11 @@ extension FilterOption {
 
     // Source of truth. Declaration order drives menu order and chip order.
     static let all: [FilterOption] = [
+        // Host motivation
+        FilterOption(id: "eager",     label: "Eager to Host",   category: .host) { $0.hostMotivation == .eager },
+        FilterOption(id: "open",      label: "Open to Hosting", category: .host) { $0.hostMotivation == .open },
+        FilterOption(id: "selective", label: "Selective",       category: .host) { $0.hostMotivation == .selective },
+
         // Guests & Space
         FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.numGuestRooms > 0 },
         FilterOption(id: "sleepingBed", label: "Guest has Bed", category: .guestsAndSpace) { ($0.sleepingCounts[.bed] ?? 0) > 0 },
