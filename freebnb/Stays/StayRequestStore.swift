@@ -13,6 +13,9 @@ import os
 final class StayRequestStore {
     private(set) var incomingRequests: [StayRequest] = []
     private(set) var outgoingRequests: [StayRequest] = []
+    /// Set when a Firestore listener fails — most commonly because security
+    /// rules haven't been deployed yet. Cleared when the listener recovers.
+    private(set) var listenerError: String?
 
     @ObservationIgnored private let repository: StayRequestsRepository
     @ObservationIgnored nonisolated(unsafe) private var incomingListener: RepositoryListener?
@@ -48,7 +51,9 @@ final class StayRequestStore {
                 switch result {
                 case .failure(let error):
                     self?.log.error("incoming snapshot error: \(error.localizedDescription, privacy: .public)")
+                    self?.listenerError = error.localizedDescription
                 case .success(let requests):
+                    self?.listenerError = nil
                     self?.incomingRequests = requests.sortedByDate()
                 }
             }
@@ -59,7 +64,9 @@ final class StayRequestStore {
                 switch result {
                 case .failure(let error):
                     self?.log.error("outgoing snapshot error: \(error.localizedDescription, privacy: .public)")
+                    self?.listenerError = error.localizedDescription
                 case .success(let requests):
+                    self?.listenerError = nil
                     self?.outgoingRequests = requests.sortedByDate()
                 }
             }

@@ -35,7 +35,21 @@ struct StaysTab: View {
 
     var body: some View {
         Group {
-            if !hasAny {
+            if let error = requestStore.listenerError {
+                ContentUnavailableView {
+                    Label("Couldn't load stays", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                } description: {
+                    Text(error)
+                        .font(.caption)
+                    Text("If this is a new project, run:\nfirebase deploy --only firestore:rules,firestore:indexes")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 4)
+                }
+                .background(Color.creamWhite.ignoresSafeArea())
+            } else if !hasAny {
                 ContentUnavailableView {
                     Label("No stays yet", systemImage: "suitcase")
                         .foregroundStyle(Color.appTeal)

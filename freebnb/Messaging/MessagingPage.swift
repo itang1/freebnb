@@ -84,11 +84,9 @@ struct MessagingPage: View {
             // is no active request already in flight.
             if listing != nil, activeRequest == nil {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showRequestSheet = true } label: {
-                        Image(systemName: "calendar.badge.plus")
-                            .foregroundColor(Color.appTeal)
-                    }
-                    .accessibilityLabel("Request to Stay")
+                    Button("Request a Stay") { showRequestSheet = true }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(Color.appTeal)
                 }
             }
         }
