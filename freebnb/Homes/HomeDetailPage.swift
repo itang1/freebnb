@@ -12,7 +12,6 @@ struct HomeDetailPage: View {
     @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
     @Environment(StayRequestStore.self) private var requestStore
-    @State private var showRequestSheet = false
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var mapState: MapState = .loading
@@ -236,31 +235,25 @@ struct HomeDetailPage: View {
             VStack(spacing: 10) {
                 if let existing {
                     existingRequestBanner(existing)
-                } else {
-                    Button { showRequestSheet = true } label: {
-                        Label("Request to Stay", systemImage: "calendar.badge.plus")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.coral)
-                            .flippedPrimaryColor()
-                            .cornerRadius(10)
-                    }
                 }
                 NavigationLink {
-                    MessagingPage(otherUserID: home.hostUserID, otherName: home.hostName)
+                    MessagingPage(
+                        otherUserID: home.hostUserID,
+                        otherName: home.hostName,
+                        listing: home
+                    )
                 } label: {
-                    Label("Message \(home.hostName)", systemImage: "message.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.appTeal)
-                        .flippedPrimaryColor()
-                        .cornerRadius(10)
+                    Label(
+                        existing == nil ? "Message \(home.hostName)" : "Open conversation",
+                        systemImage: "message.fill"
+                    )
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.appTeal)
+                    .flippedPrimaryColor()
+                    .cornerRadius(10)
                 }
-            }
-            .sheet(isPresented: $showRequestSheet) {
-                RequestStaySheet(listing: home)
             }
         case .contactInfo:
             VStack(alignment: .leading, spacing: 8) {

@@ -15,6 +15,8 @@ struct StaysTab: View {
     @State private var respondingTo: StayRequest?
     @State private var actionError: String?
 
+    @State private var showPast = false
+
     // Outgoing (guest / traveler)
     private var pendingOut:  [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .pending  } }
     private var acceptedOut: [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .accepted } }
@@ -25,9 +27,11 @@ struct StaysTab: View {
     private var acceptedIn: [StayRequest] { requestStore.incomingRequests.filter { $0.status == .accepted } }
     private var pastIn:     [StayRequest] { requestStore.incomingRequests.filter { !$0.status.isActive   } }
 
-    private var hasAny: Bool {
-        !requestStore.outgoingRequests.isEmpty || !requestStore.incomingRequests.isEmpty
+    private var hasActive: Bool {
+        !pendingOut.isEmpty || !acceptedOut.isEmpty || !pendingIn.isEmpty || !acceptedIn.isEmpty
     }
+    private var hasPast: Bool { !pastOut.isEmpty || !pastIn.isEmpty }
+    private var hasAny: Bool { hasActive || hasPast }
 
     var body: some View {
         Group {
@@ -36,7 +40,7 @@ struct StaysTab: View {
                     Label("No stays yet", systemImage: "suitcase")
                         .foregroundStyle(Color.appTeal)
                 } description: {
-                    Text("Request to stay with a host from any listing, and your trips will appear here.")
+                    Text("Open a listing, message the host, and request to stay. Your trips appear here.")
                 }
                 .background(Color.creamWhite.ignoresSafeArea())
             } else {
@@ -49,30 +53,23 @@ struct StaysTab: View {
                         }
                     }
 
-                    // MARK: Outgoing (your trips)
+                    // MARK: Active outgoing (your trips)
                     if !pendingOut.isEmpty {
-                        Section("Your requests — pending (\(pendingOut.count))") {
+                        Section("Waiting to hear back") {
                             ForEach(pendingOut) { req in
-                                OutgoingRequestRow(request: req) {
-                                    Task { await cancel(req) }
-                                }
+                                OutgoingRequestRow(request: req) { Task { await cancel(req) } }
                             }
                         }
                     }
                     if !acceptedOut.isEmpty {
-                        Section("Your requests — accepted") {
+                        Section("Confirmed trips") {
                             ForEach(acceptedOut) { req in OutgoingRequestRow(request: req) }
                         }
                     }
-                    if !pastOut.isEmpty {
-                        Section("Your requests — past") {
-                            ForEach(pastOut) { req in OutgoingRequestRow(request: req) }
-                        }
-                    }
 
-                    // MARK: Incoming (your hosting)
+                    // MARK: Active incoming (your hosting)
                     if !pendingIn.isEmpty {
-                        Section("Incoming — pending (\(pendingIn.count))") {
+                        Section("Needs your response") {
                             ForEach(pendingIn) { req in
                                 IncomingRequestRow(
                                     request: req,
@@ -85,16 +82,37 @@ struct StaysTab: View {
                         }
                     }
                     if !acceptedIn.isEmpty {
-                        Section("Incoming — accepted") {
+                        Section("Upcoming hosting") {
                             ForEach(acceptedIn) { req in
                                 IncomingRequestRow(request: req, guestName: guestName(for: req))
                             }
                         }
                     }
-                    if !pastIn.isEmpty {
-                        Section("Incoming — past") {
-                            ForEach(pastIn) { req in
-                                IncomingRequestRow(request: req, guestName: guestName(for: req))
+
+                    // MARK: Past (collapsed by default)
+                    if hasPast {
+                        Section {
+                            Button {
+                                withAnimation { showPast.toggle() }
+                            } label: {
+                                Label(showPast ? "Hide past stays" : "Show past stays",
+                                      systemImage: showPast ? "chevron.up" : "chevron.down")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        if showPast {
+                            if !pastOut.isEmpty {
+                                Section("Past trips") {
+                                    ForEach(pastOut) { req in OutgoingRequestRow(request: req) }
+                                }
+                            }
+                            if !pastIn.isEmpty {
+                                Section("Past hosting") {
+                                    ForEach(pastIn) { req in
+                                        IncomingRequestRow(request: req, guestName: guestName(for: req))
+                                    }
+                                }
                             }
                         }
                     }
@@ -325,7 +343,7 @@ struct StatusBadge: View {
 
 // MARK: - Accept sheet (lets host add an optional note)
 
-private struct AcceptSheet: View {
+struct AcceptSheet: View {
     let request: StayRequest
     let onConfirm: (String?) async -> Void
 

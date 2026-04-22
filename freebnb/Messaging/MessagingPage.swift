@@ -8,11 +8,17 @@ import SwiftUI
 struct MessagingPage: View {
     let otherUserID: String
     let otherName: String
+    /// Passed when navigating from a listing page; enables the Request to Stay
+    /// toolbar action and provides listing context for the request sheet.
+    var listing: Home? = nil
 
     @Environment(MessageStore.self) private var messageStore
+    @Environment(StayRequestStore.self) private var requestStore
     @Environment(AuthManager.self) private var authManager
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
+    @State private var showRequestSheet = false
+    @State private var respondingTo: StayRequest?
 
     private var currentUserID: String { authManager.userID }
     private var conversationID: String {
@@ -21,8 +27,21 @@ struct MessagingPage: View {
     private var messages: [Message] { messageStore.messages(for: conversationID) }
     private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// The most recent active request between these two users, from either direction.
+    private var activeRequest: StayRequest? {
+        requestStore.outgoingRequests.first(where: { $0.hostUserID == otherUserID && $0.status.isActive })
+        ?? requestStore.incomingRequests.first(where: { $0.guestUserID == otherUserID && $0.status.isActive })
+    }
+
+    private var iAmGuest: Bool { activeRequest?.guestUserID == currentUserID }
+
     var body: some View {
         VStack(spacing: 0) {
+            if let req = activeRequest {
+                requestBanner(req)
+                Divider()
+            }
+
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 8) {
@@ -55,34 +74,111 @@ struct MessagingPage: View {
             }
 
             Divider()
-
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField("Message \(otherName)...", text: $draft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(20)
-                    .focused($inputFocused)
-                    .lineLimit(1...5)
-
-                Button(action: sendMessage) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(trimmedDraft.isEmpty ? .secondary.opacity(0.4) : .appTeal)
-                }
-                .disabled(trimmedDraft.isEmpty)
-                .accessibilityLabel("Send message")
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-            .background(Color.creamWhite)
+            inputBar
         }
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle(otherName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Show the request button only when a listing is known and there
+            // is no active request already in flight.
+            if listing != nil, activeRequest == nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showRequestSheet = true } label: {
+                        Image(systemName: "calendar.badge.plus")
+                            .foregroundColor(Color.appTeal)
+                    }
+                    .accessibilityLabel("Request to Stay")
+                }
+            }
+        }
         .task { inputFocused = true }
+        .sheet(isPresented: $showRequestSheet) {
+            if let listing {
+                RequestStaySheet(listing: listing)
+            }
+        }
+        .sheet(item: $respondingTo) { req in
+            AcceptSheet(request: req) { hostNote in
+                await acceptRequest(req, hostNote: hostNote)
+            }
+        }
     }
+
+    // MARK: - Request banner
+
+    @ViewBuilder
+    private func requestBanner(_ request: StayRequest) -> some View {
+        let bannerColor: Color = request.status == .accepted ? .green : .orange
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    StatusBadge(status: request.status)
+                    Text(dateRangeText(request))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                if let note = request.guestNote, !note.isEmpty {
+                    Text("\"\(note)\"")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            if iAmGuest, request.status.isActive {
+                Button("Cancel") { Task { await cancelRequest(request) } }
+                    .font(.caption)
+                    .foregroundColor(.red)
+            } else if !iAmGuest, request.status == .pending {
+                HStack(spacing: 8) {
+                    Button("Decline") { Task { await declineRequest(request) } }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Button("Accept") { respondingTo = request }
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(Color.appTeal)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(bannerColor.opacity(0.08))
+    }
+
+    // MARK: - Input bar
+
+    private var inputBar: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            TextField("Message \(otherName)...", text: $draft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(20)
+                .focused($inputFocused)
+                .lineLimit(1...5)
+
+            Button(action: sendMessage) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(trimmedDraft.isEmpty ? .secondary.opacity(0.4) : .appTeal)
+            }
+            .disabled(trimmedDraft.isEmpty)
+            .accessibilityLabel("Send message")
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(Color.creamWhite)
+    }
+
+    // MARK: - Sending
 
     private func sendMessage() {
         let trimmed = trimmedDraft
@@ -90,6 +186,52 @@ struct MessagingPage: View {
         if messageStore.send(text: trimmed, senderUserID: currentUserID, recipientUserID: otherUserID) {
             draft = ""
         }
+    }
+
+    // MARK: - Request actions (mirror StaysTab; messages keep both sides in sync)
+
+    private static let shortDate: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
+    }()
+
+    private func dateRangeText(_ request: StayRequest) -> String {
+        "\(Self.shortDate.string(from: request.checkIn)) – \(Self.shortDate.string(from: request.checkOut))"
+    }
+
+    private func cancelRequest(_ request: StayRequest) async {
+        do {
+            try await requestStore.cancel(request)
+            messageStore.send(
+                text: "Request cancelled · \(dateRangeText(request))",
+                senderUserID: currentUserID,
+                recipientUserID: request.hostUserID
+            )
+        } catch {}
+    }
+
+    private func acceptRequest(_ request: StayRequest, hostNote: String?) async {
+        do {
+            try await requestStore.accept(request, hostNote: hostNote)
+            var text = "✅ Stay accepted · \(dateRangeText(request))"
+            if let note = hostNote, !note.isEmpty { text += "\n\(note)" }
+            messageStore.send(
+                text: text,
+                senderUserID: currentUserID,
+                recipientUserID: request.guestUserID
+            )
+            respondingTo = nil
+        } catch {}
+    }
+
+    private func declineRequest(_ request: StayRequest) async {
+        do {
+            try await requestStore.decline(request)
+            messageStore.send(
+                text: "Stay request declined · \(dateRangeText(request))",
+                senderUserID: currentUserID,
+                recipientUserID: request.guestUserID
+            )
+        } catch {}
     }
 }
 
@@ -177,8 +319,6 @@ struct MessagesTab: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     let listings: [Home]
 
-    // Prefer the profile store (works for any user), fall back to the host name
-    // from listings if we happen to know them that way, else a neutral placeholder.
     private func displayName(for userID: String) -> String {
         if let name = userProfileStore.displayName(for: userID), !name.isEmpty { return name }
         if let host = listings.first(where: { $0.hostUserID == userID })?.hostName { return host }
