@@ -12,6 +12,7 @@ struct StaysTab: View {
     @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(HomeStore.self) private var homeStore
     @State private var respondingTo: StayRequest?
     @State private var actionError: String?
 
@@ -42,11 +43,10 @@ struct StaysTab: View {
                 } description: {
                     Text(error)
                         .font(.caption)
-                    Text("If this is a new project, run:\nfirebase deploy --only firestore:rules,firestore:indexes")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 4)
+                    Button("Retry") { requestStore.reload() }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(Color.appTeal)
+                        .padding(.top, 8)
                 }
                 .background(Color.creamWhite.ignoresSafeArea())
             } else if !hasAny {
@@ -71,13 +71,13 @@ struct StaysTab: View {
                     if !pendingOut.isEmpty {
                         Section("Waiting to hear back") {
                             ForEach(pendingOut) { req in
-                                OutgoingRequestRow(request: req) { Task { await cancel(req) } }
+                                outgoingRow(req, onCancel: { Task { await cancel(req) } })
                             }
                         }
                     }
                     if !acceptedOut.isEmpty {
                         Section("Confirmed trips") {
-                            ForEach(acceptedOut) { req in OutgoingRequestRow(request: req) }
+                            ForEach(acceptedOut) { req in outgoingRow(req) }
                         }
                     }
 
@@ -85,9 +85,8 @@ struct StaysTab: View {
                     if !pendingIn.isEmpty {
                         Section("Needs your response") {
                             ForEach(pendingIn) { req in
-                                IncomingRequestRow(
-                                    request: req,
-                                    guestName: guestName(for: req),
+                                incomingRow(
+                                    req,
                                     showActions: true,
                                     onAccept:  { respondingTo = req },
                                     onDecline: { Task { await decline(req) } }
@@ -97,9 +96,7 @@ struct StaysTab: View {
                     }
                     if !acceptedIn.isEmpty {
                         Section("Upcoming hosting") {
-                            ForEach(acceptedIn) { req in
-                                IncomingRequestRow(request: req, guestName: guestName(for: req))
-                            }
+                            ForEach(acceptedIn) { req in incomingRow(req) }
                         }
                     }
 
@@ -118,14 +115,12 @@ struct StaysTab: View {
                         if showPast {
                             if !pastOut.isEmpty {
                                 Section("Past trips") {
-                                    ForEach(pastOut) { req in OutgoingRequestRow(request: req) }
+                                    ForEach(pastOut) { req in outgoingRow(req) }
                                 }
                             }
                             if !pastIn.isEmpty {
                                 Section("Past hosting") {
-                                    ForEach(pastIn) { req in
-                                        IncomingRequestRow(request: req, guestName: guestName(for: req))
-                                    }
+                                    ForEach(pastIn) { req in incomingRow(req) }
                                 }
                             }
                         }
@@ -195,7 +190,50 @@ struct StaysTab: View {
         userProfileStore.displayName(for: request.guestUserID) ?? "FreeBNB User"
     }
 
+    // MARK: - Row builders
+
+    /// Wraps an OutgoingRequestRow in a NavigationLink if the listing is cached.
+    @ViewBuilder
+    private func outgoingRow(_ request: StayRequest, onCancel: (() -> Void)? = nil) -> some View {
+        if let home = listing(for: request) {
+            NavigationLink { HomeDetailPage(home: home) } label: {
+                OutgoingRequestRow(request: request, onCancel: onCancel)
+            }
+        } else {
+            OutgoingRequestRow(request: request, onCancel: onCancel)
+        }
+    }
+
+    /// Wraps an IncomingRequestRow in a NavigationLink if the listing is cached.
+    /// Rows with inline Accept/Decline actions are never wrapped — full-width
+    /// buttons would cover the entire tap area and prevent navigation.
+    @ViewBuilder
+    private func incomingRow(
+        _ request: StayRequest,
+        showActions: Bool = false,
+        onAccept: (() -> Void)? = nil,
+        onDecline: (() -> Void)? = nil
+    ) -> some View {
+        let row = IncomingRequestRow(
+            request: request,
+            guestName: guestName(for: request),
+            showActions: showActions,
+            onAccept: onAccept,
+            onDecline: onDecline
+        )
+        if !showActions, let home = listing(for: request) {
+            NavigationLink { HomeDetailPage(home: home) } label: { row }
+        } else {
+            row
+        }
+    }
+
     // MARK: - Helpers
+
+    /// Looks up the full Home object for a request from the cached listings.
+    private func listing(for request: StayRequest) -> Home? {
+        homeStore.listings.first { $0.id == request.listingID }
+    }
 
     private static let shortDate: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "MMM d"; return f

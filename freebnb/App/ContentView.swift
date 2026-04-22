@@ -9,6 +9,7 @@ struct ContentView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(HomeStore.self) private var homeStore
     @Environment(StayRequestStore.self) private var stayRequestStore
+    @Environment(MessageStore.self) private var messageStore
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
@@ -50,6 +51,7 @@ struct ContentView: View {
                     .tabItem {
                         Label("Messages", systemImage: "message")
                     }
+                    .badge(messageStore.unreadCount)
 
                     NavigationStack {
                         ProfilePage()

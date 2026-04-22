@@ -90,6 +90,7 @@ extension FilterOption {
 
 enum SortOption: String, CaseIterable, Identifiable {
     case `default` = "Default"
+    case mostEager = "Most Eager"
     case mostRooms = "Most Rooms"
     case mostGuests = "Most Guests"
     case mostDays = "Most Days"
@@ -127,6 +128,7 @@ struct HomesPage: View {
             selectedFilters.allSatisfy { $0.matches(home) }
         }
         switch selectedSort {
+        case .mostEager:  return result.sorted { motivationRank($0.hostMotivation) > motivationRank($1.hostMotivation) }
         case .mostDays:   return result.sorted { $0.maxStayDays > $1.maxStayDays }
         case .mostGuests: return result.sorted { $0.maxGuests > $1.maxGuests }
         case .mostRooms:  return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
@@ -185,6 +187,7 @@ struct HomesPage: View {
 
                 Menu {
                     Button("Default") { selectedSort = .default }
+                    Button("Most Eager") { selectedSort = .mostEager }
                     Button("Most Rooms") { selectedSort = .mostRooms }
                     Button("Most Guests") { selectedSort = .mostGuests }
                     Button("Most Days") { selectedSort = .mostDays }
@@ -340,6 +343,14 @@ struct HomesPage: View {
         selectedFilters.isEmpty ? "Filter" : "Filter (\(selectedFilters.count))"
     }
 
+    private func motivationRank(_ m: HostMotivation) -> Int {
+        switch m {
+        case .eager:    return 2
+        case .open:     return 1
+        case .selective: return 0
+        }
+    }
+
     private func accessibilitySummary(for listing: Home) -> String {
         let rooms = "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")"
         let guests = "\(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")"
@@ -357,5 +368,5 @@ struct CardButtonStyle: ButtonStyle {
 }
 
 #Preview {
-    HomesPage(listings: sampleData, onSelectHome: { _ in })
+    HomesPage(listings: [], onSelectHome: { _ in })
 }

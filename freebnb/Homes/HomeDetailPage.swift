@@ -319,9 +319,25 @@ struct HomeDetailPage: View {
 
 #Preview {
     NavigationStack {
-        HomeDetailPage(home: sampleData.randomElement()!)
-            .environment(MessageStore())
-            .environment(AuthManager())
-            .environment(StayRequestStore())
+        HomeDetailPage(home: Home(
+            hostUserID: "preview-host",
+            hostName: "Michaela",
+            address: Address(street: "40 Cummings Rd", city: "Brighton", state: "MA", zip: "02135"),
+            description: "Spots misses you!",
+            contactPreference: .inApp,
+            hostMotivation: .eager,
+            numGuestRooms: 1, maxGuests: 2, maxStayDays: 14,
+            sleepingArrangements: ["bed": 1],
+            kidsAllowed: true, guestPetsAllowed: false, hostHasPets: true,
+            hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
+            hasMicrowave: true, hasTV: true, hasWifi: true,
+            hasPrivateGuestBathroom: false, parkingDetails: "Street parking",
+            hasInUnitLaundry: true, hasCoinLaundryNearby: false,
+            providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: true,
+            foodProvision: .all
+        ))
+        .environment(MessageStore())
+        .environment(AuthManager())
+        .environment(StayRequestStore())
     }
 }

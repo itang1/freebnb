@@ -70,6 +70,7 @@ struct MessagingPage: View {
                     if let lastID {
                         withAnimation { proxy.scrollTo(lastID, anchor: .bottom) }
                     }
+                    messageStore.markRead(conversationID: conversationID)
                 }
             }
 
@@ -90,7 +91,10 @@ struct MessagingPage: View {
                 }
             }
         }
-        .task { inputFocused = true }
+        .task {
+            inputFocused = true
+            messageStore.markRead(conversationID: conversationID)
+        }
         .sheet(isPresented: $showRequestSheet) {
             if let listing {
                 RequestStaySheet(listing: listing)

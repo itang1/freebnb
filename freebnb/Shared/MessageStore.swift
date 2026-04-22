@@ -52,6 +52,10 @@ final class MessageStore {
     private var conversations: [String: [Message]] = [:]
     private var failedMessages: [String: Message] = [:]
     private var currentUserID: String?
+    /// Last-read message ID per conversation, persisted across launches.
+    private var lastReadIDs: [String: String] = {
+        UserDefaults.standard.dictionary(forKey: "lastReadMessageIDs") as? [String: String] ?? [:]
+    }()
 
     @ObservationIgnored private let repository: MessagesRepository
     // `nonisolated(unsafe)` because `deinit` is nonisolated and must tear
@@ -111,6 +115,28 @@ final class MessageStore {
                 MessageStore.conversationID(userIDs: $0.participants)
             }
         }
+    }
+
+    // MARK: - Public interface
+
+    // MARK: - Unread tracking
+
+    /// Mark the latest message in a conversation as read.
+    func markRead(conversationID: String) {
+        guard let last = conversations[conversationID]?
+            .max(by: { Self.sortKey($0) < Self.sortKey($1) }) else { return }
+        lastReadIDs[conversationID] = last.id
+        UserDefaults.standard.set(lastReadIDs, forKey: "lastReadMessageIDs")
+    }
+
+    /// Number of conversations where the last message is from someone else
+    /// and hasn't been seen yet.
+    var unreadCount: Int {
+        guard let currentUserID else { return 0 }
+        return conversationSummaries.filter { summary in
+            summary.lastMessage.senderUserID != currentUserID &&
+            lastReadIDs[summary.id] != summary.lastMessage.id
+        }.count
     }
 
     // MARK: - Public interface

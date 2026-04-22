@@ -73,6 +73,14 @@ final class StayRequestStore {
         }
     }
 
+    // MARK: - Reload
+
+    /// Restart both listeners with the current authenticated user. Call this
+    /// from UI when the listener previously failed (e.g. rules not yet deployed).
+    func reload() {
+        restartListeners(userID: Auth.auth().currentUser?.uid)
+    }
+
     // MARK: - Guest actions
 
     func send(
