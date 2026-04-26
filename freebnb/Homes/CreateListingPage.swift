@@ -3,294 +3,101 @@
 //  freebnb
 //
 
+import Observation
 import SwiftUI
 
-struct CreateListingPage: View {
-    @Environment(HomeStore.self) private var homeStore
-    @Environment(AuthManager.self) private var authManager
-    @Environment(UserProfileStore.self) private var userProfileStore
-    @Environment(\.dismiss) private var dismiss
+// MARK: - View model
 
+@Observable
+final class CreateListingViewModel {
     // When non-nil, the form edits this listing instead of creating a new one.
-    private let editing: Home?
+    let editing: Home?
 
     // Location
-    @State private var street: String
-    @State private var city: String
-    @State private var stateField: String
-    @State private var zip: String
+    var street: String
+    var city: String
+    var stateField: String
+    var zip: String
 
     // Capacity
-    @State private var numGuestRooms: Int
-    @State private var maxGuests: Int
-    @State private var maxStayDays: Int
-    @State private var sleepingCounts: [SleepingSurface: Int]
-    @State private var kidsAllowed: Bool
-    @State private var guestPetsAllowed: Bool
-    @State private var hostHasPets: Bool
+    var numGuestRooms: Int
+    var maxGuests: Int
+    var maxStayDays: Int
+    var sleepingCounts: [SleepingSurface: Int]
+    var kidsAllowed: Bool
+    var guestPetsAllowed: Bool
+    var hostHasPets: Bool
 
     // Amenities
-    @State private var hasAC: Bool
-    @State private var hasHeating: Bool
-    @State private var hasKitchen: Bool
-    @State private var hasFridgeSpace: Bool
-    @State private var hasMicrowave: Bool
-    @State private var hasTV: Bool
-    @State private var hasWifi: Bool
+    var hasAC: Bool
+    var hasHeating: Bool
+    var hasKitchen: Bool
+    var hasFridgeSpace: Bool
+    var hasMicrowave: Bool
+    var hasTV: Bool
+    var hasWifi: Bool
 
     // Rooms and laundry
-    @State private var hasPrivateGuestBathroom: Bool
-    @State private var parkingDetails: String
-    @State private var hasInUnitLaundry: Bool
-    @State private var hasCoinLaundryNearby: Bool
+    var hasPrivateGuestBathroom: Bool
+    var parkingDetails: String
+    var hasInUnitLaundry: Bool
+    var hasCoinLaundryNearby: Bool
 
     // Provisions
-    @State private var providesPillows: Bool
-    @State private var providesBlankets: Bool
-    @State private var providesTowels: Bool
-    @State private var providesToiletries: Bool
-    @State private var foodProvision: FoodProvision
+    var providesPillows: Bool
+    var providesBlankets: Bool
+    var providesTowels: Bool
+    var providesToiletries: Bool
+    var foodProvision: FoodProvision
 
     // Host and contact
-    @State private var description: String
-    @State private var contactPreference: HostContactPreference
-    @State private var hostContactInfo: String
-    @State private var hostMotivation: HostMotivation
+    var description: String
+    var contactPreference: HostContactPreference
+    var hostContactInfo: String
+    var hostMotivation: HostMotivation
 
-    // State
-    @State private var isSaving = false
-    @State private var errorMessage: String?
+    // Save state
+    var isSaving = false
+    var errorMessage: String?
 
     init(editing: Home? = nil) {
         self.editing = editing
-        _street = State(initialValue: editing?.address.street ?? "")
-        _city = State(initialValue: editing?.address.city ?? "")
-        _stateField = State(initialValue: editing?.address.state ?? "")
-        _zip = State(initialValue: editing?.address.zip ?? "")
-        _numGuestRooms = State(initialValue: editing?.numGuestRooms ?? 1)
-        _maxGuests = State(initialValue: editing?.maxGuests ?? 2)
-        _maxStayDays = State(initialValue: editing?.maxStayDays ?? 7)
-        _sleepingCounts = State(initialValue: editing?.sleepingCounts ?? [:])
-        _kidsAllowed = State(initialValue: editing?.kidsAllowed ?? true)
-        _guestPetsAllowed = State(initialValue: editing?.guestPetsAllowed ?? false)
-        _hostHasPets = State(initialValue: editing?.hostHasPets ?? false)
-        _hasAC = State(initialValue: editing?.hasAC ?? false)
-        _hasHeating = State(initialValue: editing?.hasHeating ?? false)
-        _hasKitchen = State(initialValue: editing?.hasKitchen ?? false)
-        _hasFridgeSpace = State(initialValue: editing?.hasFridgeSpace ?? false)
-        _hasMicrowave = State(initialValue: editing?.hasMicrowave ?? false)
-        _hasTV = State(initialValue: editing?.hasTV ?? false)
-        _hasWifi = State(initialValue: editing?.hasWifi ?? false)
-        _hasPrivateGuestBathroom = State(initialValue: editing?.hasPrivateGuestBathroom ?? false)
-        _parkingDetails = State(initialValue: editing?.parkingDetails ?? "")
-        _hasInUnitLaundry = State(initialValue: editing?.hasInUnitLaundry ?? false)
-        _hasCoinLaundryNearby = State(initialValue: editing?.hasCoinLaundryNearby ?? false)
-        _providesPillows = State(initialValue: editing?.providesPillows ?? false)
-        _providesBlankets = State(initialValue: editing?.providesBlankets ?? false)
-        _providesTowels = State(initialValue: editing?.providesTowels ?? false)
-        _providesToiletries = State(initialValue: editing?.providesToiletries ?? false)
-        _foodProvision = State(initialValue: editing?.foodProvision ?? .none)
-        _description = State(initialValue: editing?.description ?? "")
-        _contactPreference = State(initialValue: editing?.contactPreference ?? .inApp)
-        _hostContactInfo = State(initialValue: editing?.hostContactInfo ?? "")
-        _hostMotivation = State(initialValue: editing?.hostMotivation ?? .open)
+        street = editing?.address.street ?? ""
+        city = editing?.address.city ?? ""
+        stateField = editing?.address.state ?? ""
+        zip = editing?.address.zip ?? ""
+        numGuestRooms = editing?.numGuestRooms ?? 1
+        maxGuests = editing?.maxGuests ?? 2
+        maxStayDays = editing?.maxStayDays ?? 7
+        sleepingCounts = editing?.sleepingCounts ?? [:]
+        kidsAllowed = editing?.kidsAllowed ?? true
+        guestPetsAllowed = editing?.guestPetsAllowed ?? false
+        hostHasPets = editing?.hostHasPets ?? false
+        hasAC = editing?.hasAC ?? false
+        hasHeating = editing?.hasHeating ?? false
+        hasKitchen = editing?.hasKitchen ?? false
+        hasFridgeSpace = editing?.hasFridgeSpace ?? false
+        hasMicrowave = editing?.hasMicrowave ?? false
+        hasTV = editing?.hasTV ?? false
+        hasWifi = editing?.hasWifi ?? false
+        hasPrivateGuestBathroom = editing?.hasPrivateGuestBathroom ?? false
+        parkingDetails = editing?.parkingDetails ?? ""
+        hasInUnitLaundry = editing?.hasInUnitLaundry ?? false
+        hasCoinLaundryNearby = editing?.hasCoinLaundryNearby ?? false
+        providesPillows = editing?.providesPillows ?? false
+        providesBlankets = editing?.providesBlankets ?? false
+        providesTowels = editing?.providesTowels ?? false
+        providesToiletries = editing?.providesToiletries ?? false
+        foodProvision = editing?.foodProvision ?? .none
+        description = editing?.description ?? ""
+        contactPreference = editing?.contactPreference ?? .inApp
+        hostContactInfo = editing?.hostContactInfo ?? ""
+        hostMotivation = editing?.hostMotivation ?? .open
     }
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                if let missingNameMessage {
-                    Section {
-                        Label(missingNameMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline)
-                            .foregroundColor(.orange)
-                    }
-                }
-
-                locationSection
-                capacitySection
-                sleepingSection
-                guestsAndPetsSection
-                amenitiesSection
-                roomsAndLaundrySection
-                provisionsSection
-                contactSection
-                motivationSection
-                descriptionSection
-
-                if let errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline)
-                            .foregroundColor(.red)
-                    }
-                }
-            }
-            .navigationTitle(editing == nil ? "New Listing" : "Edit Listing")
-            #if !os(macOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(!canSave)
-                }
-            }
-            .disabled(isSaving)
-        }
-    }
-
-    // MARK: - Sections
-
-    private var locationSection: some View {
-        Section("Location") {
-            TextField("Street", text: $street)
-                .textContentType(.streetAddressLine1)
-            TextField("City", text: $city)
-                .textContentType(.addressCity)
-            TextField("State", text: $stateField)
-                .textContentType(.addressState)
-            TextField("ZIP", text: $zip)
-                .textContentType(.postalCode)
-                #if !os(macOS)
-                .keyboardType(.numbersAndPunctuation)
-                #endif
-        }
-    }
-
-    private var capacitySection: some View {
-        Section("Capacity") {
-            Stepper("Guest rooms: \(numGuestRooms)", value: $numGuestRooms, in: 0...10)
-            Stepper("Max guests: \(maxGuests)", value: $maxGuests, in: 1...20)
-            Stepper("Max stay: \(maxStayDays) night\(maxStayDays == 1 ? "" : "s")", value: $maxStayDays, in: 1...365)
-        }
-    }
-
-    private var sleepingSection: some View {
-        Section("Sleeping arrangements") {
-            ForEach(SleepingSurface.allCases, id: \.self) { surface in
-                Stepper(
-                    "\(sleepingCounts[surface, default: 0]) \(surface.displayName)\(sleepingCounts[surface, default: 0] == 1 ? "" : "s")",
-                    value: Binding(
-                        get: { sleepingCounts[surface, default: 0] },
-                        set: { newValue in
-                            if newValue <= 0 { sleepingCounts.removeValue(forKey: surface) }
-                            else { sleepingCounts[surface] = newValue }
-                        }
-                    ),
-                    in: 0...20
-                )
-            }
-            if sleepingCounts.isEmpty {
-                Text("Add at least one sleeping surface so guests know where they'll sleep.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-
-    private var guestsAndPetsSection: some View {
-        Section("Guests and pets") {
-            Toggle("Kids allowed", isOn: $kidsAllowed)
-            Toggle("Guest can bring pets", isOn: $guestPetsAllowed)
-            Toggle("Host has pets", isOn: $hostHasPets)
-        }
-    }
-
-    private var amenitiesSection: some View {
-        Section("Amenities") {
-            Toggle("Air conditioning", isOn: $hasAC)
-            Toggle("Heating", isOn: $hasHeating)
-            Toggle("Kitchen", isOn: $hasKitchen)
-            Toggle("Fridge space for guest", isOn: $hasFridgeSpace)
-            Toggle("Microwave", isOn: $hasMicrowave)
-            Toggle("TV", isOn: $hasTV)
-            Toggle("Wifi", isOn: $hasWifi)
-        }
-    }
-
-    private var roomsAndLaundrySection: some View {
-        Section("Rooms and laundry") {
-            Toggle("Private guest bathroom", isOn: $hasPrivateGuestBathroom)
-            Toggle("In-unit laundry", isOn: $hasInUnitLaundry)
-            Toggle("Coin laundry nearby", isOn: $hasCoinLaundryNearby)
-            TextField("Parking details (optional)", text: $parkingDetails, axis: .vertical)
-                .lineLimit(1...3)
-        }
-    }
-
-    private var provisionsSection: some View {
-        Section("Provisions") {
-            Toggle("Pillows", isOn: $providesPillows)
-            Toggle("Blankets", isOn: $providesBlankets)
-            Toggle("Towels", isOn: $providesTowels)
-            Toggle("Toiletries", isOn: $providesToiletries)
-            Picker("Food", selection: $foodProvision) {
-                ForEach(FoodProvision.allCases, id: \.self) { option in
-                    Text(option.displayName).tag(option)
-                }
-            }
-        }
-    }
-
-    private var contactSection: some View {
-        Section("How guests reach you") {
-            Picker("Preference", selection: $contactPreference) {
-                Text("In-app messaging").tag(HostContactPreference.inApp)
-                Text("Share contact info").tag(HostContactPreference.contactInfo)
-            }
-            if contactPreference == .contactInfo {
-                TextField("Phone, email, or handle", text: $hostContactInfo)
-                    .textContentType(.emailAddress)
-            }
-        }
-    }
-
-    private var motivationSection: some View {
-        Section("How eager are you to host?") {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(HostMotivation.allCases, id: \.self) { motivation in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Image(systemName: hostMotivation == motivation ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(hostMotivation == motivation ? .appTeal : .secondary.opacity(0.5))
-                            Text(motivation.displayName)
-                                .font(.body)
-                        }
-                        Text(motivation.description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.leading, 28)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { hostMotivation = motivation }
-                }
-            }
-            .padding(.vertical, 8)
-        }
-    }
-
-    private var descriptionSection: some View {
-        Section("Memo (optional)") {
-            TextField("Anything guests should know", text: $description, axis: .vertical)
-                .lineLimit(2...8)
-        }
-    }
-
-    // MARK: - Derived state
-
-    private var missingNameMessage: String? {
-        guard userProfileStore.displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-        return "Add your name on your profile before creating a listing."
-    }
-
-    private var canSave: Bool {
+    func canSave(displayName: String) -> Bool {
         guard !isSaving else { return false }
-        guard missingNameMessage == nil else { return false }
+        guard !displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !street.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !city.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !stateField.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
@@ -301,9 +108,7 @@ struct CreateListingPage: View {
         return true
     }
 
-    // MARK: - Save
-
-    private func save() async {
+    func save(homeStore: HomeStore, hostUserID: String, hostName: String) async {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -315,8 +120,8 @@ struct CreateListingPage: View {
         }
 
         var home = Home(
-            hostUserID: authManager.userID,
-            hostName: userProfileStore.displayName,
+            hostUserID: hostUserID,
+            hostName: hostName,
             address: Address(
                 street: street.trimmingCharacters(in: .whitespaces),
                 city: city.trimmingCharacters(in: .whitespaces),
@@ -356,10 +161,225 @@ struct CreateListingPage: View {
 
         do {
             try await homeStore.save(home)
-            dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+// MARK: - View
+
+struct CreateListingPage: View {
+    @Environment(HomeStore.self) private var homeStore
+    @Environment(AuthManager.self) private var authManager
+    @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var vm: CreateListingViewModel
+
+    init(editing: Home? = nil) {
+        _vm = State(initialValue: CreateListingViewModel(editing: editing))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let missingNameMessage {
+                    Section {
+                        Label(missingNameMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.orange)
+                    }
+                }
+
+                locationSection
+                capacitySection
+                sleepingSection
+                guestsAndPetsSection
+                amenitiesSection
+                roomsAndLaundrySection
+                provisionsSection
+                contactSection
+                motivationSection
+                descriptionSection
+
+                if let errorMessage = vm.errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle(vm.editing == nil ? "New Listing" : "Edit Listing")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(vm.isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            await vm.save(
+                                homeStore: homeStore,
+                                hostUserID: authManager.userID,
+                                hostName: userProfileStore.displayName ?? ""
+                            )
+                            if vm.errorMessage == nil { dismiss() }
+                        }
+                    }
+                    .disabled(!vm.canSave(displayName: userProfileStore.displayName ?? ""))
+                }
+            }
+            .disabled(vm.isSaving)
+        }
+    }
+
+    // MARK: - Sections
+
+    private var locationSection: some View {
+        Section("Location") {
+            TextField("Street", text: $vm.street)
+                .textContentType(.streetAddressLine1)
+            TextField("City", text: $vm.city)
+                .textContentType(.addressCity)
+            TextField("State", text: $vm.stateField)
+                .textContentType(.addressState)
+            TextField("ZIP", text: $vm.zip)
+                .textContentType(.postalCode)
+                #if !os(macOS)
+                .keyboardType(.numbersAndPunctuation)
+                #endif
+        }
+    }
+
+    private var capacitySection: some View {
+        Section("Capacity") {
+            Stepper("Guest rooms: \(vm.numGuestRooms)", value: $vm.numGuestRooms, in: 0...10)
+            Stepper("Max guests: \(vm.maxGuests)", value: $vm.maxGuests, in: 1...20)
+            Stepper("Max stay: \(vm.maxStayDays) night\(vm.maxStayDays == 1 ? "" : "s")", value: $vm.maxStayDays, in: 1...365)
+        }
+    }
+
+    private var sleepingSection: some View {
+        Section("Sleeping arrangements") {
+            ForEach(SleepingSurface.allCases, id: \.self) { surface in
+                Stepper(
+                    "\(vm.sleepingCounts[surface, default: 0]) \(surface.displayName)\(vm.sleepingCounts[surface, default: 0] == 1 ? "" : "s")",
+                    value: Binding(
+                        get: { vm.sleepingCounts[surface, default: 0] },
+                        set: { newValue in
+                            if newValue <= 0 { vm.sleepingCounts.removeValue(forKey: surface) }
+                            else { vm.sleepingCounts[surface] = newValue }
+                        }
+                    ),
+                    in: 0...20
+                )
+            }
+            if vm.sleepingCounts.isEmpty {
+                Text("Add at least one sleeping surface so guests know where they'll sleep.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private var guestsAndPetsSection: some View {
+        Section("Guests and pets") {
+            Toggle("Kids allowed", isOn: $vm.kidsAllowed)
+            Toggle("Guest can bring pets", isOn: $vm.guestPetsAllowed)
+            Toggle("Host has pets", isOn: $vm.hostHasPets)
+        }
+    }
+
+    private var amenitiesSection: some View {
+        Section("Amenities") {
+            Toggle("Air conditioning", isOn: $vm.hasAC)
+            Toggle("Heating", isOn: $vm.hasHeating)
+            Toggle("Kitchen", isOn: $vm.hasKitchen)
+            Toggle("Fridge space for guest", isOn: $vm.hasFridgeSpace)
+            Toggle("Microwave", isOn: $vm.hasMicrowave)
+            Toggle("TV", isOn: $vm.hasTV)
+            Toggle("Wifi", isOn: $vm.hasWifi)
+        }
+    }
+
+    private var roomsAndLaundrySection: some View {
+        Section("Rooms and laundry") {
+            Toggle("Private guest bathroom", isOn: $vm.hasPrivateGuestBathroom)
+            Toggle("In-unit laundry", isOn: $vm.hasInUnitLaundry)
+            Toggle("Coin laundry nearby", isOn: $vm.hasCoinLaundryNearby)
+            TextField("Parking details (optional)", text: $vm.parkingDetails, axis: .vertical)
+                .lineLimit(1...3)
+        }
+    }
+
+    private var provisionsSection: some View {
+        Section("Provisions") {
+            Toggle("Pillows", isOn: $vm.providesPillows)
+            Toggle("Blankets", isOn: $vm.providesBlankets)
+            Toggle("Towels", isOn: $vm.providesTowels)
+            Toggle("Toiletries", isOn: $vm.providesToiletries)
+            Picker("Food", selection: $vm.foodProvision) {
+                ForEach(FoodProvision.allCases, id: \.self) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+        }
+    }
+
+    private var contactSection: some View {
+        Section("How guests reach you") {
+            Picker("Preference", selection: $vm.contactPreference) {
+                Text("In-app messaging").tag(HostContactPreference.inApp)
+                Text("Share contact info").tag(HostContactPreference.contactInfo)
+            }
+            if vm.contactPreference == .contactInfo {
+                TextField("Phone, email, or handle", text: $vm.hostContactInfo)
+                    .textContentType(.emailAddress)
+            }
+        }
+    }
+
+    private var motivationSection: some View {
+        Section("How eager are you to host?") {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(HostMotivation.allCases, id: \.self) { motivation in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Image(systemName: vm.hostMotivation == motivation ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(vm.hostMotivation == motivation ? .appTeal : .secondary.opacity(0.5))
+                            Text(motivation.displayName)
+                                .font(.body)
+                        }
+                        Text(motivation.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 28)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { vm.hostMotivation = motivation }
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var descriptionSection: some View {
+        Section("Memo (optional)") {
+            TextField("Anything guests should know", text: $vm.description, axis: .vertical)
+                .lineLimit(2...8)
+        }
+    }
+
+    // MARK: - Derived state
+
+    private var missingNameMessage: String? {
+        guard (userProfileStore.displayName ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return "Add your name on your profile before creating a listing."
     }
 }
 
