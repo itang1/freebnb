@@ -19,6 +19,8 @@ private func AmenityRow<Content: View>(
 struct HomeCard: View {
     let listing: Home
 
+    private let cardImageHeight: CGFloat = 190
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header — photo if available, teal strip otherwise
@@ -26,9 +28,6 @@ struct HomeCard: View {
 
             // Body
             VStack(alignment: .leading, spacing: 10) {
-                // Host motivation badge
-                motivationBadge
-
                 // Summary pills
                 HStack(spacing: 6) {
                     SummaryPill(icon: "door.left.hand.open", text: "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")")
@@ -147,7 +146,7 @@ struct HomeCard: View {
                             .overlay(ProgressView().tint(.white))
                     }
                 }
-                .frame(height: 190)
+                .frame(height: cardImageHeight)
                 .clipped()
 
                 // Gradient so text is readable over any photo
@@ -161,7 +160,7 @@ struct HomeCard: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 10)
             }
-            .frame(height: 190)
+            .frame(height: cardImageHeight)
             .clipShape(UnevenRoundedRectangle(
                 topLeadingRadius: 20, bottomLeadingRadius: 0,
                 bottomTrailingRadius: 0, topTrailingRadius: 20
@@ -186,6 +185,14 @@ struct HomeCard: View {
                     .foregroundColor(.white.opacity(0.85))
             }
             Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Image(systemName: motivationIcon)
+                    .font(.caption2)
+                Text(listing.hostMotivation.displayName)
+                    .font(.caption2)
+            }
+            .foregroundColor(.white.opacity(0.8))
+            .accessibilityLabel("Host motivation: \(listing.hostMotivation.displayName)")
             Image(systemName: "chevron.right")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.8))
@@ -209,36 +216,19 @@ struct HomeCard: View {
 
             Spacer()
 
+            VStack(alignment: .trailing, spacing: 2) {
+                Image(systemName: motivationIcon)
+                    .font(.caption2)
+                Text(listing.hostMotivation.displayName)
+                    .font(.caption2)
+            }
+            .opacity(0.8)
+            .accessibilityLabel("Host motivation: \(listing.hostMotivation.displayName)")
+
             Image(systemName: "chevron.right")
                 .font(.subheadline)
                 .opacity(0.8)
                 .accessibilityHidden(true)
-        }
-    }
-
-    // MARK: - Host motivation badge
-
-    private var motivationBadge: some View {
-        HStack(spacing: 5) {
-            Image(systemName: motivationIcon)
-                .font(.caption2)
-            Text(listing.hostMotivation.displayName)
-                .font(.caption)
-                .fontWeight(.medium)
-        }
-        .foregroundColor(motivationColor)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(motivationColor.opacity(0.12))
-        .clipShape(Capsule())
-        .accessibilityLabel("Host motivation: \(listing.hostMotivation.displayName)")
-    }
-
-    private var motivationColor: Color {
-        switch listing.hostMotivation {
-        case .eager:    return .red
-        case .open:     return .orange
-        case .selective: return .secondary
         }
     }
 

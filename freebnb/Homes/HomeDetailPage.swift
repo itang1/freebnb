@@ -27,15 +27,19 @@ struct HomeDetailPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // MARK: Host motivation
-                VStack(alignment: .leading, spacing: 6) {
-                    Label(home.hostMotivation.displayName, systemImage: "heart.fill")
-                        .font(.headline)
-                        .foregroundColor(home.hostMotivation == .eager ? .red : home.hostMotivation == .open ? .orange : .secondary)
-                    Text(home.hostMotivation.description)
+                HStack(spacing: 5) {
+                    Image(systemName: home.hostMotivation == .eager ? "heart.fill" : home.hostMotivation == .open ? "heart" : "heart.slash")
+                        .font(.caption2)
+                    Text(home.hostMotivation.displayName)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .fontWeight(.medium)
                 }
-                .padding(.bottom, 8)
+                .foregroundColor(home.hostMotivation == .eager ? .red : home.hostMotivation == .open ? .orange : .secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background((home.hostMotivation == .eager ? Color.red : home.hostMotivation == .open ? Color.orange : Color.secondary).opacity(0.12))
+                .clipShape(Capsule())
+                .accessibilityLabel("Host motivation: \(home.hostMotivation.displayName)")
 
                 // MARK: Details
                 Text("Details")
@@ -201,6 +205,7 @@ struct HomeDetailPage: View {
         guard mapState == .loading else { return }
         let address = formattedAddress
         let hostName = home.hostName
+        geocodeTask?.cancel()
         geocodeTask = Task {
             do {
                 let coordinate = try await GeocodingCache.shared.coordinate(for: address)
@@ -278,17 +283,18 @@ struct HomeDetailPage: View {
 
     // MARK: - Existing request banner
 
+    private static let bannerDateFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+    }()
+
     private func existingRequestBanner(_ request: StayRequest) -> some View {
-        let dateFormatter: DateFormatter = {
-            let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
-        }()
         return HStack(spacing: 10) {
             Image(systemName: request.status == .accepted ? "checkmark.circle.fill" : "clock")
                 .foregroundColor(request.status == .accepted ? .green : .orange)
             VStack(alignment: .leading, spacing: 2) {
                 Text(request.status == .accepted ? "Stay accepted" : "Request pending")
                     .font(.subheadline).fontWeight(.semibold)
-                Text("\(dateFormatter.string(from: request.checkIn)) – \(dateFormatter.string(from: request.checkOut))")
+                Text("\(Self.bannerDateFormatter.string(from: request.checkIn)) – \(Self.bannerDateFormatter.string(from: request.checkOut))")
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
