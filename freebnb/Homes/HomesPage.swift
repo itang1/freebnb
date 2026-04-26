@@ -112,6 +112,9 @@ struct HomesPage: View {
     // existing listings always propagate immediately (computed from live data),
     // while additions/removals update the ID order.
     @State private var shuffleOrder: [String] = []
+    // Cached derived lists — recomputed only when inputs change via onChange.
+    @State private var shuffledListings: [Home] = []
+    @State private var filteredListings: [Home] = []
 
     var listings: [Home]
     var isLoading: Bool = false
@@ -121,7 +124,7 @@ struct HomesPage: View {
     var onLoadMore: () -> Void = {}
     var onSelectHome: (Home) -> Void
 
-    private var shuffledListings: [Home] {
+    private func recomputeShuffled() -> [Home] {
         let byID = Dictionary(uniqueKeysWithValues: listings.map { ($0.id, $0) })
         var result = shuffleOrder.compactMap { byID[$0] }
         let seen = Set(shuffleOrder)
@@ -129,12 +132,12 @@ struct HomesPage: View {
         return result
     }
 
-    private var filteredListings: [Home] {
-        let result = shuffledListings.filter { home in
+    private func recomputeFiltered(from shuffled: [Home]) -> [Home] {
+        let result = shuffled.filter { home in
             selectedFilters.allSatisfy { $0.matches(home) }
         }
         switch selectedSort {
-        case .mostEager:  return result.sorted { motivationRank($0.hostMotivation) > motivationRank($1.hostMotivation) }
+        case .mostEager:  return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
         case .mostDays:   return result.sorted { $0.maxStayDays > $1.maxStayDays }
         case .mostGuests: return result.sorted { $0.maxGuests > $1.maxGuests }
         case .mostRooms:  return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
@@ -330,6 +333,9 @@ struct HomesPage: View {
             if shuffleOrder.isEmpty && !listings.isEmpty {
                 shuffleOrder = listings.map { $0.id }.shuffled()
             }
+            let s = recomputeShuffled()
+            shuffledListings = s
+            filteredListings = recomputeFiltered(from: s)
         }
         .onChange(of: listings.map { $0.id }) { _, newIDs in
             let newIDSet = Set(newIDs)
@@ -337,6 +343,21 @@ struct HomesPage: View {
             let seen = Set(shuffleOrder)
             let added = newIDs.filter { !seen.contains($0) }.shuffled()
             shuffleOrder.append(contentsOf: added)
+            let s = recomputeShuffled()
+            shuffledListings = s
+            filteredListings = recomputeFiltered(from: s)
+        }
+        .onChange(of: listings) { _, _ in
+            // Listing content changed (not just IDs); refresh without reshuffling.
+            let s = recomputeShuffled()
+            shuffledListings = s
+            filteredListings = recomputeFiltered(from: s)
+        }
+        .onChange(of: selectedFilters) { _, _ in
+            filteredListings = recomputeFiltered(from: shuffledListings)
+        }
+        .onChange(of: selectedSort) { _, _ in
+            filteredListings = recomputeFiltered(from: shuffledListings)
         }
     }
 
@@ -347,14 +368,6 @@ struct HomesPage: View {
 
     private var filterLabel: String {
         selectedFilters.isEmpty ? "Filter" : "Filter (\(selectedFilters.count))"
-    }
-
-    private func motivationRank(_ m: HostMotivation) -> Int {
-        switch m {
-        case .eager:    return 2
-        case .open:     return 1
-        case .selective: return 0
-        }
     }
 
     private func accessibilitySummary(for listing: Home) -> String {

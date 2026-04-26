@@ -4,7 +4,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct FlippedPrimaryColor: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
@@ -25,6 +27,17 @@ extension View {
     }
 }
 
+extension HostMotivation {
+    /// Tint used for the motivation badge across the listing card and detail page.
+    var tintColor: Color {
+        switch self {
+        case .eager:     return .red
+        case .open:      return .orange
+        case .selective: return .secondary
+        }
+    }
+}
+
 private struct AppearanceModifier: ViewModifier {
     @AppStorage("appearance") private var appearance = "system"
 
@@ -35,6 +48,7 @@ private struct AppearanceModifier: ViewModifier {
     }
 
     private func apply(_ value: String) {
+        #if canImport(UIKit)
         let style: UIUserInterfaceStyle
         switch value {
         case "light": style = .light
@@ -45,6 +59,7 @@ private struct AppearanceModifier: ViewModifier {
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
             .forEach { $0.overrideUserInterfaceStyle = style }
+        #endif
     }
 }
 

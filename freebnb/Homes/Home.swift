@@ -74,6 +74,23 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
             return "This host is particular about guests and has limited availability."
         }
     }
+
+    var iconName: String {
+        switch self {
+        case .eager:     return "heart.fill"
+        case .open:      return "heart"
+        case .selective: return "heart.slash"
+        }
+    }
+
+    /// Sort key for "Most Eager" — higher means more eager.
+    var rank: Int {
+        switch self {
+        case .eager:     return 2
+        case .open:      return 1
+        case .selective: return 0
+        }
+    }
 }
 
 struct Home: Identifiable, Hashable, Codable {

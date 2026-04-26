@@ -186,7 +186,7 @@ struct HomeCard: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Image(systemName: motivationIcon)
+                Image(systemName: listing.hostMotivation.iconName)
                     .font(.caption2)
                 Text(listing.hostMotivation.displayName)
                     .font(.caption2)
@@ -217,7 +217,7 @@ struct HomeCard: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Image(systemName: motivationIcon)
+                Image(systemName: listing.hostMotivation.iconName)
                     .font(.caption2)
                 Text(listing.hostMotivation.displayName)
                     .font(.caption2)
@@ -232,13 +232,6 @@ struct HomeCard: View {
         }
     }
 
-    private var motivationIcon: String {
-        switch listing.hostMotivation {
-        case .eager:    return "heart.fill"
-        case .open:     return "heart"
-        case .selective: return "heart.slash"
-        }
-    }
 }
 
 struct SummaryPill: View {

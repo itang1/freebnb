@@ -28,16 +28,16 @@ struct HomeDetailPage: View {
             VStack(alignment: .leading, spacing: 16) {
                 // MARK: Host motivation
                 HStack(spacing: 5) {
-                    Image(systemName: home.hostMotivation == .eager ? "heart.fill" : home.hostMotivation == .open ? "heart" : "heart.slash")
+                    Image(systemName: home.hostMotivation.iconName)
                         .font(.caption2)
                     Text(home.hostMotivation.displayName)
                         .font(.caption)
                         .fontWeight(.medium)
                 }
-                .foregroundColor(home.hostMotivation == .eager ? .red : home.hostMotivation == .open ? .orange : .secondary)
+                .foregroundColor(home.hostMotivation.tintColor)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
-                .background((home.hostMotivation == .eager ? Color.red : home.hostMotivation == .open ? Color.orange : Color.secondary).opacity(0.12))
+                .background(home.hostMotivation.tintColor.opacity(0.12))
                 .clipShape(Capsule())
                 .accessibilityLabel("Host motivation: \(home.hostMotivation.displayName)")
 
