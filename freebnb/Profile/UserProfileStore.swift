@@ -4,7 +4,7 @@
 //
 
 import FirebaseAuth
-import FirebaseFirestore
+@preconcurrency import FirebaseFirestore
 import Foundation
 import Observation
 import os
@@ -31,6 +31,7 @@ final class UserProfileStore {
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private var inFlight: Set<String> = []
+    @ObservationIgnored private var hasAttemptedProfileCreation = false
     @ObservationIgnored private let log = AppLog.logger("profile")
 
     init(repository: UserProfileRepository = FirestoreUserProfileRepository()) {
@@ -47,7 +48,7 @@ final class UserProfileStore {
 
     // MARK: - Convenience
 
-    var displayName: String { currentProfile?.displayName ?? "" }
+    var displayName: String? { currentProfile?.displayName }
 
     // MARK: - Current user listener
 
@@ -55,11 +56,12 @@ final class UserProfileStore {
         activeListener?.cancel()
         activeListener = nil
         currentProfile = nil
+        hasAttemptedProfileCreation = false
         guard let user, !user.isAnonymous else { return }
 
         let userID = user.uid
         let email = user.email
-        let seedName = UserDefaults.standard.string(forKey: "userName") ?? user.displayName ?? ""
+        let seedName = UserDefaults.standard.string(forKey: UserDefaultsKey.userName) ?? user.displayName ?? ""
 
         activeListener = repository.listenToCurrentProfile(userID: userID) { [weak self] result in
             Task { @MainActor [weak self] in
@@ -81,7 +83,8 @@ final class UserProfileStore {
             if let profile {
                 currentProfile = profile
                 profileCache[userID] = profile
-            } else {
+            } else if !hasAttemptedProfileCreation {
+                hasAttemptedProfileCreation = true
                 Task { await self.createInitialProfile(userID: userID, displayName: seedName, email: email) }
             }
         }
@@ -117,7 +120,7 @@ final class UserProfileStore {
         guard let userID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         do {
             try await repository.updateDisplayName(userID: userID, newName: trimmed)
-            UserDefaults.standard.set(trimmed, forKey: "userName")
+            UserDefaults.standard.set(trimmed, forKey: UserDefaultsKey.userName)
         } catch {
             log.error("profile update error: \(error.localizedDescription, privacy: .public)")
             throw ProfileUpdateError.underlying(error)

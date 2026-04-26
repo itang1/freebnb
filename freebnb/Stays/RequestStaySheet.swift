@@ -13,8 +13,12 @@ struct RequestStaySheet: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
-    @State private var checkIn: Date = Calendar.current.startOfDay(for: Date().addingTimeInterval(86400))
-    @State private var checkOut: Date = Calendar.current.startOfDay(for: Date().addingTimeInterval(86400 * 2))
+    @State private var checkIn: Date = Calendar.current.startOfDay(
+        for: Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    )
+    @State private var checkOut: Date = Calendar.current.startOfDay(
+        for: Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
+    )
     @State private var note = ""
     @State private var isSending = false
     @State private var errorMessage: String?
@@ -32,7 +36,7 @@ struct RequestStaySheet: View {
             Form {
                 Section("Dates") {
                     DatePicker("Check in", selection: $checkIn, in: Date()..., displayedComponents: .date)
-                    DatePicker("Check out", selection: $checkOut, in: checkIn.addingTimeInterval(86400)..., displayedComponents: .date)
+                    DatePicker("Check out", selection: $checkOut, in: (Calendar.current.date(byAdding: .day, value: 1, to: checkIn) ?? checkIn)..., displayedComponents: .date)
 
                     if nights > 0 {
                         HStack {
@@ -63,7 +67,9 @@ struct RequestStaySheet: View {
                 }
             }
             .navigationTitle("Request a Stay")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -101,11 +107,8 @@ struct RequestStaySheet: View {
         }
     }
 
-    private static let shortDate: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
-    }()
-
     private func dateRangeText(from start: Date, to end: Date, nights: Int) -> String {
-        "\(Self.shortDate.string(from: start)) – \(Self.shortDate.string(from: end)) · \(nights) night\(nights == 1 ? "" : "s")"
+        let f = AppDateFormatters.shortDay
+        return "\(f.string(from: start)) – \(f.string(from: end)) · \(nights) night\(nights == 1 ? "" : "s")"
     }
 }

@@ -70,21 +70,21 @@ struct StaysTab: View {
                     // MARK: Active outgoing (your trips)
                     if !pendingOut.isEmpty {
                         Section("Waiting to hear back") {
-                            ForEach(pendingOut) { req in
+                            ForEach(pendingOut, id: \.id) { req in
                                 outgoingRow(req, onCancel: { Task { await cancel(req) } })
                             }
                         }
                     }
                     if !acceptedOut.isEmpty {
                         Section("Confirmed trips") {
-                            ForEach(acceptedOut) { req in outgoingRow(req) }
+                            ForEach(acceptedOut, id: \.id) { req in outgoingRow(req) }
                         }
                     }
 
                     // MARK: Active incoming (your hosting)
                     if !pendingIn.isEmpty {
                         Section("Needs your response") {
-                            ForEach(pendingIn) { req in
+                            ForEach(pendingIn, id: \.id) { req in
                                 incomingRow(
                                     req,
                                     showActions: true,
@@ -96,7 +96,7 @@ struct StaysTab: View {
                     }
                     if !acceptedIn.isEmpty {
                         Section("Upcoming hosting") {
-                            ForEach(acceptedIn) { req in incomingRow(req) }
+                            ForEach(acceptedIn, id: \.id) { req in incomingRow(req) }
                         }
                     }
 
@@ -115,12 +115,12 @@ struct StaysTab: View {
                         if showPast {
                             if !pastOut.isEmpty {
                                 Section("Past trips") {
-                                    ForEach(pastOut) { req in outgoingRow(req) }
+                                    ForEach(pastOut, id: \.id) { req in outgoingRow(req) }
                                 }
                             }
                             if !pastIn.isEmpty {
                                 Section("Past hosting") {
-                                    ForEach(pastIn) { req in incomingRow(req) }
+                                    ForEach(pastIn, id: \.id) { req in incomingRow(req) }
                                 }
                             }
                         }
@@ -235,12 +235,9 @@ struct StaysTab: View {
         homeStore.listings.first { $0.id == request.listingID }
     }
 
-    private static let shortDate: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
-    }()
-
     private func dateRangeText(_ request: StayRequest) -> String {
-        "\(Self.shortDate.string(from: request.checkIn)) – \(Self.shortDate.string(from: request.checkOut))"
+        let f = AppDateFormatters.shortDay
+        return "\(f.string(from: request.checkIn)) – \(f.string(from: request.checkOut))"
     }
 }
 
@@ -249,10 +246,6 @@ struct StaysTab: View {
 struct OutgoingRequestRow: View {
     let request: StayRequest
     var onCancel: (() -> Void)? = nil
-
-    private let fmt: DateFormatter = {
-        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
-    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -263,7 +256,7 @@ struct OutgoingRequestRow: View {
                 StatusBadge(status: request.status)
             }
 
-            Text("\(request.listingCity) · \(fmt.string(from: request.checkIn)) – \(fmt.string(from: request.checkOut))")
+            Text("\(request.listingCity) · \(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
@@ -307,10 +300,6 @@ struct IncomingRequestRow: View {
     var onAccept:  (() -> Void)? = nil
     var onDecline: (() -> Void)? = nil
 
-    private let fmt: DateFormatter = {
-        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
-    }()
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -320,7 +309,7 @@ struct IncomingRequestRow: View {
                 StatusBadge(status: request.status)
             }
 
-            Text("\(request.listingCity) · \(fmt.string(from: request.checkIn)) – \(fmt.string(from: request.checkOut))")
+            Text("\(request.listingCity) · \(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
@@ -412,7 +401,9 @@ struct AcceptSheet: View {
                 }
             }
             .navigationTitle("Accept Request")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }.disabled(isConfirming)

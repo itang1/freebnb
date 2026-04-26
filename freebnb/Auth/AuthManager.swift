@@ -130,7 +130,7 @@ final class AuthManager {
                 do {
                     _ = try await Auth.auth().signIn(with: firebaseCredential)
                     if !fullName.isEmpty {
-                        UserDefaults.standard.set(fullName, forKey: "userName")
+                        UserDefaults.standard.set(fullName, forKey: UserDefaultsKey.userName)
                     }
                 } catch {
                     log.error("apple sign in failed: \(error.localizedDescription, privacy: .public)")
@@ -158,7 +158,7 @@ final class AuthManager {
     // MARK: - Sign out / delete
 
     func signOut() {
-        UserDefaults.standard.removeObject(forKey: "userName")
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKey.userName)
         do { try Auth.auth().signOut() }
         catch { log.error("sign out failed: \(error.localizedDescription, privacy: .public)") }
     }
@@ -172,7 +172,7 @@ final class AuthManager {
                 try await revokeAppleAndReauthenticate(user: user)
             }
             try await user.delete()
-            UserDefaults.standard.removeObject(forKey: "userName")
+            UserDefaults.standard.removeObject(forKey: UserDefaultsKey.userName)
         } catch AuthError.cancelled {
             return
         } catch {

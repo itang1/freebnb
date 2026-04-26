@@ -8,6 +8,40 @@ import SwiftUI
 import UIKit
 #endif
 
+// MARK: - Shared formatters
+
+/// `DateFormatter` allocations are surprisingly expensive; the same few
+/// configurations show up across every stay/message screen, so we keep a
+/// single instance per style and reuse it.
+enum AppDateFormatters {
+    /// "Mar 5" — used in chat banners and activity strings.
+    static let shortDay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
+
+    /// "Mar 5, 2026" — used in stay rows and existing-request banners.
+    static let mediumDate: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+}
+
+// MARK: - UserDefaults keys
+
+/// Single source of truth for UserDefaults keys; previously these were
+/// stringly-typed at five different call sites.
+enum UserDefaultsKey {
+    static let userName              = "userName"
+    static let lastReadMessageIDs    = "lastReadMessageIDs"
+    static let hasSeenOnboarding     = "hasSeenOnboarding"
+    static let notificationsEnabled  = "notificationsEnabled"
+    static let appearance            = "appearance"
+}
+
 struct FlippedPrimaryColor: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
 
@@ -39,7 +73,7 @@ extension HostMotivation {
 }
 
 private struct AppearanceModifier: ViewModifier {
-    @AppStorage("appearance") private var appearance = "system"
+    @AppStorage(UserDefaultsKey.appearance) private var appearance = "system"
 
     func body(content: Content) -> some View {
         content

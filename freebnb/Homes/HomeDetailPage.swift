@@ -283,18 +283,15 @@ struct HomeDetailPage: View {
 
     // MARK: - Existing request banner
 
-    private static let bannerDateFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
-    }()
-
     private func existingRequestBanner(_ request: StayRequest) -> some View {
+        let f = AppDateFormatters.mediumDate
         return HStack(spacing: 10) {
             Image(systemName: request.status == .accepted ? "checkmark.circle.fill" : "clock")
                 .foregroundColor(request.status == .accepted ? .green : .orange)
             VStack(alignment: .leading, spacing: 2) {
                 Text(request.status == .accepted ? "Stay accepted" : "Request pending")
                     .font(.subheadline).fontWeight(.semibold)
-                Text("\(Self.bannerDateFormatter.string(from: request.checkIn)) – \(Self.bannerDateFormatter.string(from: request.checkOut))")
+                Text("\(f.string(from: request.checkIn)) – \(f.string(from: request.checkOut))")
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()

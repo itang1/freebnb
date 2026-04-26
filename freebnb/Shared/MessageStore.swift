@@ -54,7 +54,7 @@ final class MessageStore {
     private var currentUserID: String?
     /// Last-read message ID per conversation, persisted across launches.
     private var lastReadIDs: [String: String] = {
-        UserDefaults.standard.dictionary(forKey: "lastReadMessageIDs") as? [String: String] ?? [:]
+        UserDefaults.standard.dictionary(forKey: UserDefaultsKey.lastReadMessageIDs) as? [String: String] ?? [:]
     }()
 
     @ObservationIgnored private let repository: MessagesRepository
@@ -126,7 +126,7 @@ final class MessageStore {
         guard let last = conversations[conversationID]?
             .max(by: { Self.sortKey($0) < Self.sortKey($1) }) else { return }
         lastReadIDs[conversationID] = last.id
-        UserDefaults.standard.set(lastReadIDs, forKey: "lastReadMessageIDs")
+        UserDefaults.standard.set(lastReadIDs, forKey: UserDefaultsKey.lastReadMessageIDs)
     }
 
     /// Number of conversations where the last message is from someone else

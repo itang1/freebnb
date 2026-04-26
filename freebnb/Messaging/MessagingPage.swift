@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import os
 
 struct MessagingPage: View {
     let otherUserID: String
@@ -19,6 +20,7 @@ struct MessagingPage: View {
     @FocusState private var inputFocused: Bool
     @State private var showRequestSheet = false
     @State private var respondingTo: StayRequest?
+    @State private var errorMessage: String?
 
     private var currentUserID: String { authManager.userID }
     private var conversationID: String {
@@ -34,6 +36,8 @@ struct MessagingPage: View {
     }
 
     private var iAmGuest: Bool { activeRequest?.guestUserID == currentUserID }
+
+    @ObservationIgnored private let log = AppLog.logger("messaging")
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,12 +83,14 @@ struct MessagingPage: View {
         }
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle(otherName)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             // Show the request button only when a listing is known and there
             // is no active request already in flight.
             if listing != nil, activeRequest == nil {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button("Request a Stay") { showRequestSheet = true }
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(Color.appTeal)
@@ -104,6 +110,14 @@ struct MessagingPage: View {
             AcceptSheet(request: req) { hostNote in
                 await acceptRequest(req, hostNote: hostNote)
             }
+        }
+        .alert("Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            if let errorMessage { Text(errorMessage) }
         }
     }
 
@@ -192,12 +206,9 @@ struct MessagingPage: View {
 
     // MARK: - Request actions (mirror StaysTab; messages keep both sides in sync)
 
-    private static let shortDate: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
-    }()
-
     private func dateRangeText(_ request: StayRequest) -> String {
-        "\(Self.shortDate.string(from: request.checkIn)) – \(Self.shortDate.string(from: request.checkOut))"
+        let f = AppDateFormatters.shortDay
+        return "\(f.string(from: request.checkIn)) – \(f.string(from: request.checkOut))"
     }
 
     private func cancelRequest(_ request: StayRequest) async {
@@ -208,7 +219,10 @@ struct MessagingPage: View {
                 senderUserID: currentUserID,
                 recipientUserID: request.hostUserID
             )
-        } catch {}
+        } catch {
+            log.error("cancel request failed: \(error.localizedDescription, privacy: .public)")
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func acceptRequest(_ request: StayRequest, hostNote: String?) async {
@@ -222,7 +236,10 @@ struct MessagingPage: View {
                 recipientUserID: request.guestUserID
             )
             respondingTo = nil
-        } catch {}
+        } catch {
+            log.error("accept request failed: \(error.localizedDescription, privacy: .public)")
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func declineRequest(_ request: StayRequest) async {
@@ -233,7 +250,10 @@ struct MessagingPage: View {
                 senderUserID: currentUserID,
                 recipientUserID: request.guestUserID
             )
-        } catch {}
+        } catch {
+            log.error("decline request failed: \(error.localizedDescription, privacy: .public)")
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

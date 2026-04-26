@@ -10,7 +10,7 @@ struct ContentView: View {
     @Environment(HomeStore.self) private var homeStore
     @Environment(StayRequestStore.self) private var stayRequestStore
     @Environment(MessageStore.self) private var messageStore
-    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    @AppStorage(UserDefaultsKey.hasSeenOnboarding) private var hasSeenOnboarding = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
 

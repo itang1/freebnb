@@ -9,8 +9,8 @@ import AuthenticationServices
 struct ProfilePage: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
-    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
-    @AppStorage("appearance") private var appearance = "system"
+    @AppStorage(UserDefaultsKey.notificationsEnabled) private var notificationsEnabled = true
+    @AppStorage(UserDefaultsKey.appearance) private var appearance = "system"
 
     @Environment(\.openURL) private var openURL
     @State private var showEditName = false
