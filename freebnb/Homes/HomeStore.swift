@@ -59,6 +59,10 @@ final class HomeStore {
             self.error = error.localizedDescription
             isLoading = false
             isLoadingMore = false
+            // Firestore stops delivering updates after an error; cancel the dead
+            // listener so loadMore() can restart it cleanly.
+            activeListener?.cancel()
+            activeListener = nil
         case .success(let homes):
             self.error = nil
             canLoadMore = homes.count > currentLimit
@@ -69,9 +73,11 @@ final class HomeStore {
     }
 
     func loadMore() {
-        guard !isLoadingMore, canLoadMore else { return }
+        guard !isLoadingMore else { return }
+        // Also allow calling loadMore() to retry after a listener error.
+        guard canLoadMore || error != nil else { return }
         isLoadingMore = true
-        currentLimit += pageSize
+        if error == nil { currentLimit += pageSize }
         restartListener()
     }
 
