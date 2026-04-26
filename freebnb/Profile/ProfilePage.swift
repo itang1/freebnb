@@ -16,6 +16,9 @@ struct ProfilePage: View {
     @State private var showEditName = false
     @State private var showDeleteConfirm = false
 
+    private static let privacyURL = URL(string: "https://freebnb.app/privacy")!
+    private static let termsURL   = URL(string: "https://freebnb.app/terms")!
+
     var body: some View {
         ScrollView {
             VStack(spacing: 8) {
@@ -31,7 +34,7 @@ struct ProfilePage: View {
                     sectionLabel("Account")
                     VStack(spacing: 0) {
                         SettingsRow(icon: "pencil", label: "Edit Name", chevron: true,
-                                    trailingText: userProfileStore.displayName.isEmpty ? nil : userProfileStore.displayName) {
+                                    trailingText: userProfileStore.displayName) {
                             showEditName = true
                         }
                         if !authManager.userEmail.isEmpty {
@@ -109,11 +112,11 @@ struct ProfilePage: View {
                     SettingsRow(icon: "number", label: "Version", trailingText: appVersion)
                     rowDivider
                     SettingsRow(icon: "hand.raised", label: "Privacy Policy", chevron: true) {
-                        if let url = URL(string: "https://freebnb.app/privacy") { openURL(url) }
+                        openURL(Self.privacyURL)
                     }
                     rowDivider
                     SettingsRow(icon: "doc.text", label: "Terms of Service", chevron: true) {
-                        if let url = URL(string: "https://freebnb.app/terms") { openURL(url) }
+                        openURL(Self.termsURL)
                     }
                 }
                 .sectionCard()
@@ -191,9 +194,9 @@ struct ProfilePage: View {
                     Text("Browsing without an account")
                         .font(.subheadline).foregroundColor(.secondary)
                 } else {
-                    Text(userProfileStore.displayName.isEmpty ? "No Name" : userProfileStore.displayName)
+                    Text(userProfileStore.displayName ?? "No Name")
                         .font(.title2).fontWeight(.semibold)
-                        .foregroundColor(userProfileStore.displayName.isEmpty ? .secondary : .primary)
+                        .foregroundColor(userProfileStore.displayName == nil ? .secondary : .primary)
                     if !authManager.userEmail.isEmpty {
                         Text(authManager.userEmail)
                             .font(.subheadline).foregroundColor(.secondary)
@@ -221,7 +224,7 @@ struct ProfilePage: View {
                 .multilineTextAlignment(.center)
 
             SignInWithAppleButton(.signUp) { request in
-                request.requestedScopes = [.fullName, .email]
+                authManager.prepareAppleSignInRequest(request)
             } onCompletion: { result in
                 authManager.handleAuthorization(result)
             }
@@ -371,7 +374,7 @@ private struct EditNameSheet: View {
                                   name.trimmingCharacters(in: .whitespaces) == userProfileStore.displayName)
                 }
             }
-            .onAppear { name = userProfileStore.displayName }
+            .onAppear { name = userProfileStore.displayName ?? "" }
         }
     }
 

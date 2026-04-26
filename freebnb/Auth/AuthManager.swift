@@ -21,15 +21,17 @@ enum AuthError: LocalizedError, Equatable {
     case guestFailed
     case deleteFailed
     case reauthRequired
+    case nonceGenerationFailed
 
     var errorDescription: String? {
         switch self {
-        case .cancelled:      return nil
-        case .invalidToken:   return "Sign in returned an invalid token."
-        case .signInFailed:   return "Sign in failed. Please try again."
-        case .guestFailed:    return "Could not continue as guest. Please try again."
-        case .deleteFailed:   return "Could not delete account. Please try again."
-        case .reauthRequired: return "Please sign in again to delete your account."
+        case .cancelled:             return nil
+        case .invalidToken:          return "Sign in returned an invalid token."
+        case .signInFailed:          return "Sign in failed. Please try again."
+        case .guestFailed:           return "Could not continue as guest. Please try again."
+        case .deleteFailed:          return "Could not delete account. Please try again."
+        case .reauthRequired:        return "Please sign in again to delete your account."
+        case .nonceGenerationFailed: return "Could not prepare sign in. Please try again."
         }
     }
 }
@@ -80,10 +82,15 @@ final class AuthManager {
     // MARK: - Sign in with Apple
 
     func prepareAppleSignInRequest(_ request: ASAuthorizationAppleIDRequest) {
-        let nonce = randomNonceString()
-        currentNonce = nonce
-        request.requestedScopes = [.fullName, .email]
-        request.nonce = sha256(nonce)
+        do {
+            let nonce = try randomNonceString()
+            currentNonce = nonce
+            request.requestedScopes = [.fullName, .email]
+            request.nonce = sha256(nonce)
+        } catch {
+            log.error("nonce generation failed: \(error.localizedDescription, privacy: .public)")
+            authError = .nonceGenerationFailed
+        }
     }
 
     func handleAuthorization(_ result: Result<ASAuthorization, Error>) {
@@ -178,7 +185,7 @@ final class AuthManager {
     // ~5 minutes, so we re-run Sign in with Apple at delete time to get a usable one,
     // reauthenticate, then revoke before deleting the user.
     private func revokeAppleAndReauthenticate(user: User) async throws {
-        let rawNonce = randomNonceString()
+        let rawNonce = try randomNonceString()
         let coordinator = AppleSignInCoordinator()
         let authorization: ASAuthorization
         do {
@@ -205,13 +212,14 @@ final class AuthManager {
 
     // MARK: - Nonce helpers
 
-    private func randomNonceString(length: Int = 32) -> String {
+    private func randomNonceString(length: Int = 32) throws -> String {
         var randomBytes = [UInt8](repeating: 0, count: length)
         let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
-        if errorCode != errSecSuccess {
-            fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+        guard errorCode == errSecSuccess else {
+            throw AuthError.nonceGenerationFailed
         }
-        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        // 64-char set keeps `UInt8 % 64` unbiased (256 / 64 = 4 evenly).
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._")
         return String(randomBytes.map { charset[Int($0) % charset.count] })
     }
 
