@@ -146,6 +146,12 @@ struct Home: Identifiable, Hashable, Codable {
     // cleanly. Access through `photos` for a non-optional view.
     var photoURLs: [String]? = nil
 
+    // MARK: Soft delete
+    // Nil means active. Set by the repository to the server timestamp on delete;
+    // the HomeStore filters out non-nil entries so deleted listings never appear
+    // in the feed while the Firestore document is preserved for history.
+    var deletedAt: Date? = nil
+
     // Identity-based equality and hashing, kept consistent per Hashable contract.
     static func == (lhs: Home, rhs: Home) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -184,6 +190,7 @@ struct Home: Identifiable, Hashable, Codable {
         case hasPrivateGuestBathroom, parkingDetails, hasInUnitLaundry, hasCoinLaundryNearby
         case providesPillows, providesBlankets, providesTowels, providesToiletries, foodProvision
         case photoURLs
+        case deletedAt
     }
 
 }
@@ -228,5 +235,6 @@ extension Home {
         providesToiletries      = try c.decode(Bool.self,                             forKey: .providesToiletries)
         foodProvision           = try c.decodeIfPresent(FoodProvision.self,           forKey: .foodProvision)         ?? .none
         photoURLs               = try c.decodeIfPresent([String].self,                forKey: .photoURLs)
+        deletedAt               = try c.decodeIfPresent(Date.self,                   forKey: .deletedAt)
     }
 }

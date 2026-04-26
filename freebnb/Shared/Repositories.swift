@@ -46,6 +46,7 @@ protocol HomesRepository: Sendable {
 
     func save(_ home: Home) async throws
     func delete(homeID: String) async throws
+    func updateHostName(userID: String, newName: String) async throws
 }
 
 struct FirestoreHomesRepository: HomesRepository {
@@ -79,7 +80,21 @@ struct FirestoreHomesRepository: HomesRepository {
     }
 
     func delete(homeID: String) async throws {
-        try await db.collection("homes").document(homeID).delete()
+        try await db.collection("homes").document(homeID).updateData([
+            "deletedAt": FieldValue.serverTimestamp()
+        ])
+    }
+
+    func updateHostName(userID: String, newName: String) async throws {
+        let snap = try await db.collection("homes")
+            .whereField("hostUserID", isEqualTo: userID)
+            .getDocuments()
+        guard !snap.documents.isEmpty else { return }
+        let batch = db.batch()
+        for doc in snap.documents {
+            batch.updateData(["hostName": newName], forDocument: doc.reference)
+        }
+        try await batch.commit()
     }
 }
 

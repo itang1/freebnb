@@ -65,8 +65,10 @@ final class HomeStore {
             activeListener = nil
         case .success(let homes):
             self.error = nil
+            // `canLoadMore` is checked before filtering so that the sentinel doc
+            // (limit+1) still triggers paging even if some results are deleted.
             canLoadMore = homes.count > currentLimit
-            listings = Array(homes.prefix(currentLimit))
+            listings = Array(homes.filter { $0.deletedAt == nil }.prefix(currentLimit))
             isLoading = false
             isLoadingMore = false
         }
@@ -128,6 +130,15 @@ final class HomeStore {
             try await repository.delete(homeID: home.id)
         } catch {
             log.error("delete error: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
+    func updateHostName(for userID: String, newName: String) async throws {
+        do {
+            try await repository.updateHostName(userID: userID, newName: newName)
+        } catch {
+            log.error("update host name error: \(error.localizedDescription, privacy: .public)")
             throw error
         }
     }

@@ -16,7 +16,7 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         limit: Int,
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener {
-        handler(.success(Array(homes.prefix(limit))))
+        handler(.success(Array(homes.filter { $0.deletedAt == nil }.prefix(limit))))
         return NoopListener()
     }
 
@@ -29,7 +29,15 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     }
 
     func delete(homeID: String) async throws {
-        homes.removeAll { $0.id == homeID }
+        for i in homes.indices where homes[i].id == homeID {
+            homes[i].deletedAt = Date()
+        }
+    }
+
+    func updateHostName(userID: String, newName: String) async throws {
+        for i in homes.indices where homes[i].hostUserID == userID {
+            homes[i].hostName = newName
+        }
     }
 }
 
