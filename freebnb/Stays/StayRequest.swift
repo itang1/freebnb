@@ -92,7 +92,9 @@ extension [StayRequest] {
             case (nil, nil):   return false
             case (nil, _):     return true   // pending write floats up
             case (_, nil):     return false
-            case (let a, let b): return a! > b!
+            case (let a, let b):
+                guard let a, let b else { return false }
+                return a > b
             }
         }
     }

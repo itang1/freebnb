@@ -72,7 +72,7 @@ struct InfoPage: View {
     }
 }
 
-struct InfoCard: View {
+private struct InfoCard: View {
     let icon: String
     let title: String
     let subtitle: String
