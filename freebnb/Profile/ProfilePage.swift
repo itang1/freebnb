@@ -337,6 +337,8 @@ private struct SettingsRow: View {
 
 private struct EditNameSheet: View {
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(HomeStore.self) private var homeStore
+    @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) var dismiss
     @State private var name = ""
     @State private var errorMessage: String?
@@ -382,8 +384,10 @@ private struct EditNameSheet: View {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
         do {
-            try await userProfileStore.updateDisplayName(name)
+            try await userProfileStore.updateDisplayName(trimmed)
+            try await homeStore.updateHostName(for: authManager.userID, newName: trimmed)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -397,5 +401,6 @@ private struct EditNameSheet: View {
             .environment(AuthManager())
             .environment(UserProfileStore())
             .environment(StayRequestStore())
+            .environment(HomeStore())
     }
 }
