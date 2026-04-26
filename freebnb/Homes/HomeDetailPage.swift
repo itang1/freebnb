@@ -236,28 +236,35 @@ struct HomeDetailPage: View {
     private var contactSection: some View {
         switch home.contactPreference {
         case .inApp:
-            let existing = requestStore.activeRequest(for: home.id, guestUserID: authManager.userID)
-            VStack(spacing: 10) {
-                if let existing {
-                    existingRequestBanner(existing)
-                }
-                NavigationLink {
-                    MessagingPage(
-                        otherUserID: home.hostUserID,
-                        otherName: home.hostName,
-                        listing: home
-                    )
-                } label: {
-                    Label(
-                        existing == nil ? "Message \(home.hostName)" : "Open conversation",
-                        systemImage: "message.fill"
-                    )
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.appTeal)
-                    .flippedPrimaryColor()
-                    .cornerRadius(10)
+            if authManager.authMethod == .guest {
+                Text("Create a free account to message \(home.hostName) and request a stay.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            } else {
+                let existing = requestStore.activeRequest(for: home.id, guestUserID: authManager.userID)
+                VStack(spacing: 10) {
+                    if let existing {
+                        existingRequestBanner(existing)
+                    }
+                    NavigationLink {
+                        MessagingPage(
+                            otherUserID: home.hostUserID,
+                            otherName: home.hostName,
+                            listing: home
+                        )
+                    } label: {
+                        Label(
+                            existing == nil ? "Message \(home.hostName)" : "Open conversation",
+                            systemImage: "message.fill"
+                        )
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.appTeal)
+                        .flippedPrimaryColor()
+                        .cornerRadius(10)
+                    }
                 }
             }
         case .contactInfo:
