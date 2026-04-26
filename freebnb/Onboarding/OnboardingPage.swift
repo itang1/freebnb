@@ -48,7 +48,9 @@ struct OnboardingPage: View {
                         slideView(slide).tag(index)
                     }
                 }
+                #if os(iOS)
                 .tabViewStyle(.page(indexDisplayMode: .always))
+                #endif
 
                 VStack(spacing: 12) {
                     Button(action: advance) {
