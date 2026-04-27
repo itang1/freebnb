@@ -383,7 +383,18 @@ struct HomesPage: View {
                         Text("No homes found")
                             .font(.title3)
                             .fontWeight(.semibold)
-                        if selectedFilters.isEmpty {
+                        if showSavedOnly {
+                            Text("You haven't saved any listings yet. Open a listing and tap \"Save listing\" to bookmark it for later.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                            Button("Show all listings") { showSavedOnly = false }
+                                .font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.appTeal.opacity(0.15), in: Capsule())
+                                .foregroundColor(Color.appTeal)
+                        } else if selectedFilters.isEmpty && citySearch.isEmpty {
                             Text("FreeBNB only shows homes from people in your network. Invite a friend who hosts, or ask someone to add you.")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
