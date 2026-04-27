@@ -124,6 +124,7 @@ enum SortOption: String, CaseIterable, Identifiable {
 struct HomesPage: View {
     @State private var selectedFilters: Set<FilterOption> = []
     @State private var selectedSort: SortOption = .default
+    @State private var citySearch: String = ""
     // Stable shuffle: we track the desired display order as an array of IDs, then
     // derive the display list from live `listings`. This means content edits to
     // existing listings always propagate immediately (computed from live data),
@@ -150,8 +151,10 @@ struct HomesPage: View {
     }
 
     private func recomputeFiltered(from shuffled: [Home]) -> [Home] {
+        let query = citySearch.trimmingCharacters(in: .whitespaces).lowercased()
         let result = shuffled.filter { home in
-            selectedFilters.allSatisfy { $0.matches(home) }
+            selectedFilters.allSatisfy { $0.matches(home) } &&
+            (query.isEmpty || home.address.city.lowercased().contains(query) || home.address.state.lowercased().contains(query))
         }
         switch selectedSort {
         case .mostEager:  return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
@@ -164,6 +167,26 @@ struct HomesPage: View {
 
     var body: some View {
         VStack(spacing: 20) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
+                TextField("Search by city or state", text: $citySearch)
+                    .autocorrectionDisabled()
+                if !citySearch.isEmpty {
+                    Button {
+                        citySearch = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+
             if let error {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -232,10 +255,11 @@ struct HomesPage: View {
             }
 
             HStack {
-                if !selectedFilters.isEmpty || selectedSort != .default {
+                if !selectedFilters.isEmpty || selectedSort != .default || !citySearch.isEmpty {
                     Button {
                         selectedFilters.removeAll()
                         selectedSort = .default
+                        citySearch = ""
                     } label: {
                         Label("Reset", systemImage: "arrow.counterclockwise")
                             .font(.subheadline)
@@ -390,6 +414,9 @@ struct HomesPage: View {
             filteredListings = recomputeFiltered(from: shuffledListings)
         }
         .onChange(of: selectedSort) { _, _ in
+            filteredListings = recomputeFiltered(from: shuffledListings)
+        }
+        .onChange(of: citySearch) { _, _ in
             filteredListings = recomputeFiltered(from: shuffledListings)
         }
     }
