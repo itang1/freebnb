@@ -21,6 +21,7 @@ struct MessagingPage: View {
     @State private var showRequestSheet = false
     @State private var respondingTo: StayRequest?
     @State private var errorMessage: String?
+    @State private var bannerBusy = false
 
     private var currentUserID: String { authManager.userID }
     private var conversationID: String {
@@ -145,14 +146,30 @@ struct MessagingPage: View {
             Spacer()
 
             if iAmGuest, request.status.isActive {
-                Button("Cancel") { Task { await cancelRequest(request) } }
-                    .font(.caption)
-                    .foregroundColor(.red)
+                Button("Cancel") {
+                    guard !bannerBusy else { return }
+                    bannerBusy = true
+                    Task {
+                        await cancelRequest(request)
+                        bannerBusy = false
+                    }
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+                .disabled(bannerBusy)
             } else if !iAmGuest, request.status == .pending {
                 HStack(spacing: 8) {
-                    Button("Decline") { Task { await declineRequest(request) } }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Button("Decline") {
+                        guard !bannerBusy else { return }
+                        bannerBusy = true
+                        Task {
+                            await declineRequest(request)
+                            bannerBusy = false
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .disabled(bannerBusy)
                     Button("Accept") { respondingTo = request }
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.white)
@@ -160,6 +177,7 @@ struct MessagingPage: View {
                         .padding(.vertical, 5)
                         .background(Color.appTeal)
                         .clipShape(Capsule())
+                        .disabled(bannerBusy)
                 }
             }
         }
