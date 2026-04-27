@@ -165,6 +165,14 @@ struct HomeDetailPage: View {
             geocodeTask = nil
         }
         .navigationTitle(home.hostName)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                ShareLink(
+                    item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
+                    subject: Text("FreeBNB Listing")
+                )
+            }
+        }
         .background(Color.creamWhite)
     }
 
