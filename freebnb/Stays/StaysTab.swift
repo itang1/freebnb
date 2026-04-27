@@ -214,14 +214,21 @@ struct StaysTab: View {
         onAccept: (() -> Void)? = nil,
         onDecline: (() -> Void)? = nil
     ) -> some View {
+        let home = listing(for: request)
+        // Show the street address when the host has more than one listing so the
+        // guest's request can be traced to the right property.
+        let multiListing = homeStore.listings.filter {
+            $0.hostUserID == authManager.userID
+        }.count > 1
         let row = IncomingRequestRow(
             request: request,
             guestName: guestName(for: request),
+            listingAddress: multiListing ? home?.address.street : nil,
             showActions: showActions,
             onAccept: onAccept,
             onDecline: onDecline
         )
-        if !showActions, let home = listing(for: request) {
+        if !showActions, let home {
             NavigationLink { HomeDetailPage(home: home) } label: { row }
         } else {
             row
@@ -296,6 +303,9 @@ struct OutgoingRequestRow: View {
 struct IncomingRequestRow: View {
     let request: StayRequest
     let guestName: String
+    /// Street address of the listing. Pass when the host has multiple listings so
+    /// the guest can see which property the request is for.
+    var listingAddress: String? = nil
     var showActions: Bool = false
     var onAccept:  (() -> Void)? = nil
     var onDecline: (() -> Void)? = nil
@@ -309,9 +319,18 @@ struct IncomingRequestRow: View {
                 StatusBadge(status: request.status)
             }
 
-            Text("\(request.listingCity) · \(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            if let listingAddress {
+                Text("\(request.listingCity) · \(listingAddress)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Text("\(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("\(request.listingCity) · \(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
 
             Text("\(request.nights) night\(request.nights == 1 ? "" : "s")")
                 .font(.caption)
