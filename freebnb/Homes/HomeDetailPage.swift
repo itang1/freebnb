@@ -12,6 +12,7 @@ struct HomeDetailPage: View {
     @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
     @Environment(StayRequestStore.self) private var requestStore
+    @Environment(UserProfileStore.self) private var userProfileStore
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var mapState: MapState = .loading
@@ -180,10 +181,21 @@ struct HomeDetailPage: View {
         .navigationTitle(home.hostName)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                ShareLink(
-                    item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
-                    subject: Text("FreeBNB Listing")
-                )
+                HStack(spacing: 4) {
+                    if authManager.authMethod != .guest {
+                        let saved = userProfileStore.isSaved(home.id)
+                        Button {
+                            Task { try? await userProfileStore.toggleSavedListing(home.id) }
+                        } label: {
+                            Image(systemName: saved ? "bookmark.fill" : "bookmark")
+                                .accessibilityLabel(saved ? "Remove bookmark" : "Bookmark listing")
+                        }
+                    }
+                    ShareLink(
+                        item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
+                        subject: Text("FreeBNB Listing")
+                    )
+                }
             }
         }
         .background(Color.creamWhite)
@@ -370,5 +382,6 @@ struct HomeDetailPage: View {
         .environment(MessageStore())
         .environment(AuthManager())
         .environment(StayRequestStore())
+        .environment(UserProfileStore())
     }
 }

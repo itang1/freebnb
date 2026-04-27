@@ -104,6 +104,10 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
         profiles[userID]?.displayName = newName
     }
 
+    func updateSavedListings(userID: String, listingIDs: [String]) async throws {
+        profiles[userID]?.savedListingIDs = listingIDs
+    }
+
     func fetchProfile(userID: String) async throws -> UserProfile? {
         profiles[userID]
     }

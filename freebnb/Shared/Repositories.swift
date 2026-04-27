@@ -241,6 +241,7 @@ protocol UserProfileRepository: Sendable {
 
     func createInitialProfile(userID: String, displayName: String, email: String?) async throws
     func updateDisplayName(userID: String, newName: String) async throws
+    func updateSavedListings(userID: String, listingIDs: [String]) async throws
     func fetchProfile(userID: String) async throws -> UserProfile?
 }
 
@@ -279,6 +280,13 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
     func updateDisplayName(userID: String, newName: String) async throws {
         try await db.collection("users").document(userID).setData([
             "displayName": newName,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+    }
+
+    func updateSavedListings(userID: String, listingIDs: [String]) async throws {
+        try await db.collection("users").document(userID).setData([
+            "savedListingIDs": listingIDs,
             "updatedAt": FieldValue.serverTimestamp()
         ], merge: true)
     }

@@ -13,8 +13,11 @@ struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     @DocumentID var id: String?
     var displayName: String
     var email: String?
+    var savedListingIDs: [String]?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
+
+    var savedIDs: Set<String> { Set(savedListingIDs ?? []) }
 }
 
 @MainActor
@@ -111,6 +114,22 @@ final class UserProfileStore {
             case .notSignedIn:        return "You need to be signed in to update your profile."
             case .underlying(let e):  return e.localizedDescription
             }
+        }
+    }
+
+    func isSaved(_ listingID: String) -> Bool {
+        currentProfile?.savedIDs.contains(listingID) ?? false
+    }
+
+    func toggleSavedListing(_ listingID: String) async throws {
+        guard let userID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
+        var ids = currentProfile?.savedIDs ?? []
+        if ids.contains(listingID) { ids.remove(listingID) } else { ids.insert(listingID) }
+        do {
+            try await repository.updateSavedListings(userID: userID, listingIDs: Array(ids))
+        } catch {
+            log.error("saved listings update error: \(error.localizedDescription, privacy: .public)")
+            throw ProfileUpdateError.underlying(error)
         }
     }
 

@@ -126,9 +126,12 @@ enum SortOption: String, CaseIterable, Identifiable {
 }
 
 struct HomesPage: View {
+    @Environment(UserProfileStore.self) private var userProfileStore
+
     @State private var selectedFilters: Set<FilterOption> = []
     @State private var selectedSort: SortOption = .default
     @State private var citySearch: String = ""
+    @State private var showSavedOnly: Bool = false
     // Stable shuffle: we track the desired display order as an array of IDs, then
     // derive the display list from live `listings`. This means content edits to
     // existing listings always propagate immediately (computed from live data),
@@ -156,9 +159,11 @@ struct HomesPage: View {
 
     private func recomputeFiltered(from shuffled: [Home]) -> [Home] {
         let query = citySearch.trimmingCharacters(in: .whitespaces).lowercased()
+        let savedIDs = userProfileStore.currentProfile?.savedIDs ?? []
         let result = shuffled.filter { home in
             selectedFilters.allSatisfy { $0.matches(home) } &&
-            (query.isEmpty || home.address.city.lowercased().contains(query) || home.address.state.lowercased().contains(query))
+            (query.isEmpty || home.address.city.lowercased().contains(query) || home.address.state.lowercased().contains(query)) &&
+            (!showSavedOnly || savedIDs.contains(home.id))
         }
         switch selectedSort {
         case .mostEager:     return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
@@ -263,15 +268,29 @@ struct HomesPage: View {
                 }
                 .transaction { t in t.animation = nil }
 
+                Button {
+                    showSavedOnly.toggle()
+                } label: {
+                    Image(systemName: showSavedOnly ? "bookmark.fill" : "bookmark")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(showSavedOnly ? Color.appTeal.opacity(0.3) : Color.appTeal.opacity(0.15), in: Capsule())
+                        .foregroundColor(Color.appTeal)
+                }
+                .accessibilityLabel(showSavedOnly ? "Show all listings" : "Show saved listings only")
+
                 Spacer()
             }
 
             HStack {
-                if !selectedFilters.isEmpty || selectedSort != .default || !citySearch.isEmpty {
+                if !selectedFilters.isEmpty || selectedSort != .default || !citySearch.isEmpty || showSavedOnly {
                     Button {
                         selectedFilters.removeAll()
                         selectedSort = .default
                         citySearch = ""
+                        showSavedOnly = false
                     } label: {
                         Label("Reset", systemImage: "arrow.counterclockwise")
                             .font(.subheadline)
@@ -431,6 +450,12 @@ struct HomesPage: View {
         .onChange(of: citySearch) { _, _ in
             filteredListings = recomputeFiltered(from: shuffledListings)
         }
+        .onChange(of: showSavedOnly) { _, _ in
+            filteredListings = recomputeFiltered(from: shuffledListings)
+        }
+        .onChange(of: userProfileStore.currentProfile?.savedListingIDs) { _, _ in
+            filteredListings = recomputeFiltered(from: shuffledListings)
+        }
     }
 
     // Selected filters sorted in the same order as the filter menu.
@@ -460,4 +485,5 @@ struct CardButtonStyle: ButtonStyle {
 
 #Preview {
     HomesPage(listings: [], onSelectHome: { _ in })
+        .environment(UserProfileStore())
 }
