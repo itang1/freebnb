@@ -312,11 +312,27 @@ struct HomesPage: View {
                         Text("No homes found")
                             .font(.title3)
                             .fontWeight(.semibold)
-                        Text(selectedFilters.isEmpty ? "No listings yet. Check back soon!" : "Try removing some filters to see more results!")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                        if !selectedFilters.isEmpty {
+                        if selectedFilters.isEmpty {
+                            Text("FreeBNB only shows homes from people in your network. Invite a friend who hosts, or ask someone to add you.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                            ShareLink(
+                                item: "Join me on FreeBNB — free stays with people you trust. Download the app and we can connect!",
+                                subject: Text("FreeBNB Invite")
+                            ) {
+                                Label("Invite a Friend", systemImage: "person.badge.plus")
+                                    .font(.subheadline.weight(.medium))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.appTeal.opacity(0.15), in: Capsule())
+                                    .foregroundColor(Color.appTeal)
+                            }
+                        } else {
+                            Text("Try removing some filters to see more results.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
                             Button("Clear All Filters") { selectedFilters.removeAll() }
                                 .buttonStyle(.borderedProminent)
                                 .tint(Color.appTeal)
