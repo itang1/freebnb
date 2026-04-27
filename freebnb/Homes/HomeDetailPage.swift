@@ -150,6 +150,21 @@ struct HomeDetailPage: View {
                     contactSection
                 }
 
+                if authManager.authMethod != .guest {
+                    let saved = userProfileStore.isSaved(home.id)
+                    Button {
+                        Task { try? await userProfileStore.toggleSavedListing(home.id) }
+                    } label: {
+                        Label(saved ? "Saved" : "Save listing", systemImage: saved ? "bookmark.fill" : "bookmark")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(saved ? Color.appTeal.opacity(0.15) : Color.secondary.opacity(0.08))
+                            .foregroundColor(saved ? Color.appTeal : .primary)
+                            .cornerRadius(10)
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Spacer(minLength: 10)
 
                 Text("View on Map")
@@ -181,21 +196,10 @@ struct HomeDetailPage: View {
         .navigationTitle(home.hostName)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 4) {
-                    if authManager.authMethod != .guest {
-                        let saved = userProfileStore.isSaved(home.id)
-                        Button {
-                            Task { try? await userProfileStore.toggleSavedListing(home.id) }
-                        } label: {
-                            Image(systemName: saved ? "bookmark.fill" : "bookmark")
-                                .accessibilityLabel(saved ? "Remove bookmark" : "Bookmark listing")
-                        }
-                    }
-                    ShareLink(
-                        item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
-                        subject: Text("FreeBNB Listing")
-                    )
-                }
+                ShareLink(
+                    item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
+                    subject: Text("FreeBNB Listing")
+                )
             }
         }
         .background(Color.creamWhite)
