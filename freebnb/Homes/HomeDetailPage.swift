@@ -120,6 +120,19 @@ struct HomeDetailPage: View {
                 }
                 .font(.subheadline)
 
+                // MARK: Cancellation Policy
+                let policy = home.cancellationPolicy ?? .flexible
+                Spacer(minLength: 10)
+                Text("Cancellation Policy")
+                    .font(.headline)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(policy.displayName)
+                        .font(.subheadline).fontWeight(.medium)
+                    Text(policy.description)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
                 if let description = home.description, !description.isEmpty {
                     Spacer(minLength: 10)
                     Text("Memo")

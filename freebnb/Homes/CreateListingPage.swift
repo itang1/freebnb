@@ -55,6 +55,7 @@ final class CreateListingViewModel {
     var contactPreference: HostContactPreference
     var hostContactInfo: String
     var hostMotivation: HostMotivation
+    var cancellationPolicy: CancellationPolicy
 
     // Save state
     var isSaving = false
@@ -93,6 +94,7 @@ final class CreateListingViewModel {
         contactPreference = editing?.contactPreference ?? .inApp
         hostContactInfo = editing?.hostContactInfo ?? ""
         hostMotivation = editing?.hostMotivation ?? .open
+        cancellationPolicy = editing?.cancellationPolicy ?? .flexible
     }
 
     func canSave(displayName: String) -> Bool {
@@ -154,7 +156,8 @@ final class CreateListingViewModel {
             providesBlankets: providesBlankets,
             providesTowels: providesTowels,
             providesToiletries: providesToiletries,
-            foodProvision: foodProvision
+            foodProvision: foodProvision,
+            cancellationPolicy: cancellationPolicy
         )
         // Preserve the listing id when editing
         if let existing = editing { home.id = existing.id }
@@ -201,6 +204,7 @@ struct CreateListingPage: View {
                 provisionsSection
                 contactSection
                 motivationSection
+                cancellationPolicySection
                 descriptionSection
 
                 if let errorMessage = vm.errorMessage {
@@ -362,6 +366,30 @@ struct CreateListingPage: View {
                     }
                     .contentShape(Rectangle())
                     .onTapGesture { vm.hostMotivation = motivation }
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var cancellationPolicySection: some View {
+        Section("Cancellation policy") {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(CancellationPolicy.allCases, id: \.self) { policy in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Image(systemName: vm.cancellationPolicy == policy ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(vm.cancellationPolicy == policy ? .appTeal : .secondary.opacity(0.5))
+                            Text(policy.displayName)
+                                .font(.body)
+                        }
+                        Text(policy.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 28)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { vm.cancellationPolicy = policy }
                 }
             }
             .padding(.vertical, 8)

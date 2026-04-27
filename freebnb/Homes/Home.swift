@@ -51,6 +51,28 @@ enum HostContactPreference: String, Hashable, Codable {
     case contactInfo = "contactInfo"
 }
 
+enum CancellationPolicy: String, CaseIterable, Hashable, Codable {
+    case flexible = "flexible"
+    case moderate = "moderate"
+    case strict   = "strict"
+
+    var displayName: String {
+        switch self {
+        case .flexible: return "Flexible"
+        case .moderate: return "Moderate"
+        case .strict:   return "Strict"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .flexible: return "Cancel any time before the stay with no issue."
+        case .moderate: return "Cancel at least 48 hours before check-in."
+        case .strict:   return "No cancellations once the stay is confirmed."
+        }
+    }
+}
+
 enum HostMotivation: String, CaseIterable, Hashable, Codable {
     case eager      = "eager"
     case open       = "open"
@@ -141,6 +163,11 @@ struct Home: Identifiable, Hashable, Codable {
     var providesToiletries: Bool
     var foodProvision: FoodProvision
 
+    // MARK: Cancellation policy
+    // Optional so listings created before this field was added decode cleanly.
+    // Nil is treated as .flexible in the UI.
+    var cancellationPolicy: CancellationPolicy? = nil
+
     // MARK: Photos
     // Optional on the wire so documents created before photo support decode
     // cleanly. Access through `photos` for a non-optional view.
@@ -189,6 +216,7 @@ struct Home: Identifiable, Hashable, Codable {
         case hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi
         case hasPrivateGuestBathroom, parkingDetails, hasInUnitLaundry, hasCoinLaundryNearby
         case providesPillows, providesBlankets, providesTowels, providesToiletries, foodProvision
+        case cancellationPolicy
         case photoURLs
         case deletedAt
     }
@@ -234,6 +262,7 @@ extension Home {
         providesTowels          = try c.decode(Bool.self,                             forKey: .providesTowels)
         providesToiletries      = try c.decode(Bool.self,                             forKey: .providesToiletries)
         foodProvision           = try c.decodeIfPresent(FoodProvision.self,           forKey: .foodProvision)         ?? .none
+        cancellationPolicy      = try c.decodeIfPresent(CancellationPolicy.self,      forKey: .cancellationPolicy)
         photoURLs               = try c.decodeIfPresent([String].self,                forKey: .photoURLs)
         deletedAt               = try c.decodeIfPresent(Date.self,                   forKey: .deletedAt)
     }
