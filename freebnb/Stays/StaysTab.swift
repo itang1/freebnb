@@ -132,6 +132,16 @@ struct StaysTab: View {
         }
         .navigationTitle("Stays")
         .background(Color.creamWhite.ignoresSafeArea())
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                NavigationLink {
+                    YourListingsPage()
+                } label: {
+                    Label("Your Listings", systemImage: "house.fill")
+                }
+                .foregroundColor(Color.appTeal)
+            }
+        }
         .sheet(item: $respondingTo) { req in
             AcceptSheet(request: req) { hostNote in
                 await accept(req, hostNote: hostNote)

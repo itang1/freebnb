@@ -46,28 +46,6 @@ struct ProfilePage: View {
                     .sectionCard()
                     .padding(.bottom, 20)
 
-                    sectionLabel("Hosting")
-                    VStack(spacing: 0) {
-                        NavigationLink {
-                            YourListingsPage()
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "house.fill")
-                                    .frame(width: 28)
-                                    .foregroundColor(Color.appTeal)
-                                Text("Your Listings")
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary.opacity(0.5))
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                        }
-                    }
-                    .sectionCard()
-                    .padding(.bottom, 20)
                 }
 
                 sectionLabel("Preferences")
