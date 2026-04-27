@@ -85,8 +85,8 @@ struct YourListingsPage: View {
             }
 
             ForEach(yourListings) { listing in
-                Button {
-                    editing = listing
+                NavigationLink {
+                    ListingDashboardPage(listing: listing)
                 } label: {
                     ListingRow(listing: listing)
                 }
@@ -168,11 +168,6 @@ private struct ListingRow: View {
             }
 
             Spacer()
-
-            Image(systemName: "pencil.circle")
-                .font(.title2)
-                .foregroundColor(.appTeal.opacity(0.6))
-                .accessibilityHidden(true)
         }
         .padding(.vertical, 4)
     }
