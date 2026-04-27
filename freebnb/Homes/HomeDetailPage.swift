@@ -150,7 +150,15 @@ struct HomeDetailPage: View {
                     contactSection
                 }
 
-                if authManager.authMethod != .guest {
+                if authManager.authMethod == .guest {
+                    Label("Sign in to save listings", systemImage: "bookmark")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(10)
+                } else {
                     let saved = userProfileStore.isSaved(home.id)
                     Button {
                         Task { try? await userProfileStore.toggleSavedListing(home.id) }
