@@ -71,6 +71,15 @@ enum CancellationPolicy: String, CaseIterable, Hashable, Codable {
         case .strict:   return "No cancellations once the stay is confirmed."
         }
     }
+
+    /// Sort key for "Most Flexible Cancellation" — higher means more flexible.
+    var flexibilityRank: Int {
+        switch self {
+        case .flexible: return 2
+        case .moderate: return 1
+        case .strict:   return 0
+        }
+    }
 }
 
 enum HostMotivation: String, CaseIterable, Hashable, Codable {
@@ -196,6 +205,13 @@ struct Home: Identifiable, Hashable, Codable {
 
     // Non-optional view of photo URLs for view code.
     var photos: [String] { photoURLs ?? [] }
+
+    var amenityCount: Int {
+        [hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi,
+         hasPrivateGuestBathroom, hasInUnitLaundry, hasCoinLaundryNearby,
+         providesPillows, providesBlankets, providesTowels, providesToiletries]
+            .filter { $0 }.count
+    }
 
     var sleepingArrangementsDescription: String {
         sleepingCounts

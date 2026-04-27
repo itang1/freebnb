@@ -112,11 +112,15 @@ extension FilterOption {
 }
 
 enum SortOption: String, CaseIterable, Identifiable {
-    case `default` = "Default"
-    case mostEager = "Most Eager"
-    case mostRooms = "Most Rooms"
-    case mostGuests = "Most Guests"
-    case mostDays = "Most Days"
+    case `default`     = "Default"
+    case mostEager     = "Most Eager to Host"
+    case mostFlexible  = "Most Flexible Cancellation"
+    case mostRooms     = "Most Rooms"
+    case mostGuests    = "Most Guests"
+    case mostDays      = "Most Days"
+    case fewestGuests  = "Most Private"
+    case mostAmenities = "Most Amenities"
+    case cityAZ        = "City (A→Z)"
 
     var id: String { rawValue }
 }
@@ -157,11 +161,15 @@ struct HomesPage: View {
             (query.isEmpty || home.address.city.lowercased().contains(query) || home.address.state.lowercased().contains(query))
         }
         switch selectedSort {
-        case .mostEager:  return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
-        case .mostDays:   return result.sorted { $0.maxStayDays > $1.maxStayDays }
-        case .mostGuests: return result.sorted { $0.maxGuests > $1.maxGuests }
-        case .mostRooms:  return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
-        default:          return result
+        case .mostEager:     return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
+        case .mostFlexible:  return result.sorted { ($0.cancellationPolicy ?? .flexible).flexibilityRank > ($1.cancellationPolicy ?? .flexible).flexibilityRank }
+        case .mostDays:      return result.sorted { $0.maxStayDays > $1.maxStayDays }
+        case .mostGuests:    return result.sorted { $0.maxGuests > $1.maxGuests }
+        case .mostRooms:     return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
+        case .fewestGuests:  return result.sorted { $0.maxGuests < $1.maxGuests }
+        case .mostAmenities: return result.sorted { $0.amenityCount > $1.amenityCount }
+        case .cityAZ:        return result.sorted { $0.address.city < $1.address.city }
+        default:             return result
         }
     }
 
@@ -236,10 +244,14 @@ struct HomesPage: View {
 
                 Menu {
                     Button("Default") { selectedSort = .default }
-                    Button("Most Eager") { selectedSort = .mostEager }
+                    Button("Most Eager to Host") { selectedSort = .mostEager }
+                    Button("Most Flexible Cancellation") { selectedSort = .mostFlexible }
                     Button("Most Rooms") { selectedSort = .mostRooms }
                     Button("Most Guests") { selectedSort = .mostGuests }
                     Button("Most Days") { selectedSort = .mostDays }
+                    Button("Most Private") { selectedSort = .fewestGuests }
+                    Button("Most Amenities") { selectedSort = .mostAmenities }
+                    Button("City (A→Z)") { selectedSort = .cityAZ }
                 } label: {
                     Label(selectedSort == .default ? "Sort" : "Sort: \(selectedSort.rawValue)", systemImage: "arrow.up.arrow.down")
                         .font(.subheadline)
