@@ -271,7 +271,7 @@ struct HomesPage: View {
                 Button {
                     showSavedOnly.toggle()
                 } label: {
-                    Image(systemName: showSavedOnly ? "bookmark.fill" : "bookmark")
+                    Label("Saved", systemImage: showSavedOnly ? "bookmark.fill" : "bookmark")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .padding(.horizontal, 12)
@@ -279,7 +279,6 @@ struct HomesPage: View {
                         .background(showSavedOnly ? Color.appTeal.opacity(0.3) : Color.appTeal.opacity(0.15), in: Capsule())
                         .foregroundColor(Color.appTeal)
                 }
-                .accessibilityLabel(showSavedOnly ? "Show all listings" : "Show saved listings only")
 
                 Spacer()
             }
