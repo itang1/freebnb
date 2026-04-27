@@ -15,6 +15,7 @@ enum FilterCategory: String, CaseIterable {
     case roomsAndLaundry = "Rooms & Laundry"
     case provisions = "Provisions"
     case food = "Food"
+    case cancellation = "Cancellation"
 }
 
 // A filter is a (label, category, predicate) triple. Adding a new filter
@@ -48,9 +49,20 @@ extension FilterOption {
         FilterOption(id: id, label: label, category: .food) { $0.foodProvision == value }
     }
 
+    fileprivate static func cancellation(
+        _ id: String,
+        _ label: String,
+        _ value: CancellationPolicy
+    ) -> FilterOption {
+        FilterOption(id: id, label: label, category: .cancellation) {
+            ($0.cancellationPolicy ?? .flexible) == value
+        }
+    }
+
     // Source of truth. Declaration order drives menu order and chip order.
     static let all: [FilterOption] = [
         // Host motivation
+        FilterOption(id: "notSelective", label: "Available to Host", category: .host) { $0.hostMotivation != .selective },
         FilterOption(id: "eager",     label: "Eager to Host",   category: .host) { $0.hostMotivation == .eager },
         FilterOption(id: "open",      label: "Open to Hosting", category: .host) { $0.hostMotivation == .open },
         FilterOption(id: "selective", label: "Selective",       category: .host) { $0.hostMotivation == .selective },
@@ -87,6 +99,11 @@ extension FilterOption {
         .food("foodSome", "Some Food Provided", .some),
         .food("foodBareMinimum", "Bare Minimum Provided", .bareMinimum),
         .food("foodNone", "No Food Provided", FoodProvision.none),
+
+        // Cancellation policy
+        .cancellation("cancelFlexible", "Flexible Cancellation", .flexible),
+        .cancellation("cancelModerate", "Moderate Cancellation", .moderate),
+        .cancellation("cancelStrict",   "Strict Cancellation",   .strict),
     ]
 
     static func options(for category: FilterCategory) -> [FilterOption] {
