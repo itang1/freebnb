@@ -137,9 +137,10 @@ struct StaysTab: View {
                 NavigationLink {
                     YourListingsPage()
                 } label: {
-                    Label("Your Listings", systemImage: "house.fill")
+                    Text("Your Listings")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(Color.appTeal)
                 }
-                .foregroundColor(Color.appTeal)
             }
         }
         .sheet(item: $respondingTo) { req in
