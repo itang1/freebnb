@@ -297,34 +297,30 @@ struct HomesPage: View {
 
             ScrollView {
                 LazyVStack(spacing: 15) {
-                    ForEach(filteredListings) { listing in
-                        listingRow(listing)
-                    }
+                    if isLoading && filteredListings.isEmpty {
+                        ForEach(0..<4, id: \.self) { _ in
+                            SkeletonHomeCard()
+                        }
+                    } else {
+                        ForEach(filteredListings) { listing in
+                            listingRow(listing)
+                        }
 
-                    if canLoadMore && !filteredListings.isEmpty {
-                        Color.clear
-                            .frame(height: 1)
-                            .onAppear { onLoadMore() }
-                    }
+                        if canLoadMore && !filteredListings.isEmpty {
+                            Color.clear
+                                .frame(height: 1)
+                                .onAppear { onLoadMore() }
+                        }
 
-                    if isLoadingMore {
-                        ProgressView()
-                            .padding(.vertical, 16)
-                    }
-                }
+                        if isLoadingMore {
+                            ProgressView()
+                                .padding(.vertical, 16)
+                        }
 
-                if isLoading {
-                    VStack(spacing: 16) {
-                        Spacer().frame(height: 60)
-                        ProgressView()
-                            .scaleEffect(1.2)
-                        Text("Loading listings...")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        if !isLoading && filteredListings.isEmpty {
+                            emptyStateView
+                        }
                     }
-                    .padding()
-                } else if filteredListings.isEmpty {
-                    emptyStateView
                 }
             }
             .refreshable { await onRefresh() }
