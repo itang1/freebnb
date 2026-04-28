@@ -14,11 +14,13 @@ struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     var displayName: String
     var email: String?
     var savedListingIDs: [String]?
+    var blockedUserIDs: [String]?
     var fcmToken: String?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
 
     var savedIDs: Set<String> { Set(savedListingIDs ?? []) }
+    var blockedIDs: Set<String> { Set(blockedUserIDs ?? []) }
 }
 
 @MainActor
@@ -148,6 +150,29 @@ final class UserProfileStore {
             log.error("profile update error: \(error.localizedDescription, privacy: .public)")
             throw ProfileUpdateError.underlying(error)
         }
+    }
+
+    func isBlocked(_ userID: String) -> Bool {
+        currentProfile?.blockedIDs.contains(userID) ?? false
+    }
+
+    func blockUser(_ userID: String) async throws {
+        guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
+        var ids = currentProfile?.blockedIDs ?? []
+        ids.insert(userID)
+        try await repository.updateBlockedUsers(userID: myID, blockedUserIDs: Array(ids))
+    }
+
+    func unblockUser(_ userID: String) async throws {
+        guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
+        var ids = currentProfile?.blockedIDs ?? []
+        ids.remove(userID)
+        try await repository.updateBlockedUsers(userID: myID, blockedUserIDs: Array(ids))
+    }
+
+    func submitReport(targetType: String, targetID: String, reason: String) async throws {
+        guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
+        try await repository.submitReport(reporterUserID: myID, targetType: targetType, targetID: targetID, reason: reason)
     }
 
     func saveFCMToken(_ token: String) async throws {

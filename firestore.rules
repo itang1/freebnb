@@ -35,7 +35,10 @@ service cloud.firestore {
           && request.resource.data.displayName.size() < 200
           && request.resource.data.updatedAt == request.time
           // createdAt must not change
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && request.resource.data.createdAt == resource.data.createdAt
+          // blockedUserIDs must be a list if present
+          && (!('blockedUserIDs' in request.resource.data)
+              || request.resource.data.blockedUserIDs is list);
 
       allow delete: if false;
     }

@@ -136,6 +136,10 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
         profiles[userID]?.savedListingIDs = listingIDs
     }
 
+    func updateBlockedUsers(userID: String, blockedUserIDs: [String]) async throws {
+        profiles[userID]?.blockedUserIDs = blockedUserIDs
+    }
+
     func fetchProfile(userID: String) async throws -> UserProfile? {
         profiles[userID]
     }
@@ -152,6 +156,8 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
         let q = query.lowercased()
         return profiles.values.filter { $0.displayName.lowercased().hasPrefix(q) }
     }
+
+    func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws {}
 }
 
 final class InMemoryFriendEdgeRepository: FriendEdgeRepository, @unchecked Sendable {

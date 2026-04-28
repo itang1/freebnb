@@ -377,11 +377,12 @@ protocol UserProfileRepository: Sendable {
     func createInitialProfile(userID: String, displayName: String, email: String?) async throws
     func updateDisplayName(userID: String, newName: String) async throws
     func updateSavedListings(userID: String, listingIDs: [String]) async throws
+    func updateBlockedUsers(userID: String, blockedUserIDs: [String]) async throws
     func fetchProfile(userID: String) async throws -> UserProfile?
     func deleteProfile(userID: String) async throws
     func updateFCMToken(userID: String, token: String) async throws
-    /// Prefix-search users by display name (case-sensitive, up to 10 results).
     func searchProfiles(query: String) async throws -> [UserProfile]
+    func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws
 }
 
 struct FirestoreUserProfileRepository: UserProfileRepository {
@@ -434,6 +435,28 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
                 "savedListingIDs": listingIDs,
                 "updatedAt": FieldValue.serverTimestamp()
             ], merge: true)
+        }
+    }
+
+    func updateBlockedUsers(userID: String, blockedUserIDs: [String]) async throws {
+        try await withRetry { [db] in
+            try await db.collection("users").document(userID).setData([
+                "blockedUserIDs": blockedUserIDs,
+                "updatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+        }
+    }
+
+    func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws {
+        let payload: [String: Any] = [
+            "reporterUserID": reporterUserID,
+            "targetType": targetType,
+            "targetID": targetID,
+            "reason": reason,
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        try await withRetry { [db] in
+            try await db.collection("reports").addDocument(data: payload)
         }
     }
 
