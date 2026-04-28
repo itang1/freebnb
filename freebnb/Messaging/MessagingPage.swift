@@ -690,5 +690,19 @@ private struct ConversationRow: View {
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var accessibilityDescription: String {
+        var parts: [String] = []
+        parts.append(otherName)
+        if isMuted { parts.append("muted") }
+        let preview = lastMessage.senderUserID == currentUserID
+            ? "You: \(lastMessage.text)"
+            : lastMessage.text
+        parts.append(preview)
+        if isUnread { parts.append("unread") }
+        return parts.joined(separator: ", ")
     }
 }

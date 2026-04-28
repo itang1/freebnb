@@ -438,6 +438,11 @@ struct CreateListingPage: View {
         Section("Memo (optional)") {
             TextField("Anything guests should know", text: $vm.description, axis: .vertical)
                 .lineLimit(2...8)
+            if !vm.description.isEmpty {
+                Text("\(vm.description.count) characters")
+                    .font(.caption)
+                    .foregroundColor(vm.description.count > 500 ? .orange : .secondary)
+            }
         }
     }
 
