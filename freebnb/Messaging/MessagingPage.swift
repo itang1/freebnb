@@ -107,7 +107,7 @@ struct MessagingPage: View {
 
                         if messages.isEmpty {
                             if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-                                Text("No messages match "\(searchQuery.trimmingCharacters(in: .whitespaces))"")
+                                Text("No messages match \"\(searchQuery.trimmingCharacters(in: .whitespaces))\"")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                     .multilineTextAlignment(.center)
