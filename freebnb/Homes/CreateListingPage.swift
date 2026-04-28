@@ -3,6 +3,7 @@
 //  freebnb
 //
 
+import CoreLocation
 import Observation
 import SwiftUI
 
@@ -170,6 +171,14 @@ final class CreateListingViewModel {
         home.visibility = visibility
         // Preserve the listing id when editing
         if let existing = editing { home.id = existing.id }
+
+        // Geocode so the map view can place a pin.
+        let addressString = "\(street.trimmingCharacters(in: .whitespaces)), \(city.trimmingCharacters(in: .whitespaces)), \(stateField.trimmingCharacters(in: .whitespaces)) \(zip.trimmingCharacters(in: .whitespaces))"
+        if let placemark = try? await CLGeocoder().geocodeAddressString(addressString).first,
+           let location = placemark.location {
+            home.latitude  = location.coordinate.latitude
+            home.longitude = location.coordinate.longitude
+        }
 
         do {
             try await homeStore.save(home)

@@ -134,6 +134,7 @@ struct HomesPage: View {
     @State private var citySearch: String = ""
     @State private var showSavedOnly: Bool = false
     @State private var showFriends: Bool = false
+    @State private var showMap: Bool = false
     // Stable shuffle: we track the desired display order as an array of IDs, then
     // derive the display list from live `listings`. This means content edits to
     // existing listings always propagate immediately (computed from live data),
@@ -331,8 +332,13 @@ struct HomesPage: View {
         .padding(30)
         .background(.creamWhite)
         .navigationTitle("Available FreeBNBs")
-        .toolbar { friendsToolbarItem }
+        .toolbar { friendsToolbarItem; mapToolbarItem }
         .sheet(isPresented: $showFriends) { friendsSheet }
+        .sheet(isPresented: $showMap) {
+            ListingsMapView(listings: listings) { home in
+                onSelectHome(home)
+            }
+        }
         .onAppear {
             if shuffleOrder.isEmpty && !listings.isEmpty {
                 shuffleOrder = listings.map { $0.id }.shuffled()
@@ -403,6 +409,18 @@ struct HomesPage: View {
             .accessibilityLabel(friendStore.pendingCount > 0
                 ? "Friends, \(friendStore.pendingCount) pending"
                 : friendStore.friendEdges.isEmpty ? "Add Friends" : "Friends")
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var mapToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .secondaryAction) {
+            Button {
+                showMap = true
+            } label: {
+                Label("Map", systemImage: "map")
+            }
+            .accessibilityLabel("Show map view")
         }
     }
 

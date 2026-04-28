@@ -238,6 +238,11 @@ struct Home: Identifiable, Hashable, Codable {
     // cleanly. Access through `photos` for a non-optional view.
     var photoURLs: [String]? = nil
 
+    // MARK: Location coordinates
+    // Geocoded at save time. Nil for listings created before this field was added.
+    var latitude: Double? = nil
+    var longitude: Double? = nil
+
     // MARK: Visibility
     // Optional on the wire so listings created before this field decode cleanly.
     // Nil is treated as .everyone.
@@ -262,6 +267,7 @@ struct Home: Identifiable, Hashable, Codable {
         case sleeping, guestPolicy, amenities
         case cancellationPolicy
         case photoURLs
+        case latitude, longitude
         case visibility
         case deletedAt
     }
@@ -287,7 +293,9 @@ extension Home {
         guestPolicy        = try c.decode(GuestPolicy.self,                    forKey: .guestPolicy)
         amenities          = try c.decode(Amenities.self,                      forKey: .amenities)
         cancellationPolicy = try c.decodeIfPresent(CancellationPolicy.self,    forKey: .cancellationPolicy)
-        photoURLs          = try c.decodeIfPresent([String].self,              forKey: .photoURLs)
+        photoURLs          = try c.decodeIfPresent([String].self,             forKey: .photoURLs)
+        latitude           = try c.decodeIfPresent(Double.self,               forKey: .latitude)
+        longitude          = try c.decodeIfPresent(Double.self,               forKey: .longitude)
         visibility         = try c.decodeIfPresent(ListingVisibility.self,    forKey: .visibility)
         deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)
     }
