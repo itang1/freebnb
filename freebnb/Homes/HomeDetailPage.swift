@@ -17,6 +17,8 @@ struct HomeDetailPage: View {
     @State private var mapItems: [MKMapItem] = []
     @State private var mapState: MapState = .loading
     @State private var geocodeTask: Task<Void, Never>?
+    @State private var showReport = false
+    @State private var showBlockConfirm = false
 
     private enum MapState {
         case loading
@@ -147,6 +149,7 @@ struct HomeDetailPage: View {
                 if authManager.userID != home.hostUserID {
                     Text("Contact Host")
                         .font(.headline)
+                    hostTrustSignals
                     contactSection
                 }
 
@@ -204,13 +207,71 @@ struct HomeDetailPage: View {
         .navigationTitle(home.hostName)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                ShareLink(
-                    item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
-                    subject: Text("FreeBNB Listing")
-                )
+                HStack(spacing: 4) {
+                    ShareLink(
+                        item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
+                        subject: Text("FreeBNB Listing")
+                    )
+                    if authManager.userID != home.hostUserID {
+                        Menu {
+                            Button(role: .destructive) { showReport = true } label: {
+                                Label("Report Listing", systemImage: "flag")
+                            }
+                            Button(role: .destructive) {
+                                showBlockConfirm = true
+                            } label: {
+                                let blocked = userProfileStore.isBlocked(home.hostUserID)
+                                Label(blocked ? "Unblock \(home.hostName)" : "Block \(home.hostName)",
+                                      systemImage: blocked ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showReport) {
+            ReportSheet(targetType: .listing, targetID: home.id, targetName: "\(home.hostName)'s listing in \(home.address.city)")
+        }
+        .confirmationDialog(
+            userProfileStore.isBlocked(home.hostUserID)
+                ? "Unblock \(home.hostName)?"
+                : "Block \(home.hostName)?",
+            isPresented: $showBlockConfirm,
+            titleVisibility: .visible
+        ) {
+            if userProfileStore.isBlocked(home.hostUserID) {
+                Button("Unblock") { Task { try? await userProfileStore.unblockUser(home.hostUserID) } }
+            } else {
+                Button("Block", role: .destructive) { Task { try? await userProfileStore.blockUser(home.hostUserID) } }
+            }
+        } message: {
+            if userProfileStore.isBlocked(home.hostUserID) {
+                Text("You will see their listings again.")
+            } else {
+                Text("Their listings won't appear and they won't be able to message you.")
             }
         }
         .background(Color.creamWhite)
+    }
+
+    // MARK: - Trust signals
+
+    private var hostTrustSignals: some View {
+        HStack(spacing: 16) {
+            if let profile = userProfileStore.profile(for: home.hostUserID),
+               let createdAt = profile.createdAt {
+                let year = Calendar.current.component(.year, from: createdAt)
+                Label("Member since \(year)", systemImage: "calendar")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Label("Verified name", systemImage: "checkmark.seal")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: - Map section

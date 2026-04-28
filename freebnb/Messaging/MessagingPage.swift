@@ -16,12 +16,14 @@ struct MessagingPage: View {
     @Environment(MessageStore.self) private var messageStore
     @Environment(StayRequestStore.self) private var requestStore
     @Environment(AuthManager.self) private var authManager
+    @Environment(UserProfileStore.self) private var userProfileStore
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
     @State private var showRequestSheet = false
     @State private var respondingTo: StayRequest?
     @State private var errorMessage: String?
     @State private var bannerBusy = false
+    @State private var reportedMessage: Message?
 
     private var currentUserID: String { authManager.userID }
     private var conversationID: String {
@@ -78,7 +80,8 @@ struct MessagingPage: View {
                                 currentUserID: currentUserID,
                                 state: messageStore.state(of: message.id),
                                 onRetry: { messageStore.retry(message.id) },
-                                onDiscard: { messageStore.discardFailed(message.id) }
+                                onDiscard: { messageStore.discardFailed(message.id) },
+                                onReport: { reportedMessage = message }
                             )
                             .id(message.id)
                         }
@@ -128,6 +131,13 @@ struct MessagingPage: View {
             AcceptSheet(request: req) { hostNote in
                 await acceptRequest(req, hostNote: hostNote)
             }
+        }
+        .sheet(item: $reportedMessage) { msg in
+            ReportSheet(
+                targetType: .message,
+                targetID: msg.id,
+                targetName: "Message from \(otherName)"
+            )
         }
         .alert("Error", isPresented: Binding(
             get: { errorMessage != nil },
@@ -300,6 +310,7 @@ private struct MessageBubble: View {
     let state: MessageState
     let onRetry: () -> Void
     let onDiscard: () -> Void
+    var onReport: () -> Void = {}
 
     private var isFromMe: Bool { message.senderUserID == currentUserID }
     private var isFailed: Bool { state == .failed }
@@ -323,6 +334,9 @@ private struct MessageBubble: View {
                         if isFailed {
                             Button("Retry", systemImage: "arrow.clockwise", action: onRetry)
                             Button("Delete", systemImage: "trash", role: .destructive, action: onDiscard)
+                        }
+                        if !isFromMe {
+                            Button("Report", systemImage: "flag", role: .destructive, action: onReport)
                         }
                     }
 
