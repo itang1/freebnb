@@ -15,6 +15,7 @@
 
 import UIKit
 import UserNotifications
+import os
 
 #if canImport(FirebaseMessaging)
 import FirebaseMessaging
@@ -25,6 +26,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     // Held weakly so AppDelegate doesn't extend the stores' lifetimes.
     weak var userProfileStore: UserProfileStore?
     weak var router: DeepLinkRouter?
+
+    private let log = AppLog.logger("apns")
 
     func application(
         _ application: UIApplication,
@@ -44,8 +47,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        // Non-fatal on simulators; log and continue.
-        print("[FCM] APNs registration failed: \(error.localizedDescription)")
+        log.error("APNs registration failed: \(error.localizedDescription, privacy: .public)")
     }
 }
 
