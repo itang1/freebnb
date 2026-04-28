@@ -42,6 +42,7 @@ enum UserDefaultsKey {
     static let appearance              = "appearance"
     static let ageGateAccepted         = "ageGateAccepted"
     static let mutedConversationIDs    = "mutedConversationIDs"
+    static let selectedTab             = "selectedTab"
 }
 
 struct FlippedPrimaryColor: ViewModifier {

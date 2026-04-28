@@ -17,7 +17,7 @@ struct ContentView: View {
     @AppStorage(UserDefaultsKey.ageGateAccepted) private var ageGateAccepted = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
-    @State private var selectedTab = 0
+    @AppStorage(UserDefaultsKey.selectedTab) private var selectedTab = 0
     @State private var messagesDeepLinkUserID: String? = nil
 
     private var visibleListings: [Home] {

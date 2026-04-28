@@ -328,6 +328,7 @@ struct HomesPage: View {
                 }
             }
             .refreshable { await onRefresh() }
+            .scrollDismissesKeyboard(.interactively)
         }
         .padding(30)
         .background(.creamWhite)

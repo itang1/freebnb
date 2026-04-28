@@ -154,6 +154,7 @@ struct StaysTab: View {
                         }
                     }
                 }
+                .refreshable { requestStore.reload() }
                 .scrollContentBackground(.hidden)
                 .background(Color.creamWhite.ignoresSafeArea())
             }
