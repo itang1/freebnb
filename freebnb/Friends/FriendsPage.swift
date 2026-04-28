@@ -396,7 +396,7 @@ private struct SearchResultRow: View {
 #Preview {
     NavigationStack {
         FriendsPage()
-            .environment(FriendStore())
+            .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
             .environment(UserProfileStore())
             .environment(AuthManager())
     }

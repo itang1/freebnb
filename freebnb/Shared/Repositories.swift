@@ -359,8 +359,9 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
             "updatedAt": FieldValue.serverTimestamp()
         ]
         if let hostNote { data["hostNote"] = hostNote }
+        let payload = data
         try await withRetry { [db] in
-            try await db.collection("stayRequests").document(requestID).updateData(data)
+            try await db.collection("stayRequests").document(requestID).updateData(payload)
         }
     }
 }
@@ -412,8 +413,9 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             "updatedAt": FieldValue.serverTimestamp()
         ]
         if let email { data["email"] = email }
+        let payload = data
         try await withRetry { [db] in
-            try await db.collection("users").document(userID).setData(data)
+            try await db.collection("users").document(userID).setData(payload)
         }
     }
 

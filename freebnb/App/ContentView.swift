@@ -92,4 +92,5 @@ struct ContentView: View {
         .environment(MessageStore())
         .environment(UserProfileStore())
         .environment(StayRequestStore())
+        .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
 }

@@ -10,7 +10,6 @@ import UserNotifications
 struct ProfilePage: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
-    @Environment(FriendStore.self) private var friendStore
     @AppStorage(UserDefaultsKey.notificationsEnabled) private var notificationsEnabled = true
     @AppStorage(UserDefaultsKey.appearance) private var appearance = "system"
 
@@ -45,40 +44,6 @@ struct ProfilePage: View {
                             SettingsRow(icon: "envelope", label: "Email",
                                         trailingText: authManager.userEmail)
                         }
-                        rowDivider
-                        NavigationLink {
-                            FriendsPage()
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "person.2")
-                                    .frame(width: 28)
-                                    .foregroundColor(Color.appTeal)
-                                Text("Friends")
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                let count = friendStore.friendEdges.count
-                                if count > 0 {
-                                    Text("\(count)")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                                if friendStore.pendingCount > 0 {
-                                    Text("\(friendStore.pendingCount)")
-                                        .font(.caption.weight(.semibold))
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 3)
-                                        .background(Color.appTeal)
-                                        .foregroundColor(.white)
-                                        .clipShape(Capsule())
-                                }
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary.opacity(0.5))
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                        }
-                        .buttonStyle(.plain)
                     }
                     .sectionCard()
                     .padding(.bottom, 20)

@@ -127,11 +127,13 @@ enum SortOption: String, CaseIterable, Identifiable {
 
 struct HomesPage: View {
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(FriendStore.self) private var friendStore
 
     @State private var selectedFilters: Set<FilterOption> = []
     @State private var selectedSort: SortOption = .default
     @State private var citySearch: String = ""
     @State private var showSavedOnly: Bool = false
+    @State private var showFriends: Bool = false
     // Stable shuffle: we track the desired display order as an array of IDs, then
     // derive the display list from live `listings`. This means content edits to
     // existing listings always propagate immediately (computed from live data),
@@ -427,6 +429,8 @@ struct HomesPage: View {
         .padding(30)
         .background(.creamWhite)
         .navigationTitle("Available FreeBNBs")
+        .toolbar { friendsToolbarItem }
+        .sheet(isPresented: $showFriends) { friendsSheet }
         .onAppear {
             if shuffleOrder.isEmpty && !listings.isEmpty {
                 shuffleOrder = listings.map { $0.id }.shuffled()
@@ -468,6 +472,42 @@ struct HomesPage: View {
         }
     }
 
+    @ToolbarContentBuilder
+    private var friendsToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                showFriends = true
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "person.2")
+                    if friendStore.pendingCount > 0 {
+                        Text("\(friendStore.pendingCount)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.red, in: Capsule())
+                            .offset(x: 8, y: -6)
+                    }
+                }
+            }
+            .accessibilityLabel(friendStore.pendingCount > 0
+                ? "Friends, \(friendStore.pendingCount) pending"
+                : "Friends")
+        }
+    }
+
+    private var friendsSheet: some View {
+        NavigationStack {
+            FriendsPage()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { showFriends = false }
+                    }
+                }
+        }
+    }
+
     // Selected filters sorted in the same order as the filter menu.
     private var sortedSelectedFilters: [FilterOption] {
         FilterOption.all.filter { selectedFilters.contains($0) }
@@ -496,4 +536,5 @@ struct CardButtonStyle: ButtonStyle {
 #Preview {
     HomesPage(listings: [], onSelectHome: { _ in })
         .environment(UserProfileStore())
+        .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
 }

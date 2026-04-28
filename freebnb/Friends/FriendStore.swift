@@ -52,6 +52,7 @@ final class FriendStore {
 
     init(repository: FriendEdgeRepository = FirestoreFriendEdgeRepository()) {
         self.repository = repository
+        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             let uid = user?.isAnonymous == false ? user?.uid : nil
             Task { @MainActor in self?.restartListeners(userID: uid) }
