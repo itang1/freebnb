@@ -56,6 +56,7 @@ final class CreateListingViewModel {
     var hostContactInfo: String
     var hostMotivation: HostMotivation
     var cancellationPolicy: CancellationPolicy
+    var visibility: ListingVisibility
 
     // Save state
     var isSaving = false
@@ -95,6 +96,7 @@ final class CreateListingViewModel {
         hostContactInfo = editing?.hostContactInfo ?? ""
         hostMotivation = editing?.hostMotivation ?? .open
         cancellationPolicy = editing?.cancellationPolicy ?? .flexible
+        visibility = editing?.visibility ?? .everyone
     }
 
     func canSave(displayName: String) -> Bool {
@@ -165,6 +167,7 @@ final class CreateListingViewModel {
             ),
             cancellationPolicy: cancellationPolicy
         )
+        home.visibility = visibility
         // Preserve the listing id when editing
         if let existing = editing { home.id = existing.id }
 
@@ -211,6 +214,7 @@ struct CreateListingPage: View {
                 contactSection
                 motivationSection
                 cancellationPolicySection
+                visibilitySection
                 descriptionSection
 
                 if let errorMessage = vm.errorMessage {
@@ -391,6 +395,30 @@ struct CreateListingPage: View {
                     }
                     .contentShape(Rectangle())
                     .onTapGesture { vm.cancellationPolicy = policy }
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var visibilitySection: some View {
+        Section("Who can see this listing") {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(ListingVisibility.allCases, id: \.self) { option in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Image(systemName: vm.visibility == option ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(vm.visibility == option ? .appTeal : .secondary.opacity(0.5))
+                            Text(option.displayName)
+                                .font(.body)
+                        }
+                        Text(option.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 28)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { vm.visibility = option }
                 }
             }
             .padding(.vertical, 8)

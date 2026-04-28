@@ -11,15 +11,23 @@ struct ContentView: View {
     @Environment(StayRequestStore.self) private var stayRequestStore
     @Environment(MessageStore.self) private var messageStore
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(FriendStore.self) private var friendStore
     @AppStorage(UserDefaultsKey.hasSeenOnboarding) private var hasSeenOnboarding = false
     @AppStorage(UserDefaultsKey.ageGateAccepted) private var ageGateAccepted = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
 
     private var visibleListings: [Home] {
+        let myID = authManager.userID
         let blocked = userProfileStore.currentProfile?.blockedIDs ?? []
-        guard !blocked.isEmpty else { return homeStore.listings }
-        return homeStore.listings.filter { !blocked.contains($0.hostUserID) }
+        let friendIDs = Set(friendStore.friendEdges.map { $0.otherUserID(relativeTo: myID) })
+        return homeStore.listings.filter { home in
+            guard !blocked.contains(home.hostUserID) else { return false }
+            if home.visibility == .friendsOnly {
+                return home.hostUserID == myID || friendIDs.contains(home.hostUserID)
+            }
+            return true
+        }
     }
 
     var body: some View {

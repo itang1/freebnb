@@ -124,6 +124,25 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
     }
 }
 
+enum ListingVisibility: String, Codable, CaseIterable, Hashable, Sendable {
+    case everyone   = "everyone"
+    case friendsOnly = "friendsOnly"
+
+    var displayName: String {
+        switch self {
+        case .everyone:    return "Everyone"
+        case .friendsOnly: return "Friends only"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .everyone:    return "Anyone on FreeBNB can see this listing."
+        case .friendsOnly: return "Only people you are connected with can see this listing."
+        }
+    }
+}
+
 // MARK: - Nested types
 
 struct Sleeping: Codable, Hashable {
@@ -219,6 +238,11 @@ struct Home: Identifiable, Hashable, Codable {
     // cleanly. Access through `photos` for a non-optional view.
     var photoURLs: [String]? = nil
 
+    // MARK: Visibility
+    // Optional on the wire so listings created before this field decode cleanly.
+    // Nil is treated as .everyone.
+    var visibility: ListingVisibility? = nil
+
     // MARK: Soft delete
     // Nil means active. Set by the repository to the server timestamp on delete;
     // the HomeStore filters out non-nil entries so deleted listings never appear
@@ -238,6 +262,7 @@ struct Home: Identifiable, Hashable, Codable {
         case sleeping, guestPolicy, amenities
         case cancellationPolicy
         case photoURLs
+        case visibility
         case deletedAt
     }
 }
@@ -261,8 +286,9 @@ extension Home {
         sleeping           = try c.decode(Sleeping.self,                       forKey: .sleeping)
         guestPolicy        = try c.decode(GuestPolicy.self,                    forKey: .guestPolicy)
         amenities          = try c.decode(Amenities.self,                      forKey: .amenities)
-        cancellationPolicy = try c.decodeIfPresent(CancellationPolicy.self,   forKey: .cancellationPolicy)
+        cancellationPolicy = try c.decodeIfPresent(CancellationPolicy.self,    forKey: .cancellationPolicy)
         photoURLs          = try c.decodeIfPresent([String].self,              forKey: .photoURLs)
+        visibility         = try c.decodeIfPresent(ListingVisibility.self,    forKey: .visibility)
         deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)
     }
 }
