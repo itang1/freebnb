@@ -368,60 +368,7 @@ struct HomesPage: View {
                     }
                     .padding()
                 } else if filteredListings.isEmpty {
-                    VStack(spacing: 16) {
-                        Spacer().frame(height: 40)
-                        Image(systemName: "house.lodge.fill")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 80, height: 80)
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color.appTeal.opacity(0.4), Color.appTeal],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                        Text("No homes found")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        if showSavedOnly {
-                            Text("You haven't saved any listings yet. Open a listing and tap \"Save listing\" to bookmark it for later.")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                            Button("Show all listings") { showSavedOnly = false }
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Color.appTeal.opacity(0.15), in: Capsule())
-                                .foregroundColor(Color.appTeal)
-                        } else if selectedFilters.isEmpty && citySearch.isEmpty {
-                            Text("FreeBNB only shows homes from people in your network. Invite a friend who hosts, or ask someone to add you.")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                            ShareLink(
-                                item: "Join me on FreeBNB — free stays with people you trust. Download the app and we can connect!",
-                                subject: Text("FreeBNB Invite")
-                            ) {
-                                Label("Invite a Friend", systemImage: "person.badge.plus")
-                                    .font(.subheadline.weight(.medium))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(Color.appTeal.opacity(0.15), in: Capsule())
-                                    .foregroundColor(Color.appTeal)
-                            }
-                        } else {
-                            Text("Try removing some filters to see more results.")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                            Button("Clear All Filters") { selectedFilters.removeAll() }
-                                .buttonStyle(.borderedProminent)
-                                .tint(Color.appTeal)
-                        }
-                    }
-                    .padding()
+                    emptyStateView
                 }
             }
             .refreshable { await onRefresh() }
@@ -505,6 +452,68 @@ struct HomesPage: View {
                         Button("Done") { showFriends = false }
                     }
                 }
+        }
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 40)
+            Image(systemName: "house.lodge.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 80, height: 80)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color.appTeal.opacity(0.4), Color.appTeal],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            Text("No homes found")
+                .font(.title3)
+                .fontWeight(.semibold)
+            emptyStateMessage
+        }
+        .padding()
+    }
+
+    @ViewBuilder
+    private var emptyStateMessage: some View {
+        if showSavedOnly {
+            Text("You haven't saved any listings yet. Open a listing and tap \"Save listing\" to bookmark it for later.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Show all listings") { showSavedOnly = false }
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.appTeal.opacity(0.15), in: Capsule())
+                .foregroundColor(Color.appTeal)
+        } else if selectedFilters.isEmpty && citySearch.isEmpty {
+            Text("FreeBNB only shows homes from people in your network. Invite a friend who hosts, or ask someone to add you.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            ShareLink(
+                item: "Join me on FreeBNB — free stays with people you trust. Download the app and we can connect!",
+                subject: Text("FreeBNB Invite")
+            ) {
+                Label("Invite a Friend", systemImage: "person.badge.plus")
+                    .font(.subheadline.weight(.medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.appTeal.opacity(0.15), in: Capsule())
+                    .foregroundColor(Color.appTeal)
+            }
+        } else {
+            Text("Try removing some filters to see more results.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Clear All Filters") { selectedFilters.removeAll() }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.appTeal)
         }
     }
 
