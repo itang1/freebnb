@@ -128,7 +128,16 @@ final class AuthManager {
                 isLoading = true
                 defer { isLoading = false }
                 do {
-                    _ = try await Auth.auth().signIn(with: firebaseCredential)
+                    if let anon = Auth.auth().currentUser, anon.isAnonymous {
+                        do {
+                            _ = try await anon.link(with: firebaseCredential)
+                        } catch let linkError as NSError
+                            where linkError.code == AuthErrorCode.credentialAlreadyInUse.rawValue {
+                            _ = try await Auth.auth().signIn(with: firebaseCredential)
+                        }
+                    } else {
+                        _ = try await Auth.auth().signIn(with: firebaseCredential)
+                    }
                     if !fullName.isEmpty {
                         UserDefaults.standard.set(fullName, forKey: UserDefaultsKey.userName)
                     }
