@@ -163,7 +163,10 @@ final class AuthManager {
         catch { log.error("sign out failed: \(error.localizedDescription, privacy: .public)") }
     }
 
-    func deleteAccount() async {
+    func deleteAccount(
+        homesRepo: any HomesRepository = FirestoreHomesRepository(),
+        profileRepo: any UserProfileRepository = FirestoreUserProfileRepository()
+    ) async {
         guard let user = Auth.auth().currentUser else { return }
         isLoading = true
         defer { isLoading = false }
@@ -171,6 +174,10 @@ final class AuthManager {
             if authMethod == .apple {
                 try await revokeAppleAndReauthenticate(user: user)
             }
+            // Soft-delete listings and remove the profile before the Auth token
+            // is invalidated; Firestore rules require a valid uid for writes.
+            try await homesRepo.softDeleteAllListings(hostUserID: user.uid)
+            try await profileRepo.deleteProfile(userID: user.uid)
             try await user.delete()
             UserDefaults.standard.removeObject(forKey: UserDefaultsKey.userName)
         } catch AuthError.cancelled {

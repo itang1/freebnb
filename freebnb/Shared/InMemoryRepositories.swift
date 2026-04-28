@@ -39,6 +39,12 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
             homes[i].hostName = newName
         }
     }
+
+    func softDeleteAllListings(hostUserID: String) async throws {
+        for i in homes.indices where homes[i].hostUserID == hostUserID && homes[i].deletedAt == nil {
+            homes[i].deletedAt = Date()
+        }
+    }
 }
 
 final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable {
@@ -110,5 +116,9 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
 
     func fetchProfile(userID: String) async throws -> UserProfile? {
         profiles[userID]
+    }
+
+    func deleteProfile(userID: String) async throws {
+        profiles.removeValue(forKey: userID)
     }
 }

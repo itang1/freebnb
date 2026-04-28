@@ -7,42 +7,76 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // User profiles. Any signed-in user can read (for showing names in chat/listings);
-    // only the owner can create/update their own doc. Deletes are forbidden by default;
-    // a Cloud Function should tombstone on account deletion.
+    function isOwner(userID) {
+      return request.auth.uid == userID;
+    }
+
+    // -------------------------------------------------------------------------
+    // Users
+    // Any signed-in user can read profiles (for name display in chat/listings).
+    // Only the owner can create/update. Deletes are forbidden on the client —
+    // account deletion is handled by a Cloud Function that cascades safely.
+    // -------------------------------------------------------------------------
     match /users/{userID} {
       allow read: if isSignedIn();
 
       allow create: if isSignedIn()
-          && request.auth.uid == userID
+          && isOwner(userID)
           && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
           && request.resource.data.displayName.size() < 200
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time;
 
       allow update: if isSignedIn()
-          && request.auth.uid == userID
+          && isOwner(userID)
           && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
           && request.resource.data.displayName.size() < 200
           && request.resource.data.updatedAt == request.time
+          // createdAt must not change
           && request.resource.data.createdAt == resource.data.createdAt;
 
       allow delete: if false;
     }
 
-    // Listings: any signed-in user can read; only the host can write their own
+    // -------------------------------------------------------------------------
+    // Homes / Listings
+    // Any signed-in user can read. (Visibility narrows once friend connections
+    // land — enforced server-side in queries, not here, because rules can't
+    // cross-reference the friend-edges collection at query time.)
+    // Only the host may write their own listings.
+    // -------------------------------------------------------------------------
     match /homes/{homeID} {
       allow read: if isSignedIn();
+
       allow create: if isSignedIn()
           && request.resource.data.hostUserID == request.auth.uid
           && request.resource.data.hostName is string
           && request.resource.data.hostName.size() > 0
-          && request.resource.data.hostName.size() < 200;
-      allow update, delete: if isSignedIn()
+          && request.resource.data.hostName.size() < 200
+          // Nested struct validation
+          && request.resource.data.sleeping is map
+          && request.resource.data.amenities is map
+          && request.resource.data.address is map
+          && request.resource.data.sleeping.numGuestRooms is int
+          && request.resource.data.sleeping.maxGuests is int
+          && request.resource.data.sleeping.maxStayDays is int;
+
+      allow update: if isSignedIn()
+          && resource.data.hostUserID == request.auth.uid
+          // hostUserID is immutable after creation
+          && request.resource.data.hostUserID == resource.data.hostUserID;
+
+      allow delete: if isSignedIn()
           && resource.data.hostUserID == request.auth.uid;
     }
 
-    // Stay requests: guests create requests, hosts accept/decline, guests can cancel.
+    // -------------------------------------------------------------------------
+    // Stay requests
+    // Guests create pending requests; hosts accept/decline; guests can cancel.
+    // No edits once a request reaches a terminal state (declined / cancelled).
+    // -------------------------------------------------------------------------
     match /stayRequests/{requestID} {
       allow read: if isSignedIn()
           && (request.auth.uid == resource.data.guestUserID
@@ -52,27 +86,45 @@ service cloud.firestore {
           && request.resource.data.guestUserID == request.auth.uid
           && request.resource.data.status == "pending"
           && request.resource.data.hostUserID is string
+          && request.resource.data.hostUserID.size() > 0
           && request.resource.data.listingID is string
+          && request.resource.data.listingID.size() > 0
           && request.resource.data.checkIn is timestamp
           && request.resource.data.checkOut is timestamp
-          && request.resource.data.checkOut > request.resource.data.checkIn;
+          && request.resource.data.checkOut > request.resource.data.checkIn
+          && (!('guestNote' in request.resource.data)
+              || (request.resource.data.guestNote is string
+                  && request.resource.data.guestNote.size() < 2000));
 
-      // Host can accept or decline; guest can cancel.
-      allow update: if isSignedIn() && (
-          (request.auth.uid == resource.data.hostUserID
-              && request.resource.data.status in ["accepted", "declined"]
-              && resource.data.status == "pending")
-          ||
-          (request.auth.uid == resource.data.guestUserID
-              && request.resource.data.status == "cancelled"
-              && resource.data.status in ["pending", "accepted"])
-      );
+      allow update: if isSignedIn()
+          // No edits from a terminal state
+          && resource.data.status in ["pending", "accepted"]
+          && (
+            // Host accepts or declines a pending request
+            (isOwner(resource.data.hostUserID)
+                && resource.data.status == "pending"
+                && request.resource.data.status in ["accepted", "declined"]
+                && request.resource.data.guestUserID == resource.data.guestUserID
+                && request.resource.data.listingID == resource.data.listingID
+                && (!('hostNote' in request.resource.data)
+                    || (request.resource.data.hostNote is string
+                        && request.resource.data.hostNote.size() < 2000)))
+            ||
+            // Guest cancels a pending or accepted request
+            (isOwner(resource.data.guestUserID)
+                && request.resource.data.status == "cancelled"
+                && request.resource.data.hostUserID == resource.data.hostUserID
+                && request.resource.data.listingID == resource.data.listingID)
+          );
 
       allow delete: if false;
     }
 
-    // Messages: user-to-user, not tied to any listing.
-    // participants is always sorted [userA, userB], both signed-in user IDs.
+    // -------------------------------------------------------------------------
+    // Messages
+    // participants is always [smaller_uid, larger_uid] to keep pairs canonical
+    // and make the composite index on (participants, timestamp) usable.
+    // -------------------------------------------------------------------------
     match /messages/{messageID} {
       allow read: if isSignedIn()
           && request.auth.uid in resource.data.participants;
@@ -96,5 +148,42 @@ service cloud.firestore {
 
       allow update, delete: if false;
     }
+
+    // -------------------------------------------------------------------------
+    // Friend edges — placeholder for when network features land.
+    // edgeID = sorted pair "{smallerUID}_{largerUID}" to keep it canonical.
+    // Client reads are allowed only for participants; writes go through
+    // Cloud Functions to enforce bidirectionality and invitation flow.
+    // -------------------------------------------------------------------------
+    match /friendEdges/{edgeID} {
+      allow read: if isSignedIn()
+          && (request.auth.uid == resource.data.userA
+              || request.auth.uid == resource.data.userB);
+      allow write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Reviews — placeholder, not yet in use.
+    // -------------------------------------------------------------------------
+    match /reviews/{reviewID} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Reports — moderation inbox, written by any signed-in user,
+    // processed by Cloud Functions. Clients cannot read reports.
+    // -------------------------------------------------------------------------
+    match /reports/{reportID} {
+      allow read: if false;
+      allow create: if isSignedIn()
+          && request.resource.data.reporterUserID == request.auth.uid
+          && request.resource.data.reason is string
+          && request.resource.data.reason.size() > 0
+          && request.resource.data.reason.size() < 2000
+          && request.resource.data.targetType in ["user", "listing", "message"];
+      allow update, delete: if false;
+    }
+
   }
 }

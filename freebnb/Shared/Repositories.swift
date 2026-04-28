@@ -47,6 +47,7 @@ protocol HomesRepository: Sendable {
     func save(_ home: Home) async throws
     func delete(homeID: String) async throws
     func updateHostName(userID: String, newName: String) async throws
+    func softDeleteAllListings(hostUserID: String) async throws
 }
 
 struct FirestoreHomesRepository: HomesRepository {
@@ -93,6 +94,19 @@ struct FirestoreHomesRepository: HomesRepository {
         let batch = db.batch()
         for doc in snap.documents {
             batch.updateData(["hostName": newName], forDocument: doc.reference)
+        }
+        try await batch.commit()
+    }
+
+    func softDeleteAllListings(hostUserID: String) async throws {
+        let snap = try await db.collection("homes")
+            .whereField("hostUserID", isEqualTo: hostUserID)
+            .getDocuments()
+        guard !snap.documents.isEmpty else { return }
+        let batch = db.batch()
+        let now = Timestamp(date: Date())
+        for doc in snap.documents {
+            batch.updateData(["deletedAt": now], forDocument: doc.reference)
         }
         try await batch.commit()
     }
@@ -243,6 +257,7 @@ protocol UserProfileRepository: Sendable {
     func updateDisplayName(userID: String, newName: String) async throws
     func updateSavedListings(userID: String, listingIDs: [String]) async throws
     func fetchProfile(userID: String) async throws -> UserProfile?
+    func deleteProfile(userID: String) async throws
 }
 
 struct FirestoreUserProfileRepository: UserProfileRepository {
@@ -295,5 +310,9 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
         let snap = try await db.collection("users").document(userID).getDocument()
         guard snap.exists else { return nil }
         return try snap.data(as: UserProfile.self)
+    }
+
+    func deleteProfile(userID: String) async throws {
+        try await db.collection("users").document(userID).delete()
     }
 }

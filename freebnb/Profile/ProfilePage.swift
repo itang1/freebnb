@@ -5,6 +5,7 @@
 
 import SwiftUI
 import AuthenticationServices
+import UserNotifications
 
 struct ProfilePage: View {
     @Environment(AuthManager.self) private var authManager
@@ -15,6 +16,7 @@ struct ProfilePage: View {
     @Environment(\.openURL) private var openURL
     @State private var showEditName = false
     @State private var showDeleteConfirm = false
+    @State private var notifAuthStatus: UNAuthorizationStatus = .notDetermined
 
     private static let privacyURL = URL(string: "https://freebnb.app/privacy")!
     private static let termsURL   = URL(string: "https://freebnb.app/terms")!
@@ -56,9 +58,12 @@ struct ProfilePage: View {
                             .foregroundColor(Color.appTeal)
                         Text("Notifications")
                         Spacer()
-                        Toggle("", isOn: $notificationsEnabled)
-                            .labelsHidden()
-                            .tint(Color.appTeal)
+                        Toggle("", isOn: Binding(
+                            get: { notificationsEnabled && notifAuthStatus != .denied },
+                            set: { newValue in handleNotificationToggle(newValue) }
+                        ))
+                        .labelsHidden()
+                        .tint(Color.appTeal)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
@@ -132,6 +137,7 @@ struct ProfilePage: View {
         }
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle("Profile")
+        .task { await refreshNotifStatus() }
         .sheet(isPresented: $showEditName) {
             EditNameSheet()
                 .environment(userProfileStore)
@@ -146,6 +152,45 @@ struct ProfilePage: View {
             }
         } message: {
             Text("This permanently removes your account and all saved data. It cannot be undone. Sign in with Apple will prompt again to confirm.")
+        }
+    }
+
+    // MARK: - Notifications
+
+    private func refreshNotifStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notifAuthStatus = settings.authorizationStatus
+        if settings.authorizationStatus == .denied {
+            notificationsEnabled = false
+        }
+    }
+
+    private func handleNotificationToggle(_ enabled: Bool) {
+        if !enabled {
+            notificationsEnabled = false
+            return
+        }
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                let granted = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
+                notificationsEnabled = granted
+                notifAuthStatus = granted ? .authorized : .denied
+            case .authorized, .provisional, .ephemeral:
+                notificationsEnabled = true
+                notifAuthStatus = .authorized
+            case .denied:
+                // OS has blocked notifications; direct user to Settings
+                notificationsEnabled = false
+                notifAuthStatus = .denied
+                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                    await MainActor.run { openURL(url) }
+                }
+            @unknown default:
+                notificationsEnabled = false
+            }
         }
     }
 

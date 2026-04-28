@@ -8,6 +8,7 @@
         { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
     },
+
     {
       "collectionGroup": "stayRequests",
       "queryScope": "COLLECTION",
@@ -22,6 +23,59 @@
       "fields": [
         { "fieldPath": "hostUserID", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stayRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "guestUserID", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stayRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hostUserID", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stayRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "listingID", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "homes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hostUserID", "order": "ASCENDING" },
+        { "fieldPath": "deletedAt", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "friendEdges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userA", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "friendEdges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userB", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
       ]
     }
   ],

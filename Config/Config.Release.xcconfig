@@ -1,0 +1,6 @@
+// Release / production build configuration.
+// Wire this file to the Release configuration in Xcode:
+//   Project > Info > Configurations > Release > freebnb target → select this file
+
+BUNDLE_ID_SUFFIX =
+APP_DISPLAY_NAME = FreeBNB
