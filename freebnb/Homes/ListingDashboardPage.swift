@@ -131,6 +131,11 @@ struct ListingDashboardPage: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.creamWhite.ignoresSafeArea())
+        .task(id: actionError) {
+            guard actionError != nil else { return }
+            try? await Task.sleep(for: .seconds(4))
+            actionError = nil
+        }
         .navigationTitle("\(listing.address.city) Dashboard")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

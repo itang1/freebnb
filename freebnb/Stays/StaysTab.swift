@@ -157,6 +157,11 @@ struct StaysTab: View {
                 .refreshable { requestStore.reload() }
                 .scrollContentBackground(.hidden)
                 .background(Color.creamWhite.ignoresSafeArea())
+                .task(id: actionError) {
+                    guard actionError != nil else { return }
+                    try? await Task.sleep(for: .seconds(4))
+                    actionError = nil
+                }
             }
         }
     }
