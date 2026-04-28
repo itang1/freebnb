@@ -12,10 +12,13 @@ struct ContentView: View {
     @Environment(MessageStore.self) private var messageStore
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(FriendStore.self) private var friendStore
+    @Environment(DeepLinkRouter.self) private var router
     @AppStorage(UserDefaultsKey.hasSeenOnboarding) private var hasSeenOnboarding = false
     @AppStorage(UserDefaultsKey.ageGateAccepted) private var ageGateAccepted = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
+    @State private var selectedTab = 0
+    @State private var messagesDeepLinkUserID: String? = nil
 
     private var visibleListings: [Home] {
         let myID = authManager.userID
@@ -42,7 +45,7 @@ struct ContentView: View {
             if !ageGateAccepted {
                 AgeGateView()
             } else if authManager.isSignedIn {
-                TabView {
+                TabView(selection: $selectedTab) {
                     NavigationStack(path: $listingsPath) {
                         HomesPage(
                             listings: visibleListings,
@@ -59,39 +62,37 @@ struct ContentView: View {
                             HomeDetailPage(home: home)
                         }
                     }
-                    .tabItem {
-                        Label("Listings", systemImage: "house")
-                    }
+                    .tabItem { Label("Listings", systemImage: "house") }
+                    .tag(0)
 
                     NavigationStack {
                         StaysTab()
                     }
-                    .tabItem {
-                        Label("Stays", systemImage: "suitcase")
-                    }
+                    .tabItem { Label("Stays", systemImage: "suitcase") }
                     .badge(stayRequestStore.pendingStaysTabCount)
+                    .tag(1)
 
-                    NavigationStack {
-                        MessagesTab(listings: homeStore.listings)
-                    }
-                    .tabItem {
-                        Label("Messages", systemImage: "message")
-                    }
+                    // MessagesTab owns its own NavigationStack so deep links
+                    // can push onto the path programmatically.
+                    MessagesTab(
+                        listings: homeStore.listings,
+                        deepLinkUserID: $messagesDeepLinkUserID
+                    )
+                    .tabItem { Label("Messages", systemImage: "message") }
                     .badge(messageStore.unreadCount)
+                    .tag(2)
 
                     NavigationStack {
                         ProfilePage()
                     }
-                    .tabItem {
-                        Label("Profile", systemImage: "person.fill")
-                    }
+                    .tabItem { Label("Profile", systemImage: "person.fill") }
+                    .tag(3)
 
                     NavigationStack {
                         InfoPage()
                     }
-                    .tabItem {
-                        Label("Info", systemImage: "book.fill")
-                    }
+                    .tabItem { Label("Info", systemImage: "book.fill") }
+                    .tag(4)
                 }
                 .tint(.appTeal)
                 .sheet(isPresented: $showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
@@ -99,6 +100,12 @@ struct ContentView: View {
                 }
                 .onAppear {
                     if !hasSeenOnboarding { showOnboarding = true }
+                }
+                .onChange(of: router.pendingConversationUserID) { _, userID in
+                    guard let userID else { return }
+                    selectedTab = 2
+                    messagesDeepLinkUserID = userID
+                    router.pendingConversationUserID = nil
                 }
             } else {
                 NavigationStack {
@@ -118,4 +125,5 @@ struct ContentView: View {
         .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
         .environment(StayRequestStore())
         .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
+        .environment(DeepLinkRouter())
 }

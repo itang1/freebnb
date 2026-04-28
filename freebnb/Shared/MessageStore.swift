@@ -48,6 +48,9 @@ enum MessageState: Hashable {
 final class MessageStore {
     private(set) var pendingIDs: Set<String> = []
     private(set) var failedIDs: Set<String> = []
+    private(set) var mutedConversationIDs: Set<String> = {
+        Set(UserDefaults.standard.stringArray(forKey: UserDefaultsKey.mutedConversationIDs) ?? [])
+    }()
 
     // Global snapshot: last few messages across all conversations (for summaries).
     private var conversations: [String: [Message]] = [:]
@@ -195,13 +198,36 @@ final class MessageStore {
         UserDefaults.standard.set(lastReadIDs, forKey: UserDefaultsKey.lastReadMessageIDs)
     }
 
-    /// Number of conversations where the last message is from someone else
-    /// and hasn't been seen yet.
+    func muteConversation(_ conversationID: String) {
+        mutedConversationIDs.insert(conversationID)
+        UserDefaults.standard.set(Array(mutedConversationIDs), forKey: UserDefaultsKey.mutedConversationIDs)
+    }
+
+    func unmuteConversation(_ conversationID: String) {
+        mutedConversationIDs.remove(conversationID)
+        UserDefaults.standard.set(Array(mutedConversationIDs), forKey: UserDefaultsKey.mutedConversationIDs)
+    }
+
+    func isMuted(_ conversationID: String) -> Bool {
+        mutedConversationIDs.contains(conversationID)
+    }
+
+    /// True when the other user sent the last message and it hasn't been read.
+    /// Muted conversations are never considered unread (no badge, no dot).
+    func isUnread(_ conversationID: String, currentUserID: String) -> Bool {
+        guard !mutedConversationIDs.contains(conversationID),
+              let summary = conversationSummaries.first(where: { $0.id == conversationID })
+        else { return false }
+        return summary.lastMessage.senderUserID != currentUserID &&
+               lastReadIDs[conversationID] != summary.lastMessage.id
+    }
+
+    /// Number of conversations where the last message is from someone else,
+    /// hasn't been seen yet, and is not muted.
     var unreadCount: Int {
         guard let currentUserID else { return 0 }
         return conversationSummaries.filter { summary in
-            summary.lastMessage.senderUserID != currentUserID &&
-            lastReadIDs[summary.id] != summary.lastMessage.id
+            isUnread(summary.id, currentUserID: currentUserID)
         }.count
     }
 

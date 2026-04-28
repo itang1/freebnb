@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     // Held weakly so AppDelegate doesn't extend the stores' lifetimes.
     weak var userProfileStore: UserProfileStore?
+    weak var router: DeepLinkRouter?
 
     func application(
         _ application: UIApplication,
@@ -58,6 +59,20 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .badge])
+    }
+
+    // Deep-link into the correct conversation when the user taps a notification.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let info = response.notification.request.content.userInfo
+        if let type = info["type"] as? String, type == "message",
+           let senderID = info["senderUserID"] as? String {
+            router?.pendingConversationUserID = senderID
+        }
+        completionHandler()
     }
 }
 

@@ -16,6 +16,7 @@ import FirebaseMessaging
 struct FreeBNBApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    @State private var router = DeepLinkRouter()
     @State private var authManager: AuthManager
     @State private var homeStore: HomeStore
     @State private var messageStore: MessageStore
@@ -45,9 +46,11 @@ struct FreeBNBApp: App {
                 .environment(userProfileStore)
                 .environment(stayRequestStore)
                 .environment(friendStore)
+                .environment(router)
                 .onAppear {
-                    // Wire the store into the delegate so token saves work.
+                    // Wire the store and router into the delegate.
                     appDelegate.userProfileStore = userProfileStore
+                    appDelegate.router = router
 #if canImport(FirebaseMessaging)
                     Messaging.messaging().delegate = appDelegate
 #endif

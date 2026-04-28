@@ -36,6 +36,21 @@ struct HomeCard: View {
                 }
                 .accessibilityElement(children: .combine)
 
+                if let avail = availabilityLabel {
+                    HStack(spacing: 4) {
+                        Image(systemName: avail.icon)
+                            .font(.caption2)
+                        Text(avail.text)
+                            .font(.caption)
+                    }
+                    .foregroundColor(avail.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(avail.color.opacity(0.12))
+                    .clipShape(Capsule())
+                    .accessibilityLabel(avail.text)
+                }
+
                 // Amenity icons in colored chips
                 VStack(alignment: .leading, spacing: 8) {
                     // MARK: Guests, Space & Laundry
@@ -128,6 +143,25 @@ struct HomeCard: View {
         .background(Color.skyBlue.opacity(0.35))
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: Color.appTeal.opacity(0.15), radius: 8, x: 0, y: 5)
+    }
+
+    // MARK: - Availability
+
+    private struct AvailabilityLabel {
+        let text: String
+        let icon: String
+        let color: Color
+    }
+
+    private var availabilityLabel: AvailabilityLabel? {
+        let now = Date()
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now
+        let upcoming = (listing.blockedDateRanges ?? []).filter { $0.end > now }
+        guard !upcoming.isEmpty else { return nil }
+        if upcoming.contains(where: { $0.overlaps(checkIn: now, checkOut: tomorrow) }) {
+            return AvailabilityLabel(text: "Unavailable now", icon: "calendar.badge.minus", color: .red)
+        }
+        return AvailabilityLabel(text: "Some dates blocked", icon: "calendar.badge.exclamationmark", color: .orange)
     }
 
     // MARK: - Header

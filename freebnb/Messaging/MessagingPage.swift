@@ -6,17 +6,35 @@
 import SwiftUI
 import os
 
+// Used by MessagesTab's NavigationStack path so deep links can push
+// programmatically without touching the parent's navigation state.
+struct ConversationRoute: Hashable {
+    let otherUserID: String
+    let otherName: String
+    let listing: Home?
+
+    static func == (lhs: ConversationRoute, rhs: ConversationRoute) -> Bool {
+        lhs.otherUserID == rhs.otherUserID
+    }
+
+    func hash(into hasher: inout Hasher) { hasher.combine(otherUserID) }
+}
+
+// MARK: - MessagingPage
+
 struct MessagingPage: View {
     let otherUserID: String
     let otherName: String
     /// Passed when navigating from a listing page; enables the Request to Stay
-    /// toolbar action and provides listing context for the request sheet.
+    /// toolbar action and provides listing context at the top of the thread.
     var listing: Home? = nil
 
     @Environment(MessageStore.self) private var messageStore
     @Environment(StayRequestStore.self) private var requestStore
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(\.dismiss) private var dismiss
+
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
     @State private var showRequestSheet = false
@@ -24,17 +42,27 @@ struct MessagingPage: View {
     @State private var errorMessage: String?
     @State private var bannerBusy = false
     @State private var reportedMessage: Message?
+    @State private var showReportUser = false
+    @State private var showBlockConfirm = false
+    @State private var searchQuery = ""
 
     private var currentUserID: String { authManager.userID }
     private var conversationID: String {
         MessageStore.conversationID(userIDs: [currentUserID, otherUserID])
     }
     private var participants: [String] { [currentUserID, otherUserID].sorted() }
-    private var messages: [Message] { messageStore.messages(for: conversationID) }
+    private var isMuted: Bool { messageStore.isMuted(conversationID) }
+    private var isBlocked: Bool { userProfileStore.isBlocked(otherUserID) }
+
+    private var allMessages: [Message] { messageStore.messages(for: conversationID) }
+    private var messages: [Message] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return allMessages }
+        return allMessages.filter { $0.text.localizedCaseInsensitiveContains(q) }
+    }
     private var hasMoreMessages: Bool { messageStore.hasMoreMessages(conversationID) }
     private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    /// The most recent active request between these two users, from either direction.
     private var activeRequest: StayRequest? {
         requestStore.outgoingRequests.first(where: { $0.hostUserID == otherUserID && $0.status.isActive })
         ?? requestStore.incomingRequests.first(where: { $0.guestUserID == otherUserID && $0.status.isActive })
@@ -46,9 +74,20 @@ struct MessagingPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Listing context — shown when a specific listing is associated.
+            if let listing {
+                listingContextBanner(listing)
+                Divider()
+            }
+
             if let req = activeRequest {
                 requestBanner(req)
                 Divider()
+            }
+
+            // In-thread search bar
+            if !searchQuery.isEmpty || inputFocused == false {
+                // searchable modifier handles this below
             }
 
             ScrollViewReader { proxy in
@@ -67,12 +106,21 @@ struct MessagingPage: View {
                         }
 
                         if messages.isEmpty {
-                            Text("Send \(otherName) a message to get started.")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.top, 48)
-                                .padding(.horizontal, 24)
+                            if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+                                Text("No messages match "\(searchQuery.trimmingCharacters(in: .whitespaces))"")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.top, 48)
+                                    .padding(.horizontal, 24)
+                            } else {
+                                Text("Send \(otherName) a message to get started.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.top, 48)
+                                    .padding(.horizontal, 24)
+                            }
                         }
                         ForEach(messages) { message in
                             MessageBubble(
@@ -89,8 +137,8 @@ struct MessagingPage: View {
                     .padding()
                 }
                 .scrollDismissesKeyboard(.immediately)
-                .onChange(of: messages.last?.id) { _, lastID in
-                    if let lastID {
+                .onChange(of: allMessages.last?.id) { _, lastID in
+                    if let lastID, searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
                         withAnimation { proxy.scrollTo(lastID, anchor: .bottom) }
                     }
                     messageStore.markRead(conversationID: conversationID)
@@ -103,14 +151,49 @@ struct MessagingPage: View {
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle(otherName)
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search messages")
         .toolbar {
-            // Show the request button only when a listing is known and there
-            // is no active request already in flight.
+            // Primary action: Request a Stay (only when a listing is known and no active request)
             if listing != nil, activeRequest == nil {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Request a Stay") { showRequestSheet = true }
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(Color.appTeal)
+                }
+            }
+            // Secondary: conversation actions menu
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    if isMuted {
+                        Button {
+                            messageStore.unmuteConversation(conversationID)
+                        } label: {
+                            Label("Unmute Conversation", systemImage: "bell")
+                        }
+                    } else {
+                        Button {
+                            messageStore.muteConversation(conversationID)
+                        } label: {
+                            Label("Mute Conversation", systemImage: "bell.slash")
+                        }
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        showReportUser = true
+                    } label: {
+                        Label("Report \(otherName)", systemImage: "flag")
+                    }
+
+                    Button(role: .destructive) {
+                        showBlockConfirm = true
+                    } label: {
+                        Label(isBlocked ? "Unblock \(otherName)" : "Block \(otherName)",
+                              systemImage: isBlocked ? "person.fill.checkmark" : "person.fill.xmark")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
             }
         }
@@ -139,6 +222,37 @@ struct MessagingPage: View {
                 targetName: "Message from \(otherName)"
             )
         }
+        .sheet(isPresented: $showReportUser) {
+            ReportSheet(
+                targetType: .user,
+                targetID: otherUserID,
+                targetName: otherName
+            )
+        }
+        .confirmationDialog(
+            isBlocked ? "Unblock \(otherName)?" : "Block \(otherName)?",
+            isPresented: $showBlockConfirm,
+            titleVisibility: .visible
+        ) {
+            if isBlocked {
+                Button("Unblock") {
+                    Task {
+                        try? await userProfileStore.unblockUser(otherUserID)
+                    }
+                }
+            } else {
+                Button("Block", role: .destructive) {
+                    Task {
+                        try? await userProfileStore.blockUser(otherUserID)
+                        dismiss()
+                    }
+                }
+            }
+        } message: {
+            if !isBlocked {
+                Text("You won't see messages or listings from \(otherName). You can unblock them any time.")
+            }
+        }
         .alert("Error", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -147,6 +261,33 @@ struct MessagingPage: View {
         } message: {
             if let errorMessage { Text(errorMessage) }
         }
+    }
+
+    // MARK: - Listing context banner
+
+    private func listingContextBanner(_ home: Home) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "house.fill")
+                .font(.subheadline)
+                .foregroundColor(.appTeal)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Re: \(home.hostName)'s place")
+                    .font(.subheadline).fontWeight(.semibold)
+                Text("\(home.address.city), \(home.address.state)")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            if isMuted {
+                Image(systemName: "bell.slash.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .accessibilityLabel("Muted")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.appTeal.opacity(0.07))
     }
 
     // MARK: - Request banner
@@ -249,7 +390,7 @@ struct MessagingPage: View {
         }
     }
 
-    // MARK: - Request actions (mirror StaysTab; messages keep both sides in sync)
+    // MARK: - Request actions
 
     private func dateRangeText(_ request: StayRequest) -> String {
         let f = AppDateFormatters.shortDay
@@ -388,7 +529,16 @@ struct MessagesTab: View {
     @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(StayRequestStore.self) private var requestStore
+
     let listings: [Home]
+    /// Set by ContentView when a push notification tap should open a conversation.
+    var deepLinkUserID: Binding<String?>
+
+    @State private var path: [ConversationRoute] = []
+    @State private var searchQuery = ""
+
+    // MARK: - Helpers
 
     private func displayName(for userID: String) -> String {
         if let name = userProfileStore.displayName(for: userID), !name.isEmpty { return name }
@@ -396,37 +546,86 @@ struct MessagesTab: View {
         return "FreeBNB User"
     }
 
+    /// Finds the listing associated with this conversation by looking at stay
+    /// requests. Used to pass listing context into the thread.
+    private func listing(for otherUserID: String) -> Home? {
+        let request = requestStore.outgoingRequests.first { $0.hostUserID == otherUserID }
+            ?? requestStore.incomingRequests.first { $0.guestUserID == otherUserID }
+        guard let listingID = request?.listingID else { return nil }
+        return listings.first { $0.id == listingID }
+    }
+
+    private var visibleSummaries: [ConversationSummary] {
+        let blocked = userProfileStore.currentProfile?.blockedIDs ?? []
+        let all = messageStore.conversationSummaries.filter { !blocked.contains($0.otherUserID) }
+        let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return all }
+        return all.filter { summary in
+            displayName(for: summary.otherUserID).lowercased().contains(q) ||
+            summary.lastMessage.text.lowercased().contains(q)
+        }
+    }
+
+    // MARK: - Body
+
     var body: some View {
-        let summaries = messageStore.conversationSummaries
-        Group {
-            if summaries.isEmpty {
-                ContentUnavailableView {
-                    Label("No conversations yet", systemImage: "message")
-                        .foregroundStyle(Color.appTeal)
-                } description: {
-                    Text("Open a listing and message the host to get started.")
-                }
-                .background(Color.creamWhite.ignoresSafeArea())
-            } else {
-                List {
-                    ForEach(summaries) { summary in
-                        let name = displayName(for: summary.otherUserID)
-                        NavigationLink {
-                            MessagingPage(otherUserID: summary.otherUserID, otherName: name)
-                        } label: {
-                            ConversationRow(
+        NavigationStack(path: $path) {
+            Group {
+                if visibleSummaries.isEmpty && searchQuery.isEmpty {
+                    ContentUnavailableView {
+                        Label("No conversations yet", systemImage: "message")
+                            .foregroundStyle(Color.appTeal)
+                    } description: {
+                        Text("Open a listing and message the host to get started.")
+                    }
+                    .background(Color.creamWhite.ignoresSafeArea())
+                } else if visibleSummaries.isEmpty {
+                    ContentUnavailableView.search(text: searchQuery)
+                        .background(Color.creamWhite.ignoresSafeArea())
+                } else {
+                    List {
+                        ForEach(visibleSummaries) { summary in
+                            let name = displayName(for: summary.otherUserID)
+                            let route = ConversationRoute(
+                                otherUserID: summary.otherUserID,
                                 otherName: name,
-                                lastMessage: summary.lastMessage,
-                                currentUserID: authManager.userID
+                                listing: listing(for: summary.otherUserID)
                             )
+                            NavigationLink(value: route) {
+                                ConversationRow(
+                                    otherName: name,
+                                    lastMessage: summary.lastMessage,
+                                    currentUserID: authManager.userID,
+                                    isMuted: messageStore.isMuted(summary.id),
+                                    isUnread: messageStore.isUnread(summary.id, currentUserID: authManager.userID)
+                                )
+                            }
                         }
                     }
+                    .scrollContentBackground(.hidden)
+                    .background(Color.creamWhite.ignoresSafeArea())
                 }
-                .scrollContentBackground(.hidden)
-                .background(Color.creamWhite.ignoresSafeArea())
+            }
+            .navigationTitle("Messages")
+            .searchable(text: $searchQuery, prompt: "Search conversations")
+            .navigationDestination(for: ConversationRoute.self) { route in
+                MessagingPage(
+                    otherUserID: route.otherUserID,
+                    otherName: route.otherName,
+                    listing: route.listing
+                )
             }
         }
-        .navigationTitle("Messages")
+        .onChange(of: deepLinkUserID.wrappedValue) { _, userID in
+            guard let userID else { return }
+            let name = displayName(for: userID)
+            path.append(ConversationRoute(
+                otherUserID: userID,
+                otherName: name,
+                listing: listing(for: userID)
+            ))
+            deepLinkUserID.wrappedValue = nil
+        }
     }
 }
 
@@ -436,6 +635,8 @@ private struct ConversationRow: View {
     let otherName: String
     let lastMessage: Message
     let currentUserID: String
+    var isMuted: Bool = false
+    var isUnread: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -450,8 +651,16 @@ private struct ConversationRow: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(otherName)
-                    .font(.headline)
+                HStack(spacing: 4) {
+                    Text(otherName)
+                        .font(isUnread ? .headline.weight(.semibold) : .headline)
+                    if isMuted {
+                        Image(systemName: "bell.slash.fill")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .accessibilityLabel("Muted")
+                    }
+                }
                 HStack(spacing: 2) {
                     if lastMessage.senderUserID == currentUserID {
                         Text("You: ")
@@ -460,16 +669,25 @@ private struct ConversationRow: View {
                     }
                     Text(lastMessage.text)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(isUnread ? .primary : .secondary)
+                        .fontWeight(isUnread ? .medium : .regular)
                         .lineLimit(1)
                 }
             }
 
             Spacer()
 
-            Text(lastMessage.timestamp ?? Date(), style: .time)
-                .font(.caption)
-                .foregroundColor(.secondary)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(lastMessage.timestamp ?? Date(), style: .time)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                if isUnread {
+                    Circle()
+                        .fill(Color.appTeal)
+                        .frame(width: 8, height: 8)
+                        .accessibilityLabel("Unread")
+                }
+            }
         }
         .padding(.vertical, 4)
     }
