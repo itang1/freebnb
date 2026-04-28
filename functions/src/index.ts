@@ -6,6 +6,56 @@ admin.initializeApp();
 const db = admin.firestore();
 
 // ---------------------------------------------------------------------------
+// scheduledFirestoreBackup
+// Exports all Firestore collections to GCS once a day at 03:00 UTC.
+//
+// One-time setup required:
+//   1. Create a GCS bucket named "${PROJECT_ID}-backups" in the same region.
+//   2. Grant the App Engine default service account
+//      (${PROJECT_ID}@appspot.gserviceaccount.com) the roles:
+//        - storage.admin  (on the backup bucket)
+//        - datastore.importExportAdmin  (on the project)
+//   3. Deploy this function: firebase deploy --only functions
+//
+// Exports land in gs://${PROJECT_ID}-backups/firestore/YYYY-MM-DD/
+// ---------------------------------------------------------------------------
+export const scheduledFirestoreBackup = functions.pubsub
+  .schedule("0 3 * * *")
+  .timeZone("UTC")
+  .onRun(async () => {
+    const projectId = process.env.GCLOUD_PROJECT ?? process.env.GOOGLE_CLOUD_PROJECT;
+    if (!projectId) throw new Error("GCLOUD_PROJECT env var not set");
+
+    const credential = admin.app().options.credential;
+    if (!credential) throw new Error("Firebase Admin credential not initialised");
+    const { access_token: accessToken } = await credential.getAccessToken();
+
+    const today = new Date().toISOString().split("T")[0];
+    const outputUri = `gs://${projectId}-backups/firestore/${today}`;
+
+    const url =
+      `https://firestore.googleapis.com/v1/projects/${projectId}` +
+      `/databases/(default):exportDocuments`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ outputUriPrefix: outputUri }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Firestore export failed (${res.status}): ${body}`);
+    }
+
+    const op = await res.json() as { name: string };
+    functions.logger.info("Firestore backup started", { operation: op.name, outputUri });
+  });
+
+// ---------------------------------------------------------------------------
 // onMessageCreated
 // Sends a push notification to the recipient of a new message.
 // ---------------------------------------------------------------------------
