@@ -11,6 +11,7 @@ struct FriendsPage: View {
     @Environment(AuthManager.self) private var authManager
 
     @State private var showAddFriend = false
+    @State private var showInvite = false
     @State private var actionError: String?
 
     var body: some View {
@@ -84,6 +85,14 @@ struct FriendsPage: View {
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle("Friends")
         .toolbar {
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    showInvite = true
+                } label: {
+                    Label("Invite", systemImage: "envelope")
+                }
+                .accessibilityLabel("Invite someone to FreeBNB")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showAddFriend = true
@@ -95,6 +104,9 @@ struct FriendsPage: View {
         }
         .sheet(isPresented: $showAddFriend) {
             AddFriendSheet()
+        }
+        .sheet(isPresented: $showInvite) {
+            InviteSheet()
         }
     }
 
@@ -390,6 +402,84 @@ private struct SearchResultRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Invite sheet
+
+struct InviteSheet: View {
+    @Environment(AuthManager.self) private var authManager
+    @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(\.dismiss) private var dismiss
+
+    private var inviterName: String {
+        userProfileStore.displayName ?? "A friend"
+    }
+
+    private var inviteURL: URL {
+        var components = URLComponents()
+        components.scheme = "freebnb"
+        components.host = "invite"
+        components.queryItems = [
+            URLQueryItem(name: "from", value: authManager.userID),
+            URLQueryItem(name: "name", value: inviterName)
+        ]
+        return components.url ?? URL(string: "freebnb://invite")!
+    }
+
+    private var inviteMessage: String {
+        "\(inviterName) invited you to FreeBNB — a free home-sharing app for people who trust each other. Install the app and add me as a friend: \(inviteURL.absoluteString)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Image(systemName: "house.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(Color.appTeal)
+                    .padding(.top, 32)
+
+                VStack(spacing: 8) {
+                    Text("Invite to FreeBNB")
+                        .font(.title2.weight(.semibold))
+                    Text("Share the link below so your friend can install the app and connect with you automatically.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+
+                ShareLink(item: inviteMessage) {
+                    Label("Share Invite", systemImage: "square.and.arrow.up")
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 14)
+                        .background(Color.appTeal, in: Capsule())
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Your invite link")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(inviteURL.absoluteString)
+                        .font(.caption.monospaced())
+                        .foregroundColor(.secondary)
+                        .padding(10)
+                        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                }
+                .padding(.horizontal, 24)
+
+                Spacer()
+            }
+            .navigationTitle("Invite")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
     }
 }
 
