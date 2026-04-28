@@ -172,6 +172,14 @@ final class UserProfileStore {
         profile(for: userID)?.displayName
     }
 
+    func searchProfiles(query: String) async throws -> [UserProfile] {
+        let results = try await repository.searchProfiles(query: query)
+        for p in results {
+            if let id = p.id { profileCache[id] = p }
+        }
+        return results
+    }
+
     private func fetchProfile(userID: String) {
         guard !inFlight.contains(userID) else { return }
         inFlight.insert(userID)

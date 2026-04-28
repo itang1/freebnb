@@ -20,6 +20,7 @@ struct FreeBNBApp: App {
     @State private var messageStore: MessageStore
     @State private var userProfileStore: UserProfileStore
     @State private var stayRequestStore: StayRequestStore
+    @State private var friendStore: FriendStore
 
     init() {
         FirebaseApp.configure()
@@ -28,6 +29,7 @@ struct FreeBNBApp: App {
         _messageStore = State(initialValue: MessageStore())
         _userProfileStore = State(initialValue: UserProfileStore())
         _stayRequestStore = State(initialValue: StayRequestStore())
+        _friendStore = State(initialValue: FriendStore())
     }
 
     // Called from the scene body once auth + stores are ready.
@@ -49,6 +51,7 @@ struct FreeBNBApp: App {
                 .environment(messageStore)
                 .environment(userProfileStore)
                 .environment(stayRequestStore)
+                .environment(friendStore)
                 .onAppear { registerForPushIfNeeded() }
         }
     }

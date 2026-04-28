@@ -86,6 +86,11 @@ protocol HomesRepository: Sendable {
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener
 
+    func listenToOwnListings(
+        hostUserID: String,
+        handler: @escaping @Sendable (Result<[Home], Error>) -> Void
+    ) -> RepositoryListener
+
     func save(_ home: Home) async throws
     func delete(homeID: String) async throws
     func updateHostName(userID: String, newName: String) async throws
@@ -113,6 +118,26 @@ struct FirestoreHomesRepository: HomesRepository {
                     do { return try doc.data(as: Home.self) }
                     catch {
                         repoLog.error("home decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        return nil
+                    }
+                }
+                handler(.success(homes))
+            }
+        return FirestoreListenerBox(reg)
+    }
+
+    func listenToOwnListings(
+        hostUserID: String,
+        handler: @escaping @Sendable (Result<[Home], Error>) -> Void
+    ) -> RepositoryListener {
+        let reg = db.collection("homes")
+            .whereField("hostUserID", isEqualTo: hostUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error { handler(.failure(error)); return }
+                let homes: [Home] = (snapshot?.documents ?? []).compactMap { doc in
+                    do { return try doc.data(as: Home.self) }
+                    catch {
+                        repoLog.error("own home decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
                         return nil
                     }
                 }
@@ -354,6 +379,8 @@ protocol UserProfileRepository: Sendable {
     func fetchProfile(userID: String) async throws -> UserProfile?
     func deleteProfile(userID: String) async throws
     func updateFCMToken(userID: String, token: String) async throws
+    /// Prefix-search users by display name (case-sensitive, up to 10 results).
+    func searchProfiles(query: String) async throws -> [UserProfile]
 }
 
 struct FirestoreUserProfileRepository: UserProfileRepository {
@@ -428,6 +455,80 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
                 "fcmToken": token,
                 "updatedAt": FieldValue.serverTimestamp()
             ], merge: true)
+        }
+    }
+
+    func searchProfiles(query: String) async throws -> [UserProfile] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return [] }
+        let end = trimmed + "\u{f8ff}"
+        let snap = try await db.collection("users")
+            .whereField("displayName", isGreaterThanOrEqualTo: trimmed)
+            .whereField("displayName", isLessThan: end)
+            .limit(to: 10)
+            .getDocuments()
+        return snap.documents.compactMap { try? $0.data(as: UserProfile.self) }
+    }
+}
+
+// MARK: - Friend edges
+
+protocol FriendEdgeRepository: Sendable {
+    func listenToEdges(
+        userID: String,
+        field: String,
+        handler: @escaping @Sendable (Result<[FriendEdge], Error>) -> Void
+    ) -> RepositoryListener
+
+    func createEdge(_ edge: FriendEdge) async throws
+    func updateStatus(edgeID: String, status: FriendStatus) async throws
+    func deleteEdge(edgeID: String) async throws
+}
+
+struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
+    private let db: Firestore
+    init(db: Firestore = .firestore()) { self.db = db }
+
+    func listenToEdges(
+        userID: String,
+        field: String,
+        handler: @escaping @Sendable (Result<[FriendEdge], Error>) -> Void
+    ) -> RepositoryListener {
+        let reg = db.collection("friendEdges")
+            .whereField(field, isEqualTo: userID)
+            .addSnapshotListener { snapshot, error in
+                if let error { handler(.failure(error)); return }
+                let edges: [FriendEdge] = (snapshot?.documents ?? []).compactMap { doc in
+                    do { return try doc.data(as: FriendEdge.self) }
+                    catch {
+                        repoLog.error("friendEdge decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        return nil
+                    }
+                }
+                handler(.success(edges))
+            }
+        return FirestoreListenerBox(reg)
+    }
+
+    func createEdge(_ edge: FriendEdge) async throws {
+        let edgeID = FriendEdge.edgeID(edge.userA, edge.userB)
+        try await withRetry { [db] in
+            try db.collection("friendEdges").document(edgeID).setData(from: edge)
+        }
+    }
+
+    func updateStatus(edgeID: String, status: FriendStatus) async throws {
+        try await withRetry { [db] in
+            try await db.collection("friendEdges").document(edgeID).updateData([
+                "status": status.rawValue,
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
+        }
+    }
+
+    func deleteEdge(edgeID: String) async throws {
+        try await withRetry { [db] in
+            try await db.collection("friendEdges").document(edgeID).delete()
         }
     }
 }

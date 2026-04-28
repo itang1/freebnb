@@ -150,16 +150,43 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Friend edges — placeholder for when network features land.
-    // edgeID = sorted pair "{smallerUID}_{largerUID}" to keep it canonical.
-    // Client reads are allowed only for participants; writes go through
-    // Cloud Functions to enforce bidirectionality and invitation flow.
+    // Friend edges — bidirectional connections between two users.
+    // edgeID = "{smallerUID}_{largerUID}" (canonical alphabetical order).
     // -------------------------------------------------------------------------
     match /friendEdges/{edgeID} {
       allow read: if isSignedIn()
           && (request.auth.uid == resource.data.userA
               || request.auth.uid == resource.data.userB);
-      allow write: if false;
+
+      // Send a friend request (create pending edge).
+      allow create: if isSignedIn()
+          && request.resource.data.initiator == request.auth.uid
+          && (request.resource.data.userA == request.auth.uid
+              || request.resource.data.userB == request.auth.uid)
+          && request.resource.data.status == "pending"
+          && request.resource.data.userA is string
+          && request.resource.data.userB is string
+          && request.resource.data.userA < request.resource.data.userB
+          && request.resource.data.userA != request.resource.data.userB
+          // edgeID must match the canonical "{userA}_{userB}" form
+          && edgeID == request.resource.data.userA + "_" + request.resource.data.userB;
+
+      // Accept a pending request (only the non-initiator may accept).
+      allow update: if isSignedIn()
+          && (request.auth.uid == resource.data.userA
+              || request.auth.uid == resource.data.userB)
+          && resource.data.status == "pending"
+          && request.resource.data.status == "accepted"
+          && request.auth.uid != resource.data.initiator
+          // Immutable fields must not change.
+          && request.resource.data.userA == resource.data.userA
+          && request.resource.data.userB == resource.data.userB
+          && request.resource.data.initiator == resource.data.initiator;
+
+      // Either party may delete (decline, cancel, or remove friend).
+      allow delete: if isSignedIn()
+          && (request.auth.uid == resource.data.userA
+              || request.auth.uid == resource.data.userB);
     }
 
     // -------------------------------------------------------------------------

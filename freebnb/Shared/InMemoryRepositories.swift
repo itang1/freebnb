@@ -20,6 +20,14 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         return NoopListener()
     }
 
+    func listenToOwnListings(
+        hostUserID: String,
+        handler: @escaping @Sendable (Result<[Home], Error>) -> Void
+    ) -> RepositoryListener {
+        handler(.success(homes.filter { $0.hostUserID == hostUserID && $0.deletedAt == nil }))
+        return NoopListener()
+    }
+
     func save(_ home: Home) async throws {
         if let i = homes.firstIndex(where: { $0.id == home.id }) {
             homes[i] = home
@@ -138,5 +146,41 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
 
     func updateFCMToken(userID: String, token: String) async throws {
         profiles[userID]?.fcmToken = token
+    }
+
+    func searchProfiles(query: String) async throws -> [UserProfile] {
+        let q = query.lowercased()
+        return profiles.values.filter { $0.displayName.lowercased().hasPrefix(q) }
+    }
+}
+
+final class InMemoryFriendEdgeRepository: FriendEdgeRepository, @unchecked Sendable {
+    private var edges: [String: FriendEdge] = [:]
+
+    func listenToEdges(
+        userID: String,
+        field: String,
+        handler: @escaping @Sendable (Result<[FriendEdge], Error>) -> Void
+    ) -> RepositoryListener {
+        let result = edges.values.filter { edge in
+            field == "userA" ? edge.userA == userID : edge.userB == userID
+        }
+        handler(.success(Array(result)))
+        return NoopListener()
+    }
+
+    func createEdge(_ edge: FriendEdge) async throws {
+        let id = FriendEdge.edgeID(edge.userA, edge.userB)
+        var stamped = edge
+        stamped.id = id
+        edges[id] = stamped
+    }
+
+    func updateStatus(edgeID: String, status: FriendStatus) async throws {
+        edges[edgeID]?.status = status
+    }
+
+    func deleteEdge(edgeID: String) async throws {
+        edges.removeValue(forKey: edgeID)
     }
 }
