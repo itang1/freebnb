@@ -327,11 +327,9 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
     ) -> RepositoryListener {
         let field = role == .guest ? "guestUserID" : "hostUserID"
-        // No .order(by:) here — combining whereField with order(by: "createdAt")
-        // requires a composite index that may not be deployed. Sort client-side
-        // in the store instead; request counts per user are small.
         let reg = db.collection("stayRequests")
             .whereField(field, isEqualTo: userID)
+            .order(by: "createdAt", descending: true)
             .addSnapshotListener { snapshot, error in
                 if let error { handler(.failure(error)); return }
                 let docs = snapshot?.documents ?? []

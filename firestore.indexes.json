@@ -16,6 +16,14 @@
         { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
     },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "senderUserID", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
+    },
 
     {
       "collectionGroup": "stayRequests",
