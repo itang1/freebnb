@@ -28,7 +28,7 @@ struct RequestStaySheet: View {
     }
 
     private var canSend: Bool {
-        !isSending && checkOut > checkIn && nights <= listing.maxStayDays
+        !isSending && checkOut > checkIn && nights <= listing.sleeping.maxStayDays
     }
 
     var body: some View {
@@ -43,11 +43,11 @@ struct RequestStaySheet: View {
                             Text("Duration")
                             Spacer()
                             Text("\(nights) night\(nights == 1 ? "" : "s")")
-                                .foregroundColor(nights > listing.maxStayDays ? .red : .secondary)
+                                .foregroundColor(nights > listing.sleeping.maxStayDays ? .red : .secondary)
                         }
                     }
-                    if nights > listing.maxStayDays {
-                        Label("Max stay is \(listing.maxStayDays) nights", systemImage: "exclamationmark.circle")
+                    if nights > listing.sleeping.maxStayDays {
+                        Label("Max stay is \(listing.sleeping.maxStayDays) nights", systemImage: "exclamationmark.circle")
                             .font(.caption)
                             .foregroundColor(.red)
                     }

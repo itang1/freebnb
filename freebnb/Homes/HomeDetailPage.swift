@@ -47,11 +47,11 @@ struct HomeDetailPage: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Guest Rooms: \(home.numGuestRooms)")
-                    Text("Max Guests: \(home.maxGuests)")
-                    Text("Max Stay: \(home.maxStayDays) night\(home.maxStayDays == 1 ? "" : "s")")
-                    if !home.sleepingCounts.isEmpty {
-                        Text("Sleeping Arrangements: \(home.sleepingArrangementsDescription)")
+                    Text("Guest Rooms: \(home.sleeping.numGuestRooms)")
+                    Text("Max Guests: \(home.sleeping.maxGuests)")
+                    Text("Max Stay: \(home.sleeping.maxStayDays) night\(home.sleeping.maxStayDays == 1 ? "" : "s")")
+                    if !home.sleeping.sleepingCounts.isEmpty {
+                        Text("Sleeping Arrangements: \(home.sleeping.arrangementsDescription)")
                     }
                 }
                 .font(.subheadline)
@@ -61,9 +61,9 @@ struct HomeDetailPage: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Kids Allowed", available: home.kidsAllowed)
-                    amenityRow("Guest Can Bring Pets", available: home.guestPetsAllowed)
-                    amenityRow("Host Has Pets", available: home.hostHasPets)
+                    amenityRow("Kids Allowed", available: home.sleeping.kidsAllowed)
+                    amenityRow("Guest Can Bring Pets", available: home.sleeping.guestPetsAllowed)
+                    amenityRow("Host Has Pets", available: home.sleeping.hostHasPets)
                 }
                 .font(.subheadline)
 
@@ -72,13 +72,13 @@ struct HomeDetailPage: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Air Conditioning", available: home.hasAC)
-                    amenityRow("Heating", available: home.hasHeating)
-                    amenityRow("Kitchen", available: home.hasKitchen)
-                    amenityRow("Fridge Space", available: home.hasFridgeSpace)
-                    amenityRow("Microwave", available: home.hasMicrowave)
-                    amenityRow("TV", available: home.hasTV)
-                    amenityRow("Wifi", available: home.hasWifi)
+                    amenityRow("Air Conditioning", available: home.amenities.hasAC)
+                    amenityRow("Heating", available: home.amenities.hasHeating)
+                    amenityRow("Kitchen", available: home.amenities.hasKitchen)
+                    amenityRow("Fridge Space", available: home.amenities.hasFridgeSpace)
+                    amenityRow("Microwave", available: home.amenities.hasMicrowave)
+                    amenityRow("TV", available: home.amenities.hasTV)
+                    amenityRow("Wifi", available: home.amenities.hasWifi)
                 }
                 .font(.subheadline)
 
@@ -87,17 +87,17 @@ struct HomeDetailPage: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Private Guest Bathroom", available: home.hasPrivateGuestBathroom)
-                    amenityRow("In-unit Laundry", available: home.hasInUnitLaundry)
-                    amenityRow("Coin Laundry Nearby", available: home.hasCoinLaundryNearby)
+                    amenityRow("Private Guest Bathroom", available: home.amenities.hasPrivateGuestBathroom)
+                    amenityRow("In-unit Laundry", available: home.amenities.hasInUnitLaundry)
+                    amenityRow("Coin Laundry Nearby", available: home.amenities.hasCoinLaundryNearby)
                 }
                 .font(.subheadline)
 
                 // MARK: Parking
-                if !home.parkingDetails.isEmpty {
+                if !home.amenities.parkingDetails.isEmpty {
                     Text("Parking")
                         .font(.headline)
-                    Text(home.parkingDetails)
+                    Text(home.amenities.parkingDetails)
                         .font(.subheadline)
                 }
 
@@ -106,16 +106,16 @@ struct HomeDetailPage: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Pillows", available: home.providesPillows)
-                    amenityRow("Blankets", available: home.providesBlankets)
-                    amenityRow("Towels", available: home.providesTowels)
-                    amenityRow("Toiletries", available: home.providesToiletries)
+                    amenityRow("Pillows", available: home.amenities.providesPillows)
+                    amenityRow("Blankets", available: home.amenities.providesBlankets)
+                    amenityRow("Towels", available: home.amenities.providesTowels)
+                    amenityRow("Toiletries", available: home.amenities.providesToiletries)
                     HStack(spacing: 8) {
                         Image(systemName: "fork.knife")
-                            .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.75) : .green)
+                            .foregroundColor(home.amenities.foodProvision == .none ? .secondary.opacity(0.75) : .green)
                             .accessibilityHidden(true)
-                        Text("Food: \(home.foodProvision.displayName)")
-                            .foregroundColor(home.foodProvision == .none ? .secondary.opacity(0.75) : .primary)
+                        Text("Food: \(home.amenities.foodProvision.displayName)")
+                            .foregroundColor(home.amenities.foodProvision == .none ? .secondary.opacity(0.75) : .primary)
                     }
                     .accessibilityElement(children: .combine)
                 }
@@ -381,15 +381,19 @@ struct HomeDetailPage: View {
             description: "Spots misses you!",
             contactPreference: .inApp,
             hostMotivation: .eager,
-            numGuestRooms: 1, maxGuests: 2, maxStayDays: 14,
-            sleepingArrangements: ["bed": 1],
-            kidsAllowed: true, guestPetsAllowed: false, hostHasPets: true,
-            hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
-            hasMicrowave: true, hasTV: true, hasWifi: true,
-            hasPrivateGuestBathroom: false, parkingDetails: "Street parking",
-            hasInUnitLaundry: true, hasCoinLaundryNearby: false,
-            providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: true,
-            foodProvision: .all
+            sleeping: Sleeping(
+                numGuestRooms: 1, maxGuests: 2, maxStayDays: 14,
+                arrangements: ["bed": 1],
+                kidsAllowed: true, guestPetsAllowed: false, hostHasPets: true
+            ),
+            amenities: Amenities(
+                hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
+                hasMicrowave: true, hasTV: true, hasWifi: true,
+                hasPrivateGuestBathroom: false, parkingDetails: "Street parking",
+                hasInUnitLaundry: true, hasCoinLaundryNearby: false,
+                providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: true,
+                foodProvision: .all
+            )
         ))
         .environment(MessageStore())
         .environment(AuthManager())

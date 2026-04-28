@@ -46,7 +46,7 @@ extension FilterOption {
         _ label: String,
         _ value: FoodProvision
     ) -> FilterOption {
-        FilterOption(id: id, label: label, category: .food) { $0.foodProvision == value }
+        FilterOption(id: id, label: label, category: .food) { $0.amenities.foodProvision == value }
     }
 
     fileprivate static func cancellation(
@@ -68,31 +68,31 @@ extension FilterOption {
         FilterOption(id: "selective", label: "Selective",       category: .host) { $0.hostMotivation == .selective },
 
         // Guests & Space
-        FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.numGuestRooms > 0 },
-        FilterOption(id: "sleepingBed", label: "Guest has Bed", category: .guestsAndSpace) { ($0.sleepingCounts[.bed] ?? 0) > 0 },
-        .bool("kidsAllowed", "Kids Allowed", .guestsAndSpace, \.kidsAllowed),
-        .bool("guestPetsAllowed", "Guest Can Bring Pets", .guestsAndSpace, \.guestPetsAllowed),
-        .bool("hostHasPets", "Host Has Pets", .guestsAndSpace, \.hostHasPets),
+        FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.sleeping.numGuestRooms > 0 },
+        FilterOption(id: "sleepingBed", label: "Guest has Bed", category: .guestsAndSpace) { ($0.sleeping.sleepingCounts[.bed] ?? 0) > 0 },
+        .bool("kidsAllowed", "Kids Allowed", .guestsAndSpace, \.sleeping.kidsAllowed),
+        .bool("guestPetsAllowed", "Guest Can Bring Pets", .guestsAndSpace, \.sleeping.guestPetsAllowed),
+        .bool("hostHasPets", "Host Has Pets", .guestsAndSpace, \.sleeping.hostHasPets),
 
         // Amenities
-        .bool("ac", "Air Conditioning", .amenities, \.hasAC),
-        .bool("heating", "Heating", .amenities, \.hasHeating),
-        .bool("kitchen", "Kitchen", .amenities, \.hasKitchen),
-        .bool("fridgeSpace", "Fridge Space", .amenities, \.hasFridgeSpace),
-        .bool("microwave", "Microwave", .amenities, \.hasMicrowave),
-        .bool("tv", "TV", .amenities, \.hasTV),
-        .bool("wifi", "Wifi", .amenities, \.hasWifi),
+        .bool("ac", "Air Conditioning", .amenities, \.amenities.hasAC),
+        .bool("heating", "Heating", .amenities, \.amenities.hasHeating),
+        .bool("kitchen", "Kitchen", .amenities, \.amenities.hasKitchen),
+        .bool("fridgeSpace", "Fridge Space", .amenities, \.amenities.hasFridgeSpace),
+        .bool("microwave", "Microwave", .amenities, \.amenities.hasMicrowave),
+        .bool("tv", "TV", .amenities, \.amenities.hasTV),
+        .bool("wifi", "Wifi", .amenities, \.amenities.hasWifi),
 
         // Rooms & Laundry
-        .bool("privateGuestBathroom", "Private Guest Bathroom", .roomsAndLaundry, \.hasPrivateGuestBathroom),
-        .bool("inUnitLaundry", "In-unit Laundry", .roomsAndLaundry, \.hasInUnitLaundry),
-        .bool("coinLaundryNearby", "Coin Laundry Nearby", .roomsAndLaundry, \.hasCoinLaundryNearby),
+        .bool("privateGuestBathroom", "Private Guest Bathroom", .roomsAndLaundry, \.amenities.hasPrivateGuestBathroom),
+        .bool("inUnitLaundry", "In-unit Laundry", .roomsAndLaundry, \.amenities.hasInUnitLaundry),
+        .bool("coinLaundryNearby", "Coin Laundry Nearby", .roomsAndLaundry, \.amenities.hasCoinLaundryNearby),
 
         // Provisions
-        .bool("pillows", "Pillows Provided", .provisions, \.providesPillows),
-        .bool("blankets", "Blankets Provided", .provisions, \.providesBlankets),
-        .bool("towels", "Towels Provided", .provisions, \.providesTowels),
-        .bool("toiletries", "Toiletries Provided", .provisions, \.providesToiletries),
+        .bool("pillows", "Pillows Provided", .provisions, \.amenities.providesPillows),
+        .bool("blankets", "Blankets Provided", .provisions, \.amenities.providesBlankets),
+        .bool("towels", "Towels Provided", .provisions, \.amenities.providesTowels),
+        .bool("toiletries", "Toiletries Provided", .provisions, \.amenities.providesToiletries),
 
         // Food
         .food("foodAll", "All Meals Provided", .all),
@@ -168,11 +168,11 @@ struct HomesPage: View {
         switch selectedSort {
         case .mostEager:     return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
         case .mostFlexible:  return result.sorted { ($0.cancellationPolicy ?? .flexible).flexibilityRank > ($1.cancellationPolicy ?? .flexible).flexibilityRank }
-        case .mostDays:      return result.sorted { $0.maxStayDays > $1.maxStayDays }
-        case .mostGuests:    return result.sorted { $0.maxGuests > $1.maxGuests }
-        case .mostRooms:     return result.sorted { $0.numGuestRooms > $1.numGuestRooms }
-        case .fewestGuests:  return result.sorted { $0.maxGuests < $1.maxGuests }
-        case .mostAmenities: return result.sorted { $0.amenityCount > $1.amenityCount }
+        case .mostDays:      return result.sorted { $0.sleeping.maxStayDays > $1.sleeping.maxStayDays }
+        case .mostGuests:    return result.sorted { $0.sleeping.maxGuests > $1.sleeping.maxGuests }
+        case .mostRooms:     return result.sorted { $0.sleeping.numGuestRooms > $1.sleeping.numGuestRooms }
+        case .fewestGuests:  return result.sorted { $0.sleeping.maxGuests < $1.sleeping.maxGuests }
+        case .mostAmenities: return result.sorted { $0.amenities.count > $1.amenities.count }
         case .cityAZ:        return result.sorted { $0.address.city < $1.address.city }
         default:             return result
         }
@@ -478,9 +478,9 @@ struct HomesPage: View {
     }
 
     private func accessibilitySummary(for listing: Home) -> String {
-        let rooms = "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")"
-        let guests = "\(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")"
-        let nights = "up to \(listing.maxStayDays) night\(listing.maxStayDays == 1 ? "" : "s")"
+        let rooms = "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")"
+        let guests = "\(listing.sleeping.maxGuests) guest\(listing.sleeping.maxGuests == 1 ? "" : "s")"
+        let nights = "up to \(listing.sleeping.maxStayDays) night\(listing.sleeping.maxStayDays == 1 ? "" : "s")"
         return "\(rooms), \(guests), \(nights)"
     }
 }

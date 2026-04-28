@@ -67,29 +67,29 @@ final class CreateListingViewModel {
         city = editing?.address.city ?? ""
         stateField = editing?.address.state ?? ""
         zip = editing?.address.zip ?? ""
-        numGuestRooms = editing?.numGuestRooms ?? 1
-        maxGuests = editing?.maxGuests ?? 2
-        maxStayDays = editing?.maxStayDays ?? 7
-        sleepingCounts = editing?.sleepingCounts ?? [:]
-        kidsAllowed = editing?.kidsAllowed ?? true
-        guestPetsAllowed = editing?.guestPetsAllowed ?? false
-        hostHasPets = editing?.hostHasPets ?? false
-        hasAC = editing?.hasAC ?? false
-        hasHeating = editing?.hasHeating ?? false
-        hasKitchen = editing?.hasKitchen ?? false
-        hasFridgeSpace = editing?.hasFridgeSpace ?? false
-        hasMicrowave = editing?.hasMicrowave ?? false
-        hasTV = editing?.hasTV ?? false
-        hasWifi = editing?.hasWifi ?? false
-        hasPrivateGuestBathroom = editing?.hasPrivateGuestBathroom ?? false
-        parkingDetails = editing?.parkingDetails ?? ""
-        hasInUnitLaundry = editing?.hasInUnitLaundry ?? false
-        hasCoinLaundryNearby = editing?.hasCoinLaundryNearby ?? false
-        providesPillows = editing?.providesPillows ?? false
-        providesBlankets = editing?.providesBlankets ?? false
-        providesTowels = editing?.providesTowels ?? false
-        providesToiletries = editing?.providesToiletries ?? false
-        foodProvision = editing?.foodProvision ?? .none
+        numGuestRooms = editing?.sleeping.numGuestRooms ?? 1
+        maxGuests = editing?.sleeping.maxGuests ?? 2
+        maxStayDays = editing?.sleeping.maxStayDays ?? 7
+        sleepingCounts = editing?.sleeping.sleepingCounts ?? [:]
+        kidsAllowed = editing?.sleeping.kidsAllowed ?? true
+        guestPetsAllowed = editing?.sleeping.guestPetsAllowed ?? false
+        hostHasPets = editing?.sleeping.hostHasPets ?? false
+        hasAC = editing?.amenities.hasAC ?? false
+        hasHeating = editing?.amenities.hasHeating ?? false
+        hasKitchen = editing?.amenities.hasKitchen ?? false
+        hasFridgeSpace = editing?.amenities.hasFridgeSpace ?? false
+        hasMicrowave = editing?.amenities.hasMicrowave ?? false
+        hasTV = editing?.amenities.hasTV ?? false
+        hasWifi = editing?.amenities.hasWifi ?? false
+        hasPrivateGuestBathroom = editing?.amenities.hasPrivateGuestBathroom ?? false
+        parkingDetails = editing?.amenities.parkingDetails ?? ""
+        hasInUnitLaundry = editing?.amenities.hasInUnitLaundry ?? false
+        hasCoinLaundryNearby = editing?.amenities.hasCoinLaundryNearby ?? false
+        providesPillows = editing?.amenities.providesPillows ?? false
+        providesBlankets = editing?.amenities.providesBlankets ?? false
+        providesTowels = editing?.amenities.providesTowels ?? false
+        providesToiletries = editing?.amenities.providesToiletries ?? false
+        foodProvision = editing?.amenities.foodProvision ?? .none
         description = editing?.description ?? ""
         contactPreference = editing?.contactPreference ?? .inApp
         hostContactInfo = editing?.hostContactInfo ?? ""
@@ -134,29 +134,33 @@ final class CreateListingViewModel {
             contactPreference: contactPreference,
             hostContactInfo: contactPreference == .contactInfo && !trimmedContactInfo.isEmpty ? trimmedContactInfo : nil,
             hostMotivation: hostMotivation,
-            numGuestRooms: numGuestRooms,
-            maxGuests: maxGuests,
-            maxStayDays: maxStayDays,
-            sleepingArrangements: sleepingRaw,
-            kidsAllowed: kidsAllowed,
-            guestPetsAllowed: guestPetsAllowed,
-            hostHasPets: hostHasPets,
-            hasAC: hasAC,
-            hasHeating: hasHeating,
-            hasKitchen: hasKitchen,
-            hasFridgeSpace: hasFridgeSpace,
-            hasMicrowave: hasMicrowave,
-            hasTV: hasTV,
-            hasWifi: hasWifi,
-            hasPrivateGuestBathroom: hasPrivateGuestBathroom,
-            parkingDetails: parkingDetails.trimmingCharacters(in: .whitespacesAndNewlines),
-            hasInUnitLaundry: hasInUnitLaundry,
-            hasCoinLaundryNearby: hasCoinLaundryNearby,
-            providesPillows: providesPillows,
-            providesBlankets: providesBlankets,
-            providesTowels: providesTowels,
-            providesToiletries: providesToiletries,
-            foodProvision: foodProvision,
+            sleeping: Sleeping(
+                numGuestRooms: numGuestRooms,
+                maxGuests: maxGuests,
+                maxStayDays: maxStayDays,
+                arrangements: sleepingRaw,
+                kidsAllowed: kidsAllowed,
+                guestPetsAllowed: guestPetsAllowed,
+                hostHasPets: hostHasPets
+            ),
+            amenities: Amenities(
+                hasAC: hasAC,
+                hasHeating: hasHeating,
+                hasKitchen: hasKitchen,
+                hasFridgeSpace: hasFridgeSpace,
+                hasMicrowave: hasMicrowave,
+                hasTV: hasTV,
+                hasWifi: hasWifi,
+                hasPrivateGuestBathroom: hasPrivateGuestBathroom,
+                parkingDetails: parkingDetails.trimmingCharacters(in: .whitespacesAndNewlines),
+                hasInUnitLaundry: hasInUnitLaundry,
+                hasCoinLaundryNearby: hasCoinLaundryNearby,
+                providesPillows: providesPillows,
+                providesBlankets: providesBlankets,
+                providesTowels: providesTowels,
+                providesToiletries: providesToiletries,
+                foodProvision: foodProvision
+            ),
             cancellationPolicy: cancellationPolicy
         )
         // Preserve the listing id when editing

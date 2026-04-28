@@ -30,9 +30,9 @@ struct HomeCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 // Summary pills
                 HStack(spacing: 6) {
-                    SummaryPill(icon: "door.left.hand.open", text: "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")")
-                    SummaryPill(icon: "person.fill", text: "\(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")")
-                    SummaryPill(icon: "calendar", text: "up to \(listing.maxStayDays) night\(listing.maxStayDays == 1 ? "" : "s")")
+                    SummaryPill(icon: "door.left.hand.open", text: "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")")
+                    SummaryPill(icon: "person.fill", text: "\(listing.sleeping.maxGuests) guest\(listing.sleeping.maxGuests == 1 ? "" : "s")")
+                    SummaryPill(icon: "calendar", text: "up to \(listing.sleeping.maxStayDays) night\(listing.sleeping.maxStayDays == 1 ? "" : "s")")
                 }
                 .accessibilityElement(children: .combine)
 
@@ -40,82 +40,83 @@ struct HomeCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     // MARK: Guests, Space & Laundry
                     AmenityRow(
-                        isVisible: listing.kidsAllowed ||
-                                   listing.guestPetsAllowed ||
-                                   listing.hostHasPets || listing.hasPrivateGuestBathroom ||
-                        listing.hasInUnitLaundry ||
-                        listing.hasCoinLaundryNearby
+                        isVisible: listing.sleeping.kidsAllowed ||
+                                   listing.sleeping.guestPetsAllowed ||
+                                   listing.sleeping.hostHasPets ||
+                                   listing.amenities.hasPrivateGuestBathroom ||
+                                   listing.amenities.hasInUnitLaundry ||
+                                   listing.amenities.hasCoinLaundryNearby
                     ) {
-                        if listing.kidsAllowed {
+                        if listing.sleeping.kidsAllowed {
                             ChipIcon(systemName: "figure.2.and.child.holdinghands", color: .purple, label: "Kids allowed")
                         }
-                        if listing.guestPetsAllowed {
+                        if listing.sleeping.guestPetsAllowed {
                             ChipIcon(systemName: "pawprint.fill", color: .purple, label: "Guest pets allowed")
                         }
-                        if listing.hostHasPets {
+                        if listing.sleeping.hostHasPets {
                             ChipIcon(systemName: "pet.carrier.fill", color: .purple, label: "Host has pets")
                         }
-                        if listing.hasPrivateGuestBathroom {
+                        if listing.amenities.hasPrivateGuestBathroom {
                             ChipIcon(systemName: "toilet.fill", color: .purple, label: "Private guest bathroom")
                         }
-                        if listing.hasInUnitLaundry {
+                        if listing.amenities.hasInUnitLaundry {
                             ChipIcon(systemName: "washer.fill", color: .purple, label: "In-unit laundry")
                         }
-                        if listing.hasCoinLaundryNearby {
+                        if listing.amenities.hasCoinLaundryNearby {
                             ChipIcon(systemName: "washer.circle.fill", color: .purple, label: "Coin laundry nearby")
                         }
                     }
 
                     // MARK: Comfort & Amenities
                     AmenityRow(
-                        isVisible: listing.hasAC ||
-                                   listing.hasHeating ||
-                                   listing.hasKitchen ||
-                                   listing.hasFridgeSpace ||
-                                   listing.hasMicrowave ||
-                                   listing.hasTV ||
-                                   listing.hasWifi
+                        isVisible: listing.amenities.hasAC ||
+                                   listing.amenities.hasHeating ||
+                                   listing.amenities.hasKitchen ||
+                                   listing.amenities.hasFridgeSpace ||
+                                   listing.amenities.hasMicrowave ||
+                                   listing.amenities.hasTV ||
+                                   listing.amenities.hasWifi
                     ) {
-                        if listing.hasAC {
+                        if listing.amenities.hasAC {
                             ChipIcon(systemName: "snowflake", color: .blue, label: "Air conditioning")
                         }
-                        if listing.hasHeating {
+                        if listing.amenities.hasHeating {
                             ChipIcon(systemName: "heat.waves", color: .blue, label: "Heating")
                         }
-                        if listing.hasKitchen {
+                        if listing.amenities.hasKitchen {
                             ChipIcon(systemName: "stove", color: .blue, label: "Kitchen")
                         }
-                        if listing.hasFridgeSpace {
+                        if listing.amenities.hasFridgeSpace {
                             ChipIcon(systemName: "refrigerator.fill", color: .blue, label: "Fridge space")
                         }
-                        if listing.hasMicrowave {
+                        if listing.amenities.hasMicrowave {
                             ChipIcon(systemName: "microwave.fill", color: .blue, label: "Microwave")
                         }
-                        if listing.hasTV {
+                        if listing.amenities.hasTV {
                             ChipIcon(systemName: "tv.fill", color: .blue, label: "TV")
                         }
-                        if listing.hasWifi {
+                        if listing.amenities.hasWifi {
                             ChipIcon(systemName: "wifi", color: .blue, label: "WiFi")
                         }
                     }
 
                     // MARK: Provisions
                     AmenityRow(
-                        isVisible: listing.providesPillows ||
-                                   listing.providesBlankets ||
-                                   listing.providesTowels ||
-                                   listing.providesToiletries
+                        isVisible: listing.amenities.providesPillows ||
+                                   listing.amenities.providesBlankets ||
+                                   listing.amenities.providesTowels ||
+                                   listing.amenities.providesToiletries
                     ) {
-                        if listing.providesPillows {
+                        if listing.amenities.providesPillows {
                             ChipIcon(systemName: "bed.double.fill", color: Color.coral, label: "Pillows provided")
                         }
-                        if listing.providesBlankets {
+                        if listing.amenities.providesBlankets {
                             ChipIcon(systemName: "square.stack.fill", color: Color.coral, label: "Blankets provided")
                         }
-                        if listing.providesTowels {
+                        if listing.amenities.providesTowels {
                             ChipIcon(systemName: "shower.fill", color: Color.coral, label: "Towels provided")
                         }
-                        if listing.providesToiletries {
+                        if listing.amenities.providesToiletries {
                             ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color.coral, label: "Toiletries provided")
                         }
                     }
@@ -280,14 +281,18 @@ struct ChipIcon: View {
         description: "Next to the Rose Bowl.",
         contactPreference: .inApp,
         hostMotivation: .eager,
-        numGuestRooms: 1, maxGuests: 2, maxStayDays: 7,
-        sleepingArrangements: ["bed": 1],
-        kidsAllowed: false, guestPetsAllowed: true, hostHasPets: false,
-        hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
-        hasMicrowave: true, hasTV: true, hasWifi: true,
-        hasPrivateGuestBathroom: false, parkingDetails: "Street parking",
-        hasInUnitLaundry: true, hasCoinLaundryNearby: false,
-        providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: false,
-        foodProvision: .some
+        sleeping: Sleeping(
+            numGuestRooms: 1, maxGuests: 2, maxStayDays: 7,
+            arrangements: ["bed": 1],
+            kidsAllowed: false, guestPetsAllowed: true, hostHasPets: false
+        ),
+        amenities: Amenities(
+            hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
+            hasMicrowave: true, hasTV: true, hasWifi: true,
+            hasPrivateGuestBathroom: false, parkingDetails: "Street parking",
+            hasInUnitLaundry: true, hasCoinLaundryNearby: false,
+            providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: false,
+            foodProvision: .some
+        )
     ))
 }

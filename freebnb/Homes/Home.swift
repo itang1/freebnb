@@ -114,7 +114,7 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
         }
     }
 
-    /// Sort key for "Most Eager" — higher means more eager.
+    /// Sort key for "Most Eager to Host" — higher means more eager.
     var rank: Int {
         switch self {
         case .eager:     return 2
@@ -123,6 +123,67 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
         }
     }
 }
+
+// MARK: - Nested types
+
+struct Sleeping: Codable, Hashable {
+    var numGuestRooms: Int
+    var maxGuests: Int
+    var maxStayDays: Int
+    // Firestore-compatible [String: Int] map; use sleepingCounts for a typed view.
+    var arrangements: [String: Int]
+    var kidsAllowed: Bool
+    var guestPetsAllowed: Bool
+    var hostHasPets: Bool
+
+    var sleepingCounts: [SleepingSurface: Int] {
+        var result: [SleepingSurface: Int] = [:]
+        for (raw, count) in arrangements {
+            if let surface = SleepingSurface(rawValue: raw), count > 0 {
+                result[surface] = count
+            }
+        }
+        return result
+    }
+
+    var arrangementsDescription: String {
+        sleepingCounts
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { "\($0.value) \($0.key.displayName)" }
+            .joined(separator: ", ")
+    }
+}
+
+struct Amenities: Codable, Hashable {
+    // Comfort
+    var hasAC: Bool
+    var hasHeating: Bool
+    var hasKitchen: Bool
+    var hasFridgeSpace: Bool
+    var hasMicrowave: Bool
+    var hasTV: Bool
+    var hasWifi: Bool
+    // Rooms & laundry
+    var hasPrivateGuestBathroom: Bool
+    var parkingDetails: String
+    var hasInUnitLaundry: Bool
+    var hasCoinLaundryNearby: Bool
+    // Provisions
+    var providesPillows: Bool
+    var providesBlankets: Bool
+    var providesTowels: Bool
+    var providesToiletries: Bool
+    var foodProvision: FoodProvision
+
+    var count: Int {
+        [hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi,
+         hasPrivateGuestBathroom, hasInUnitLaundry, hasCoinLaundryNearby,
+         providesPillows, providesBlankets, providesTowels, providesToiletries]
+            .filter { $0 }.count
+    }
+}
+
+// MARK: - Home
 
 struct Home: Identifiable, Hashable, Codable {
     // `var` rather than `let` so the edit path can construct a Home with an
@@ -140,37 +201,9 @@ struct Home: Identifiable, Hashable, Codable {
     var hostContactInfo: String?
     var hostMotivation: HostMotivation
 
-    // MARK: Capacity
-    var numGuestRooms: Int
-    var maxGuests: Int
-    var maxStayDays: Int
-    // Firestore-compatible storage; access through `sleepingCounts` for a typed view.
-    var sleepingArrangements: [String: Int]
-    var kidsAllowed: Bool
-    var guestPetsAllowed: Bool
-    var hostHasPets: Bool
-
-    // MARK: Comfort and amenities
-    var hasAC: Bool
-    var hasHeating: Bool
-    var hasKitchen: Bool
-    var hasFridgeSpace: Bool
-    var hasMicrowave: Bool
-    var hasTV: Bool
-    var hasWifi: Bool
-
-    // MARK: Other rooms
-    var hasPrivateGuestBathroom: Bool
-    var parkingDetails: String
-    var hasInUnitLaundry: Bool
-    var hasCoinLaundryNearby: Bool
-
-    // MARK: Provisions
-    var providesPillows: Bool
-    var providesBlankets: Bool
-    var providesTowels: Bool
-    var providesToiletries: Bool
-    var foodProvision: FoodProvision
+    // MARK: Capacity, guest policy, and amenities
+    var sleeping: Sleeping
+    var amenities: Amenities
 
     // MARK: Cancellation policy
     // Optional so listings created before this field was added decode cleanly.
@@ -192,51 +225,17 @@ struct Home: Identifiable, Hashable, Codable {
     static func == (lhs: Home, rhs: Home) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
-    // Typed view of `sleepingArrangements`; unknown raw keys are dropped.
-    var sleepingCounts: [SleepingSurface: Int] {
-        var result: [SleepingSurface: Int] = [:]
-        for (raw, count) in sleepingArrangements {
-            if let surface = SleepingSurface(rawValue: raw), count > 0 {
-                result[surface] = count
-            }
-        }
-        return result
-    }
-
     // Non-optional view of photo URLs for view code.
     var photos: [String] { photoURLs ?? [] }
 
-    var amenityCount: Int {
-        [hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi,
-         hasPrivateGuestBathroom, hasInUnitLaundry, hasCoinLaundryNearby,
-         providesPillows, providesBlankets, providesTowels, providesToiletries]
-            .filter { $0 }.count
-    }
-
-    var sleepingArrangementsDescription: String {
-        sleepingCounts
-            .sorted { $0.key.rawValue < $1.key.rawValue }
-            .map { "\($0.value) \($0.key.displayName)" }
-            .joined(separator: ", ")
-    }
-
-    // CodingKeys must live in the struct body (not an extension) so that Swift
-    // can use them to synthesize encode(to:). The matching init(from:) lives in
-    // the extension below so that the memberwise initializer is preserved for
-    // call sites that construct Home values directly.
     enum CodingKeys: String, CodingKey {
         case id, hostUserID, hostName, address, description
         case contactPreference, hostContactInfo, hostMotivation
-        case numGuestRooms, maxGuests, maxStayDays, sleepingArrangements
-        case kidsAllowed, guestPetsAllowed, hostHasPets
-        case hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi
-        case hasPrivateGuestBathroom, parkingDetails, hasInUnitLaundry, hasCoinLaundryNearby
-        case providesPillows, providesBlankets, providesTowels, providesToiletries, foodProvision
+        case sleeping, amenities
         case cancellationPolicy
         case photoURLs
         case deletedAt
     }
-
 }
 
 // MARK: - Custom Decodable
@@ -247,39 +246,18 @@ struct Home: Identifiable, Hashable, Codable {
 extension Home {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id                      = try c.decodeIfPresent(String.self,                  forKey: .id)                    ?? UUID().uuidString
-        hostUserID              = try c.decode(String.self,                            forKey: .hostUserID)
-        hostName                = try c.decode(String.self,                            forKey: .hostName)
-        address                 = try c.decode(Address.self,                           forKey: .address)
-        description             = try c.decodeIfPresent(String.self,                  forKey: .description)
-        contactPreference       = try c.decodeIfPresent(HostContactPreference.self,   forKey: .contactPreference)     ?? .inApp
-        hostContactInfo         = try c.decodeIfPresent(String.self,                  forKey: .hostContactInfo)
-        hostMotivation          = try c.decodeIfPresent(HostMotivation.self,          forKey: .hostMotivation)        ?? .open
-        numGuestRooms           = try c.decode(Int.self,                              forKey: .numGuestRooms)
-        maxGuests               = try c.decode(Int.self,                              forKey: .maxGuests)
-        maxStayDays             = try c.decode(Int.self,                              forKey: .maxStayDays)
-        sleepingArrangements    = try c.decodeIfPresent([String: Int].self,           forKey: .sleepingArrangements)  ?? [:]
-        kidsAllowed             = try c.decode(Bool.self,                             forKey: .kidsAllowed)
-        guestPetsAllowed        = try c.decode(Bool.self,                             forKey: .guestPetsAllowed)
-        hostHasPets             = try c.decode(Bool.self,                             forKey: .hostHasPets)
-        hasAC                   = try c.decode(Bool.self,                             forKey: .hasAC)
-        hasHeating              = try c.decode(Bool.self,                             forKey: .hasHeating)
-        hasKitchen              = try c.decode(Bool.self,                             forKey: .hasKitchen)
-        hasFridgeSpace          = try c.decode(Bool.self,                             forKey: .hasFridgeSpace)
-        hasMicrowave            = try c.decode(Bool.self,                             forKey: .hasMicrowave)
-        hasTV                   = try c.decode(Bool.self,                             forKey: .hasTV)
-        hasWifi                 = try c.decode(Bool.self,                             forKey: .hasWifi)
-        hasPrivateGuestBathroom = try c.decode(Bool.self,                             forKey: .hasPrivateGuestBathroom)
-        parkingDetails          = try c.decodeIfPresent(String.self,                  forKey: .parkingDetails)        ?? ""
-        hasInUnitLaundry        = try c.decode(Bool.self,                             forKey: .hasInUnitLaundry)
-        hasCoinLaundryNearby    = try c.decode(Bool.self,                             forKey: .hasCoinLaundryNearby)
-        providesPillows         = try c.decode(Bool.self,                             forKey: .providesPillows)
-        providesBlankets        = try c.decode(Bool.self,                             forKey: .providesBlankets)
-        providesTowels          = try c.decode(Bool.self,                             forKey: .providesTowels)
-        providesToiletries      = try c.decode(Bool.self,                             forKey: .providesToiletries)
-        foodProvision           = try c.decodeIfPresent(FoodProvision.self,           forKey: .foodProvision)         ?? .none
-        cancellationPolicy      = try c.decodeIfPresent(CancellationPolicy.self,      forKey: .cancellationPolicy)
-        photoURLs               = try c.decodeIfPresent([String].self,                forKey: .photoURLs)
-        deletedAt               = try c.decodeIfPresent(Date.self,                   forKey: .deletedAt)
+        id                 = try c.decodeIfPresent(String.self,               forKey: .id)                ?? UUID().uuidString
+        hostUserID         = try c.decode(String.self,                         forKey: .hostUserID)
+        hostName           = try c.decode(String.self,                         forKey: .hostName)
+        address            = try c.decode(Address.self,                        forKey: .address)
+        description        = try c.decodeIfPresent(String.self,               forKey: .description)
+        contactPreference  = try c.decodeIfPresent(HostContactPreference.self, forKey: .contactPreference) ?? .inApp
+        hostContactInfo    = try c.decodeIfPresent(String.self,               forKey: .hostContactInfo)
+        hostMotivation     = try c.decodeIfPresent(HostMotivation.self,       forKey: .hostMotivation)    ?? .open
+        sleeping           = try c.decode(Sleeping.self,                       forKey: .sleeping)
+        amenities          = try c.decode(Amenities.self,                      forKey: .amenities)
+        cancellationPolicy = try c.decodeIfPresent(CancellationPolicy.self,   forKey: .cancellationPolicy)
+        photoURLs          = try c.decodeIfPresent([String].self,              forKey: .photoURLs)
+        deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)
     }
 }

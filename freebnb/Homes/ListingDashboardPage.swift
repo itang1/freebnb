@@ -175,15 +175,15 @@ struct ListingDashboardPage: View {
 
                 HStack(spacing: 14) {
                     Label(
-                        "\(listing.numGuestRooms) room\(listing.numGuestRooms == 1 ? "" : "s")",
+                        "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")",
                         systemImage: "bed.double"
                     )
                     Label(
-                        "\(listing.maxGuests) guest\(listing.maxGuests == 1 ? "" : "s")",
+                        "\(listing.sleeping.maxGuests) guest\(listing.sleeping.maxGuests == 1 ? "" : "s")",
                         systemImage: "person.fill"
                     )
                     Label(
-                        "\(listing.maxStayDays)d max",
+                        "\(listing.sleeping.maxStayDays)d max",
                         systemImage: "calendar"
                     )
                 }
@@ -290,15 +290,19 @@ struct ListingDashboardPage: View {
         address: Address(street: "40 Cummings Rd", city: "Brighton", state: "MA", zip: "02135"),
         contactPreference: .inApp,
         hostMotivation: .eager,
-        numGuestRooms: 1, maxGuests: 2, maxStayDays: 14,
-        sleepingArrangements: ["bed": 1],
-        kidsAllowed: true, guestPetsAllowed: false, hostHasPets: false,
-        hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
-        hasMicrowave: true, hasTV: true, hasWifi: true,
-        hasPrivateGuestBathroom: false, parkingDetails: "",
-        hasInUnitLaundry: true, hasCoinLaundryNearby: false,
-        providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: true,
-        foodProvision: .some
+        sleeping: Sleeping(
+            numGuestRooms: 1, maxGuests: 2, maxStayDays: 14,
+            arrangements: ["bed": 1],
+            kidsAllowed: true, guestPetsAllowed: false, hostHasPets: false
+        ),
+        amenities: Amenities(
+            hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
+            hasMicrowave: true, hasTV: true, hasWifi: true,
+            hasPrivateGuestBathroom: false, parkingDetails: "",
+            hasInUnitLaundry: true, hasCoinLaundryNearby: false,
+            providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: true,
+            foodProvision: .some
+        )
     )
     NavigationStack {
         ListingDashboardPage(listing: home)
