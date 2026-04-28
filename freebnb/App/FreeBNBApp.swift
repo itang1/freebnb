@@ -3,8 +3,15 @@
 //  freebnb
 //
 
-import SwiftUI
+import FirebaseAuth
 import FirebaseCore
+import SwiftUI
+
+// To enable push notifications:
+// 1. Add FirebaseMessaging via Xcode → Package Dependencies
+// 2. Uncomment the import and the Messaging.messaging() calls below
+// 3. Set FreeBNBApp as UNUserNotificationCenterDelegate and MessagingDelegate
+// import FirebaseMessaging
 
 @main
 struct FreeBNBApp: App {
@@ -23,6 +30,17 @@ struct FreeBNBApp: App {
         _stayRequestStore = State(initialValue: StayRequestStore())
     }
 
+    // Called from the scene body once auth + stores are ready.
+    // Swap the body of this function for real FCM token fetching once
+    // FirebaseMessaging is linked:
+    //   Messaging.messaging().token { token, _ in
+    //       guard let token, let uid = Auth.auth().currentUser?.uid else { return }
+    //       Task { try? await userProfileStore.saveFCMToken(token) }
+    //   }
+    private func registerForPushIfNeeded() {
+        // no-op until FirebaseMessaging is linked
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -31,6 +49,7 @@ struct FreeBNBApp: App {
                 .environment(messageStore)
                 .environment(userProfileStore)
                 .environment(stayRequestStore)
+                .onAppear { registerForPushIfNeeded() }
         }
     }
 }

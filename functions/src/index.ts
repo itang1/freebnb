@@ -8,7 +8,6 @@ const db = admin.firestore();
 // ---------------------------------------------------------------------------
 // onMessageCreated
 // Sends a push notification to the recipient of a new message.
-// Fires on every new document in the `messages` collection.
 // ---------------------------------------------------------------------------
 export const onMessageCreated = functions.firestore
   .document("messages/{messageID}")
@@ -22,13 +21,14 @@ export const onMessageCreated = functions.firestore
     const recipientID = msg.participants.find((uid) => uid !== msg.senderUserID);
     if (!recipientID) return;
 
-    // Load the recipient's FCM token from their user profile.
-    const userDoc = await db.collection("users").doc(recipientID).get();
+    const [userDoc, senderDoc] = await Promise.all([
+      db.collection("users").doc(recipientID).get(),
+      db.collection("users").doc(msg.senderUserID).get(),
+    ]);
+
     const fcmToken: string | undefined = userDoc.data()?.fcmToken;
     if (!fcmToken) return;
 
-    // Load the sender's display name for the notification title.
-    const senderDoc = await db.collection("users").doc(msg.senderUserID).get();
     const senderName: string = senderDoc.data()?.displayName ?? "FreeBNB";
 
     await admin.messaging().send({
@@ -38,42 +38,88 @@ export const onMessageCreated = functions.firestore
         body: msg.text.length > 120 ? msg.text.slice(0, 120) + "…" : msg.text,
       },
       apns: {
-        payload: {
-          aps: {
-            sound: "default",
-            badge: 1,
-          },
-        },
+        payload: { aps: { sound: "default", badge: 1 } },
       },
-      data: {
-        type: "message",
-        senderUserID: msg.senderUserID,
-      },
+      data: { type: "message", senderUserID: msg.senderUserID },
     });
   });
 
 // ---------------------------------------------------------------------------
 // onUserDeleted
-// Cascade-deletes Firestore data when a Firebase Auth user is removed.
-// This is a safety net; the iOS app also soft-deletes listings client-side
-// before calling user.delete() so data disappears immediately in the UI.
+// Server-side cascade when a Firebase Auth user is removed.
+// The iOS client soft-deletes listings before calling user.delete(), so this
+// is a safety net for deletions that bypass the client (e.g. console, admin).
 // ---------------------------------------------------------------------------
 export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
   const uid = user.uid;
   const batch = db.batch();
+  const now = admin.firestore.FieldValue.serverTimestamp();
 
-  // Soft-delete all listings owned by this host.
   const listingsSnap = await db
     .collection("homes")
     .where("hostUserID", "==", uid)
     .get();
-  const now = admin.firestore.FieldValue.serverTimestamp();
   for (const doc of listingsSnap.docs) {
     batch.update(doc.ref, { deletedAt: now });
   }
 
-  // Delete the user profile document.
   batch.delete(db.collection("users").doc(uid));
-
   await batch.commit();
+});
+
+// ---------------------------------------------------------------------------
+// exportUserData (callable)
+// Returns all data we hold for the calling user: profile, listings,
+// stay requests, and message IDs. Fulfills GDPR/CCPA right-to-access.
+// Call from the app: Functions.functions().httpsCallable("exportUserData")
+// ---------------------------------------------------------------------------
+export const exportUserData = functions.https.onCall(async (_data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+
+  const [profileSnap, listingsSnap, guestRequestsSnap, hostRequestsSnap, messagesSnap] =
+    await Promise.all([
+      db.collection("users").doc(uid).get(),
+      db.collection("homes").where("hostUserID", "==", uid).get(),
+      db.collection("stayRequests").where("guestUserID", "==", uid).get(),
+      db.collection("stayRequests").where("hostUserID", "==", uid).get(),
+      db.collection("messages").where("participants", "array-contains", uid).get(),
+    ]);
+
+  return {
+    profile: profileSnap.data() ?? null,
+    listings: listingsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    stayRequestsAsGuest: guestRequestsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    stayRequestsAsHost: hostRequestsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    messageIDs: messagesSnap.docs.map((d) => d.id),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// checkMessageRate (callable, internal helper)
+// Rejects a message send if the user has exceeded 30 messages in 60 seconds.
+// The iOS client calls this before writing to Firestore; it is not a hard
+// enforcement layer — add Firestore rules or a write trigger for that.
+// ---------------------------------------------------------------------------
+const MESSAGE_RATE_LIMIT = 30;
+const MESSAGE_RATE_WINDOW_MS = 60_000;
+
+export const checkMessageRate = functions.https.onCall(async (_data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+
+  const since = admin.firestore.Timestamp.fromMillis(Date.now() - MESSAGE_RATE_WINDOW_MS);
+  const snap = await db
+    .collection("messages")
+    .where("senderUserID", "==", uid)
+    .where("timestamp", ">=", since)
+    .get();
+
+  if (snap.size >= MESSAGE_RATE_LIMIT) {
+    throw new functions.https.HttpsError(
+      "resource-exhausted",
+      "Slow down — you're sending messages too quickly."
+    );
+  }
+  return { allowed: true };
 });

@@ -14,6 +14,7 @@ struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     var displayName: String
     var email: String?
     var savedListingIDs: [String]?
+    var fcmToken: String?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
 
@@ -145,6 +146,16 @@ final class UserProfileStore {
             UserDefaults.standard.set(trimmed, forKey: UserDefaultsKey.userName)
         } catch {
             log.error("profile update error: \(error.localizedDescription, privacy: .public)")
+            throw ProfileUpdateError.underlying(error)
+        }
+    }
+
+    func saveFCMToken(_ token: String) async throws {
+        guard let userID = Auth.auth().currentUser?.uid else { return }
+        do {
+            try await repository.updateFCMToken(userID: userID, token: token)
+        } catch {
+            log.error("FCM token update error: \(error.localizedDescription, privacy: .public)")
             throw ProfileUpdateError.underlying(error)
         }
     }

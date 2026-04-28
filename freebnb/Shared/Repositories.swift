@@ -258,6 +258,7 @@ protocol UserProfileRepository: Sendable {
     func updateSavedListings(userID: String, listingIDs: [String]) async throws
     func fetchProfile(userID: String) async throws -> UserProfile?
     func deleteProfile(userID: String) async throws
+    func updateFCMToken(userID: String, token: String) async throws
 }
 
 struct FirestoreUserProfileRepository: UserProfileRepository {
@@ -314,5 +315,12 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
 
     func deleteProfile(userID: String) async throws {
         try await db.collection("users").document(userID).delete()
+    }
+
+    func updateFCMToken(userID: String, token: String) async throws {
+        try await db.collection("users").document(userID).setData([
+            "fcmToken": token,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
     }
 }

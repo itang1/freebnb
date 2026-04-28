@@ -121,4 +121,8 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
     func deleteProfile(userID: String) async throws {
         profiles.removeValue(forKey: userID)
     }
+
+    func updateFCMToken(userID: String, token: String) async throws {
+        profiles[userID]?.fcmToken = token
+    }
 }
