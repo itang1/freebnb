@@ -7,7 +7,6 @@ import SwiftUI
 
 struct YourListingsPage: View {
     @Environment(HomeStore.self) private var homeStore
-    @Environment(AuthManager.self) private var authManager
     @State private var showCreate = false
     @State private var editing: Home? = nil
     @State private var deleteTarget: Home? = nil
@@ -15,7 +14,7 @@ struct YourListingsPage: View {
     @State private var errorMessage: String?
 
     private var yourListings: [Home] {
-        homeStore.listings.filter { $0.hostUserID == authManager.userID }
+        homeStore.ownListings
     }
 
     var body: some View {
@@ -177,7 +176,6 @@ private struct ListingRow: View {
     NavigationStack {
         YourListingsPage()
             .environment(HomeStore())
-            .environment(AuthManager())
             .environment(StayRequestStore())
     }
 }
