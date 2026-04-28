@@ -243,9 +243,7 @@ struct HomesPage: View {
                         .background(Color.appTeal.opacity(0.15), in: Capsule())
                         .foregroundColor(Color.appTeal)
                 }
-                #if os(iOS) || os(tvOS) || os(visionOS)
                 .menuActionDismissBehavior(.disabled)
-                #endif
 
                 Menu {
                     Button("Default") { selectedSort = .default }

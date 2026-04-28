@@ -441,9 +441,7 @@ struct AcceptSheet: View {
                 }
             }
             .navigationTitle("Accept Request")
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }.disabled(isConfirming)

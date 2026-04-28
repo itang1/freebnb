@@ -131,9 +131,7 @@ struct ListingDashboardPage: View {
         .scrollContentBackground(.hidden)
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle("\(listing.address.city) Dashboard")
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit Listing") { showEdit = true }

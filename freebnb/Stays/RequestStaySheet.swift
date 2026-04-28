@@ -67,9 +67,7 @@ struct RequestStaySheet: View {
                 }
             }
             .navigationTitle("Request a Stay")
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

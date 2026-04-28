@@ -84,9 +84,7 @@ struct MessagingPage: View {
         }
         .background(Color.creamWhite.ignoresSafeArea())
         .navigationTitle(otherName)
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .toolbar {
             // Show the request button only when a listing is known and there
             // is no active request already in flight.
