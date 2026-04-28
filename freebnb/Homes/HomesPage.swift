@@ -160,6 +160,29 @@ struct HomesPage: View {
         return result
     }
 
+    private func filterBinding(_ filter: FilterOption) -> Binding<Bool> {
+        Binding(
+            get: { selectedFilters.contains(filter) },
+            set: { isOn in
+                if isOn { selectedFilters.insert(filter) }
+                else { selectedFilters.remove(filter) }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func listingRow(_ listing: Home) -> some View {
+        Button {
+            onSelectHome(listing)
+        } label: {
+            HomeCard(listing: listing)
+        }
+        .buttonStyle(CardButtonStyle())
+        .accessibilityLabel("\(listing.hostName) in \(listing.address.city), \(listing.address.state)")
+        .accessibilityValue(accessibilitySummary(for: listing))
+        .accessibilityHint("Opens listing details")
+    }
+
     private func recomputeFiltered(from shuffled: [Home]) -> [Home] {
         let query = citySearch.trimmingCharacters(in: .whitespaces).lowercased()
         let savedIDs = userProfileStore.currentProfile?.savedIDs ?? []
@@ -218,69 +241,9 @@ struct HomesPage: View {
             }
 
             HStack {
-                Menu {
-                    ForEach(FilterCategory.allCases, id: \.self) { category in
-                        Section(category.rawValue) {
-                            ForEach(FilterOption.options(for: category)) { filter in
-                                Toggle(
-                                    filter.label,
-                                    isOn: Binding(
-                                        get: { selectedFilters.contains(filter) },
-                                        set: { isOn in
-                                            if isOn { selectedFilters.insert(filter) }
-                                            else { selectedFilters.remove(filter) }
-                                        }
-                                    )
-                                )
-                            }
-                        }
-                    }
-                    Divider()
-                    Button("Clear Filters") { selectedFilters.removeAll() }
-                } label: {
-                    Label(filterLabel, systemImage: "line.3.horizontal.decrease")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.appTeal.opacity(0.15), in: Capsule())
-                        .foregroundColor(Color.appTeal)
-                }
-                .menuActionDismissBehavior(.disabled)
-
-                Menu {
-                    Button("Default") { selectedSort = .default }
-                    Button("Most Eager to Host") { selectedSort = .mostEager }
-                    Button("Most Flexible Cancellation") { selectedSort = .mostFlexible }
-                    Button("Most Rooms") { selectedSort = .mostRooms }
-                    Button("Most Guests") { selectedSort = .mostGuests }
-                    Button("Most Days") { selectedSort = .mostDays }
-                    Button("Most Private") { selectedSort = .fewestGuests }
-                    Button("Most Amenities") { selectedSort = .mostAmenities }
-                    Button("City (A→Z)") { selectedSort = .cityAZ }
-                } label: {
-                    Label(selectedSort == .default ? "Sort" : "Sort: \(selectedSort.rawValue)", systemImage: "arrow.up.arrow.down")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.appTeal.opacity(0.15), in: Capsule())
-                        .foregroundColor(Color.appTeal)
-                }
-                .transaction { t in t.animation = nil }
-
-                Button {
-                    showSavedOnly.toggle()
-                } label: {
-                    Label("Saved", systemImage: showSavedOnly ? "bookmark.fill" : "bookmark")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(showSavedOnly ? Color.appTeal.opacity(0.3) : Color.appTeal.opacity(0.15), in: Capsule())
-                        .foregroundColor(Color.appTeal)
-                }
-
+                filterMenu
+                sortMenu
+                savedButton
                 Spacer()
             }
 
@@ -334,15 +297,7 @@ struct HomesPage: View {
             ScrollView {
                 LazyVStack(spacing: 15) {
                     ForEach(filteredListings) { listing in
-                        Button {
-                            onSelectHome(listing)
-                        } label: {
-                            HomeCard(listing: listing)
-                        }
-                        .buttonStyle(CardButtonStyle())
-                        .accessibilityLabel("\(listing.hostName) in \(listing.address.city), \(listing.address.state)")
-                        .accessibilityValue(accessibilitySummary(for: listing))
-                        .accessibilityHint("Opens listing details")
+                        listingRow(listing)
                     }
 
                     if canLoadMore && !filteredListings.isEmpty {
@@ -475,6 +430,67 @@ struct HomesPage: View {
             emptyStateMessage
         }
         .padding()
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            ForEach(FilterCategory.allCases, id: \.self) { category in
+                Section(category.rawValue) {
+                    ForEach(FilterOption.options(for: category)) { filter in
+                        Toggle(filter.label, isOn: filterBinding(filter))
+                    }
+                }
+            }
+            Divider()
+            Button("Clear Filters") { selectedFilters.removeAll() }
+        } label: {
+            Label(filterLabel, systemImage: "line.3.horizontal.decrease")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.appTeal.opacity(0.15), in: Capsule())
+                .foregroundColor(Color.appTeal)
+        }
+        .menuActionDismissBehavior(.disabled)
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Button("Default") { selectedSort = .default }
+            Button("Most Eager to Host") { selectedSort = .mostEager }
+            Button("Most Flexible Cancellation") { selectedSort = .mostFlexible }
+            Button("Most Rooms") { selectedSort = .mostRooms }
+            Button("Most Guests") { selectedSort = .mostGuests }
+            Button("Most Days") { selectedSort = .mostDays }
+            Button("Most Private") { selectedSort = .fewestGuests }
+            Button("Most Amenities") { selectedSort = .mostAmenities }
+            Button("City (A→Z)") { selectedSort = .cityAZ }
+        } label: {
+            let label = selectedSort == .default ? "Sort" : "Sort: \(selectedSort.rawValue)"
+            Label(label, systemImage: "arrow.up.arrow.down")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.appTeal.opacity(0.15), in: Capsule())
+                .foregroundColor(Color.appTeal)
+        }
+        .transaction { t in t.animation = nil }
+    }
+
+    private var savedButton: some View {
+        Button {
+            showSavedOnly.toggle()
+        } label: {
+            Label("Saved", systemImage: showSavedOnly ? "bookmark.fill" : "bookmark")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(showSavedOnly ? Color.appTeal.opacity(0.3) : Color.appTeal.opacity(0.15), in: Capsule())
+                .foregroundColor(Color.appTeal)
+        }
     }
 
     @ViewBuilder
