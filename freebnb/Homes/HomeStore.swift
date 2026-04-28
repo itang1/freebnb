@@ -12,6 +12,7 @@ import os
 @Observable
 final class HomeStore {
     private(set) var listings: [Home] = []
+    private(set) var ownListings: [Home] = []
     private(set) var isLoading = true
     private(set) var isLoadingMore = false
     private(set) var canLoadMore = true
@@ -24,6 +25,7 @@ final class HomeStore {
     // and `RepositoryListener.cancel()` is thread-safe per Firebase's docs
     // for `ListenerRegistration.remove()`.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
+    @ObservationIgnored nonisolated(unsafe) private var ownListingsListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("homes")
     @ObservationIgnored private let pageSize = 20
@@ -43,6 +45,7 @@ final class HomeStore {
 
     deinit {
         activeListener?.cancel()
+        ownListingsListener?.cancel()
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
@@ -51,8 +54,11 @@ final class HomeStore {
     private func restartListener(signedIn: Bool? = nil) {
         activeListener?.cancel()
         activeListener = nil
+        ownListingsListener?.cancel()
+        ownListingsListener = nil
         guard signedIn ?? (Auth.auth().currentUser != nil) else {
             listings = []
+            ownListings = []
             isLoading = false
             return
         }
@@ -63,6 +69,22 @@ final class HomeStore {
             Task { @MainActor [weak self] in
                 self?.apply(result: result)
             }
+        }
+        if let uid = Auth.auth().currentUser?.uid {
+            ownListingsListener = repository.listenToOwnListings(hostUserID: uid) { [weak self] result in
+                Task { @MainActor [weak self] in
+                    self?.applyOwnListings(result: result)
+                }
+            }
+        }
+    }
+
+    private func applyOwnListings(result: Result<[Home], Error>) {
+        switch result {
+        case .failure(let error):
+            log.error("own listings snapshot error: \(error.localizedDescription, privacy: .public)")
+        case .success(let homes):
+            ownListings = homes.filter { $0.deletedAt == nil }
         }
     }
 
@@ -94,6 +116,11 @@ final class HomeStore {
         guard canLoadMore || error != nil else { return }
         isLoadingMore = true
         if error == nil { currentLimit += pageSize }
+        restartListener(signedIn: true)
+    }
+
+    func reload() {
+        currentLimit = pageSize
         restartListener(signedIn: true)
     }
 

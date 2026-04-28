@@ -85,6 +85,7 @@ struct MessagingPage: View {
                     }
                     .padding()
                 }
+                .scrollDismissesKeyboard(.immediately)
                 .onChange(of: messages.last?.id) { _, lastID in
                     if let lastID {
                         withAnimation { proxy.scrollTo(lastID, anchor: .bottom) }

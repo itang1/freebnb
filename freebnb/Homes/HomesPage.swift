@@ -147,6 +147,7 @@ struct HomesPage: View {
     var canLoadMore: Bool = false
     var error: String? = nil
     var onLoadMore: () -> Void = {}
+    var onRefresh: () async -> Void = {}
     var onSelectHome: (Home) -> Void
 
     private func recomputeShuffled() -> [Home] {
@@ -421,6 +422,7 @@ struct HomesPage: View {
                     .padding()
                 }
             }
+            .refreshable { await onRefresh() }
         }
         .padding(30)
         .background(.creamWhite)
