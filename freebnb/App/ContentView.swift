@@ -10,17 +10,27 @@ struct ContentView: View {
     @Environment(HomeStore.self) private var homeStore
     @Environment(StayRequestStore.self) private var stayRequestStore
     @Environment(MessageStore.self) private var messageStore
+    @Environment(UserProfileStore.self) private var userProfileStore
     @AppStorage(UserDefaultsKey.hasSeenOnboarding) private var hasSeenOnboarding = false
+    @AppStorage(UserDefaultsKey.ageGateAccepted) private var ageGateAccepted = false
     @State private var showOnboarding = false
     @State private var listingsPath = NavigationPath()
 
+    private var visibleListings: [Home] {
+        let blocked = userProfileStore.currentProfile?.blockedIDs ?? []
+        guard !blocked.isEmpty else { return homeStore.listings }
+        return homeStore.listings.filter { !blocked.contains($0.hostUserID) }
+    }
+
     var body: some View {
         Group {
-            if authManager.isSignedIn {
+            if !ageGateAccepted {
+                AgeGateView()
+            } else if authManager.isSignedIn {
                 TabView {
                     NavigationStack(path: $listingsPath) {
                         HomesPage(
-                            listings: homeStore.listings,
+                            listings: visibleListings,
                             isLoading: homeStore.isLoading,
                             isLoadingMore: homeStore.isLoadingMore,
                             canLoadMore: homeStore.canLoadMore,
@@ -90,7 +100,7 @@ struct ContentView: View {
         .environment(AuthManager())
         .environment(HomeStore())
         .environment(MessageStore())
-        .environment(UserProfileStore())
+        .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
         .environment(StayRequestStore())
         .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
 }

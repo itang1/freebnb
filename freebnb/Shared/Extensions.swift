@@ -40,6 +40,7 @@ enum UserDefaultsKey {
     static let hasSeenOnboarding     = "hasSeenOnboarding"
     static let notificationsEnabled  = "notificationsEnabled"
     static let appearance            = "appearance"
+    static let ageGateAccepted       = "ageGateAccepted"
 }
 
 struct FlippedPrimaryColor: ViewModifier {
