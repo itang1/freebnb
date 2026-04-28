@@ -61,6 +61,20 @@ final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable 
         return NoopListener()
     }
 
+    func listenToConversation(
+        participants: [String],
+        limit: Int,
+        handler: @escaping @Sendable (Result<(messages: [Message], hasMore: Bool), Error>) -> Void
+    ) -> RepositoryListener {
+        let sorted = participants.sorted()
+        let filtered = messages
+            .filter { $0.participants.sorted() == sorted }
+            .sorted { ($0.timestamp ?? .distantPast) > ($1.timestamp ?? .distantPast) }
+        let hasMore = filtered.count > limit
+        handler(.success((Array(filtered.prefix(limit)), hasMore)))
+        return NoopListener()
+    }
+
     func send(_ message: Message, onError: @escaping @Sendable (Error) -> Void) throws {
         messages.append(message)
     }

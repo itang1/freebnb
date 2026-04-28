@@ -8,6 +8,14 @@
         { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
     },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participants", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
 
     {
       "collectionGroup": "stayRequests",

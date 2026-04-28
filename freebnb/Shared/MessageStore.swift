@@ -49,7 +49,13 @@ final class MessageStore {
     private(set) var pendingIDs: Set<String> = []
     private(set) var failedIDs: Set<String> = []
 
+    // Global snapshot: last few messages across all conversations (for summaries).
     private var conversations: [String: [Message]] = [:]
+    // Per-conversation snapshots opened when a thread is on screen.
+    private var threadMessages: [String: [Message]] = [:]
+    private var threadHasMore: [String: Bool] = [:]
+    private var threadLimits: [String: Int] = [:]
+
     private var failedMessages: [String: Message] = [:]
     private var currentUserID: String?
     /// Last-read message ID per conversation, persisted across launches.
@@ -64,8 +70,12 @@ final class MessageStore {
     // `Auth.removeStateDidChangeListener(_:)` are thread-safe.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
+    // Per-conversation listeners; keyed by conversationID. nonisolated(unsafe)
+    // for the same reason as activeListener above.
+    @ObservationIgnored nonisolated(unsafe) private var threadListeners: [String: RepositoryListener] = [:]
     @ObservationIgnored private let log = AppLog.logger("messaging")
-    @ObservationIgnored private let historyLimit = 200
+    @ObservationIgnored private let summaryLimit = 50
+    @ObservationIgnored private let threadPageSize = 50
 
     init(repository: MessagesRepository = FirestoreMessagesRepository()) {
         self.repository = repository
@@ -76,6 +86,7 @@ final class MessageStore {
 
     deinit {
         activeListener?.cancel()
+        for (_, listener) in threadListeners { listener.cancel() }
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
@@ -85,27 +96,32 @@ final class MessageStore {
         userIDs.sorted().joined(separator: "_")
     }
 
-    // MARK: - Listener
+    // MARK: - Global listener (conversation list)
 
     private func restartListener(userID: String?) {
         currentUserID = userID
         activeListener?.cancel()
         activeListener = nil
+        for (_, l) in threadListeners { l.cancel() }
+        threadListeners = [:]
         guard let userID else {
             conversations = [:]
+            threadMessages = [:]
+            threadHasMore = [:]
+            threadLimits = [:]
             pendingIDs = []
             failedIDs = []
             failedMessages = [:]
             return
         }
-        activeListener = repository.listenToMessages(userID: userID, limit: historyLimit) { [weak self] result in
+        activeListener = repository.listenToMessages(userID: userID, limit: summaryLimit) { [weak self] result in
             Task { @MainActor [weak self] in
-                self?.apply(result: result)
+                self?.applyGlobal(result: result)
             }
         }
     }
 
-    private func apply(result: Result<[Message], Error>) {
+    private func applyGlobal(result: Result<[Message], Error>) {
         switch result {
         case .failure(let error):
             log.error("snapshot error: \(error.localizedDescription, privacy: .public)")
@@ -117,14 +133,64 @@ final class MessageStore {
         }
     }
 
-    // MARK: - Public interface
+    // MARK: - Per-conversation listeners (thread view)
+
+    /// Call when a conversation thread appears on screen.
+    func openConversation(_ conversationID: String, participants: [String]) {
+        guard threadListeners[conversationID] == nil else { return }
+        let limit = threadPageSize
+        threadLimits[conversationID] = limit
+        startThreadListener(conversationID: conversationID, participants: participants, limit: limit)
+    }
+
+    /// Call when a conversation thread disappears from screen.
+    func closeConversation(_ conversationID: String) {
+        threadListeners[conversationID]?.cancel()
+        threadListeners.removeValue(forKey: conversationID)
+        threadMessages.removeValue(forKey: conversationID)
+        threadHasMore.removeValue(forKey: conversationID)
+        threadLimits.removeValue(forKey: conversationID)
+    }
+
+    /// Extend the thread by one page. Call when user taps "Load older messages".
+    func loadMoreMessages(_ conversationID: String, participants: [String]) {
+        guard threadHasMore[conversationID] == true else { return }
+        let newLimit = (threadLimits[conversationID] ?? threadPageSize) + threadPageSize
+        threadLimits[conversationID] = newLimit
+        threadListeners[conversationID]?.cancel()
+        startThreadListener(conversationID: conversationID, participants: participants, limit: newLimit)
+    }
+
+    func hasMoreMessages(_ conversationID: String) -> Bool {
+        threadHasMore[conversationID] ?? false
+    }
+
+    private func startThreadListener(conversationID: String, participants: [String], limit: Int) {
+        let listener = repository.listenToConversation(participants: participants, limit: limit) { [weak self] result in
+            Task { @MainActor [weak self] in
+                self?.applyThread(conversationID: conversationID, result: result)
+            }
+        }
+        threadListeners[conversationID] = listener
+    }
+
+    private func applyThread(conversationID: String, result: Result<(messages: [Message], hasMore: Bool), Error>) {
+        switch result {
+        case .failure(let error):
+            log.error("thread snapshot error \(conversationID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        case .success(let (messages, hasMore)):
+            pendingIDs.subtract(Set(messages.map { $0.id }))
+            threadMessages[conversationID] = messages
+            threadHasMore[conversationID] = hasMore
+        }
+    }
 
     // MARK: - Unread tracking
 
     /// Mark the latest message in a conversation as read.
     func markRead(conversationID: String) {
-        guard let last = conversations[conversationID]?
-            .max(by: { Self.sortKey($0) < Self.sortKey($1) }) else { return }
+        let msgs = threadMessages[conversationID] ?? conversations[conversationID] ?? []
+        guard let last = msgs.max(by: { Self.sortKey($0) < Self.sortKey($1) }) else { return }
         lastReadIDs[conversationID] = last.id
         UserDefaults.standard.set(lastReadIDs, forKey: UserDefaultsKey.lastReadMessageIDs)
     }
@@ -143,7 +209,10 @@ final class MessageStore {
 
     var conversationSummaries: [ConversationSummary] {
         guard let currentUserID else { return [] }
-        return conversations
+        // Merge global and thread data; thread data wins for conversations that are open.
+        var merged = conversations
+        for (cid, msgs) in threadMessages { merged[cid] = msgs }
+        return merged
             .compactMap { cid, messages -> ConversationSummary? in
                 guard let last = messages.max(by: { Self.sortKey($0) < Self.sortKey($1) }),
                       let otherID = last.participants.first(where: { $0 != currentUserID })
@@ -154,7 +223,8 @@ final class MessageStore {
     }
 
     func messages(for conversationID: String) -> [Message] {
-        let sent = conversations[conversationID] ?? []
+        // Prefer the per-conversation snapshot (more complete) when available.
+        let sent = threadMessages[conversationID] ?? conversations[conversationID] ?? []
         let failed = failedMessages.values.filter {
             MessageStore.conversationID(userIDs: $0.participants) == conversationID
         }

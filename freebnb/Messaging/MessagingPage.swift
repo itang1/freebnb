@@ -27,7 +27,9 @@ struct MessagingPage: View {
     private var conversationID: String {
         MessageStore.conversationID(userIDs: [currentUserID, otherUserID])
     }
+    private var participants: [String] { [currentUserID, otherUserID].sorted() }
     private var messages: [Message] { messageStore.messages(for: conversationID) }
+    private var hasMoreMessages: Bool { messageStore.hasMoreMessages(conversationID) }
     private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     /// The most recent active request between these two users, from either direction.
@@ -50,6 +52,18 @@ struct MessagingPage: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 8) {
+                        if hasMoreMessages {
+                            Button {
+                                messageStore.loadMoreMessages(conversationID, participants: participants)
+                            } label: {
+                                Label("Load older messages", systemImage: "arrow.up.circle")
+                                    .font(.subheadline)
+                                    .foregroundColor(Color.appTeal)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 8)
+                        }
+
                         if messages.isEmpty {
                             Text("Send \(otherName) a message to get started.")
                                 .font(.subheadline)
@@ -98,7 +112,11 @@ struct MessagingPage: View {
         }
         .task {
             inputFocused = true
+            messageStore.openConversation(conversationID, participants: participants)
             messageStore.markRead(conversationID: conversationID)
+        }
+        .onDisappear {
+            messageStore.closeConversation(conversationID)
         }
         .sheet(isPresented: $showRequestSheet) {
             if let listing {

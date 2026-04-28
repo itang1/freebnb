@@ -36,6 +36,48 @@ final class FirestoreListenerBox: RepositoryListener, @unchecked Sendable {
 
 private let repoLog = AppLog.logger("repository")
 
+// MARK: - Retry helper
+
+/// Retries `operation` up to `maxAttempts` times using exponential backoff
+/// with full jitter. Only retries on transient Firestore errors (unavailable,
+/// deadline exceeded, internal, resource exhausted). Gives up immediately on
+/// permission errors or other unrecoverable failures.
+func withRetry<T>(
+    maxAttempts: Int = 3,
+    baseDelay: TimeInterval = 0.5,
+    operation: @Sendable () async throws -> T
+) async throws -> T {
+    var attempt = 0
+    while true {
+        do {
+            return try await operation()
+        } catch {
+            attempt += 1
+            let isTransient = isTransientFirestoreError(error)
+            guard isTransient && attempt < maxAttempts else { throw error }
+            let cap = baseDelay * pow(2.0, Double(attempt - 1))
+            let jitter = Double.random(in: 0...cap)
+            try await Task.sleep(nanoseconds: UInt64(jitter * 1_000_000_000))
+        }
+    }
+}
+
+private func isTransientFirestoreError(_ error: Error) -> Bool {
+    let nsErr = error as NSError
+    // Firestore error codes that indicate a transient condition:
+    // 14 = unavailable, 4 = deadline exceeded, 13 = internal, 8 = resource exhausted
+    let transientCodes: Set<Int> = [4, 8, 13, 14]
+    if nsErr.domain == "FIRFirestoreErrorDomain" {
+        return transientCodes.contains(nsErr.code)
+    }
+    // Also catch NSURLErrorNetworkConnectionLost and similar URLSession errors.
+    if nsErr.domain == NSURLErrorDomain {
+        return [NSURLErrorNetworkConnectionLost, NSURLErrorTimedOut,
+                NSURLErrorNotConnectedToInternet].contains(nsErr.code)
+    }
+    return false
+}
+
 // MARK: - Homes
 
 protocol HomesRepository: Sendable {
@@ -61,10 +103,13 @@ struct FirestoreHomesRepository: HomesRepository {
         let reg = db.collection("homes")
             .order(by: FieldPath.documentID())
             .limit(to: limit)
-            .addSnapshotListener { snapshot, error in
+            .addSnapshotListener(includeMetadataChanges: true) { snapshot, error in
                 if let error { handler(.failure(error)); return }
-                let docs = snapshot?.documents ?? []
-                let homes: [Home] = docs.compactMap { doc in
+                guard let snapshot else { return }
+                // Skip an empty cached snapshot — wait for the server confirmation
+                // so the UI doesn't flash "no listings" before real data arrives.
+                if snapshot.metadata.isFromCache && snapshot.isEmpty { return }
+                let homes: [Home] = snapshot.documents.compactMap { doc in
                     do { return try doc.data(as: Home.self) }
                     catch {
                         repoLog.error("home decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -77,38 +122,46 @@ struct FirestoreHomesRepository: HomesRepository {
     }
 
     func save(_ home: Home) async throws {
-        try db.collection("homes").document(home.id).setData(from: home)
+        try await withRetry { [db] in
+            try db.collection("homes").document(home.id).setData(from: home)
+        }
     }
 
     func delete(homeID: String) async throws {
-        try await db.collection("homes").document(homeID).updateData([
-            "deletedAt": FieldValue.serverTimestamp()
-        ])
+        try await withRetry { [db] in
+            try await db.collection("homes").document(homeID).updateData([
+                "deletedAt": FieldValue.serverTimestamp()
+            ])
+        }
     }
 
     func updateHostName(userID: String, newName: String) async throws {
-        let snap = try await db.collection("homes")
-            .whereField("hostUserID", isEqualTo: userID)
-            .getDocuments()
-        guard !snap.documents.isEmpty else { return }
-        let batch = db.batch()
-        for doc in snap.documents {
-            batch.updateData(["hostName": newName], forDocument: doc.reference)
+        try await withRetry { [db] in
+            let snap = try await db.collection("homes")
+                .whereField("hostUserID", isEqualTo: userID)
+                .getDocuments()
+            guard !snap.documents.isEmpty else { return }
+            let batch = db.batch()
+            for doc in snap.documents {
+                batch.updateData(["hostName": newName], forDocument: doc.reference)
+            }
+            try await batch.commit()
         }
-        try await batch.commit()
     }
 
     func softDeleteAllListings(hostUserID: String) async throws {
-        let snap = try await db.collection("homes")
-            .whereField("hostUserID", isEqualTo: hostUserID)
-            .getDocuments()
-        guard !snap.documents.isEmpty else { return }
-        let batch = db.batch()
-        let now = Timestamp(date: Date())
-        for doc in snap.documents {
-            batch.updateData(["deletedAt": now], forDocument: doc.reference)
+        try await withRetry { [db] in
+            let snap = try await db.collection("homes")
+                .whereField("hostUserID", isEqualTo: hostUserID)
+                .getDocuments()
+            guard !snap.documents.isEmpty else { return }
+            let batch = db.batch()
+            let now = Timestamp(date: Date())
+            for doc in snap.documents {
+                batch.updateData(["deletedAt": now], forDocument: doc.reference)
+            }
+            try await batch.commit()
         }
-        try await batch.commit()
     }
 }
 
@@ -143,10 +196,22 @@ struct NoopPhotoUploader: PhotoUploader {
 // MARK: - Messages
 
 protocol MessagesRepository: Sendable {
+    /// Broad listener used to build the conversation list. Fetches the most
+    /// recent `limit` messages across all of the user's conversations.
     func listenToMessages(
         userID: String,
         limit: Int,
         handler: @escaping @Sendable (Result<[Message], Error>) -> Void
+    ) -> RepositoryListener
+
+    /// Focused listener for a single conversation thread. `participants` must
+    /// be the sorted [userA, userB] pair. Fetches the most recent `limit`
+    /// messages and calls handler with `hasMore = true` when a full page
+    /// arrived (so the caller can offer a "load older" action).
+    func listenToConversation(
+        participants: [String],
+        limit: Int,
+        handler: @escaping @Sendable (Result<(messages: [Message], hasMore: Bool), Error>) -> Void
     ) -> RepositoryListener
 
     func send(_ message: Message, onError: @escaping @Sendable (Error) -> Void) throws
@@ -176,6 +241,32 @@ struct FirestoreMessagesRepository: MessagesRepository {
                     }
                 }
                 handler(.success(messages))
+            }
+        return FirestoreListenerBox(reg)
+    }
+
+    func listenToConversation(
+        participants: [String],
+        limit: Int,
+        handler: @escaping @Sendable (Result<(messages: [Message], hasMore: Bool), Error>) -> Void
+    ) -> RepositoryListener {
+        // Fetch limit+1 to detect whether older messages exist.
+        let reg = db.collection("messages")
+            .whereField("participants", isEqualTo: participants.sorted())
+            .order(by: "timestamp", descending: true)
+            .limit(to: limit + 1)
+            .addSnapshotListener { snapshot, error in
+                if let error { handler(.failure(error)); return }
+                let docs = snapshot?.documents ?? []
+                let hasMore = docs.count > limit
+                let messages: [Message] = docs.prefix(limit).compactMap { doc in
+                    do { return try doc.data(as: Message.self) }
+                    catch {
+                        repoLog.error("conv msg decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        return nil
+                    }
+                }
+                handler(.success((messages, hasMore)))
             }
         return FirestoreListenerBox(reg)
     }
@@ -232,7 +323,9 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
     }
 
     func create(_ request: StayRequest) async throws {
-        try db.collection("stayRequests").document(request.id).setData(from: request)
+        try await withRetry { [db] in
+            try db.collection("stayRequests").document(request.id).setData(from: request)
+        }
     }
 
     func updateStatus(requestID: String, status: StayRequestStatus, hostNote: String?) async throws {
@@ -241,7 +334,9 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
             "updatedAt": FieldValue.serverTimestamp()
         ]
         if let hostNote { data["hostNote"] = hostNote }
-        try await db.collection("stayRequests").document(requestID).updateData(data)
+        try await withRetry { [db] in
+            try await db.collection("stayRequests").document(requestID).updateData(data)
+        }
     }
 }
 
@@ -290,37 +385,49 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             "updatedAt": FieldValue.serverTimestamp()
         ]
         if let email { data["email"] = email }
-        try await db.collection("users").document(userID).setData(data)
+        try await withRetry { [db] in
+            try await db.collection("users").document(userID).setData(data)
+        }
     }
 
     func updateDisplayName(userID: String, newName: String) async throws {
-        try await db.collection("users").document(userID).setData([
-            "displayName": newName,
-            "updatedAt": FieldValue.serverTimestamp()
-        ], merge: true)
+        try await withRetry { [db] in
+            try await db.collection("users").document(userID).setData([
+                "displayName": newName,
+                "updatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+        }
     }
 
     func updateSavedListings(userID: String, listingIDs: [String]) async throws {
-        try await db.collection("users").document(userID).setData([
-            "savedListingIDs": listingIDs,
-            "updatedAt": FieldValue.serverTimestamp()
-        ], merge: true)
+        try await withRetry { [db] in
+            try await db.collection("users").document(userID).setData([
+                "savedListingIDs": listingIDs,
+                "updatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+        }
     }
 
     func fetchProfile(userID: String) async throws -> UserProfile? {
-        let snap = try await db.collection("users").document(userID).getDocument()
-        guard snap.exists else { return nil }
-        return try snap.data(as: UserProfile.self)
+        try await withRetry { [db] in
+            let snap = try await db.collection("users").document(userID).getDocument()
+            guard snap.exists else { return nil }
+            return try snap.data(as: UserProfile.self)
+        }
     }
 
     func deleteProfile(userID: String) async throws {
-        try await db.collection("users").document(userID).delete()
+        try await withRetry { [db] in
+            try await db.collection("users").document(userID).delete()
+        }
     }
 
     func updateFCMToken(userID: String, token: String) async throws {
-        try await db.collection("users").document(userID).setData([
-            "fcmToken": token,
-            "updatedAt": FieldValue.serverTimestamp()
-        ], merge: true)
+        try await withRetry { [db] in
+            try await db.collection("users").document(userID).setData([
+                "fcmToken": token,
+                "updatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+        }
     }
 }

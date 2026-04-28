@@ -250,17 +250,12 @@ struct CreateListingPage: View {
 
     private var locationSection: some View {
         Section("Location") {
-            TextField("Street", text: $vm.street)
-                .textContentType(.streetAddressLine1)
-            TextField("City", text: $vm.city)
-                .textContentType(.addressCity)
-            TextField("State", text: $vm.stateField)
-                .textContentType(.addressState)
-            TextField("ZIP", text: $vm.zip)
-                .textContentType(.postalCode)
-                #if !os(macOS)
-                .keyboardType(.numbersAndPunctuation)
-                #endif
+            AddressSearchField(
+                street: $vm.street,
+                city: $vm.city,
+                state: $vm.stateField,
+                zip: $vm.zip
+            )
         }
     }
 
