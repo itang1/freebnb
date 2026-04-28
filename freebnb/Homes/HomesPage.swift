@@ -265,7 +265,7 @@ struct HomesPage: View {
                 Spacer()
 
                 let count = filteredListings.count
-                Text("\(count) home\(count == 1 ? "" : "s")")
+                Text("\(count)\(canLoadMore ? "+" : "") home\(count == 1 ? "" : "s")")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.secondary)

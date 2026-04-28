@@ -28,7 +28,7 @@ final class HomeStore {
     @ObservationIgnored nonisolated(unsafe) private var ownListingsListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("homes")
-    @ObservationIgnored private let pageSize = 20
+    @ObservationIgnored private let pageSize = 25
     @ObservationIgnored private var currentLimit: Int
 
     init(
