@@ -128,13 +128,8 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
 
 struct Sleeping: Codable, Hashable {
     var numGuestRooms: Int
-    var maxGuests: Int
-    var maxStayDays: Int
     // Firestore-compatible [String: Int] map; use sleepingCounts for a typed view.
     var arrangements: [String: Int]
-    var kidsAllowed: Bool
-    var guestPetsAllowed: Bool
-    var hostHasPets: Bool
 
     var sleepingCounts: [SleepingSurface: Int] {
         var result: [SleepingSurface: Int] = [:]
@@ -154,6 +149,13 @@ struct Sleeping: Codable, Hashable {
     }
 }
 
+struct GuestPolicy: Codable, Hashable {
+    var maxGuests: Int
+    var maxStayDays: Int
+    var kidsAllowed: Bool
+    var guestPetsAllowed: Bool
+}
+
 struct Amenities: Codable, Hashable {
     // Comfort
     var hasAC: Bool
@@ -165,6 +167,7 @@ struct Amenities: Codable, Hashable {
     var hasWifi: Bool
     // Rooms & laundry
     var hasPrivateGuestBathroom: Bool
+    var hostHasPets: Bool
     var parkingDetails: String
     var hasInUnitLaundry: Bool
     var hasCoinLaundryNearby: Bool
@@ -177,7 +180,7 @@ struct Amenities: Codable, Hashable {
 
     var count: Int {
         [hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi,
-         hasPrivateGuestBathroom, hasInUnitLaundry, hasCoinLaundryNearby,
+         hasPrivateGuestBathroom, hostHasPets, hasInUnitLaundry, hasCoinLaundryNearby,
          providesPillows, providesBlankets, providesTowels, providesToiletries]
             .filter { $0 }.count
     }
@@ -203,6 +206,7 @@ struct Home: Identifiable, Hashable, Codable {
 
     // MARK: Capacity, guest policy, and amenities
     var sleeping: Sleeping
+    var guestPolicy: GuestPolicy
     var amenities: Amenities
 
     // MARK: Cancellation policy
@@ -231,7 +235,7 @@ struct Home: Identifiable, Hashable, Codable {
     enum CodingKeys: String, CodingKey {
         case id, hostUserID, hostName, address, description
         case contactPreference, hostContactInfo, hostMotivation
-        case sleeping, amenities
+        case sleeping, guestPolicy, amenities
         case cancellationPolicy
         case photoURLs
         case deletedAt
@@ -255,6 +259,7 @@ extension Home {
         hostContactInfo    = try c.decodeIfPresent(String.self,               forKey: .hostContactInfo)
         hostMotivation     = try c.decodeIfPresent(HostMotivation.self,       forKey: .hostMotivation)    ?? .open
         sleeping           = try c.decode(Sleeping.self,                       forKey: .sleeping)
+        guestPolicy        = try c.decode(GuestPolicy.self,                    forKey: .guestPolicy)
         amenities          = try c.decode(Amenities.self,                      forKey: .amenities)
         cancellationPolicy = try c.decodeIfPresent(CancellationPolicy.self,   forKey: .cancellationPolicy)
         photoURLs          = try c.decodeIfPresent([String].self,              forKey: .photoURLs)

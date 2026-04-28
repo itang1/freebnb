@@ -31,8 +31,8 @@ struct HomeCard: View {
                 // Summary pills
                 HStack(spacing: 6) {
                     SummaryPill(icon: "door.left.hand.open", text: "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")")
-                    SummaryPill(icon: "person.fill", text: "\(listing.sleeping.maxGuests) guest\(listing.sleeping.maxGuests == 1 ? "" : "s")")
-                    SummaryPill(icon: "calendar", text: "up to \(listing.sleeping.maxStayDays) night\(listing.sleeping.maxStayDays == 1 ? "" : "s")")
+                    SummaryPill(icon: "person.fill", text: "\(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s")")
+                    SummaryPill(icon: "calendar", text: "up to \(listing.guestPolicy.maxStayDays) night\(listing.guestPolicy.maxStayDays == 1 ? "" : "s")")
                 }
                 .accessibilityElement(children: .combine)
 
@@ -40,20 +40,20 @@ struct HomeCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     // MARK: Guests, Space & Laundry
                     AmenityRow(
-                        isVisible: listing.sleeping.kidsAllowed ||
-                                   listing.sleeping.guestPetsAllowed ||
-                                   listing.sleeping.hostHasPets ||
+                        isVisible: listing.guestPolicy.kidsAllowed ||
+                                   listing.guestPolicy.guestPetsAllowed ||
+                                   listing.amenities.hostHasPets ||
                                    listing.amenities.hasPrivateGuestBathroom ||
                                    listing.amenities.hasInUnitLaundry ||
                                    listing.amenities.hasCoinLaundryNearby
                     ) {
-                        if listing.sleeping.kidsAllowed {
+                        if listing.guestPolicy.kidsAllowed {
                             ChipIcon(systemName: "figure.2.and.child.holdinghands", color: .purple, label: "Kids allowed")
                         }
-                        if listing.sleeping.guestPetsAllowed {
+                        if listing.guestPolicy.guestPetsAllowed {
                             ChipIcon(systemName: "pawprint.fill", color: .purple, label: "Guest pets allowed")
                         }
-                        if listing.sleeping.hostHasPets {
+                        if listing.amenities.hostHasPets {
                             ChipIcon(systemName: "pet.carrier.fill", color: .purple, label: "Host has pets")
                         }
                         if listing.amenities.hasPrivateGuestBathroom {
@@ -281,15 +281,12 @@ struct ChipIcon: View {
         description: "Next to the Rose Bowl.",
         contactPreference: .inApp,
         hostMotivation: .eager,
-        sleeping: Sleeping(
-            numGuestRooms: 1, maxGuests: 2, maxStayDays: 7,
-            arrangements: ["bed": 1],
-            kidsAllowed: false, guestPetsAllowed: true, hostHasPets: false
-        ),
+        sleeping: Sleeping(numGuestRooms: 1, arrangements: ["bed": 1]),
+        guestPolicy: GuestPolicy(maxGuests: 2, maxStayDays: 7, kidsAllowed: false, guestPetsAllowed: true),
         amenities: Amenities(
             hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
             hasMicrowave: true, hasTV: true, hasWifi: true,
-            hasPrivateGuestBathroom: false, parkingDetails: "Street parking",
+            hasPrivateGuestBathroom: false, hostHasPets: false, parkingDetails: "Street parking",
             hasInUnitLaundry: true, hasCoinLaundryNearby: false,
             providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: false,
             foodProvision: .some

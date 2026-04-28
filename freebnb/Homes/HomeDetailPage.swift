@@ -48,8 +48,8 @@ struct HomeDetailPage: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Guest Rooms: \(home.sleeping.numGuestRooms)")
-                    Text("Max Guests: \(home.sleeping.maxGuests)")
-                    Text("Max Stay: \(home.sleeping.maxStayDays) night\(home.sleeping.maxStayDays == 1 ? "" : "s")")
+                    Text("Max Guests: \(home.guestPolicy.maxGuests)")
+                    Text("Max Stay: \(home.guestPolicy.maxStayDays) night\(home.guestPolicy.maxStayDays == 1 ? "" : "s")")
                     if !home.sleeping.sleepingCounts.isEmpty {
                         Text("Sleeping Arrangements: \(home.sleeping.arrangementsDescription)")
                     }
@@ -61,9 +61,9 @@ struct HomeDetailPage: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Kids Allowed", available: home.sleeping.kidsAllowed)
-                    amenityRow("Guest Can Bring Pets", available: home.sleeping.guestPetsAllowed)
-                    amenityRow("Host Has Pets", available: home.sleeping.hostHasPets)
+                    amenityRow("Kids Allowed", available: home.guestPolicy.kidsAllowed)
+                    amenityRow("Guest Can Bring Pets", available: home.guestPolicy.guestPetsAllowed)
+                    amenityRow("Host Has Pets", available: home.amenities.hostHasPets)
                 }
                 .font(.subheadline)
 
@@ -381,15 +381,12 @@ struct HomeDetailPage: View {
             description: "Spots misses you!",
             contactPreference: .inApp,
             hostMotivation: .eager,
-            sleeping: Sleeping(
-                numGuestRooms: 1, maxGuests: 2, maxStayDays: 14,
-                arrangements: ["bed": 1],
-                kidsAllowed: true, guestPetsAllowed: false, hostHasPets: true
-            ),
+            sleeping: Sleeping(numGuestRooms: 1, arrangements: ["bed": 1]),
+            guestPolicy: GuestPolicy(maxGuests: 2, maxStayDays: 14, kidsAllowed: true, guestPetsAllowed: false),
             amenities: Amenities(
                 hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
                 hasMicrowave: true, hasTV: true, hasWifi: true,
-                hasPrivateGuestBathroom: false, parkingDetails: "Street parking",
+                hasPrivateGuestBathroom: false, hostHasPets: true, parkingDetails: "Street parking",
                 hasInUnitLaundry: true, hasCoinLaundryNearby: false,
                 providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: true,
                 foodProvision: .all

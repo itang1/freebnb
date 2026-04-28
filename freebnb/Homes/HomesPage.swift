@@ -70,9 +70,9 @@ extension FilterOption {
         // Guests & Space
         FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.sleeping.numGuestRooms > 0 },
         FilterOption(id: "sleepingBed", label: "Guest has Bed", category: .guestsAndSpace) { ($0.sleeping.sleepingCounts[.bed] ?? 0) > 0 },
-        .bool("kidsAllowed", "Kids Allowed", .guestsAndSpace, \.sleeping.kidsAllowed),
-        .bool("guestPetsAllowed", "Guest Can Bring Pets", .guestsAndSpace, \.sleeping.guestPetsAllowed),
-        .bool("hostHasPets", "Host Has Pets", .guestsAndSpace, \.sleeping.hostHasPets),
+        .bool("kidsAllowed", "Kids Allowed", .guestsAndSpace, \.guestPolicy.kidsAllowed),
+        .bool("guestPetsAllowed", "Guest Can Bring Pets", .guestsAndSpace, \.guestPolicy.guestPetsAllowed),
+        .bool("hostHasPets", "Host Has Pets", .guestsAndSpace, \.amenities.hostHasPets),
 
         // Amenities
         .bool("ac", "Air Conditioning", .amenities, \.amenities.hasAC),
@@ -168,10 +168,10 @@ struct HomesPage: View {
         switch selectedSort {
         case .mostEager:     return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
         case .mostFlexible:  return result.sorted { ($0.cancellationPolicy ?? .flexible).flexibilityRank > ($1.cancellationPolicy ?? .flexible).flexibilityRank }
-        case .mostDays:      return result.sorted { $0.sleeping.maxStayDays > $1.sleeping.maxStayDays }
-        case .mostGuests:    return result.sorted { $0.sleeping.maxGuests > $1.sleeping.maxGuests }
+        case .mostDays:      return result.sorted { $0.guestPolicy.maxStayDays > $1.guestPolicy.maxStayDays }
+        case .mostGuests:    return result.sorted { $0.guestPolicy.maxGuests > $1.guestPolicy.maxGuests }
         case .mostRooms:     return result.sorted { $0.sleeping.numGuestRooms > $1.sleeping.numGuestRooms }
-        case .fewestGuests:  return result.sorted { $0.sleeping.maxGuests < $1.sleeping.maxGuests }
+        case .fewestGuests:  return result.sorted { $0.guestPolicy.maxGuests < $1.guestPolicy.maxGuests }
         case .mostAmenities: return result.sorted { $0.amenities.count > $1.amenities.count }
         case .cityAZ:        return result.sorted { $0.address.city < $1.address.city }
         default:             return result
@@ -477,8 +477,8 @@ struct HomesPage: View {
 
     private func accessibilitySummary(for listing: Home) -> String {
         let rooms = "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")"
-        let guests = "\(listing.sleeping.maxGuests) guest\(listing.sleeping.maxGuests == 1 ? "" : "s")"
-        let nights = "up to \(listing.sleeping.maxStayDays) night\(listing.sleeping.maxStayDays == 1 ? "" : "s")"
+        let guests = "\(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s")"
+        let nights = "up to \(listing.guestPolicy.maxStayDays) night\(listing.guestPolicy.maxStayDays == 1 ? "" : "s")"
         return "\(rooms), \(guests), \(nights)"
     }
 }

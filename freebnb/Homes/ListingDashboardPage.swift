@@ -177,11 +177,11 @@ struct ListingDashboardPage: View {
                         systemImage: "bed.double"
                     )
                     Label(
-                        "\(listing.sleeping.maxGuests) guest\(listing.sleeping.maxGuests == 1 ? "" : "s")",
+                        "\(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s")",
                         systemImage: "person.fill"
                     )
                     Label(
-                        "\(listing.sleeping.maxStayDays)d max",
+                        "\(listing.guestPolicy.maxStayDays)d max",
                         systemImage: "calendar"
                     )
                 }
@@ -288,15 +288,12 @@ struct ListingDashboardPage: View {
         address: Address(street: "40 Cummings Rd", city: "Brighton", state: "MA", zip: "02135"),
         contactPreference: .inApp,
         hostMotivation: .eager,
-        sleeping: Sleeping(
-            numGuestRooms: 1, maxGuests: 2, maxStayDays: 14,
-            arrangements: ["bed": 1],
-            kidsAllowed: true, guestPetsAllowed: false, hostHasPets: false
-        ),
+        sleeping: Sleeping(numGuestRooms: 1, arrangements: ["bed": 1]),
+        guestPolicy: GuestPolicy(maxGuests: 2, maxStayDays: 14, kidsAllowed: true, guestPetsAllowed: false),
         amenities: Amenities(
             hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
             hasMicrowave: true, hasTV: true, hasWifi: true,
-            hasPrivateGuestBathroom: false, parkingDetails: "",
+            hasPrivateGuestBathroom: false, hostHasPets: false, parkingDetails: "",
             hasInUnitLaundry: true, hasCoinLaundryNearby: false,
             providesPillows: true, providesBlankets: true, providesTowels: true, providesToiletries: true,
             foodProvision: .some

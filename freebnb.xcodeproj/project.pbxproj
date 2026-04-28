@@ -39,8 +39,8 @@
 		FC3EE6B62E3360ED004B2E1B /* freebnb.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = freebnb.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC3EE6C42E3360EE004B2E1B /* freebnbTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = freebnbTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC3EE6CE2E3360EE004B2E1B /* freebnbUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = freebnbUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		FCBB00012FA000000000BB01 /* Config.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Config.Debug.xcconfig; sourceTree = "<group>"; };
-		FCBB00022FA000000000BB01 /* Config.Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Config.Release.xcconfig; sourceTree = "<group>"; };
+		FCBB00012FA000000000BB01 /* Config/Config.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Config.Debug.xcconfig; sourceTree = "<group>"; };
+		FCBB00022FA000000000BB01 /* Config/Config.Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Config.Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -101,8 +101,8 @@
 				FC3EE6D12E3360EE004B2E1B /* freebnbUITests */,
 				FC3EE6B72E3360ED004B2E1B /* Products */,
 				FC38E3892E382803000906CA /* .gitignore */,
-				FCBB00012FA000000000BB01 /* Config.Debug.xcconfig */,
-				FCBB00022FA000000000BB01 /* Config.Release.xcconfig */,
+				FCBB00012FA000000000BB01 /* Config/Config.Debug.xcconfig */,
+				FCBB00022FA000000000BB01 /* Config/Config.Release.xcconfig */,
 				FCA1F5742F94741C00045A12 /* Frameworks */,
 			);
 			sourceTree = "<group>";
@@ -432,7 +432,7 @@
 		};
 		FC3EE6D92E3360EE004B2E1B /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = FCBB00012FA000000000BB01 /* Config.Debug.xcconfig */;
+			baseConfigurationReference = FCBB00012FA000000000BB01 /* Config/Config.Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -442,18 +442,18 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation" = YES;
-				"INFOPLIST_KEY_UIStatusBarStyle" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				SDKROOT = iphoneos;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.pastureraised.freebnb;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = minimal;
@@ -464,7 +464,7 @@
 		};
 		FC3EE6DA2E3360EE004B2E1B /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = FCBB00022FA000000000BB01 /* Config.Release.xcconfig */;
+			baseConfigurationReference = FCBB00022FA000000000BB01 /* Config/Config.Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -474,18 +474,18 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation" = YES;
-				"INFOPLIST_KEY_UIStatusBarStyle" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				SDKROOT = iphoneos;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.pastureraised.freebnb;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = minimal;

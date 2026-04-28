@@ -158,9 +158,9 @@ private struct ListingRow: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 HStack(spacing: 6) {
-                    Label("\(listing.sleeping.maxGuests) guest\(listing.sleeping.maxGuests == 1 ? "" : "s")", systemImage: "person.fill")
+                    Label("\(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s")", systemImage: "person.fill")
                     Text("·")
-                    Label("\(listing.sleeping.maxStayDays) night\(listing.sleeping.maxStayDays == 1 ? "" : "s") max", systemImage: "calendar")
+                    Label("\(listing.guestPolicy.maxStayDays) night\(listing.guestPolicy.maxStayDays == 1 ? "" : "s") max", systemImage: "calendar")
                 }
                 .font(.caption)
                 .foregroundColor(.secondary)

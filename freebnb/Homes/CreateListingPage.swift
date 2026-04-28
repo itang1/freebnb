@@ -68,12 +68,12 @@ final class CreateListingViewModel {
         stateField = editing?.address.state ?? ""
         zip = editing?.address.zip ?? ""
         numGuestRooms = editing?.sleeping.numGuestRooms ?? 1
-        maxGuests = editing?.sleeping.maxGuests ?? 2
-        maxStayDays = editing?.sleeping.maxStayDays ?? 7
+        maxGuests = editing?.guestPolicy.maxGuests ?? 2
+        maxStayDays = editing?.guestPolicy.maxStayDays ?? 7
         sleepingCounts = editing?.sleeping.sleepingCounts ?? [:]
-        kidsAllowed = editing?.sleeping.kidsAllowed ?? true
-        guestPetsAllowed = editing?.sleeping.guestPetsAllowed ?? false
-        hostHasPets = editing?.sleeping.hostHasPets ?? false
+        kidsAllowed = editing?.guestPolicy.kidsAllowed ?? true
+        guestPetsAllowed = editing?.guestPolicy.guestPetsAllowed ?? false
+        hostHasPets = editing?.amenities.hostHasPets ?? false
         hasAC = editing?.amenities.hasAC ?? false
         hasHeating = editing?.amenities.hasHeating ?? false
         hasKitchen = editing?.amenities.hasKitchen ?? false
@@ -136,12 +136,13 @@ final class CreateListingViewModel {
             hostMotivation: hostMotivation,
             sleeping: Sleeping(
                 numGuestRooms: numGuestRooms,
+                arrangements: sleepingRaw
+            ),
+            guestPolicy: GuestPolicy(
                 maxGuests: maxGuests,
                 maxStayDays: maxStayDays,
-                arrangements: sleepingRaw,
                 kidsAllowed: kidsAllowed,
-                guestPetsAllowed: guestPetsAllowed,
-                hostHasPets: hostHasPets
+                guestPetsAllowed: guestPetsAllowed
             ),
             amenities: Amenities(
                 hasAC: hasAC,
@@ -152,6 +153,7 @@ final class CreateListingViewModel {
                 hasTV: hasTV,
                 hasWifi: hasWifi,
                 hasPrivateGuestBathroom: hasPrivateGuestBathroom,
+                hostHasPets: hostHasPets,
                 parkingDetails: parkingDetails.trimmingCharacters(in: .whitespacesAndNewlines),
                 hasInUnitLaundry: hasInUnitLaundry,
                 hasCoinLaundryNearby: hasCoinLaundryNearby,
