@@ -21,12 +21,19 @@ struct ContentView: View {
         let myID = authManager.userID
         let blocked = userProfileStore.currentProfile?.blockedIDs ?? []
         let friendIDs = Set(friendStore.friendEdges.map { $0.otherUserID(relativeTo: myID) })
-        return homeStore.listings.filter { home in
+        let filtered = homeStore.listings.filter { home in
             guard !blocked.contains(home.hostUserID) else { return false }
             if home.visibility == .friendsOnly {
                 return home.hostUserID == myID || friendIDs.contains(home.hostUserID)
             }
             return true
+        }
+        // Surface friends' listings first, then own listings, then everyone else.
+        return filtered.sorted { a, b in
+            let aIsFriend = friendIDs.contains(a.hostUserID) || a.hostUserID == myID
+            let bIsFriend = friendIDs.contains(b.hostUserID) || b.hostUserID == myID
+            if aIsFriend != bIsFriend { return aIsFriend }
+            return false
         }
     }
 
