@@ -143,6 +143,16 @@ enum ListingVisibility: String, Codable, CaseIterable, Hashable, Sendable {
     }
 }
 
+struct DateRange: Codable, Hashable, Identifiable, Sendable {
+    var start: Date
+    var end: Date
+    var id: String { "\(start.timeIntervalSince1970)-\(end.timeIntervalSince1970)" }
+
+    func overlaps(checkIn: Date, checkOut: Date) -> Bool {
+        checkIn < end && checkOut > start
+    }
+}
+
 // MARK: - Nested types
 
 struct Sleeping: Codable, Hashable {
@@ -238,6 +248,11 @@ struct Home: Identifiable, Hashable, Codable {
     // cleanly. Access through `photos` for a non-optional view.
     var photoURLs: [String]? = nil
 
+    // MARK: Availability
+    // Nil or empty means fully available. Host marks date ranges as blocked;
+    // guests cannot request stays that overlap any blocked range.
+    var blockedDateRanges: [DateRange]? = nil
+
     // MARK: Location coordinates
     // Geocoded at save time. Nil for listings created before this field was added.
     var latitude: Double? = nil
@@ -267,6 +282,7 @@ struct Home: Identifiable, Hashable, Codable {
         case sleeping, guestPolicy, amenities
         case cancellationPolicy
         case photoURLs
+        case blockedDateRanges
         case latitude, longitude
         case visibility
         case deletedAt
@@ -292,9 +308,10 @@ extension Home {
         sleeping           = try c.decode(Sleeping.self,                       forKey: .sleeping)
         guestPolicy        = try c.decode(GuestPolicy.self,                    forKey: .guestPolicy)
         amenities          = try c.decode(Amenities.self,                      forKey: .amenities)
-        cancellationPolicy = try c.decodeIfPresent(CancellationPolicy.self,    forKey: .cancellationPolicy)
-        photoURLs          = try c.decodeIfPresent([String].self,             forKey: .photoURLs)
-        latitude           = try c.decodeIfPresent(Double.self,               forKey: .latitude)
+        cancellationPolicy  = try c.decodeIfPresent(CancellationPolicy.self,  forKey: .cancellationPolicy)
+        photoURLs           = try c.decodeIfPresent([String].self,            forKey: .photoURLs)
+        blockedDateRanges   = try c.decodeIfPresent([DateRange].self,         forKey: .blockedDateRanges)
+        latitude            = try c.decodeIfPresent(Double.self,              forKey: .latitude)
         longitude          = try c.decodeIfPresent(Double.self,               forKey: .longitude)
         visibility         = try c.decodeIfPresent(ListingVisibility.self,    forKey: .visibility)
         deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)

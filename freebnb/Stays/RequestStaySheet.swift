@@ -27,8 +27,12 @@ struct RequestStaySheet: View {
         max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
     }
 
+    private var blockedConflict: DateRange? {
+        listing.blockedDateRanges?.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
+    }
+
     private var canSend: Bool {
-        !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays
+        !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays && blockedConflict == nil
     }
 
     var body: some View {
@@ -48,6 +52,12 @@ struct RequestStaySheet: View {
                     }
                     if nights > listing.guestPolicy.maxStayDays {
                         Label("Max stay is \(listing.guestPolicy.maxStayDays) nights", systemImage: "exclamationmark.circle")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                    if let conflict = blockedConflict {
+                        let f = AppDateFormatters.shortDay
+                        Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
                             .font(.caption)
                             .foregroundColor(.red)
                     }

@@ -19,6 +19,7 @@ struct ListingDashboardPage: View {
     @State private var respondingTo: StayRequest?
     @State private var actionError: String?
     @State private var showEdit = false
+    @State private var showAvailability = false
     @State private var showPast = false
 
     // MARK: - Derived data
@@ -133,6 +134,11 @@ struct ListingDashboardPage: View {
         .navigationTitle("\(listing.address.city) Dashboard")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .secondaryAction) {
+                Button("Availability") { showAvailability = true }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(Color.appTeal)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit Listing") { showEdit = true }
                     .font(.subheadline.weight(.medium))
@@ -141,6 +147,9 @@ struct ListingDashboardPage: View {
         }
         .sheet(isPresented: $showEdit) {
             CreateListingPage(editing: listing)
+        }
+        .sheet(isPresented: $showAvailability) {
+            AvailabilityEditorView(listing: listing)
         }
         .sheet(item: $respondingTo) { req in
             AcceptSheet(request: req) { hostNote in
