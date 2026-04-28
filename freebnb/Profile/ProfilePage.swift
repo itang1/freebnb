@@ -105,19 +105,33 @@ struct ProfilePage: View {
                 .sectionCard()
                 .padding(.bottom, 20)
 
-                if authManager.authMethod != .guest {
-                    VStack(spacing: 10) {
-                        Button(role: .destructive) {
-                            authManager.signOut()
-                        } label: {
-                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.red.opacity(0.08))
-                                .foregroundColor(.red)
-                                .cornerRadius(12)
-                        }
+                #if DEBUG
+                sectionLabel("Dev")
+                VStack(spacing: 0) {
+                    SettingsRow(icon: "envelope", label: "Sign in as dev@freebnb.test") {
+                        authManager.signInWithEmail("dev@freebnb.test", password: "***REDACTED***")
+                    }
+                }
+                .sectionCard()
+                .padding(.bottom, 20)
+                #endif
 
+                VStack(spacing: 10) {
+                    Button(role: .destructive) {
+                        authManager.signOut()
+                    } label: {
+                        Label(
+                            authManager.authMethod == .guest ? "Sign Out (End Guest Session)" : "Sign Out",
+                            systemImage: "rectangle.portrait.and.arrow.right"
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red.opacity(0.08))
+                        .foregroundColor(.red)
+                        .cornerRadius(12)
+                    }
+
+                    if authManager.authMethod != .guest {
                         Button(role: .destructive) {
                             showDeleteConfirm = true
                         } label: {
@@ -127,9 +141,9 @@ struct ProfilePage: View {
                         }
                         .padding(.top, 2)
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 24)
                 }
+                .padding(.horizontal)
+                .padding(.bottom, 24)
             }
             .padding(.top, 16)
             .frame(maxWidth: 500)

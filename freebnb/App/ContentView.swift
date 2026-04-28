@@ -46,13 +46,6 @@ struct ContentView: View {
                     .badge(stayRequestStore.pendingStaysTabCount)
 
                     NavigationStack {
-                        YourListingsPage()
-                    }
-                    .tabItem {
-                        Label("Your Listings", systemImage: "house.fill")
-                    }
-
-                    NavigationStack {
                         MessagesTab(listings: homeStore.listings)
                     }
                     .tabItem {

@@ -15,8 +15,10 @@ struct StaysTab: View {
     @Environment(HomeStore.self) private var homeStore
     @State private var respondingTo: StayRequest?
     @State private var actionError: String?
-
+    @State private var selectedTab: StaysTabSelection = .trips
     @State private var showPast = false
+
+    enum StaysTabSelection { case trips, listings }
 
     // Outgoing (guest / traveler)
     private var pendingOut:  [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .pending  } }
@@ -36,6 +38,35 @@ struct StaysTab: View {
 
     var body: some View {
         Group {
+            if selectedTab == .listings {
+                YourListingsPage()
+            } else {
+                tripsView
+            }
+        }
+        .navigationTitle("Stays")
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("", selection: $selectedTab) {
+                    Text("Trips").tag(StaysTabSelection.trips)
+                    Text("Listings").tag(StaysTabSelection.listings)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+            }
+        }
+        .background(Color.creamWhite.ignoresSafeArea())
+        .sheet(item: $respondingTo) { req in
+            AcceptSheet(request: req) { hostNote in
+                await accept(req, hostNote: hostNote)
+            }
+        }
+    }
+
+    // MARK: - Trips view
+
+    private var tripsView: some View {
+        Group {
             if let error = requestStore.listenerError {
                 ContentUnavailableView {
                     Label("Couldn't load stays", systemImage: "exclamationmark.triangle")
@@ -51,7 +82,7 @@ struct StaysTab: View {
                 .background(Color.creamWhite.ignoresSafeArea())
             } else if !hasAny {
                 ContentUnavailableView {
-                    Label("No stays yet", systemImage: "suitcase")
+                    Label("No trips yet", systemImage: "suitcase")
                         .foregroundStyle(Color.appTeal)
                 } description: {
                     Text("Open a listing, message the host, and request to stay. Your trips appear here.")
@@ -67,7 +98,6 @@ struct StaysTab: View {
                         }
                     }
 
-                    // MARK: Active outgoing (your trips)
                     if !pendingOut.isEmpty {
                         Section("Waiting to hear back") {
                             ForEach(pendingOut, id: \.id) { req in
@@ -81,7 +111,6 @@ struct StaysTab: View {
                         }
                     }
 
-                    // MARK: Active incoming (your hosting)
                     if !pendingIn.isEmpty {
                         Section("Needs your response") {
                             ForEach(pendingIn, id: \.id) { req in
@@ -100,7 +129,6 @@ struct StaysTab: View {
                         }
                     }
 
-                    // MARK: Past (collapsed by default)
                     if hasPast {
                         Section {
                             Button {
@@ -128,13 +156,6 @@ struct StaysTab: View {
                 }
                 .scrollContentBackground(.hidden)
                 .background(Color.creamWhite.ignoresSafeArea())
-            }
-        }
-        .navigationTitle("Stays")
-        .background(Color.creamWhite.ignoresSafeArea())
-        .sheet(item: $respondingTo) { req in
-            AcceptSheet(request: req) { hostNote in
-                await accept(req, hostNote: hostNote)
             }
         }
     }

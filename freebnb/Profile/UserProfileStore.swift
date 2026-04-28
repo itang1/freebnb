@@ -64,7 +64,10 @@ final class UserProfileStore {
 
         let userID = user.uid
         let email = user.email
-        let seedName = UserDefaults.standard.string(forKey: UserDefaultsKey.userName) ?? user.displayName ?? ""
+        let rawSeed = UserDefaults.standard.string(forKey: UserDefaultsKey.userName) ?? user.displayName ?? ""
+        let seedName = rawSeed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? (user.email.flatMap { $0.components(separatedBy: "@").first } ?? "FreeBNB User")
+            : rawSeed
 
         activeListener = repository.listenToCurrentProfile(userID: userID) { [weak self] result in
             Task { @MainActor [weak self] in

@@ -3,6 +3,7 @@
 //  freebnb
 //
 
+import FirebaseAuth
 import Foundation
 import Observation
 import os
@@ -23,6 +24,7 @@ final class HomeStore {
     // and `RepositoryListener.cancel()` is thread-safe per Firebase's docs
     // for `ListenerRegistration.remove()`.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
+    @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("homes")
     @ObservationIgnored private let pageSize = 20
     @ObservationIgnored private var currentLimit: Int
@@ -34,15 +36,27 @@ final class HomeStore {
         self.repository = repository
         self.photoUploader = photoUploader
         self.currentLimit = pageSize
-        restartListener()
+        authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            Task { @MainActor in self?.restartListener(signedIn: user != nil) }
+        }
     }
 
-    deinit { activeListener?.cancel() }
+    deinit {
+        activeListener?.cancel()
+        if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
+    }
 
     // MARK: - Paginated listener
 
-    private func restartListener() {
+    private func restartListener(signedIn: Bool? = nil) {
         activeListener?.cancel()
+        activeListener = nil
+        guard signedIn ?? (Auth.auth().currentUser != nil) else {
+            listings = []
+            isLoading = false
+            return
+        }
+        isLoading = true
         // Fetch one past the limit so we can tell "page full, more exist" apart
         // from "page full, nothing more" without an extra round trip.
         activeListener = repository.listenToListings(limit: currentLimit + 1) { [weak self] result in
@@ -80,7 +94,7 @@ final class HomeStore {
         guard canLoadMore || error != nil else { return }
         isLoadingMore = true
         if error == nil { currentLimit += pageSize }
-        restartListener()
+        restartListener(signedIn: true)
     }
 
     // MARK: - Writes

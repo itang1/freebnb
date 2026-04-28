@@ -78,6 +78,7 @@ struct WelcomePage: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
+
                 }
                 .padding(.bottom, 20)
             }

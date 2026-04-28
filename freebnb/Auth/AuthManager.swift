@@ -155,6 +155,23 @@ final class AuthManager {
         }
     }
 
+    // MARK: - Debug sign-in (simulator / development only)
+
+    #if DEBUG
+    func signInWithEmail(_ email: String, password: String) {
+        Task { @MainActor in
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                _ = try await Auth.auth().signIn(withEmail: email, password: password)
+            } catch {
+                log.error("debug sign in failed: \(error.localizedDescription, privacy: .public)")
+                authError = .signInFailed
+            }
+        }
+    }
+    #endif
+
     // MARK: - Sign out / delete
 
     func signOut() {
