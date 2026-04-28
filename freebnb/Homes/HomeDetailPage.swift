@@ -19,6 +19,9 @@ struct HomeDetailPage: View {
     @State private var geocodeTask: Task<Void, Never>?
     @State private var showReport = false
     @State private var showBlockConfirm = false
+    // Bridge @Observable → @State so the toolbar re-renders reliably.
+    @State private var isListingSaved = false
+    @State private var saveError: String?
 
     private enum MapState {
         case loading
@@ -29,20 +32,24 @@ struct HomeDetailPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // MARK: Host motivation
-                HStack(spacing: 5) {
-                    Image(systemName: home.hostMotivation.iconName)
-                        .font(.caption2)
-                    Text(home.hostMotivation.displayName)
-                        .font(.caption)
-                        .fontWeight(.medium)
+                // MARK: Host motivation + trust signals
+                HStack(spacing: 8) {
+                    HStack(spacing: 5) {
+                        Image(systemName: home.hostMotivation.iconName)
+                            .font(.caption2)
+                        Text(home.hostMotivation.displayName)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(home.hostMotivation.tintColor)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(home.hostMotivation.tintColor.opacity(0.12))
+                    .clipShape(Capsule())
+                    .accessibilityLabel("Host motivation: \(home.hostMotivation.displayName)")
+
+                    hostTrustSignals
                 }
-                .foregroundColor(home.hostMotivation.tintColor)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(home.hostMotivation.tintColor.opacity(0.12))
-                .clipShape(Capsule())
-                .accessibilityLabel("Host motivation: \(home.hostMotivation.displayName)")
 
                 // MARK: Details
                 Text("Details")
@@ -149,31 +156,7 @@ struct HomeDetailPage: View {
                 if authManager.userID != home.hostUserID {
                     Text("Contact Host")
                         .font(.headline)
-                    hostTrustSignals
                     contactSection
-                }
-
-                if authManager.authMethod == .guest {
-                    Label("Sign in to save listings", systemImage: "bookmark")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.secondary.opacity(0.08))
-                        .cornerRadius(10)
-                } else {
-                    let saved = userProfileStore.isSaved(home.id)
-                    Button {
-                        Task { try? await userProfileStore.toggleSavedListing(home.id) }
-                    } label: {
-                        Label(saved ? "Saved" : "Save listing", systemImage: saved ? "bookmark.fill" : "bookmark")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(saved ? Color.appTeal.opacity(0.15) : Color.secondary.opacity(0.08))
-                            .foregroundColor(saved ? Color.appTeal : .primary)
-                            .cornerRadius(10)
-                    }
-                    .buttonStyle(.plain)
                 }
 
                 Spacer(minLength: 10)
@@ -196,39 +179,73 @@ struct HomeDetailPage: View {
                         .cornerRadius(10)
                 }
                 .disabled(mapState != .loaded)
+
+                if authManager.userID != home.hostUserID {
+                    Divider().padding(.vertical, 8)
+                    HStack(spacing: 24) {
+                        Button {
+                            showReport = true
+                        } label: {
+                            Label("Report listing", systemImage: "flag")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showBlockConfirm = true
+                        } label: {
+                            let blocked = userProfileStore.isBlocked(home.hostUserID)
+                            Label(blocked ? "Unblock \(home.hostName)" : "Block \(home.hostName)",
+                                  systemImage: blocked ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .padding()
         }
-        .onAppear(perform: startGeocoding)
+        .onAppear {
+            startGeocoding()
+            isListingSaved = userProfileStore.isSaved(home.id)
+        }
+        .onChange(of: userProfileStore.currentProfile?.savedListingIDs) { _, _ in
+            isListingSaved = userProfileStore.isSaved(home.id)
+        }
         .onDisappear {
             geocodeTask?.cancel()
             geocodeTask = nil
         }
         .navigationTitle(home.hostName)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 4) {
-                    ShareLink(
-                        item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
-                        subject: Text("FreeBNB Listing")
-                    )
-                    if authManager.userID != home.hostUserID {
-                        Menu {
-                            Button(role: .destructive) { showReport = true } label: {
-                                Label("Report Listing", systemImage: "flag")
+            if authManager.authMethod != .guest {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        let newValue = !isListingSaved
+                        isListingSaved = newValue          // optimistic
+                        Task {
+                            do {
+                                try await userProfileStore.toggleSavedListing(home.id)
+                            } catch {
+                                isListingSaved = !newValue // revert
+                                saveError = error.localizedDescription
                             }
-                            Button(role: .destructive) {
-                                showBlockConfirm = true
-                            } label: {
-                                let blocked = userProfileStore.isBlocked(home.hostUserID)
-                                Label(blocked ? "Unblock \(home.hostName)" : "Block \(home.hostName)",
-                                      systemImage: blocked ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
                         }
+                    } label: {
+                        Image(systemName: isListingSaved ? "bookmark.fill" : "bookmark")
+                            .foregroundStyle(Color.appTeal)
                     }
+                    .accessibilityLabel(isListingSaved ? "Remove from saved" : "Save listing")
                 }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                ShareLink(
+                    item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
+                    subject: Text("FreeBNB Listing")
+                )
             }
         }
         .sheet(isPresented: $showReport) {
@@ -254,24 +271,39 @@ struct HomeDetailPage: View {
             }
         }
         .background(Color.creamWhite)
+        .alert("Couldn't save listing", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK", role: .cancel) { saveError = nil }
+        } message: {
+            if let saveError { Text(saveError) }
+        }
     }
 
     // MARK: - Trust signals
 
+    @ViewBuilder
     private var hostTrustSignals: some View {
-        HStack(spacing: 16) {
-            if let profile = userProfileStore.profile(for: home.hostUserID),
-               let createdAt = profile.createdAt {
-                let year = Calendar.current.component(.year, from: createdAt)
-                Label("Member since \(year)", systemImage: "calendar")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            Label("Verified name", systemImage: "checkmark.seal")
+        Label("Verified name", systemImage: "checkmark.seal.fill")
+            .font(.caption)
+            .foregroundColor(Color.appTeal)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.appTeal.opacity(0.1))
+            .clipShape(Capsule())
+
+        if let profile = userProfileStore.profile(for: home.hostUserID),
+           let createdAt = profile.createdAt {
+            let year = Calendar.current.component(.year, from: createdAt)
+            Label("Since \(year)", systemImage: "calendar")
                 .font(.caption)
                 .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.secondary.opacity(0.08))
+                .clipShape(Capsule())
         }
-        .padding(.vertical, 4)
     }
 
     // MARK: - Map section

@@ -131,9 +131,17 @@ final class UserProfileStore {
         guard let userID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         var ids = currentProfile?.savedIDs ?? []
         if ids.contains(listingID) { ids.remove(listingID) } else { ids.insert(listingID) }
+        let newIDs = Array(ids)
+
+        // Optimistic local update so the filter and icon reflect the change
+        // immediately without waiting for the Firestore listener round-trip.
+        let snapshot = currentProfile
+        currentProfile?.savedListingIDs = newIDs
+
         do {
-            try await repository.updateSavedListings(userID: userID, listingIDs: Array(ids))
+            try await repository.updateSavedListings(userID: userID, listingIDs: newIDs)
         } catch {
+            currentProfile = snapshot          // revert on failure
             log.error("saved listings update error: \(error.localizedDescription, privacy: .public)")
             throw ProfileUpdateError.underlying(error)
         }

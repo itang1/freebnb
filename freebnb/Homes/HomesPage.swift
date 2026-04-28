@@ -414,11 +414,11 @@ struct HomesPage: View {
 
     @ToolbarContentBuilder
     private var mapToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .secondaryAction) {
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 showMap = true
             } label: {
-                Label("Map", systemImage: "map")
+                Image(systemName: "map")
             }
             .accessibilityLabel("Show map view")
         }
