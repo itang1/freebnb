@@ -240,10 +240,6 @@ struct HomesPage: View {
                 .padding(.horizontal)
             }
 
-            if friendStore.friendEdges.isEmpty {
-                friendsCallToAction
-            }
-
             HStack {
                 filterMenu
                 sortMenu
@@ -384,52 +380,30 @@ struct HomesPage: View {
             Button {
                 showFriends = true
             } label: {
-                ZStack(alignment: .topTrailing) {
-                    Label("Friends", systemImage: "person.2")
-                        .font(.subheadline.weight(.medium))
-                    if friendStore.pendingCount > 0 {
-                        Text("\(friendStore.pendingCount)")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Color.red, in: Capsule())
-                            .offset(x: 8, y: -6)
+                if friendStore.friendEdges.isEmpty && friendStore.pendingCount == 0 {
+                    Label("Add Friends", systemImage: "person.badge.plus")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(Color.appTeal)
+                } else {
+                    ZStack(alignment: .topTrailing) {
+                        Label("Friends", systemImage: "person.2")
+                            .font(.subheadline.weight(.medium))
+                        if friendStore.pendingCount > 0 {
+                            Text("\(friendStore.pendingCount)")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.red, in: Capsule())
+                                .offset(x: 8, y: -6)
+                        }
                     }
                 }
             }
             .accessibilityLabel(friendStore.pendingCount > 0
                 ? "Friends, \(friendStore.pendingCount) pending"
-                : "Friends")
+                : friendStore.friendEdges.isEmpty ? "Add Friends" : "Friends")
         }
-    }
-
-    private var friendsCallToAction: some View {
-        Button {
-            showFriends = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "person.2.fill")
-                    .font(.title3)
-                    .foregroundColor(Color.appTeal)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Add friends to see more listings")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.primary)
-                    Text("FreeBNB only shows homes from people in your network.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(12)
-            .background(Color.appTeal.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 4)
     }
 
     private var friendsSheet: some View {

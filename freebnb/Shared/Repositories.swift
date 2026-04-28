@@ -456,7 +456,7 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             "createdAt": FieldValue.serverTimestamp()
         ]
         try await withRetry { [db] in
-            try await db.collection("reports").addDocument(data: payload)
+            _ = try await db.collection("reports").addDocument(data: payload)
         }
     }
 
