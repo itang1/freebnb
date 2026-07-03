@@ -36,6 +36,16 @@ final class FirestoreListenerBox: RepositoryListener, @unchecked Sendable {
 
 private let repoLog = AppLog.logger("repository")
 
+// Upper bounds for otherwise-unbounded snapshot listeners so a heavy account
+// doesn't download an ever-growing collection on every launch. Paging can be
+// layered on later; these caps keep read cost predictable in the meantime.
+private let ownListingsListenerLimit = 200
+private let stayRequestsListenerLimit = 200
+private let friendEdgesListenerLimit = 500
+
+// Firestore caps a WriteBatch at 500 operations.
+private let firestoreBatchLimit = 500
+
 // MARK: - Retry helper
 
 /// Retries `operation` up to `maxAttempts` times using exponential backoff
@@ -132,6 +142,9 @@ struct FirestoreHomesRepository: HomesRepository {
     ) -> RepositoryListener {
         let reg = db.collection("homes")
             .whereField("hostUserID", isEqualTo: hostUserID)
+            // Bound the listener so a prolific host doesn't stream every
+            // listing they've ever created on each launch.
+            .limit(to: ownListingsListenerLimit)
             .addSnapshotListener { snapshot, error in
                 if let error { handler(.failure(error)); return }
                 let homes: [Home] = (snapshot?.documents ?? []).compactMap { doc in
@@ -165,12 +178,16 @@ struct FirestoreHomesRepository: HomesRepository {
             let snap = try await db.collection("homes")
                 .whereField("hostUserID", isEqualTo: userID)
                 .getDocuments()
-            guard !snap.documents.isEmpty else { return }
-            let batch = db.batch()
-            for doc in snap.documents {
-                batch.updateData(["hostName": newName], forDocument: doc.reference)
+            let refs = snap.documents.map(\.reference)
+            // Commit in chunks of 500 so a prolific host's rename doesn't
+            // exceed Firestore's per-batch write limit.
+            for start in stride(from: 0, to: refs.count, by: firestoreBatchLimit) {
+                let batch = db.batch()
+                for ref in refs[start..<min(start + firestoreBatchLimit, refs.count)] {
+                    batch.updateData(["hostName": newName], forDocument: ref)
+                }
+                try await batch.commit()
             }
-            try await batch.commit()
         }
     }
 
@@ -179,13 +196,16 @@ struct FirestoreHomesRepository: HomesRepository {
             let snap = try await db.collection("homes")
                 .whereField("hostUserID", isEqualTo: hostUserID)
                 .getDocuments()
-            guard !snap.documents.isEmpty else { return }
-            let batch = db.batch()
+            let refs = snap.documents.map(\.reference)
             let now = Timestamp(date: Date())
-            for doc in snap.documents {
-                batch.updateData(["deletedAt": now], forDocument: doc.reference)
+            // Chunk under the 500-op batch cap for hosts with many listings.
+            for start in stride(from: 0, to: refs.count, by: firestoreBatchLimit) {
+                let batch = db.batch()
+                for ref in refs[start..<min(start + firestoreBatchLimit, refs.count)] {
+                    batch.updateData(["deletedAt": now], forDocument: ref)
+                }
+                try await batch.commit()
             }
-            try await batch.commit()
         }
     }
 }
@@ -330,6 +350,8 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         let reg = db.collection("stayRequests")
             .whereField(field, isEqualTo: userID)
             .order(by: "createdAt", descending: true)
+            // Bound the listener; most-recent-first keeps active requests in view.
+            .limit(to: stayRequestsListenerLimit)
             .addSnapshotListener { snapshot, error in
                 if let error { handler(.failure(error)); return }
                 let docs = snapshot?.documents ?? []
@@ -519,6 +541,7 @@ struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
     ) -> RepositoryListener {
         let reg = db.collection("friendEdges")
             .whereField(field, isEqualTo: userID)
+            .limit(to: friendEdgesListenerLimit)
             .addSnapshotListener { snapshot, error in
                 if let error { handler(.failure(error)); return }
                 let edges: [FriendEdge] = (snapshot?.documents ?? []).compactMap { doc in
