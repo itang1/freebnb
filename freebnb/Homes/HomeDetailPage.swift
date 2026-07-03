@@ -341,8 +341,25 @@ struct HomeDetailPage: View {
 
     private func startGeocoding() {
         guard mapState == .loading else { return }
-        let address = formattedAddress
         let hostName = home.hostName
+
+        // Listings save their geocoded coordinates at creation time. Reuse them
+        // and skip the network geocode entirely; only fall back to geocoding the
+        // address string for legacy listings saved before coordinates existed.
+        if let latitude = home.latitude, let longitude = home.longitude {
+            let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+            item.name = hostName
+            mapItems = [item]
+            region = MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            )
+            mapState = .loaded
+            return
+        }
+
+        let address = formattedAddress
         geocodeTask?.cancel()
         geocodeTask = Task {
             do {
