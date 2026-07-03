@@ -140,9 +140,11 @@ struct HomesPage: View {
     // existing listings always propagate immediately (computed from live data),
     // while additions/removals update the ID order.
     @State private var shuffleOrder: [String] = []
-    // Cached derived lists — recomputed only when inputs change via onChange.
+    // Stable shuffle applied to the live listings. Cached in state because it
+    // depends on the random `shuffleOrder`; recomputed only when the set of
+    // listings changes. The filter/sort/saved layer on top is derived (see
+    // `filteredListings`), not cached, so it can never fall out of sync.
     @State private var shuffledListings: [Home] = []
-    @State private var filteredListings: [Home] = []
 
     var listings: [Home]
     var isLoading: Bool = false
@@ -182,6 +184,16 @@ struct HomesPage: View {
         .accessibilityLabel("\(listing.hostName) in \(listing.address.city), \(listing.address.state)")
         .accessibilityValue(accessibilitySummary(for: listing))
         .accessibilityHint("Opens listing details")
+    }
+
+    // Single derived source of truth for the visible list: filter + sort +
+    // saved applied to the current shuffle. Computed rather than mirrored into
+    // @State so it recomputes automatically whenever any input changes (filters,
+    // sort, search, the saved-only toggle, or the user's saved-listing set) and
+    // can never go stale from a missing onChange trigger. This is what makes the
+    // "Saved" filter update the instant a listing is bookmarked or unbookmarked.
+    private var filteredListings: [Home] {
+        recomputeFiltered(from: shuffledListings)
     }
 
     private func recomputeFiltered(from shuffled: [Home]) -> [Home] {
@@ -340,9 +352,7 @@ struct HomesPage: View {
             if shuffleOrder.isEmpty && !listings.isEmpty {
                 shuffleOrder = listings.map { $0.id }.shuffled()
             }
-            let s = recomputeShuffled()
-            shuffledListings = s
-            filteredListings = recomputeFiltered(from: s)
+            shuffledListings = recomputeShuffled()
         }
         .onChange(of: listings.map { $0.id }) { _, newIDs in
             let newIDSet = Set(newIDs)
@@ -350,30 +360,11 @@ struct HomesPage: View {
             let seen = Set(shuffleOrder)
             let added = newIDs.filter { !seen.contains($0) }.shuffled()
             shuffleOrder.append(contentsOf: added)
-            let s = recomputeShuffled()
-            shuffledListings = s
-            filteredListings = recomputeFiltered(from: s)
+            shuffledListings = recomputeShuffled()
         }
         .onChange(of: listings) { _, _ in
             // Listing content changed (not just IDs); refresh without reshuffling.
-            let s = recomputeShuffled()
-            shuffledListings = s
-            filteredListings = recomputeFiltered(from: s)
-        }
-        .onChange(of: selectedFilters) { _, _ in
-            filteredListings = recomputeFiltered(from: shuffledListings)
-        }
-        .onChange(of: selectedSort) { _, _ in
-            filteredListings = recomputeFiltered(from: shuffledListings)
-        }
-        .onChange(of: citySearch) { _, _ in
-            filteredListings = recomputeFiltered(from: shuffledListings)
-        }
-        .onChange(of: showSavedOnly) { _, _ in
-            filteredListings = recomputeFiltered(from: shuffledListings)
-        }
-        .onChange(of: userProfileStore.currentProfile?.savedListingIDs) { _, _ in
-            filteredListings = recomputeFiltered(from: shuffledListings)
+            shuffledListings = recomputeShuffled()
         }
     }
 
