@@ -71,18 +71,19 @@ struct FreeBNBApp: App {
 
     // Handle freebnb://invite?from=<uid>&name=<name>
     // The URL scheme "freebnb" must be registered in the project's Info.plist
-    // under CFBundleURLTypes before this fires (Xcode → Info → URL Types).
+    // under CFBundleURLTypes before this fires (Xcode -> Info -> URL Types).
     private func handleIncomingURL(_ url: URL) {
         guard url.scheme == "freebnb",
               url.host == "invite" else { return }
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         guard let inviterID = components?.queryItems?.first(where: { $0.name == "from" })?.value,
               !inviterID.isEmpty else { return }
-        Task {
-            // Only act once the user has signed in.
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            guard Auth.auth().currentUser?.isAnonymous == false else { return }
-            try? await friendStore.sendRequest(to: inviterID)
-        }
+        let inviterName = components?.queryItems?.first(where: { $0.name == "name" })?.value
+
+        // Record the invite and let ContentView confirm it with the user once
+        // they're signed in. We deliberately do NOT send a friend request here:
+        // a crafted link must not silently write on the recipient's behalf, and
+        // the previous fixed one-second sleep was a race against auth state.
+        router.pendingInvite = PendingInvite(inviterID: inviterID, inviterName: inviterName)
     }
 }

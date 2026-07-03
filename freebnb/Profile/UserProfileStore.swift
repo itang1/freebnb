@@ -205,6 +205,24 @@ final class UserProfileStore {
         profile(for: userID)?.displayName
     }
 
+    /// Awaits a definitive lookup of a single profile (unlike `profile(for:)`,
+    /// which returns nil immediately and fetches in the background). Used to
+    /// validate that an invite deep link's inviter is a real user before the
+    /// app prompts to send them a friend request. Returns nil if no such user
+    /// exists or the fetch fails.
+    func fetchProfileOnce(userID: String) async -> UserProfile? {
+        if let cached = profileCache[userID] { return cached }
+        do {
+            if let profile = try await repository.fetchProfile(userID: userID) {
+                profileCache[userID] = profile
+                return profile
+            }
+        } catch {
+            log.error("invite profile fetch error \(userID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        return nil
+    }
+
     func searchProfiles(query: String) async throws -> [UserProfile] {
         let results = try await repository.searchProfiles(query: query)
         for p in results {
