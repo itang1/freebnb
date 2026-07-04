@@ -5,6 +5,18 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
+// Firestore caps a WriteBatch at 500 operations. Deletes every document a
+// query matches, committing in chunks so large result sets don't exceed it.
+async function deleteQueryInChunks(query: FirebaseFirestore.Query): Promise<void> {
+  const snap = await query.get();
+  const refs = snap.docs.map((d) => d.ref);
+  for (let i = 0; i < refs.length; i += 500) {
+    const batch = db.batch();
+    for (const ref of refs.slice(i, i + 500)) batch.delete(ref);
+    await batch.commit();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // scheduledFirestoreBackup
 // Exports all Firestore collections to GCS once a day at 03:00 UTC.
@@ -71,12 +83,20 @@ export const onMessageCreated = functions.firestore
     const recipientID = msg.participants.find((uid) => uid !== msg.senderUserID);
     if (!recipientID) return;
 
-    const [userDoc, senderDoc] = await Promise.all([
-      db.collection("users").doc(recipientID).get(),
+    // The recipient's token and block list live in their owner-only private
+    // subdocument; the sender's display name is on the public user doc.
+    const [recipientPrivate, senderDoc] = await Promise.all([
+      db.doc(`users/${recipientID}/private/profile`).get(),
       db.collection("users").doc(msg.senderUserID).get(),
     ]);
 
-    const fcmToken: string | undefined = userDoc.data()?.fcmToken;
+    const recipientData = recipientPrivate.data();
+
+    // Never push a notification from someone the recipient has blocked.
+    const blocked: string[] = recipientData?.blockedUserIDs ?? [];
+    if (blocked.includes(msg.senderUserID)) return;
+
+    const fcmToken: string | undefined = recipientData?.fcmToken;
     if (!fcmToken) return;
 
     const senderName: string = senderDoc.data()?.displayName ?? "FreeBNB";
@@ -102,46 +122,81 @@ export const onMessageCreated = functions.firestore
 // ---------------------------------------------------------------------------
 export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
   const uid = user.uid;
-  const batch = db.batch();
-  const now = admin.firestore.FieldValue.serverTimestamp();
 
-  const listingsSnap = await db
-    .collection("homes")
-    .where("hostUserID", "==", uid)
-    .get();
-  for (const doc of listingsSnap.docs) {
-    batch.update(doc.ref, { deletedAt: now });
+  // Soft-delete the user's listings (kept for history), chunked under the
+  // 500-op batch cap for prolific hosts.
+  const listingsSnap = await db.collection("homes").where("hostUserID", "==", uid).get();
+  for (let i = 0; i < listingsSnap.docs.length; i += 500) {
+    const batch = db.batch();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    for (const doc of listingsSnap.docs.slice(i, i + 500)) {
+      batch.update(doc.ref, { deletedAt: now });
+    }
+    await batch.commit();
   }
 
-  batch.delete(db.collection("users").doc(uid));
-  await batch.commit();
+  // Hard-cascade the user's own messages, stay requests (as guest and host),
+  // friend edges, and submitted reports so no personal data is left behind.
+  // Only messages the user authored are removed, preserving the other party's
+  // side of any shared conversation.
+  await Promise.all([
+    deleteQueryInChunks(db.collection("messages").where("senderUserID", "==", uid)),
+    deleteQueryInChunks(db.collection("stayRequests").where("guestUserID", "==", uid)),
+    deleteQueryInChunks(db.collection("stayRequests").where("hostUserID", "==", uid)),
+    deleteQueryInChunks(db.collection("friendEdges").where("userA", "==", uid)),
+    deleteQueryInChunks(db.collection("friendEdges").where("userB", "==", uid)),
+    deleteQueryInChunks(db.collection("reports").where("reporterUserID", "==", uid)),
+  ]);
+
+  // Finally remove the private subdocument and the public user document.
+  await db.doc(`users/${uid}/private/profile`).delete();
+  await db.collection("users").doc(uid).delete();
 });
 
 // ---------------------------------------------------------------------------
 // exportUserData (callable)
-// Returns all data we hold for the calling user: profile, listings,
-// stay requests, and message IDs. Fulfills GDPR/CCPA right-to-access.
+// Returns all data we hold for the calling user: public profile, private
+// profile data, listings, stay requests, full message content, friend edges,
+// and submitted reports. Fulfills GDPR/CCPA right-to-access, and mirrors what
+// onUserDeleted removes so the export is complete relative to what is stored.
 // Call from the app: Functions.functions().httpsCallable("exportUserData")
 // ---------------------------------------------------------------------------
 export const exportUserData = functions.https.onCall(async (_data, context) => {
   const uid = context.auth?.uid;
   if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
 
-  const [profileSnap, listingsSnap, guestRequestsSnap, hostRequestsSnap, messagesSnap] =
-    await Promise.all([
-      db.collection("users").doc(uid).get(),
-      db.collection("homes").where("hostUserID", "==", uid).get(),
-      db.collection("stayRequests").where("guestUserID", "==", uid).get(),
-      db.collection("stayRequests").where("hostUserID", "==", uid).get(),
-      db.collection("messages").where("participants", "array-contains", uid).get(),
-    ]);
+  const [
+    profileSnap,
+    privateSnap,
+    listingsSnap,
+    guestRequestsSnap,
+    hostRequestsSnap,
+    messagesSnap,
+    friendEdgesASnap,
+    friendEdgesBSnap,
+    reportsSnap,
+  ] = await Promise.all([
+    db.collection("users").doc(uid).get(),
+    db.doc(`users/${uid}/private/profile`).get(),
+    db.collection("homes").where("hostUserID", "==", uid).get(),
+    db.collection("stayRequests").where("guestUserID", "==", uid).get(),
+    db.collection("stayRequests").where("hostUserID", "==", uid).get(),
+    db.collection("messages").where("participants", "array-contains", uid).get(),
+    db.collection("friendEdges").where("userA", "==", uid).get(),
+    db.collection("friendEdges").where("userB", "==", uid).get(),
+    db.collection("reports").where("reporterUserID", "==", uid).get(),
+  ]);
+
+  const withID = (d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() });
 
   return {
-    profile: profileSnap.data() ?? null,
-    listings: listingsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    stayRequestsAsGuest: guestRequestsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    stayRequestsAsHost: hostRequestsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    messageIDs: messagesSnap.docs.map((d) => d.id),
+    profile: { ...(profileSnap.data() ?? {}), ...(privateSnap.data() ?? {}) },
+    listings: listingsSnap.docs.map(withID),
+    stayRequestsAsGuest: guestRequestsSnap.docs.map(withID),
+    stayRequestsAsHost: hostRequestsSnap.docs.map(withID),
+    messages: messagesSnap.docs.map(withID),
+    friendEdges: [...friendEdgesASnap.docs, ...friendEdgesBSnap.docs].map(withID),
+    reports: reportsSnap.docs.map(withID),
   };
 });
 
