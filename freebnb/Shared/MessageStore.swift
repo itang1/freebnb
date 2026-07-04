@@ -9,6 +9,10 @@ import Foundation
 import Observation
 import os
 
+#if canImport(FirebaseFunctions)
+import FirebaseFunctions
+#endif
+
 struct Message: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let senderUserID: String
@@ -48,6 +52,9 @@ enum MessageState: Hashable {
 final class MessageStore {
     private(set) var pendingIDs: Set<String> = []
     private(set) var failedIDs: Set<String> = []
+    /// True when the most recent send was blocked by the client-side rate limit,
+    /// so the UI can show a "slow down" notice. Reset on the next allowed send.
+    private(set) var isSendRateLimited = false
     private(set) var mutedConversationIDs: Set<String> = {
         Set(UserDefaults.standard.stringArray(forKey: UserDefaultsKey.mutedConversationIDs) ?? [])
     }()
@@ -79,6 +86,13 @@ final class MessageStore {
     @ObservationIgnored private let log = AppLog.logger("messaging")
     @ObservationIgnored private let summaryLimit = 50
     @ObservationIgnored private let threadPageSize = 50
+    // Client-side advisory rate limit mirroring the checkMessageRate Cloud
+    // Function (30 messages / 60s). This is a UX guard, not a security control;
+    // real enforcement belongs in Firestore rules or a write trigger. When the
+    // FirebaseFunctions product is linked, sends are also verified server-side.
+    @ObservationIgnored private let sendRateLimit = 30
+    @ObservationIgnored private let sendRateWindow: TimeInterval = 60
+    @ObservationIgnored private var recentSendTimestamps: [Date] = []
 
     init(repository: MessagesRepository = FirestoreMessagesRepository()) {
         self.repository = repository
@@ -273,6 +287,18 @@ final class MessageStore {
         guard senderUserID != recipientUserID,
               !senderUserID.isEmpty, !recipientUserID.isEmpty
         else { return false }
+
+        // Advisory client-side rate limit; blocks obvious spamming before it
+        // reaches Firestore. The callable below is the server-side counterpart.
+        if isOverSendRateLimit() {
+            isSendRateLimited = true
+            log.error("send blocked: client rate limit of \(self.sendRateLimit) per \(Int(self.sendRateWindow))s reached")
+            return false
+        }
+        isSendRateLimited = false
+        recentSendTimestamps.append(Date())
+        verifyServerRateLimit()
+
         let participants = [senderUserID, recipientUserID].sorted()
         let msg = Message(
             senderUserID: senderUserID,
@@ -292,6 +318,27 @@ final class MessageStore {
             return false
         }
         return true
+    }
+
+    private func isOverSendRateLimit() -> Bool {
+        let cutoff = Date().addingTimeInterval(-sendRateWindow)
+        recentSendTimestamps.removeAll { $0 < cutoff }
+        return recentSendTimestamps.count >= sendRateLimit
+    }
+
+    /// Best-effort server-side rate verification. Only compiled when the
+    /// FirebaseFunctions product is linked; failures are logged, not surfaced,
+    /// since the client-side window already gated this send.
+    private func verifyServerRateLimit() {
+#if canImport(FirebaseFunctions)
+        Task {
+            do {
+                _ = try await Functions.functions().httpsCallable("checkMessageRate").call()
+            } catch {
+                log.error("server rate check failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+#endif
     }
 
     func retry(_ messageID: String) {
