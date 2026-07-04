@@ -101,6 +101,10 @@ protocol HomesRepository: Sendable {
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener
 
+    /// One-shot cursor page of listings after `afterID` (document-ID order).
+    /// Used to fetch older pages without re-downloading earlier ones.
+    func fetchListings(afterID: String?, limit: Int) async throws -> [Home]
+
     func save(_ home: Home) async throws
     func delete(homeID: String) async throws
     func updateHostName(userID: String, newName: String) async throws
@@ -157,6 +161,23 @@ struct FirestoreHomesRepository: HomesRepository {
                 handler(.success(homes))
             }
         return FirestoreListenerBox(reg)
+    }
+
+    func fetchListings(afterID: String?, limit: Int) async throws -> [Home] {
+        try await withRetry { [db] in
+            var query: Query = db.collection("homes")
+                .order(by: FieldPath.documentID())
+                .limit(to: limit)
+            if let afterID { query = query.start(after: [afterID]) }
+            let snap = try await query.getDocuments()
+            return snap.documents.compactMap { doc in
+                do { return try doc.data(as: Home.self) }
+                catch {
+                    repoLog.error("page home decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    return nil
+                }
+            }
+        }
     }
 
     func save(_ home: Home) async throws {

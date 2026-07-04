@@ -29,7 +29,11 @@ final class HomeStore {
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("homes")
     @ObservationIgnored private let pageSize = 25
-    @ObservationIgnored private var currentLimit: Int
+    // Live first page (kept fresh by the snapshot listener) and the older pages
+    // fetched on demand via cursor. `listings` is their de-duplicated, ordered
+    // merge, so paging no longer re-downloads earlier pages on each load-more.
+    @ObservationIgnored private var livePage: [Home] = []
+    @ObservationIgnored private var pagedListings: [Home] = []
 
     init(
         repository: HomesRepository = FirestoreHomesRepository(),
@@ -37,7 +41,6 @@ final class HomeStore {
     ) {
         self.repository = repository
         self.photoUploader = photoUploader
-        self.currentLimit = pageSize
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in self?.restartListener(signedIn: user != nil) }
         }
@@ -57,15 +60,23 @@ final class HomeStore {
         ownListingsListener?.cancel()
         ownListingsListener = nil
         guard signedIn ?? (Auth.auth().currentUser != nil) else {
+            livePage = []
+            pagedListings = []
             listings = []
             ownListings = []
+            canLoadMore = true
             isLoading = false
             return
         }
         isLoading = true
-        // Fetch one past the limit so we can tell "page full, more exist" apart
-        // from "page full, nothing more" without an extra round trip.
-        activeListener = repository.listenToListings(limit: currentLimit + 1) { [weak self] result in
+        // Re-establishing the live first page invalidates any fetched older
+        // pages, so start paging fresh.
+        pagedListings = []
+        canLoadMore = true
+        // The live listener covers only the first page. Fetch one past the page
+        // size so we can tell "more exist beyond the first page" from "that's
+        // all" without an extra round trip.
+        activeListener = repository.listenToListings(limit: pageSize + 1) { [weak self] result in
             Task { @MainActor [weak self] in
                 self?.apply(result: result)
             }
@@ -94,33 +105,53 @@ final class HomeStore {
             log.error("snapshot error: \(error.localizedDescription, privacy: .public)")
             self.error = error.localizedDescription
             isLoading = false
-            isLoadingMore = false
-            // Firestore stops delivering updates after an error; cancel the dead
-            // listener so loadMore() can restart it cleanly.
-            activeListener?.cancel()
-            activeListener = nil
-        case .success(let homes):
+        case .success(let raw):
             self.error = nil
-            // `canLoadMore` is checked before filtering so that the sentinel doc
-            // (limit+1) still triggers paging even if some results are deleted.
-            canLoadMore = homes.count > currentLimit
-            listings = Array(homes.filter { $0.deletedAt == nil }.prefix(currentLimit))
+            // The sentinel (pageSize + 1) tells us whether more listings exist
+            // beyond the live first page. Once older pages have been fetched,
+            // their own paging owns canLoadMore, so don't overwrite it here.
+            let firstPageHasMore = raw.count > pageSize
+            livePage = Array(raw.filter { $0.deletedAt == nil }.prefix(pageSize))
+            if pagedListings.isEmpty { canLoadMore = firstPageHasMore }
             isLoading = false
+            recompute()
+        }
+    }
+
+    // Merge the live first page with any fetched older pages into one
+    // de-duplicated list in document-ID order.
+    private func recompute() {
+        var seen = Set<String>()
+        var merged: [Home] = []
+        for home in (livePage + pagedListings).sorted(by: { $0.id < $1.id })
+            where seen.insert(home.id).inserted {
+            merged.append(home)
+        }
+        listings = merged
+    }
+
+    func loadMore() {
+        guard !isLoadingMore, canLoadMore else { return }
+        isLoadingMore = true
+        let afterID = listings.last?.id
+        Task { @MainActor in
+            do {
+                // Cursor page after the last loaded listing; no earlier pages
+                // are re-downloaded.
+                let next = try await repository.fetchListings(afterID: afterID, limit: pageSize)
+                pagedListings.append(contentsOf: next)
+                canLoadMore = next.count == pageSize
+                self.error = nil
+                recompute()
+            } catch {
+                log.error("load more error: \(error.localizedDescription, privacy: .public)")
+                self.error = error.localizedDescription
+            }
             isLoadingMore = false
         }
     }
 
-    func loadMore() {
-        guard !isLoadingMore else { return }
-        // Also allow calling loadMore() to retry after a listener error.
-        guard canLoadMore || error != nil else { return }
-        isLoadingMore = true
-        if error == nil { currentLimit += pageSize }
-        restartListener(signedIn: true)
-    }
-
     func reload() {
-        currentLimit = pageSize
         restartListener(signedIn: true)
     }
 

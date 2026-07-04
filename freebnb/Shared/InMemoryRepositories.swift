@@ -28,6 +28,18 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         return NoopListener()
     }
 
+    func fetchListings(afterID: String?, limit: Int) async throws -> [Home] {
+        let active = homes.filter { $0.deletedAt == nil }.sorted { $0.id < $1.id }
+        let start: Int
+        if let afterID, let idx = active.firstIndex(where: { $0.id == afterID }) {
+            start = idx + 1
+        } else {
+            start = 0
+        }
+        guard start < active.count else { return [] }
+        return Array(active[start...].prefix(limit))
+    }
+
     func save(_ home: Home) async throws {
         if let i = homes.firstIndex(where: { $0.id == home.id }) {
             homes[i] = home
