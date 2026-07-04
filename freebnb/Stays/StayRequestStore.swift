@@ -119,7 +119,13 @@ final class StayRequestStore {
     // MARK: - Host actions
 
     func accept(_ request: StayRequest, hostNote: String? = nil) async throws {
-        try await update(requestID: request.id, status: .accepted, hostNote: hostNote)
+        do {
+            // Guards against accepting a request that double-books the listing.
+            try await repository.accept(request, hostNote: hostNote)
+        } catch {
+            log.error("accept error: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
     }
 
     func decline(_ request: StayRequest, hostNote: String? = nil) async throws {

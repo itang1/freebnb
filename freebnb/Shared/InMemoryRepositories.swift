@@ -110,6 +110,17 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         requests[i].status = status
         if let hostNote { requests[i].hostNote = hostNote }
     }
+
+    func accept(_ request: StayRequest, hostNote: String?) async throws {
+        let conflict = requests.contains { other in
+            other.id != request.id &&
+            other.listingID == request.listingID &&
+            other.status == .accepted &&
+            other.checkIn < request.checkOut && request.checkIn < other.checkOut
+        }
+        if conflict { throw StayRequestError.overlappingStay }
+        try await updateStatus(requestID: request.id, status: .accepted, hostNote: hostNote)
+    }
 }
 
 final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sendable {

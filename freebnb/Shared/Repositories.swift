@@ -335,6 +335,11 @@ protocol StayRequestsRepository: Sendable {
 
     func create(_ request: StayRequest) async throws
     func updateStatus(requestID: String, status: StayRequestStatus, hostNote: String?) async throws
+    /// Accepts a request only if no other already-accepted request for the same
+    /// listing overlaps its dates. Throws `StayRequestError.overlappingStay` on
+    /// a conflict. A best-effort double-booking guard; authoritative enforcement
+    /// still belongs in a server transaction.
+    func accept(_ request: StayRequest, hostNote: String?) async throws
 }
 
 struct FirestoreStayRequestsRepository: StayRequestsRepository {
@@ -382,6 +387,32 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         let payload = data
         try await withRetry { [db] in
             try await db.collection("stayRequests").document(requestID).updateData(payload)
+        }
+    }
+
+    func accept(_ request: StayRequest, hostNote: String?) async throws {
+        var data: [String: Any] = [
+            "status": StayRequestStatus.accepted.rawValue,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+        if let hostNote { data["hostNote"] = hostNote }
+        let payload = data
+        let request = request
+        try await withRetry { [db] in
+            // Single-field query (no composite index needed); filter to accepted
+            // and overlapping in code.
+            let snap = try await db.collection("stayRequests")
+                .whereField("listingID", isEqualTo: request.listingID)
+                .getDocuments()
+            for doc in snap.documents where doc.documentID != request.id {
+                guard let other = try? doc.data(as: StayRequest.self),
+                      other.status == .accepted else { continue }
+                // Half-open interval overlap: [checkIn, checkOut).
+                if other.checkIn < request.checkOut && request.checkIn < other.checkOut {
+                    throw StayRequestError.overlappingStay
+                }
+            }
+            try await db.collection("stayRequests").document(request.id).updateData(payload)
         }
     }
 }

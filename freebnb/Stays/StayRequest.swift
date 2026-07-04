@@ -29,6 +29,17 @@ enum StayRequestRole: Sendable {
     case host
 }
 
+enum StayRequestError: LocalizedError {
+    case overlappingStay
+
+    var errorDescription: String? {
+        switch self {
+        case .overlappingStay:
+            return "Those dates overlap a stay you've already accepted for this listing."
+        }
+    }
+}
+
 struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let listingID: String
