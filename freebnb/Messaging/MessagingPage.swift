@@ -85,11 +85,6 @@ struct MessagingPage: View {
                 Divider()
             }
 
-            // In-thread search bar
-            if !searchQuery.isEmpty || inputFocused == false {
-                // searchable modifier handles this below
-            }
-
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 8) {
