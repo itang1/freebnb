@@ -12,6 +12,22 @@ import UserNotifications
 import FirebaseMessaging
 #endif
 
+#if canImport(FirebaseAppCheck)
+import FirebaseAppCheck
+
+// Attests that requests come from a genuine, unmodified build of this app so
+// Firestore/Storage/Functions can reject traffic that bypasses the app. App
+// Attest is used in production; DeviceCheck covers older devices.
+final class FreeBNBAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
+    func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+        if #available(iOS 14.0, *) {
+            return AppAttestProvider(app: app)
+        }
+        return DeviceCheckProvider(app: app)
+    }
+}
+#endif
+
 @main
 struct FreeBNBApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -25,6 +41,16 @@ struct FreeBNBApp: App {
     @State private var friendStore: FriendStore
 
     init() {
+        // App Check must be registered before FirebaseApp.configure() so the
+        // first backend calls are attested. In DEBUG the debug provider lets the
+        // simulator obtain a token (register it in the Firebase console).
+#if canImport(FirebaseAppCheck)
+#if DEBUG
+        AppCheck.setAppCheckProviderFactory(AppCheckDebugProviderFactory())
+#else
+        AppCheck.setAppCheckProviderFactory(FreeBNBAppCheckProviderFactory())
+#endif
+#endif
         FirebaseApp.configure()
 #if canImport(FirebaseMessaging)
         Messaging.messaging().isAutoInitEnabled = true
