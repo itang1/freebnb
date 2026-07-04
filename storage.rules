@@ -8,7 +8,10 @@ service firebase.storage {
   match /b/{bucket}/o {
     match /listings/{hostUserID}/{listingID}/{allPaths=**} {
       allow read: if request.auth != null;
+      // Anonymous guests may browse photos but not upload; only a full-member
+      // host may write their own listing images.
       allow write: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
         && request.auth.uid == hostUserID
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');

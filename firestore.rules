@@ -11,11 +11,32 @@ service cloud.firestore {
       return request.auth.uid == userID;
     }
 
+    // Anonymous "guest" accounts may browse (read) but must not write. The UI
+    // already restricts guests; this makes it a real security boundary rather
+    // than a client-side convention.
+    function isFullMember() {
+      return isSignedIn()
+          && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // True when `recipientID`'s private profile lists `senderID` as blocked.
+    // get()/exists() run with elevated privilege, so this reads the owner-only
+    // private doc that clients cannot. Missing doc or field is treated as "not
+    // blocked" via the default on get().
+    function recipientHasBlocked(recipientID, senderID) {
+      return exists(/databases/$(database)/documents/users/$(recipientID)/private/profile)
+          && get(/databases/$(database)/documents/users/$(recipientID)/private/profile)
+               .data.get('blockedUserIDs', []).hasAny([senderID]);
+    }
+
     // -------------------------------------------------------------------------
     // Users
-    // Any signed-in user can read profiles (for name display in chat/listings).
-    // Only the owner can create/update. Deletes are forbidden on the client —
-    // account deletion is handled by a Cloud Function that cascades safely.
+    // The user document is a PUBLIC projection (displayName + timestamps) that
+    // any signed-in user may read for name display in chat/listings. PII and
+    // safety-sensitive data (email, fcmToken, blockedUserIDs, savedListingIDs)
+    // live in the owner-only `private/profile` subdocument below and are never
+    // world-readable. Only the owner can create/update. Deletes are forbidden
+    // on the client; account deletion is handled by a Cloud Function cascade.
     // -------------------------------------------------------------------------
     match /users/{userID} {
       allow read: if isSignedIn();
@@ -35,12 +56,15 @@ service cloud.firestore {
           && request.resource.data.displayName.size() < 200
           && request.resource.data.updatedAt == request.time
           // createdAt must not change
-          && request.resource.data.createdAt == resource.data.createdAt
-          // blockedUserIDs must be a list if present
-          && (!('blockedUserIDs' in request.resource.data)
-              || request.resource.data.blockedUserIDs is list);
+          && request.resource.data.createdAt == resource.data.createdAt;
 
       allow delete: if false;
+
+      // Owner-only private data. Readable and writable exclusively by the owner;
+      // Cloud Functions still reach it through elevated get()/exists().
+      match /private/{docID} {
+        allow read, write: if isSignedIn() && isOwner(userID);
+      }
     }
 
     // -------------------------------------------------------------------------
@@ -53,7 +77,7 @@ service cloud.firestore {
     match /homes/{homeID} {
       allow read: if isSignedIn();
 
-      allow create: if isSignedIn()
+      allow create: if isFullMember()
           && request.resource.data.hostUserID == request.auth.uid
           && request.resource.data.hostName is string
           && request.resource.data.hostName.size() > 0
@@ -85,7 +109,7 @@ service cloud.firestore {
           && (request.auth.uid == resource.data.guestUserID
               || request.auth.uid == resource.data.hostUserID);
 
-      allow create: if isSignedIn()
+      allow create: if isFullMember()
           && request.resource.data.guestUserID == request.auth.uid
           && request.resource.data.status == "pending"
           && request.resource.data.hostUserID is string
@@ -132,7 +156,7 @@ service cloud.firestore {
       allow read: if isSignedIn()
           && request.auth.uid in resource.data.participants;
 
-      allow create: if isSignedIn()
+      allow create: if isFullMember()
           && request.resource.data.keys().hasOnly(
                ['id', 'senderUserID', 'text', 'timestamp', 'participants']
              )
@@ -147,7 +171,15 @@ service cloud.firestore {
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() < 5000
-          && request.resource.data.timestamp == request.time;
+          && request.resource.data.timestamp == request.time
+          // Reject the message if the recipient has blocked the sender, so a
+          // block can't be bypassed by writing to Firestore directly.
+          && !recipientHasBlocked(
+               request.resource.data.participants[0] == request.auth.uid
+                 ? request.resource.data.participants[1]
+                 : request.resource.data.participants[0],
+               request.auth.uid
+             );
 
       allow update, delete: if false;
     }
@@ -162,7 +194,7 @@ service cloud.firestore {
               || request.auth.uid == resource.data.userB);
 
       // Send a friend request (create pending edge).
-      allow create: if isSignedIn()
+      allow create: if isFullMember()
           && request.resource.data.initiator == request.auth.uid
           && (request.resource.data.userA == request.auth.uid
               || request.resource.data.userB == request.auth.uid)
@@ -206,7 +238,7 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     match /reports/{reportID} {
       allow read: if false;
-      allow create: if isSignedIn()
+      allow create: if isFullMember()
           && request.resource.data.reporterUserID == request.auth.uid
           && request.resource.data.reason is string
           && request.resource.data.reason.size() > 0
