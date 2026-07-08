@@ -115,7 +115,7 @@ final class MessageStore {
 
     // MARK: - Conversation ID
 
-    static func conversationID(userIDs: [String]) -> String {
+    nonisolated static func conversationID(userIDs: [String]) -> String {
         userIDs.sorted().joined(separator: "_")
     }
 
