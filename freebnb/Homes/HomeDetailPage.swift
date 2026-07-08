@@ -421,6 +421,7 @@ struct HomeDetailPage: View {
                         .foregroundColor(.onBrandFill)
                         .cornerRadius(10)
                     }
+                    .accessibilityIdentifier("homeDetail.messageHostButton")
                 }
             }
         case .contactInfo:

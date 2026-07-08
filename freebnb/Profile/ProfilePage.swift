@@ -108,7 +108,8 @@ struct ProfilePage: View {
                 #if DEBUG
                 sectionLabel("Dev")
                 VStack(spacing: 0) {
-                    SettingsRow(icon: "envelope", label: "Sign in as dev@freebnb.test") {
+                    SettingsRow(icon: "envelope", label: "Sign in as dev@freebnb.test",
+                                accessibilityID: "profile.devSignInButton") {
                         authManager.signInWithEmail("dev@freebnb.test", password: "***REDACTED***")
                     }
                 }
@@ -338,6 +339,7 @@ private struct SettingsRow: View {
     let label: String
     var chevron: Bool = false
     var trailingText: String? = nil
+    var accessibilityID: String? = nil
     var action: (() -> Void)? = nil
 
     var body: some View {
@@ -367,6 +369,7 @@ private struct SettingsRow: View {
             .padding(.vertical, 14)
         }
         .disabled(action == nil && !chevron)
+        .accessibilityIdentifier(accessibilityID ?? "")
     }
 }
 

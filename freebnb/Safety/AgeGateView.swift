@@ -41,6 +41,7 @@ struct AgeGateView: View {
                         .foregroundColor(.onBrandFill)
                         .cornerRadius(14)
                 }
+                .accessibilityIdentifier("ageGate.continueButton")
 
                 Text("If you are under 18, please close the app.")
                     .font(.caption)

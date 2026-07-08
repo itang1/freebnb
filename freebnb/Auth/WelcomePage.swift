@@ -68,6 +68,7 @@ struct WelcomePage: View {
                         }
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                        .accessibilityIdentifier("welcome.continueAsGuestButton")
                     }
 
                     if let error = authManager.authError,
