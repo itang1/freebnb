@@ -390,7 +390,7 @@ struct IncomingRequestRow: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(Color.appTeal)
-                            .foregroundColor(.white)
+                            .foregroundColor(.onBrandFill)
                             .cornerRadius(8)
                     }
                     .buttonStyle(.pressable)

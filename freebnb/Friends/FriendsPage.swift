@@ -196,7 +196,7 @@ private struct FriendRequestRow: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
                         .background(Color.appTeal)
-                        .foregroundColor(.white)
+                        .foregroundColor(.onBrandFill)
                         .cornerRadius(8)
                 }
                 .buttonStyle(.pressable)
@@ -387,7 +387,7 @@ private struct SearchResultRow: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(Color.appTeal)
-                        .foregroundColor(.white)
+                        .foregroundColor(.onBrandFill)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)

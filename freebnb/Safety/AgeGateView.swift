@@ -38,7 +38,7 @@ struct AgeGateView: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color.appTeal)
-                        .foregroundColor(.white)
+                        .foregroundColor(.onBrandFill)
                         .cornerRadius(14)
                 }
 

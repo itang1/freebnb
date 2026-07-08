@@ -202,7 +202,7 @@ struct HomeCard: View {
             ))
         } else {
             tealHeaderContent
-                .foregroundColor(.white)
+                .foregroundColor(.onBrandFill)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.appTeal)

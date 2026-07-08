@@ -45,20 +45,7 @@ enum UserDefaultsKey {
     static let selectedTab             = "selectedTab"
 }
 
-struct FlippedPrimaryColor: ViewModifier {
-    @Environment(\.colorScheme) var colorScheme
-
-    func body(content: Content) -> some View {
-        content
-            .foregroundColor(colorScheme == .dark ? .black : .white)
-    }
-}
-
 extension View {
-    func flippedPrimaryColor() -> some View {
-        self.modifier(FlippedPrimaryColor())
-    }
-
     func appliesStoredAppearance() -> some View {
         self.modifier(AppearanceModifier())
     }

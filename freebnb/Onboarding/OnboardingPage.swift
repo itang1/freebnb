@@ -57,7 +57,7 @@ struct OnboardingPage: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.appTeal)
-                            .flippedPrimaryColor()
+                            .foregroundColor(.onBrandFill)
                             .cornerRadius(12)
                     }
                     // Fixed-height slot keeps layout stable when Skip disappears

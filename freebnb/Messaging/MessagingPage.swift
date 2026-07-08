@@ -344,7 +344,7 @@ struct MessagingPage: View {
                     .disabled(bannerBusy)
                     Button("Accept") { respondingTo = request }
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.onBrandFill)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
                         .background(Color.appTeal)

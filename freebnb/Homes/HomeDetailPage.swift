@@ -175,7 +175,7 @@ struct HomeDetailPage: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color.coral)
-                        .flippedPrimaryColor()
+                        .foregroundColor(.onBrandFill)
                         .cornerRadius(10)
                 }
                 .disabled(mapState != .loaded)
@@ -418,7 +418,7 @@ struct HomeDetailPage: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color.appTeal)
-                        .flippedPrimaryColor()
+                        .foregroundColor(.onBrandFill)
                         .cornerRadius(10)
                     }
                 }
