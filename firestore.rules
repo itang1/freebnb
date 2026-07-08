@@ -29,6 +29,33 @@ service cloud.firestore {
                .data.get('blockedUserIDs', []).hasAny([senderID]);
     }
 
+    // The keys an update actually touches. Anything absent from the caller's
+    // allowlist is thereby pinned to its existing value.
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // Optional-field helpers. The Swift Firestore encoder omits nil optionals
+    // rather than writing null, but seed and admin writes do use null, so both
+    // absent and null count as "unset". These take the field name as a string
+    // and read it with map.get(), because indexing a map by a variable key is
+    // not part of the rules language.
+    function isUnset(data, field) {
+      return data.get(field, null) == null;
+    }
+
+    function isOptionalString(data, field, maxLength) {
+      return isUnset(data, field)
+          || (data.get(field, '') is string
+              && data.get(field, '').size() <= maxLength);
+    }
+
+    function isOptionalList(data, field, maxCount) {
+      return isUnset(data, field)
+          || (data.get(field, []) is list
+              && data.get(field, []).size() <= maxCount);
+    }
+
     // -------------------------------------------------------------------------
     // Users
     // The user document is a PUBLIC projection (displayName + timestamps) that
@@ -39,22 +66,29 @@ service cloud.firestore {
     // on the client; account deletion is handled by a Cloud Function cascade.
     // -------------------------------------------------------------------------
     match /users/{userID} {
+      // The public user doc holds exactly these three keys. hasOnly() keeps the
+      // world-readable document from being used as a spam surface or a stealth
+      // data channel; hasAll() keeps a merge write from dropping a field.
+      function isValidPublicProfile(data) {
+        return data.keys().hasOnly(['displayName', 'createdAt', 'updatedAt'])
+            && data.keys().hasAll(['displayName', 'createdAt', 'updatedAt'])
+            && data.displayName is string
+            && data.displayName.size() > 0
+            && data.displayName.size() < 200
+            && data.createdAt is timestamp
+            && data.updatedAt == request.time;
+      }
+
       allow read: if isSignedIn();
 
       allow create: if isSignedIn()
           && isOwner(userID)
-          && request.resource.data.displayName is string
-          && request.resource.data.displayName.size() > 0
-          && request.resource.data.displayName.size() < 200
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && isValidPublicProfile(request.resource.data)
+          && request.resource.data.createdAt == request.time;
 
       allow update: if isSignedIn()
           && isOwner(userID)
-          && request.resource.data.displayName is string
-          && request.resource.data.displayName.size() > 0
-          && request.resource.data.displayName.size() < 200
-          && request.resource.data.updatedAt == request.time
+          && isValidPublicProfile(request.resource.data)
           // createdAt must not change
           && request.resource.data.createdAt == resource.data.createdAt;
 
@@ -75,25 +109,67 @@ service cloud.firestore {
     // Only the host may write their own listings.
     // -------------------------------------------------------------------------
     match /homes/{homeID} {
+      // Every key the Home model encodes. Optional fields are omitted by the
+      // encoder when nil, so hasOnly() (not hasAll()) is the right check for
+      // the tail of this list.
+      function isValidListing(data) {
+        return data.keys().hasOnly([
+                 'id', 'hostUserID', 'hostName', 'address', 'description',
+                 'contactPreference', 'hostContactInfo', 'hostMotivation',
+                 'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
+                 'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
+                 'visibility', 'deletedAt'
+               ])
+            && data.keys().hasAll([
+                 'hostUserID', 'hostName', 'address',
+                 'sleeping', 'guestPolicy', 'amenities'
+               ])
+            && data.hostUserID is string
+            && data.hostName is string
+            && data.hostName.size() > 0
+            && data.hostName.size() < 200
+            // Nested struct validation
+            && data.address is map
+            && data.sleeping is map
+            && data.guestPolicy is map
+            && data.amenities is map
+            && data.sleeping.numGuestRooms is int
+            && data.guestPolicy.maxGuests is int
+            && data.guestPolicy.maxStayDays is int
+            // Size caps so a document can't be stuffed toward the 1 MiB limit
+            && isOptionalString(data, 'description', 2000)
+            && isOptionalString(data, 'hostContactInfo', 500)
+            && isOptionalList(data, 'photoURLs', 10)
+            && isOptionalList(data, 'blockedDateRanges', 100)
+            // Enums and coordinates: a value the client can't decode makes the
+            // listing silently disappear from the feed (see A5).
+            && (isUnset(data, 'contactPreference')
+                || data.contactPreference in ['inApp', 'contactInfo'])
+            && (isUnset(data, 'hostMotivation')
+                || data.hostMotivation in ['eager', 'open', 'selective'])
+            && (isUnset(data, 'cancellationPolicy')
+                || data.cancellationPolicy in ['flexible', 'moderate', 'strict'])
+            && (isUnset(data, 'visibility')
+                || data.visibility in ['everyone', 'friendsOnly'])
+            && (isUnset(data, 'latitude') || data.latitude is number)
+            && (isUnset(data, 'longitude') || data.longitude is number)
+            && (isUnset(data, 'deletedAt') || data.deletedAt is timestamp);
+      }
+
       allow read: if isSignedIn();
 
       allow create: if isFullMember()
           && request.resource.data.hostUserID == request.auth.uid
-          && request.resource.data.hostName is string
-          && request.resource.data.hostName.size() > 0
-          && request.resource.data.hostName.size() < 200
-          // Nested struct validation
-          && request.resource.data.sleeping is map
-          && request.resource.data.amenities is map
-          && request.resource.data.address is map
-          && request.resource.data.sleeping.numGuestRooms is int
-          && request.resource.data.sleeping.maxGuests is int
-          && request.resource.data.sleeping.maxStayDays is int;
+          && isValidListing(request.resource.data);
 
+      // Update re-validates the whole document. Without this a host could
+      // corrupt their own listing into a shape the client cannot decode, and
+      // decode failures are silently dropped, so the listing would just vanish.
       allow update: if isSignedIn()
           && resource.data.hostUserID == request.auth.uid
           // hostUserID is immutable after creation
-          && request.resource.data.hostUserID == resource.data.hostUserID;
+          && request.resource.data.hostUserID == resource.data.hostUserID
+          && isValidListing(request.resource.data);
 
       allow delete: if isSignedIn()
           && resource.data.hostUserID == request.auth.uid;
@@ -110,6 +186,11 @@ service cloud.firestore {
               || request.auth.uid == resource.data.hostUserID);
 
       allow create: if isFullMember()
+          && request.resource.data.keys().hasOnly([
+               'id', 'listingID', 'listingCity', 'listingHostName',
+               'hostUserID', 'guestUserID', 'checkIn', 'checkOut',
+               'guestNote', 'hostNote', 'status', 'createdAt', 'updatedAt'
+             ])
           && request.resource.data.guestUserID == request.auth.uid
           && request.resource.data.status == "pending"
           && request.resource.data.hostUserID is string
@@ -119,29 +200,29 @@ service cloud.firestore {
           && request.resource.data.checkIn is timestamp
           && request.resource.data.checkOut is timestamp
           && request.resource.data.checkOut > request.resource.data.checkIn
-          && (!('guestNote' in request.resource.data)
-              || (request.resource.data.guestNote is string
-                  && request.resource.data.guestNote.size() < 2000));
+          && isOptionalString(request.resource.data, 'guestNote', 2000);
 
+      // Status transitions may touch nothing but the status, the note belonging
+      // to the acting role, and updatedAt. Everything else — checkIn, checkOut,
+      // guestNote, listingID, the participant IDs, createdAt — is pinned by
+      // affectedKeys(), so a host cannot rewrite the dates while "accepting"
+      // and a guest cannot rewrite them while cancelling.
       allow update: if isSignedIn()
           // No edits from a terminal state
           && resource.data.status in ["pending", "accepted"]
+          && request.resource.data.updatedAt == request.time
           && (
             // Host accepts or declines a pending request
             (isOwner(resource.data.hostUserID)
                 && resource.data.status == "pending"
                 && request.resource.data.status in ["accepted", "declined"]
-                && request.resource.data.guestUserID == resource.data.guestUserID
-                && request.resource.data.listingID == resource.data.listingID
-                && (!('hostNote' in request.resource.data)
-                    || (request.resource.data.hostNote is string
-                        && request.resource.data.hostNote.size() < 2000)))
+                && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
+                && isOptionalString(request.resource.data, 'hostNote', 2000))
             ||
             // Guest cancels a pending or accepted request
             (isOwner(resource.data.guestUserID)
                 && request.resource.data.status == "cancelled"
-                && request.resource.data.hostUserID == resource.data.hostUserID
-                && request.resource.data.listingID == resource.data.listingID)
+                && changedKeys().hasOnly(['status', 'updatedAt']))
           );
 
       allow delete: if false;
