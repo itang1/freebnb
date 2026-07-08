@@ -44,14 +44,25 @@ final class freebnbUITests: XCTestCase {
         guestButton.tap()
     }
 
+    /// Taps once the element exists. Tapping an element that hasn't been laid out
+    /// yet is silently a no-op, which shows up later as a confusing "not found"
+    /// on whatever the tap was supposed to reveal.
+    @discardableResult
+    private func waitAndTap(_ element: XCUIElement, timeout: TimeInterval = 15) -> Bool {
+        guard element.waitForExistence(timeout: timeout) else {
+            XCTFail("Timed out waiting for \(element)")
+            return false
+        }
+        element.tap()
+        return true
+    }
+
     /// Signs into the `#if DEBUG`-only dev@freebnb.test account (see
     /// AuthManager.signInWithEmail, ProfilePage) from wherever the tab bar is showing.
     private func signInAsDev(_ app: XCUIApplication) {
-        app.tabBars.buttons["Profile"].tap()
-        let devRow = app.buttons["profile.devSignInButton"]
-        XCTAssertTrue(devRow.waitForExistence(timeout: 10))
-        devRow.tap()
-        XCTAssertTrue(app.staticTexts["dev@freebnb.test"].waitForExistence(timeout: 10))
+        waitAndTap(app.tabBars.buttons["Profile"])
+        waitAndTap(app.buttons["profile.devSignInButton"])
+        XCTAssertTrue(app.staticTexts["dev@freebnb.test"].waitForExistence(timeout: 15))
     }
 
     // MARK: - Sign in
@@ -93,9 +104,9 @@ final class freebnbUITests: XCTestCase {
             }
         }
 
-        app.tabBars.buttons["Stays"].tap()
-        app.buttons["Listings"].tap()
-        app.buttons["Create listing"].tap()
+        waitAndTap(app.tabBars.buttons["Stays"])
+        waitAndTap(app.buttons["Listings"])
+        waitAndTap(app.buttons["Create listing"])
 
         let streetField = app.textFields["Street"]
         XCTAssertTrue(streetField.waitForExistence(timeout: 10))
@@ -131,7 +142,7 @@ final class freebnbUITests: XCTestCase {
         continueAsGuest(app)
         signInAsDev(app)
 
-        app.tabBars.buttons["Listings"].tap()
+        waitAndTap(app.tabBars.buttons["Listings"])
         let firstListing = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Opens listing details")).firstMatch
         // Fall back to the first cell-like button in the list if the accessibility hint isn't matched this way.
         let target = firstListing.exists ? firstListing : app.scrollViews.buttons.firstMatch
