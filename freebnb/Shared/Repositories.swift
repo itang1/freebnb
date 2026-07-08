@@ -420,14 +420,15 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         let payload = data
         let request = request
         try await withRetry { [db] in
-            // Single-field query (no composite index needed); filter to accepted
-            // and overlapping in code.
+            // Only accepted requests can conflict, so filter server-side rather
+            // than reading every request ever made against this listing. Served
+            // by the (listingID, status, createdAt) composite index.
             let snap = try await db.collection("stayRequests")
                 .whereField("listingID", isEqualTo: request.listingID)
+                .whereField("status", isEqualTo: StayRequestStatus.accepted.rawValue)
                 .getDocuments()
             for doc in snap.documents where doc.documentID != request.id {
-                guard let other = try? doc.data(as: StayRequest.self),
-                      other.status == .accepted else { continue }
+                guard let other = try? doc.data(as: StayRequest.self) else { continue }
                 // Half-open interval overlap: [checkIn, checkOut).
                 if other.checkIn < request.checkOut && request.checkIn < other.checkOut {
                     throw StayRequestError.overlappingStay
