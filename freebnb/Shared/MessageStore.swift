@@ -50,6 +50,10 @@ enum MessageState: Hashable {
 @MainActor
 @Observable
 final class MessageStore {
+    /// True from launch until the conversation-list listener delivers its first
+    /// snapshot (or the user turns out to be signed out). Lets the UI show
+    /// skeleton rows instead of flashing the "No conversations yet" empty state.
+    private(set) var isLoadingConversations = true
     private(set) var pendingIDs: Set<String> = []
     private(set) var failedIDs: Set<String> = []
     /// True when the most recent send was blocked by the client-side rate limit,
@@ -65,6 +69,8 @@ final class MessageStore {
     private var threadMessages: [String: [Message]] = [:]
     private var threadHasMore: [String: Bool] = [:]
     private var threadLimits: [String: Int] = [:]
+    /// Conversations whose per-thread listener has replied at least once.
+    private var threadResolvedIDs: Set<String> = []
 
     private var failedMessages: [String: Message] = [:]
     private var currentUserID: String?
@@ -126,11 +132,15 @@ final class MessageStore {
             threadMessages = [:]
             threadHasMore = [:]
             threadLimits = [:]
+            threadResolvedIDs = []
             pendingIDs = []
             failedIDs = []
             failedMessages = [:]
+            // Signed out: nothing is coming, so stop showing skeletons.
+            isLoadingConversations = false
             return
         }
+        isLoadingConversations = true
         activeListener = repository.listenToMessages(userID: userID, limit: summaryLimit) { [weak self] result in
             Task { @MainActor [weak self] in
                 self?.applyGlobal(result: result)
@@ -139,6 +149,9 @@ final class MessageStore {
     }
 
     private func applyGlobal(result: Result<[Message], Error>) {
+        // Either outcome ends the initial load; on failure the empty state is a
+        // more honest answer than an indefinite skeleton.
+        isLoadingConversations = false
         switch result {
         case .failure(let error):
             log.error("snapshot error: \(error.localizedDescription, privacy: .public)")
@@ -167,6 +180,20 @@ final class MessageStore {
         threadMessages.removeValue(forKey: conversationID)
         threadHasMore.removeValue(forKey: conversationID)
         threadLimits.removeValue(forKey: conversationID)
+        threadResolvedIDs.remove(conversationID)
+    }
+
+    /// True until we know what the thread contains: its listener has not replied
+    /// yet and the global listener has nothing for it either.
+    ///
+    /// Deliberately not a flag flipped on in `openConversation`: the thread view
+    /// renders once *before* its `.task` opens the conversation, so such a flag
+    /// would read `false` on that first frame and flash the empty state before
+    /// the skeleton. Starting from "unresolved" makes the first frame correct.
+    ///
+    /// Paging in older messages keeps the conversation resolved.
+    func isLoadingThread(_ conversationID: String) -> Bool {
+        !threadResolvedIDs.contains(conversationID) && conversations[conversationID] == nil
     }
 
     /// Extend the thread by one page. Call when user taps "Load older messages".
@@ -192,6 +219,10 @@ final class MessageStore {
     }
 
     private func applyThread(conversationID: String, result: Result<(messages: [Message], hasMore: Bool), Error>) {
+        // Either outcome means the thread's contents are now known. On failure the
+        // global snapshot (if any) still shows through `messages(for:)`, so the
+        // thread resolves to whatever is already on hand rather than a skeleton.
+        threadResolvedIDs.insert(conversationID)
         switch result {
         case .failure(let error):
             log.error("thread snapshot error \(conversationID, privacy: .public): \(error.localizedDescription, privacy: .public)")

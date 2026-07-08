@@ -54,9 +54,12 @@ struct MessagingPage: View {
     private var isMuted: Bool { messageStore.isMuted(conversationID) }
     private var isBlocked: Bool { userProfileStore.isBlocked(otherUserID) }
 
+    private var trimmedSearchQuery: String { searchQuery.trimmingCharacters(in: .whitespaces) }
+    private var isLoadingThread: Bool { messageStore.isLoadingThread(conversationID) }
+
     private var allMessages: [Message] { messageStore.messages(for: conversationID) }
     private var messages: [Message] {
-        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        let q = trimmedSearchQuery
         guard !q.isEmpty else { return allMessages }
         return allMessages.filter { $0.text.localizedCaseInsensitiveContains(q) }
     }
@@ -101,13 +104,19 @@ struct MessagingPage: View {
                         }
 
                         if messages.isEmpty {
-                            if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-                                Text("No messages match \"\(searchQuery.trimmingCharacters(in: .whitespaces))\"")
+                            if !trimmedSearchQuery.isEmpty {
+                                Text("No messages match \"\(trimmedSearchQuery)\"")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                     .multilineTextAlignment(.center)
                                     .padding(.top, 48)
                                     .padding(.horizontal, 24)
+                            } else if isLoadingThread {
+                                // Only stands in for the unknown-yet state: a thread
+                                // already backed by the global snapshot skips this.
+                                SkeletonMessageThread()
+                                    .accessibilityElement()
+                                    .accessibilityLabel("Loading messages")
                             } else {
                                 Text("Send \(otherName) a message to get started.")
                                     .font(.subheadline)
@@ -566,7 +575,19 @@ struct MessagesTab: View {
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if visibleSummaries.isEmpty && searchQuery.isEmpty {
+                // Skeletons only stand in for the not-yet-known empty state; once
+                // any conversation has arrived the real list is the better answer,
+                // and a search with no hits is a result, not a pending load.
+                if messageStore.isLoadingConversations && visibleSummaries.isEmpty && searchQuery.isEmpty {
+                    List(0..<6, id: \.self) { _ in
+                        SkeletonConversationRow()
+                    }
+                    .scrollContentBackground(.hidden)
+                    .background(Color.creamWhite.ignoresSafeArea())
+                    .allowsHitTesting(false)
+                    .accessibilityElement()
+                    .accessibilityLabel("Loading conversations")
+                } else if visibleSummaries.isEmpty && searchQuery.isEmpty {
                     ContentUnavailableView {
                         Label("No conversations yet", systemImage: "message")
                             .foregroundStyle(Color.appTeal)

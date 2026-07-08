@@ -312,9 +312,7 @@ struct HomeDetailPage: View {
     private var mapSection: some View {
         switch mapState {
         case .loading:
-            ProgressView("Loading map...")
-                .frame(maxWidth: .infinity)
-                .frame(height: 250)
+            SkeletonMapBlock()
         case .loaded:
             Map(initialPosition: .region(region)) {
                 ForEach(mapItems, id: \.self) { item in
