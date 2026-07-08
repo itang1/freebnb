@@ -7,11 +7,15 @@ import SwiftUI
 
 private struct SkeletonModifier: ViewModifier {
     @State private var animating = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
-            .opacity(animating ? 0.4 : 0.9)
+            // A repeatForever pulse is exactly the kind of looping animation
+            // Reduce Motion exists to stop; hold a steady mid opacity instead.
+            .opacity(reduceMotion ? 0.6 : (animating ? 0.4 : 0.9))
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                     animating = true
                 }

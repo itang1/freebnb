@@ -570,15 +570,19 @@ struct MessagesTab: View {
         }
     }
 
+    /// Skeletons stand in only for the not-yet-known empty state. Once any
+    /// conversation has arrived the real list is the better answer, and a search
+    /// that matches nothing is a result rather than a pending load.
+    private var showingSkeletons: Bool {
+        messageStore.isLoadingConversations && visibleSummaries.isEmpty && searchQuery.isEmpty
+    }
+
     // MARK: - Body
 
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                // Skeletons only stand in for the not-yet-known empty state; once
-                // any conversation has arrived the real list is the better answer,
-                // and a search with no hits is a result, not a pending load.
-                if messageStore.isLoadingConversations && visibleSummaries.isEmpty && searchQuery.isEmpty {
+                if showingSkeletons {
                     List(0..<6, id: \.self) { _ in
                         SkeletonConversationRow()
                     }
@@ -587,6 +591,7 @@ struct MessagesTab: View {
                     .allowsHitTesting(false)
                     .accessibilityElement()
                     .accessibilityLabel("Loading conversations")
+                    .transition(.opacity)
                 } else if visibleSummaries.isEmpty && searchQuery.isEmpty {
                     ContentUnavailableView {
                         Label("No conversations yet", systemImage: "message")
@@ -620,8 +625,11 @@ struct MessagesTab: View {
                     }
                     .scrollContentBackground(.hidden)
                     .background(Color.creamWhite.ignoresSafeArea())
+                    .transition(.opacity)
+                    .animatesListChanges(on: visibleSummaries.map(\.id))
                 }
             }
+            .animation(AppAnimation.contentSwap, value: showingSkeletons)
             .navigationTitle("Messages")
             .searchable(text: $searchQuery, prompt: "Search conversations")
             .navigationDestination(for: ConversationRoute.self) { route in

@@ -190,7 +190,7 @@ private struct FriendRequestRow: View {
                         .foregroundColor(.primary)
                         .cornerRadius(8)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 Button(action: onAccept) {
                     Text("Accept")
                         .frame(maxWidth: .infinity)
@@ -199,7 +199,7 @@ private struct FriendRequestRow: View {
                         .foregroundColor(.white)
                         .cornerRadius(8)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
         .padding(.vertical, 4)
@@ -234,7 +234,7 @@ private struct PendingOutgoingRow: View {
             Spacer()
             Button("Cancel", role: .destructive, action: onCancel)
                 .font(.subheadline)
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .foregroundColor(.red)
         }
     }

@@ -180,7 +180,7 @@ struct HomesPage: View {
         } label: {
             HomeCard(listing: listing)
         }
-        .buttonStyle(CardButtonStyle())
+        .buttonStyle(.pressableCard)
         .accessibilityLabel("\(listing.hostName) in \(listing.address.city), \(listing.address.state)")
         .accessibilityValue(accessibilitySummary(for: listing))
         .accessibilityHint("Opens listing details")
@@ -195,6 +195,10 @@ struct HomesPage: View {
     private var filteredListings: [Home] {
         recomputeFiltered(from: shuffledListings)
     }
+
+    /// Placeholders stand in only before the first page arrives. Once any listing
+    /// is on screen, a filter that matches nothing is a result, not a load.
+    private var showingSkeletons: Bool { isLoading && filteredListings.isEmpty }
 
     private func recomputeFiltered(from shuffled: [Home]) -> [Home] {
         let query = citySearch.trimmingCharacters(in: .whitespaces).lowercased()
@@ -309,30 +313,40 @@ struct HomesPage: View {
 
             ScrollView {
                 LazyVStack(spacing: 15) {
-                    if isLoading && filteredListings.isEmpty {
-                        ForEach(0..<4, id: \.self) { _ in
-                            SkeletonHomeCard()
-                        }
-                    } else {
-                        ForEach(filteredListings) { listing in
-                            listingRow(listing)
-                        }
+                    Group {
+                        if showingSkeletons {
+                            ForEach(0..<4, id: \.self) { _ in
+                                SkeletonHomeCard()
+                            }
+                            .transition(.opacity)
+                        } else {
+                            ForEach(filteredListings) { listing in
+                                listingRow(listing)
+                            }
+                            .transition(.opacity)
 
-                        if canLoadMore && !filteredListings.isEmpty {
-                            Color.clear
-                                .frame(height: 1)
-                                .onAppear { onLoadMore() }
-                        }
+                            if canLoadMore && !filteredListings.isEmpty {
+                                Color.clear
+                                    .frame(height: 1)
+                                    .onAppear { onLoadMore() }
+                            }
 
-                        if isLoadingMore {
-                            ProgressView()
-                                .padding(.vertical, 16)
-                        }
+                            if isLoadingMore {
+                                ProgressView()
+                                    .padding(.vertical, 16)
+                            }
 
-                        if !isLoading && filteredListings.isEmpty {
-                            emptyStateView
+                            if !isLoading && filteredListings.isEmpty {
+                                emptyStateView
+                            }
                         }
                     }
+                    .animation(AppAnimation.contentSwap, value: showingSkeletons)
+                    // Filtering, sorting, and the saved-only toggle all rewrite this
+                    // list in place; animate on identity so rows slide rather than
+                    // pop. Keyed on IDs, not the Homes themselves, so an unrelated
+                    // field change does not re-run the transition.
+                    .animatesListChanges(on: filteredListings.map(\.id))
                 }
             }
             .refreshable { await onRefresh() }
@@ -560,14 +574,6 @@ struct HomesPage: View {
         let guests = "\(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s")"
         let nights = "up to \(listing.guestPolicy.maxStayDays) night\(listing.guestPolicy.maxStayDays == 1 ? "" : "s")"
         return "\(rooms), \(guests), \(nights)"
-    }
-}
-
-struct CardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

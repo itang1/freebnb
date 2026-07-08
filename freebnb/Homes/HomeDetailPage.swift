@@ -23,7 +23,7 @@ struct HomeDetailPage: View {
     @State private var isListingSaved = false
     @State private var saveError: String?
 
-    private enum MapState {
+    private enum MapState: Equatable {
         case loading
         case loaded
         case failed
@@ -310,29 +310,32 @@ struct HomeDetailPage: View {
 
     @ViewBuilder
     private var mapSection: some View {
-        switch mapState {
-        case .loading:
-            SkeletonMapBlock()
-        case .loaded:
-            Map(initialPosition: .region(region)) {
-                ForEach(mapItems, id: \.self) { item in
-                    Marker(item.name ?? "Location", coordinate: item.placemark.coordinate)
+        Group {
+            switch mapState {
+            case .loading:
+                SkeletonMapBlock()
+            case .loaded:
+                Map(initialPosition: .region(region)) {
+                    ForEach(mapItems, id: \.self) { item in
+                        Marker(item.name ?? "Location", coordinate: item.placemark.coordinate)
+                    }
                 }
+                .frame(height: 250)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            case .failed:
+                HStack(spacing: 8) {
+                    Image(systemName: "location.slash")
+                        .foregroundColor(.secondary)
+                    Text("Map unavailable — address shown above")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 60)
+                .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
             }
-            .frame(height: 250)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        case .failed:
-            HStack(spacing: 8) {
-                Image(systemName: "location.slash")
-                    .foregroundColor(.secondary)
-                Text("Map unavailable — address shown above")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 60)
-            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
         }
+        .crossFades(on: mapState)
     }
 
     // MARK: - Geocoding

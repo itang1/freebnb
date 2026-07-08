@@ -317,7 +317,7 @@ struct OutgoingRequestRow: View {
                         .foregroundColor(.red)
                         .cornerRadius(8)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.top, 4)
             }
         }
@@ -383,7 +383,7 @@ struct IncomingRequestRow: View {
                             .foregroundColor(.primary)
                             .cornerRadius(8)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
 
                     Button(action: { onAccept?() }) {
                         Text("Accept")
@@ -393,7 +393,7 @@ struct IncomingRequestRow: View {
                             .foregroundColor(.white)
                             .cornerRadius(8)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
                 .padding(.top, 4)
             }
