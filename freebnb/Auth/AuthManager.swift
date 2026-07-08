@@ -164,10 +164,21 @@ final class AuthManager {
         }
     }
 
-    // MARK: - Debug sign-in (simulator / development only)
+    // MARK: - Debug sign-in (emulator only)
 
     #if DEBUG
+    /// Email/password sign-in for the seeded development accounts.
+    ///
+    /// Compile-gated to DEBUG *and* refused unless this process is pointed at the
+    /// Auth emulator. A hardcoded credential that only ever reaches localhost is
+    /// not a backdoor into production, so weakening one guard is not enough to
+    /// turn it into one.
     func signInWithEmail(_ email: String, password: String) {
+        guard EmulatorEnvironment.isActive else {
+            log.error("debug sign in refused: not running against the Auth emulator")
+            authError = .signInFailed
+            return
+        }
         Task { @MainActor in
             isLoading = true
             defer { isLoading = false }

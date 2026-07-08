@@ -91,18 +91,14 @@ struct FreeBNBApp: App {
         }
     }
 
-    // UI tests and store-level unit tests launch with `-UseFirebaseEmulator YES`
-    // (or `FIREBASE_EMULATOR=1` in the environment) to point Auth and Firestore
-    // at `firebase emulators:start` instead of the production project, so
-    // automated runs never write real data. DEBUG-only; production builds never
-    // check for this.
+    // Points Auth and Firestore at `firebase emulators:start` instead of the
+    // production project, so automated runs never write real data. See
+    // EmulatorEnvironment for how the emulator is requested. DEBUG-only;
+    // production builds never check for this.
 #if DEBUG
     private static func configureEmulatorIfRequested() {
-        let env = ProcessInfo.processInfo.environment
-        let usesEmulator = ProcessInfo.processInfo.arguments.contains("-UseFirebaseEmulator")
-            || env["FIREBASE_EMULATOR"] == "1"
-        guard usesEmulator else { return }
-        let host = env["FIREBASE_EMULATOR_HOST"] ?? "localhost"
+        guard EmulatorEnvironment.isActive else { return }
+        let host = EmulatorEnvironment.host
         Auth.auth().useEmulator(withHost: host, port: 9099)
         let settings = Firestore.firestore().settings
         settings.host = "\(host):8080"
