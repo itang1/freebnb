@@ -55,7 +55,7 @@ struct StaysTab: View {
                 .frame(width: 200)
             }
         }
-        .background(Color.creamWhite.ignoresSafeArea())
+        .background(Color.primaryBackground.ignoresSafeArea())
         .sheet(item: $respondingTo) { req in
             AcceptSheet(request: req) { hostNote in
                 await accept(req, hostNote: hostNote)
@@ -76,18 +76,18 @@ struct StaysTab: View {
                         .font(.caption)
                     Button("Retry") { requestStore.reload() }
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(Color.appTeal)
+                        .foregroundColor(Color.accent)
                         .padding(.top, 8)
                 }
-                .background(Color.creamWhite.ignoresSafeArea())
+                .background(Color.primaryBackground.ignoresSafeArea())
             } else if !hasAny {
                 ContentUnavailableView {
                     Label("No trips yet", systemImage: "suitcase")
-                        .foregroundStyle(Color.appTeal)
+                        .foregroundStyle(Color.accent)
                 } description: {
                     Text("Open a listing, message the host, and request to stay. Your trips appear here.")
                 }
-                .background(Color.creamWhite.ignoresSafeArea())
+                .background(Color.primaryBackground.ignoresSafeArea())
             } else {
                 List {
                     if let actionError {
@@ -156,7 +156,7 @@ struct StaysTab: View {
                 }
                 .refreshable { requestStore.reload() }
                 .scrollContentBackground(.hidden)
-                .background(Color.creamWhite.ignoresSafeArea())
+                .background(Color.primaryBackground.ignoresSafeArea())
                 .task(id: actionError) {
                     guard actionError != nil else { return }
                     try? await Task.sleep(for: .seconds(4))
@@ -389,8 +389,8 @@ struct IncomingRequestRow: View {
                         Text("Accept")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(Color.appTeal)
-                            .foregroundColor(.onBrandFill)
+                            .background(Color.accent)
+                            .foregroundColor(.onAccent)
                             .cornerRadius(8)
                     }
                     .buttonStyle(.pressable)

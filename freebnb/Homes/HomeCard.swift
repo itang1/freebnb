@@ -123,16 +123,16 @@ struct HomeCard: View {
                                    listing.amenities.providesToiletries
                     ) {
                         if listing.amenities.providesPillows {
-                            ChipIcon(systemName: "bed.double.fill", color: Color.coral, label: "Pillows provided")
+                            ChipIcon(systemName: "bed.double.fill", color: Color.callToAction, label: "Pillows provided")
                         }
                         if listing.amenities.providesBlankets {
-                            ChipIcon(systemName: "square.stack.fill", color: Color.coral, label: "Blankets provided")
+                            ChipIcon(systemName: "square.stack.fill", color: Color.callToAction, label: "Blankets provided")
                         }
                         if listing.amenities.providesTowels {
-                            ChipIcon(systemName: "shower.fill", color: Color.coral, label: "Towels provided")
+                            ChipIcon(systemName: "shower.fill", color: Color.callToAction, label: "Towels provided")
                         }
                         if listing.amenities.providesToiletries {
-                            ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color.coral, label: "Toiletries provided")
+                            ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color.callToAction, label: "Toiletries provided")
                         }
                     }
                 }
@@ -140,9 +140,9 @@ struct HomeCard: View {
             .padding(16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.skyBlue.opacity(0.35))
+        .background(Color.secondaryBackground.opacity(0.35))
         .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(color: Color.appTeal.opacity(0.15), radius: 8, x: 0, y: 5)
+        .shadow(color: Color.accent.opacity(0.15), radius: 8, x: 0, y: 5)
     }
 
     // MARK: - Availability
@@ -177,7 +177,7 @@ struct HomeCard: View {
                     case .failure:
                         tealHeaderContent
                     default:
-                        Color.appTeal.opacity(0.3)
+                        Color.accent.opacity(0.3)
                             .overlay(ProgressView().tint(.white))
                     }
                 }
@@ -202,10 +202,10 @@ struct HomeCard: View {
             ))
         } else {
             tealHeaderContent
-                .foregroundColor(.onBrandFill)
+                .foregroundColor(.onAccent)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Color.appTeal)
+                .background(Color.accent)
         }
     }
 
@@ -284,7 +284,7 @@ struct SummaryPill: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.appTeal.opacity(0.15))
+        .background(Color.accent.opacity(0.15))
         .clipShape(Capsule())
     }
 }

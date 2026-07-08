@@ -109,7 +109,7 @@ struct ContentView: View {
                     .tabItem { Label("Info", systemImage: "book.fill") }
                     .tag(4)
                 }
-                .tint(.appTeal)
+                .tint(.accent)
                 .sheet(isPresented: $showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
                     OnboardingPage(isPresented: $showOnboarding)
                 }

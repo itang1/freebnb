@@ -49,19 +49,19 @@ The backend is intentionally thin. Firestore security rules are the real authori
 
 ## Design palette
 
-The visual theme is "summer lakeside cabin": sandy neutrals, lake and sky blues, and a sunset-coral accent. Colors live in `freebnb/Assets.xcassets` as named colorsets with light and dark variants; Xcode generates the Swift symbols (`Color.appTeal`, `.creamWhite`, ...), so views reference colors by role and never hardcode hex values.
+The visual theme is "summer lakeside cabin": sandy neutrals, lake and sky blues, and a sunset-coral accent. Colorsets live in the `Color/` namespace of `freebnb/Assets.xcassets` with light and dark variants, named by semantic role rather than hue. `Shared/AppColor.swift` is the single Swift interface: an `AppColor` enum plus `Color` and `UIColor` extensions (`Color.accent`, `UIColor.app(.accent)`), so views reference roles and never hardcode hex values. Generated asset symbol extensions are disabled in favor of this hand-written API.
 
-| Colorset | Role | Light | Dark |
-|----------|------|-------|------|
-| `CreamWhite` | Sand; page and card backgrounds | `#FAF3E8` | `#211E19` |
-| `AppTeal` | Lake teal; primary brand, tints, buttons | `#0B7382` | `#5CC1CD` |
-| `SkyBlue` | Sky blue; soft card washes (used at low opacity) | `#B7E0EA` | `#27454F` |
-| `SeafoamBlue` | Seafoam; secondary water tone | `#A9DCD3` | `#2E5551` |
-| `Coral` | Sunset coral; calls to action and warm icons | `#E85443` | `#FF7E6A` |
-| `CoralPink` | Shell pink; soft blush fills and badges | `#FFDDD6` | `#492722` |
-| `mintGreen` | Pine sage; greenery accents | `#6B8E6E` | `#A6C6A4` |
-| `OnBrandFill` | Text and icons placed on teal or coral fills | `#FFF8F0` | `#2A1F1A` |
-| `AccentColor` | System tint; mirrors `AppTeal` | `#0B7382` | `#5CC1CD` |
+| Colorset (`Color/`) | Role | Light | Dark |
+|---------------------|------|-------|------|
+| `primaryBackground` | Warm sand; page and sheet backgrounds | `#FAF3E8` | `#211E19` |
+| `secondaryBackground` | Sky blue; card washes (used at low opacity) | `#B7E0EA` | `#27454F` |
+| `tertiaryBackground` | Shell pink; soft blush fills and badges | `#FFDDD6` | `#492722` |
+| `accent` | Lake teal; primary brand, tints, buttons | `#0B7382` | `#5CC1CD` |
+| `secondaryAccent` | Seafoam; secondary water tone | `#A9DCD3` | `#2E5551` |
+| `callToAction` | Sunset coral; high-emphasis actions | `#E85443` | `#FF7E6A` |
+| `success` | Pine sage; positive states, greenery accents | `#6B8E6E` | `#A6C6A4` |
+| `onAccent` | Text and icons on `accent` or `callToAction` fills | `#FFF8F0` | `#2A1F1A` |
+| `AccentColor` (top level) | System tint; mirrors `accent` | `#0B7382` | `#5CC1CD` |
 
 Brand fills invert with the appearance: in light mode fills are deep (lake teal, sunset coral) with cream labels, and in dark mode fills brighten (moonlit teal, warm coral) with espresso labels, which is what `OnBrandFill` encodes. `AppTeal` clears 4.5:1 contrast as text on `CreamWhite` in both modes.
 

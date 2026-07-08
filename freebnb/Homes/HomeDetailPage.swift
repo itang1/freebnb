@@ -174,8 +174,8 @@ struct HomeDetailPage: View {
                     Text("Open in Apple Maps")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.coral)
-                        .foregroundColor(.onBrandFill)
+                        .background(Color.callToAction)
+                        .foregroundColor(.onAccent)
                         .cornerRadius(10)
                 }
                 .disabled(mapState != .loaded)
@@ -236,7 +236,7 @@ struct HomeDetailPage: View {
                         }
                     } label: {
                         Image(systemName: isListingSaved ? "bookmark.fill" : "bookmark")
-                            .foregroundStyle(Color.appTeal)
+                            .foregroundStyle(Color.accent)
                     }
                     .accessibilityLabel(isListingSaved ? "Remove from saved" : "Save listing")
                 }
@@ -270,7 +270,7 @@ struct HomeDetailPage: View {
                 Text("Their listings won't appear and they won't be able to message you.")
             }
         }
-        .background(Color.creamWhite)
+        .background(Color.primaryBackground)
         .alert("Couldn't save listing", isPresented: Binding(
             get: { saveError != nil },
             set: { if !$0 { saveError = nil } }
@@ -287,10 +287,10 @@ struct HomeDetailPage: View {
     private var hostTrustSignals: some View {
         Label("Verified name", systemImage: "checkmark.seal.fill")
             .font(.caption)
-            .foregroundColor(Color.appTeal)
+            .foregroundColor(Color.accent)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.appTeal.opacity(0.1))
+            .background(Color.accent.opacity(0.1))
             .clipShape(Capsule())
 
         if let profile = userProfileStore.profile(for: home.hostUserID),
@@ -417,8 +417,8 @@ struct HomeDetailPage: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.appTeal)
-                        .foregroundColor(.onBrandFill)
+                        .background(Color.accent)
+                        .foregroundColor(.onAccent)
                         .cornerRadius(10)
                     }
                     .accessibilityIdentifier("homeDetail.messageHostButton")
@@ -432,7 +432,7 @@ struct HomeDetailPage: View {
                 if let info = home.hostContactInfo, !info.isEmpty {
                     HStack(spacing: 10) {
                         Image(systemName: "person.crop.circle")
-                            .foregroundColor(Color.appTeal)
+                            .foregroundColor(Color.accent)
                         Text(info)
                             .font(.subheadline)
                     }

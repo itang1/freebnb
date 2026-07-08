@@ -55,7 +55,7 @@ struct AvailabilityEditorView: View {
                         addRange()
                     }
                     .disabled(!canAdd)
-                    .foregroundColor(canAdd ? .appTeal : .secondary)
+                    .foregroundColor(canAdd ? .accent : .secondary)
                 }
 
                 if !blockedRanges.isEmpty {

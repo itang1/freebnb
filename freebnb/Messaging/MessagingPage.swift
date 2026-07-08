@@ -97,7 +97,7 @@ struct MessagingPage: View {
                             } label: {
                                 Label("Load older messages", systemImage: "arrow.up.circle")
                                     .font(.subheadline)
-                                    .foregroundColor(Color.appTeal)
+                                    .foregroundColor(Color.accent)
                             }
                             .buttonStyle(.plain)
                             .padding(.top, 8)
@@ -152,7 +152,7 @@ struct MessagingPage: View {
             Divider()
             inputBar
         }
-        .background(Color.creamWhite.ignoresSafeArea())
+        .background(Color.primaryBackground.ignoresSafeArea())
         .navigationTitle(otherName)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search messages")
@@ -162,7 +162,7 @@ struct MessagingPage: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Request a Stay") { showRequestSheet = true }
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(Color.appTeal)
+                        .foregroundColor(Color.accent)
                 }
             }
             // Secondary: conversation actions menu
@@ -273,7 +273,7 @@ struct MessagingPage: View {
         HStack(spacing: 10) {
             Image(systemName: "house.fill")
                 .font(.subheadline)
-                .foregroundColor(.appTeal)
+                .foregroundColor(.accent)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Re: \(home.hostName)'s place")
@@ -291,7 +291,7 @@ struct MessagingPage: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Color.appTeal.opacity(0.07))
+        .background(Color.accent.opacity(0.07))
     }
 
     // MARK: - Request banner
@@ -344,10 +344,10 @@ struct MessagingPage: View {
                     .disabled(bannerBusy)
                     Button("Accept") { respondingTo = request }
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.onBrandFill)
+                        .foregroundColor(.onAccent)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
-                        .background(Color.appTeal)
+                        .background(Color.accent)
                         .clipShape(Capsule())
                         .disabled(bannerBusy)
                 }
@@ -374,14 +374,14 @@ struct MessagingPage: View {
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
-                    .foregroundColor(trimmedDraft.isEmpty ? .secondary.opacity(0.4) : .appTeal)
+                    .foregroundColor(trimmedDraft.isEmpty ? .secondary.opacity(0.4) : .accent)
             }
             .disabled(trimmedDraft.isEmpty)
             .accessibilityLabel("Send message")
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
-        .background(Color.creamWhite)
+        .background(Color.primaryBackground)
     }
 
     // MARK: - Sending
@@ -494,7 +494,7 @@ private struct MessageBubble: View {
 
     private var bubbleBackground: Color {
         if isFailed { return Color.red.opacity(0.15) }
-        return isFromMe ? Color.appTeal : Color.secondary.opacity(0.15)
+        return isFromMe ? Color.accent : Color.secondary.opacity(0.15)
     }
 
     @ViewBuilder
@@ -587,7 +587,7 @@ struct MessagesTab: View {
                         SkeletonConversationRow()
                     }
                     .scrollContentBackground(.hidden)
-                    .background(Color.creamWhite.ignoresSafeArea())
+                    .background(Color.primaryBackground.ignoresSafeArea())
                     .allowsHitTesting(false)
                     .accessibilityElement()
                     .accessibilityLabel("Loading conversations")
@@ -595,14 +595,14 @@ struct MessagesTab: View {
                 } else if visibleSummaries.isEmpty && searchQuery.isEmpty {
                     ContentUnavailableView {
                         Label("No conversations yet", systemImage: "message")
-                            .foregroundStyle(Color.appTeal)
+                            .foregroundStyle(Color.accent)
                     } description: {
                         Text("Open a listing and message the host to get started.")
                     }
-                    .background(Color.creamWhite.ignoresSafeArea())
+                    .background(Color.primaryBackground.ignoresSafeArea())
                 } else if visibleSummaries.isEmpty {
                     ContentUnavailableView.search(text: searchQuery)
-                        .background(Color.creamWhite.ignoresSafeArea())
+                        .background(Color.primaryBackground.ignoresSafeArea())
                 } else {
                     List {
                         ForEach(visibleSummaries) { summary in
@@ -624,7 +624,7 @@ struct MessagesTab: View {
                         }
                     }
                     .scrollContentBackground(.hidden)
-                    .background(Color.creamWhite.ignoresSafeArea())
+                    .background(Color.primaryBackground.ignoresSafeArea())
                     .transition(.opacity)
                     .animatesListChanges(on: visibleSummaries.map(\.id))
                 }
@@ -666,11 +666,11 @@ private struct ConversationRow: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.appTeal.opacity(0.15))
+                    .fill(Color.accent.opacity(0.15))
                     .frame(width: 44, height: 44)
                 Text(String(otherName.prefix(1)))
                     .font(.headline)
-                    .foregroundColor(.appTeal)
+                    .foregroundColor(.accent)
             }
             .accessibilityHidden(true)
 
@@ -707,7 +707,7 @@ private struct ConversationRow: View {
                     .foregroundColor(.secondary)
                 if isUnread {
                     Circle()
-                        .fill(Color.appTeal)
+                        .fill(Color.accent)
                         .frame(width: 8, height: 8)
                         .accessibilityLabel("Unread")
                 }

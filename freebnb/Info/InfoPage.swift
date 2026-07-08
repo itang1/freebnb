@@ -67,7 +67,7 @@ struct InfoPage: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.creamWhite)
+        .background(Color.primaryBackground)
         .navigationTitle("FreeBNB Information")
     }
 }
@@ -87,7 +87,7 @@ private struct InfoCard: View {
                 .frame(width: 46, height: 46)
                 .background(
                     Circle()
-                        .fill(Color.appTeal.opacity(0.85))
+                        .fill(Color.accent.opacity(0.85))
                 )
 
             VStack(alignment: .leading, spacing: 3) {
@@ -105,12 +105,12 @@ private struct InfoCard: View {
             Image(systemName: "chevron.right")
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(Color.appTeal.opacity(0.6))
+                .foregroundColor(Color.accent.opacity(0.6))
         }
         .padding(14)
-        .background(Color.skyBlue.opacity(0.35))
+        .background(Color.secondaryBackground.opacity(0.35))
         .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(color: Color.appTeal.opacity(0.25), radius: 10, x: 0, y: 5)
+        .shadow(color: Color.accent.opacity(0.25), radius: 10, x: 0, y: 5)
     }
 }
 

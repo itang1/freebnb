@@ -36,7 +36,7 @@ struct OnboardingPage: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color.appTeal.opacity(0.15), .creamWhite, Color.appTeal.opacity(0.3)],
+                colors: [Color.accent.opacity(0.15), .primaryBackground, Color.accent.opacity(0.3)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -56,8 +56,8 @@ struct OnboardingPage: View {
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.appTeal)
-                            .foregroundColor(.onBrandFill)
+                            .background(Color.accent)
+                            .foregroundColor(.onAccent)
                             .cornerRadius(12)
                     }
                     // Fixed-height slot keeps layout stable when Skip disappears
@@ -82,14 +82,14 @@ struct OnboardingPage: View {
 
             ZStack {
                 Circle()
-                    .fill(Color.appTeal.opacity(0.15))
+                    .fill(Color.accent.opacity(0.15))
                     .frame(width: 140, height: 140)
                 Image(systemName: slide.icon)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 64, height: 64)
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(Color.appTeal)
+                    .foregroundStyle(Color.accent)
             }
             .accessibilityHidden(true)
 

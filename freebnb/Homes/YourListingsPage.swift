@@ -22,7 +22,7 @@ struct YourListingsPage: View {
             if homeStore.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.creamWhite.ignoresSafeArea())
+                    .background(Color.primaryBackground.ignoresSafeArea())
             } else if yourListings.isEmpty {
                 emptyState
             } else {
@@ -101,12 +101,12 @@ struct YourListingsPage: View {
                     } label: {
                         Label("Edit", systemImage: "pencil")
                     }
-                    .tint(.appTeal)
+                    .tint(.accent)
                 }
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.creamWhite.ignoresSafeArea())
+        .background(Color.primaryBackground.ignoresSafeArea())
     }
 
     // MARK: - Empty state
@@ -114,7 +114,7 @@ struct YourListingsPage: View {
     private var emptyState: some View {
         ContentUnavailableView {
             Label("No listings yet", systemImage: "house")
-                .foregroundStyle(Color.appTeal)
+                .foregroundStyle(Color.accent)
         } description: {
             Text("Create your first listing so friends can find a place to stay.")
         } actions: {
@@ -122,9 +122,9 @@ struct YourListingsPage: View {
                 showCreate = true
             }
             .buttonStyle(.borderedProminent)
-            .tint(Color.appTeal)
+            .tint(Color.accent)
         }
-        .background(Color.creamWhite.ignoresSafeArea())
+        .background(Color.primaryBackground.ignoresSafeArea())
     }
 
     // MARK: - Delete

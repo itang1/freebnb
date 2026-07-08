@@ -369,7 +369,7 @@ struct CreateListingPage: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Image(systemName: vm.hostMotivation == motivation ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(vm.hostMotivation == motivation ? .appTeal : .secondary.opacity(0.5))
+                                .foregroundColor(vm.hostMotivation == motivation ? .accent : .secondary.opacity(0.5))
                             Text(motivation.displayName)
                                 .font(.body)
                         }
@@ -393,7 +393,7 @@ struct CreateListingPage: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Image(systemName: vm.cancellationPolicy == policy ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(vm.cancellationPolicy == policy ? .appTeal : .secondary.opacity(0.5))
+                                .foregroundColor(vm.cancellationPolicy == policy ? .accent : .secondary.opacity(0.5))
                             Text(policy.displayName)
                                 .font(.body)
                         }
@@ -417,7 +417,7 @@ struct CreateListingPage: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Image(systemName: vm.visibility == option ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(vm.visibility == option ? .appTeal : .secondary.opacity(0.5))
+                                .foregroundColor(vm.visibility == option ? .accent : .secondary.opacity(0.5))
                             Text(option.displayName)
                                 .font(.body)
                         }

@@ -59,7 +59,7 @@ struct FAQPage: View {
             .padding(30)
             .frame(maxWidth: .infinity, alignment: .center)
         }
-        .background(Color.creamWhite)
+        .background(Color.primaryBackground)
         .navigationTitle("FAQ")
     }
 }

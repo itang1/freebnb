@@ -55,7 +55,7 @@ struct ProfilePage: View {
                     HStack(spacing: 12) {
                         Image(systemName: "bell")
                             .frame(width: 28)
-                            .foregroundColor(Color.appTeal)
+                            .foregroundColor(Color.accent)
                         Text("Notifications")
                         Spacer()
                         Toggle("", isOn: Binding(
@@ -63,7 +63,7 @@ struct ProfilePage: View {
                             set: { newValue in handleNotificationToggle(newValue) }
                         ))
                         .labelsHidden()
-                        .tint(Color.appTeal)
+                        .tint(Color.accent)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
@@ -74,7 +74,7 @@ struct ProfilePage: View {
                         HStack(spacing: 12) {
                             Image(systemName: "circle.lefthalf.filled")
                                 .frame(width: 28)
-                                .foregroundColor(Color.appTeal)
+                                .foregroundColor(Color.accent)
                             Text("Appearance")
                         }
                         Picker("Appearance", selection: $appearance) {
@@ -150,7 +150,7 @@ struct ProfilePage: View {
             .frame(maxWidth: 500)
             .frame(maxWidth: .infinity)
         }
-        .background(Color.creamWhite.ignoresSafeArea())
+        .background(Color.primaryBackground.ignoresSafeArea())
         .navigationTitle("Profile")
         .task { await refreshNotifStatus() }
         .sheet(isPresented: $showEditName) {
@@ -215,13 +215,13 @@ struct ProfilePage: View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .fill(Color.appTeal.opacity(0.15))
+                    .fill(Color.accent.opacity(0.15))
                     .frame(width: 100, height: 100)
                 Image(systemName: authManager.authMethod == .guest ? "person.slash" : "person.fill")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 44, height: 44)
-                    .foregroundColor(Color.appTeal)
+                    .foregroundColor(Color.accent)
             }
             .padding(.top, 16)
 
@@ -244,8 +244,8 @@ struct ProfilePage: View {
                     .font(.caption)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.appTeal.opacity(0.12))
-                    .foregroundColor(Color.appTeal)
+                    .background(Color.accent.opacity(0.12))
+                    .foregroundColor(Color.accent)
                     .clipShape(Capsule())
                     .padding(.top, 4)
             }
@@ -349,7 +349,7 @@ private struct SettingsRow: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .frame(width: 28)
-                    .foregroundColor(Color.appTeal)
+                    .foregroundColor(Color.accent)
                 Text(label)
                     .foregroundColor(.primary)
                 Spacer()

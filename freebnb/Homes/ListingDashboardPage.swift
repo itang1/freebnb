@@ -130,7 +130,7 @@ struct ListingDashboardPage: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.creamWhite.ignoresSafeArea())
+        .background(Color.primaryBackground.ignoresSafeArea())
         .task(id: actionError) {
             guard actionError != nil else { return }
             try? await Task.sleep(for: .seconds(4))
@@ -142,12 +142,12 @@ struct ListingDashboardPage: View {
             ToolbarItem(placement: .secondaryAction) {
                 Button("Availability") { showAvailability = true }
                     .font(.subheadline.weight(.medium))
-                    .foregroundColor(Color.appTeal)
+                    .foregroundColor(Color.accent)
             }
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit Listing") { showEdit = true }
                     .font(.subheadline.weight(.medium))
-                    .foregroundColor(Color.appTeal)
+                    .foregroundColor(Color.accent)
             }
         }
         .sheet(isPresented: $showEdit) {
@@ -213,11 +213,11 @@ struct ListingDashboardPage: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.appTeal.opacity(0.15))
+                    .fill(Color.accent.opacity(0.15))
                     .frame(width: 36, height: 36)
                 Text(String(name.prefix(1)))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.appTeal)
+                    .foregroundColor(.accent)
             }
             .accessibilityHidden(true)
 

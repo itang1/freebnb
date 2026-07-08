@@ -36,7 +36,7 @@ struct ListingsMapView: View {
                     ForEach(pins, id: \.home.id) { pin in
                         Marker(pin.home.address.city, systemImage: "house.fill", coordinate: pin.coordinate)
                             .tag(pin.home)
-                            .tint(.appTeal)
+                            .tint(.accent)
                     }
                 }
                 .mapStyle(.standard)
@@ -54,7 +54,7 @@ struct ListingsMapView: View {
                 } else if !isGeocoding && pins.isEmpty {
                     ContentUnavailableView {
                         Label("No map pins", systemImage: "map")
-                            .foregroundStyle(Color.appTeal)
+                            .foregroundStyle(Color.accent)
                     } description: {
                         Text("None of the visible listings have a geocodable address.")
                     }
@@ -116,7 +116,7 @@ struct ListingsMapView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
-            .background(Color.creamWhite, in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.primaryBackground, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             .padding(.horizontal)
             .padding(.bottom, 16)

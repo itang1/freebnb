@@ -305,7 +305,7 @@ struct HomesPage: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.appTeal.opacity(0.2))
+                        .background(Color.accent.opacity(0.2))
                         .cornerRadius(20)
                     }
                 }
@@ -353,7 +353,7 @@ struct HomesPage: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .padding(30)
-        .background(.creamWhite)
+        .background(.primaryBackground)
         .navigationTitle("Available FreeBNBs")
         .toolbar { friendsToolbarItem; mapToolbarItem }
         .sheet(isPresented: $showFriends) { friendsSheet }
@@ -391,7 +391,7 @@ struct HomesPage: View {
                 if friendStore.friendEdges.isEmpty && friendStore.pendingCount == 0 {
                     Label("Add Friends", systemImage: "person.badge.plus")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(Color.appTeal)
+                        .foregroundColor(Color.accent)
                 } else {
                     ZStack(alignment: .topTrailing) {
                         Label("Friends", systemImage: "person.2")
@@ -446,7 +446,7 @@ struct HomesPage: View {
                 .frame(width: 80, height: 80)
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [Color.appTeal.opacity(0.4), Color.appTeal],
+                        colors: [Color.accent.opacity(0.4), Color.accent],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -476,8 +476,8 @@ struct HomesPage: View {
                 .fontWeight(.medium)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.appTeal.opacity(0.15), in: Capsule())
-                .foregroundColor(Color.appTeal)
+                .background(Color.accent.opacity(0.15), in: Capsule())
+                .foregroundColor(Color.accent)
         }
         .menuActionDismissBehavior(.disabled)
     }
@@ -500,8 +500,8 @@ struct HomesPage: View {
                 .fontWeight(.medium)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.appTeal.opacity(0.15), in: Capsule())
-                .foregroundColor(Color.appTeal)
+                .background(Color.accent.opacity(0.15), in: Capsule())
+                .foregroundColor(Color.accent)
         }
         .transaction { t in t.animation = nil }
     }
@@ -515,8 +515,8 @@ struct HomesPage: View {
                 .fontWeight(.medium)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(showSavedOnly ? Color.appTeal.opacity(0.3) : Color.appTeal.opacity(0.15), in: Capsule())
-                .foregroundColor(Color.appTeal)
+                .background(showSavedOnly ? Color.accent.opacity(0.3) : Color.accent.opacity(0.15), in: Capsule())
+                .foregroundColor(Color.accent)
         }
     }
 
@@ -531,8 +531,8 @@ struct HomesPage: View {
                 .font(.subheadline.weight(.medium))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(Color.appTeal.opacity(0.15), in: Capsule())
-                .foregroundColor(Color.appTeal)
+                .background(Color.accent.opacity(0.15), in: Capsule())
+                .foregroundColor(Color.accent)
         } else if selectedFilters.isEmpty && citySearch.isEmpty {
             Text("FreeBNB only shows homes from people in your network. Invite a friend who hosts, or ask someone to add you.")
                 .font(.subheadline)
@@ -546,8 +546,8 @@ struct HomesPage: View {
                     .font(.subheadline.weight(.medium))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.appTeal.opacity(0.15), in: Capsule())
-                    .foregroundColor(Color.appTeal)
+                    .background(Color.accent.opacity(0.15), in: Capsule())
+                    .foregroundColor(Color.accent)
             }
         } else {
             Text("Try removing some filters to see more results.")
@@ -556,7 +556,7 @@ struct HomesPage: View {
                 .multilineTextAlignment(.center)
             Button("Clear All Filters") { selectedFilters.removeAll() }
                 .buttonStyle(.borderedProminent)
-                .tint(Color.appTeal)
+                .tint(Color.accent)
         }
     }
 

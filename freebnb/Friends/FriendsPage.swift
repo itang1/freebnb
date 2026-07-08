@@ -69,20 +69,20 @@ struct FriendsPage: View {
                 Section {
                     ContentUnavailableView {
                         Label("No friends yet", systemImage: "person.2")
-                            .foregroundStyle(Color.appTeal)
+                            .foregroundStyle(Color.accent)
                     } description: {
                         Text("Add friends to see their listings and let them request to stay with you.")
                     } actions: {
                         Button("Add a Friend") { showAddFriend = true }
                             .buttonStyle(.borderedProminent)
-                            .tint(Color.appTeal)
+                            .tint(Color.accent)
                     }
                 }
                 .listRowBackground(Color.clear)
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.creamWhite.ignoresSafeArea())
+        .background(Color.primaryBackground.ignoresSafeArea())
         .navigationTitle("Friends")
         .toolbar {
             ToolbarItem(placement: .secondaryAction) {
@@ -140,12 +140,12 @@ private struct FriendRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(Color.appTeal.opacity(0.15))
+                .fill(Color.accent.opacity(0.15))
                 .frame(width: 40, height: 40)
                 .overlay(
                     Text(String(name.prefix(1)).uppercased())
                         .font(.headline)
-                        .foregroundColor(Color.appTeal)
+                        .foregroundColor(Color.accent)
                 )
             Text(name)
                 .font(.body)
@@ -195,8 +195,8 @@ private struct FriendRequestRow: View {
                     Text("Accept")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
-                        .background(Color.appTeal)
-                        .foregroundColor(.onBrandFill)
+                        .background(Color.accent)
+                        .foregroundColor(.onAccent)
                         .cornerRadius(8)
                 }
                 .buttonStyle(.pressable)
@@ -217,12 +217,12 @@ private struct PendingOutgoingRow: View {
         let name = userProfileStore.displayName(for: otherID) ?? "FreeBNB User"
         HStack(spacing: 12) {
             Circle()
-                .fill(Color.appTeal.opacity(0.10))
+                .fill(Color.accent.opacity(0.10))
                 .frame(width: 40, height: 40)
                 .overlay(
                     Text(String(name.prefix(1)).uppercased())
                         .font(.headline)
-                        .foregroundColor(Color.appTeal)
+                        .foregroundColor(Color.accent)
                 )
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -369,12 +369,12 @@ private struct SearchResultRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(Color.appTeal.opacity(0.12))
+                .fill(Color.accent.opacity(0.12))
                 .frame(width: 40, height: 40)
                 .overlay(
                     Text(String(profile.displayName.prefix(1)).uppercased())
                         .font(.headline)
-                        .foregroundColor(Color.appTeal)
+                        .foregroundColor(Color.accent)
                 )
             Text(profile.displayName)
                 .font(.body)
@@ -386,8 +386,8 @@ private struct SearchResultRow: View {
                         .font(.subheadline.weight(.medium))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
-                        .background(Color.appTeal)
-                        .foregroundColor(.onBrandFill)
+                        .background(Color.accent)
+                        .foregroundColor(.onAccent)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -398,7 +398,7 @@ private struct SearchResultRow: View {
             case .friends:
                 Label("Friends", systemImage: "checkmark")
                     .font(.subheadline)
-                    .foregroundColor(Color.appTeal)
+                    .foregroundColor(Color.accent)
             }
         }
         .padding(.vertical, 2)
@@ -436,7 +436,7 @@ struct InviteSheet: View {
             VStack(spacing: 24) {
                 Image(systemName: "house.fill")
                     .font(.system(size: 48))
-                    .foregroundColor(Color.appTeal)
+                    .foregroundColor(Color.accent)
                     .padding(.top, 32)
 
                 VStack(spacing: 8) {
@@ -455,7 +455,7 @@ struct InviteSheet: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 14)
-                        .background(Color.appTeal, in: Capsule())
+                        .background(Color.accent, in: Capsule())
                 }
 
                 VStack(alignment: .leading, spacing: 6) {

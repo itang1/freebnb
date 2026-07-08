@@ -17,7 +17,7 @@ struct AboutPage: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 80, height: 80)
-                            .foregroundColor(Color.appTeal)
+                            .foregroundColor(Color.accent)
 
                         Text("FreeBNB")
                             .font(.title)
@@ -63,7 +63,7 @@ struct AboutPage: View {
             .padding(30)
             .frame(maxWidth: .infinity, alignment: .center)
         }
-        .background(Color.creamWhite)
+        .background(Color.primaryBackground)
         .navigationTitle("About FreeBNB")
     }
 }

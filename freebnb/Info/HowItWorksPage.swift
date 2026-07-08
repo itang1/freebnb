@@ -80,7 +80,7 @@ struct HowItWorksPage: View {
             .padding(30)
             .frame(maxWidth: .infinity, alignment: .center)
         }
-        .background(Color.creamWhite)
+        .background(Color.primaryBackground)
         .navigationTitle("How It Works")
     }
 }
@@ -94,8 +94,8 @@ struct StepRow: View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(Color.appTeal.opacity(0.2))
-                    .overlay(Circle().stroke(Color.appTeal, lineWidth: 1))
+                    .fill(Color.accent.opacity(0.2))
+                    .overlay(Circle().stroke(Color.accent, lineWidth: 1))
                     .frame(width: 40, height: 40)
                 Text("\(number)")
                     .font(.headline)

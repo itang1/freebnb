@@ -15,7 +15,7 @@ struct FeatureCard: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 40, height: 40)
-                .foregroundColor(Color.appTeal)
+                .foregroundColor(Color.accent)
                 .frame(width: 60, height: 60)
 
             Text(description)
@@ -61,7 +61,7 @@ struct FeaturesPage: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.creamWhite)
+        .background(.primaryBackground)
         .navigationTitle("Features")
     }
 }

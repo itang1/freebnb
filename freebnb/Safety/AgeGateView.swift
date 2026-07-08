@@ -15,7 +15,7 @@ struct AgeGateView: View {
             VStack(spacing: 16) {
                 Image(systemName: "person.badge.shield.checkmark")
                     .font(.system(size: 64))
-                    .foregroundColor(Color.appTeal)
+                    .foregroundColor(Color.accent)
 
                 Text("You must be 18 or older")
                     .font(.title2)
@@ -37,8 +37,8 @@ struct AgeGateView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.appTeal)
-                        .foregroundColor(.onBrandFill)
+                        .background(Color.accent)
+                        .foregroundColor(.onAccent)
                         .cornerRadius(14)
                 }
                 .accessibilityIdentifier("ageGate.continueButton")
@@ -52,7 +52,7 @@ struct AgeGateView: View {
 
             Spacer()
         }
-        .background(Color.creamWhite.ignoresSafeArea())
+        .background(Color.primaryBackground.ignoresSafeArea())
     }
 }
 

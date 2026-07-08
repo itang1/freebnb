@@ -13,9 +13,9 @@ struct WelcomePage: View {
         ZStack {
             LinearGradient(
                 gradient: Gradient(colors: [
-                    Color.appTeal.opacity(0.15),
-                    .creamWhite,
-                    Color.appTeal.opacity(0.3)
+                    Color.accent.opacity(0.15),
+                    .primaryBackground,
+                    Color.accent.opacity(0.3)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
@@ -41,7 +41,7 @@ struct WelcomePage: View {
                         .scaledToFit()
                         .frame(width: 250, height: 200)
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(Color.appTeal)
+                        .foregroundStyle(Color.accent)
                         .accessibilityHidden(true)
                 }
 
@@ -61,7 +61,7 @@ struct WelcomePage: View {
 
                     if authManager.isLoading {
                         ProgressView()
-                            .tint(Color.appTeal)
+                            .tint(Color.accent)
                     } else {
                         Button("Continue as Guest") {
                             authManager.continueAsGuest()
