@@ -25,20 +25,46 @@ struct ContentView: View {
         let myID = authManager.userID
         let blocked = userProfileStore.currentProfile?.blockedIDs ?? []
         let friendIDs = Set(friendStore.friendEdges.map { $0.otherUserID(relativeTo: myID) })
-        let filtered = homeStore.listings.filter { home in
-            guard !blocked.contains(home.hostUserID) else { return false }
-            if home.visibility == .friendsOnly {
-                return home.hostUserID == myID || friendIDs.contains(home.hostUserID)
+        return Self.feed(
+            from: homeStore.listings,
+            myID: myID,
+            friendIDs: friendIDs,
+            blockedIDs: Set(blocked)
+        )
+    }
+
+    /// Filters out blocked hosts and friends-only listings you can't see, then
+    /// orders friends' listings first, then your own, then everyone else.
+    ///
+    /// Swift's sort is not stable, so the comparator falls through to the listing
+    /// id: without a total order, equal-ranked rows reshuffle between recomputes.
+    static func feed(
+        from listings: [Home],
+        myID: String,
+        friendIDs: Set<String>,
+        blockedIDs: Set<String>
+    ) -> [Home] {
+        listings
+            .filter { home in
+                guard !blockedIDs.contains(home.hostUserID) else { return false }
+                if home.visibility == .friendsOnly {
+                    return home.hostUserID == myID || friendIDs.contains(home.hostUserID)
+                }
+                return true
             }
-            return true
-        }
-        // Surface friends' listings first, then own listings, then everyone else.
-        return filtered.sorted { a, b in
-            let aIsFriend = friendIDs.contains(a.hostUserID) || a.hostUserID == myID
-            let bIsFriend = friendIDs.contains(b.hostUserID) || b.hostUserID == myID
-            if aIsFriend != bIsFriend { return aIsFriend }
-            return false
-        }
+            .sorted { a, b in
+                let aRank = feedRank(a, myID: myID, friendIDs: friendIDs)
+                let bRank = feedRank(b, myID: myID, friendIDs: friendIDs)
+                if aRank != bRank { return aRank < bRank }
+                return a.id < b.id
+            }
+    }
+
+    /// Lower sorts earlier: friends' listings, then your own, then everyone else.
+    static func feedRank(_ home: Home, myID: String, friendIDs: Set<String>) -> Int {
+        if friendIDs.contains(home.hostUserID) { return 0 }
+        if home.hostUserID == myID { return 1 }
+        return 2
     }
 
     // Validates an incoming invite deep link and, if the inviter is a real user,
