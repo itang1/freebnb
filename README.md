@@ -47,6 +47,24 @@ Stores never talk to Firestore directly. Each one depends on a repository protoc
 
 The backend is intentionally thin. Firestore security rules are the real authorization boundary (guests can read but not write, blocked users cannot message, private profile data is owner-only), and Cloud Functions handle what clients can't be trusted with: push notification fan-out on new messages, the account-deletion data cascade, user data export, message rate limiting, and a daily scheduled Firestore backup.
 
+## Design palette
+
+The visual theme is "summer lakeside cabin": sandy neutrals, lake and sky blues, and a sunset-coral accent. Colors live in `freebnb/Assets.xcassets` as named colorsets with light and dark variants; Xcode generates the Swift symbols (`Color.appTeal`, `.creamWhite`, ...), so views reference colors by role and never hardcode hex values.
+
+| Colorset | Role | Light | Dark |
+|----------|------|-------|------|
+| `CreamWhite` | Sand; page and card backgrounds | `#FAF3E8` | `#211E19` |
+| `AppTeal` | Lake teal; primary brand, tints, buttons | `#0B7382` | `#5CC1CD` |
+| `SkyBlue` | Sky blue; soft card washes (used at low opacity) | `#B7E0EA` | `#27454F` |
+| `SeafoamBlue` | Seafoam; secondary water tone | `#A9DCD3` | `#2E5551` |
+| `Coral` | Sunset coral; calls to action and warm icons | `#E85443` | `#FF7E6A` |
+| `CoralPink` | Shell pink; soft blush fills and badges | `#FFDDD6` | `#492722` |
+| `mintGreen` | Pine sage; greenery accents | `#6B8E6E` | `#A6C6A4` |
+| `OnBrandFill` | Text and icons placed on teal or coral fills | `#FFF8F0` | `#2A1F1A` |
+| `AccentColor` | System tint; mirrors `AppTeal` | `#0B7382` | `#5CC1CD` |
+
+Brand fills invert with the appearance: in light mode fills are deep (lake teal, sunset coral) with cream labels, and in dark mode fills brighten (moonlit teal, warm coral) with espresso labels, which is what `OnBrandFill` encodes. `AppTeal` clears 4.5:1 contrast as text on `CreamWhite` in both modes.
+
 ## Getting started
 
 ### Requirements
