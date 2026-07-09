@@ -103,9 +103,19 @@ service cloud.firestore {
 
     // -------------------------------------------------------------------------
     // Homes / Listings
-    // Any signed-in user can read. (Visibility narrows once friend connections
-    // land — enforced server-side in queries, not here, because rules can't
-    // cross-reference the friend-edges collection at query time.)
+    // A listing is readable by anyone signed in if its visibility is 'everyone',
+    // and otherwise only by its host and the users named in `allowedViewerIDs`
+    // (the host's accepted friends, denormalized onto the document because rules
+    // cannot join to `friendEdges`). Clients therefore cannot query `homes`
+    // unfiltered: a query is rejected outright if any matched document fails the
+    // read rule. The feed issues two provably-safe queries instead —
+    // `visibility == 'everyone'` and `allowedViewerIDs contains me` — and merges
+    // them (see FirestoreHomesRepository).
+    //
+    // Documents predating the `allowedViewerIDs` backfill have neither field, so
+    // they read as 'everyone'. Run scripts/backfill_visibility.js before relying
+    // on this rule to hide anything.
+    //
     // Only the host may write their own listings.
     // -------------------------------------------------------------------------
     match /homes/{homeID} {
@@ -118,7 +128,7 @@ service cloud.firestore {
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
                  'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
-                 'visibility', 'deletedAt'
+                 'visibility', 'allowedViewerIDs', 'deletedAt'
                ])
             && data.keys().hasAll([
                  'hostUserID', 'hostName', 'address',
@@ -151,12 +161,25 @@ service cloud.firestore {
                 || data.cancellationPolicy in ['flexible', 'moderate', 'strict'])
             && (isUnset(data, 'visibility')
                 || data.visibility in ['everyone', 'friendsOnly'])
+            // The read ACL. A host may grant whoever they like access to their own
+            // listing, so the only constraints are a size cap (this array is
+            // downloaded with every feed document) and that the host cannot lock
+            // themselves out of their own listing.
+            && isOptionalList(data, 'allowedViewerIDs', 1000)
+            && (isUnset(data, 'allowedViewerIDs')
+                || data.allowedViewerIDs.hasAll([data.hostUserID]))
             && (isUnset(data, 'latitude') || data.latitude is number)
             && (isUnset(data, 'longitude') || data.longitude is number)
             && (isUnset(data, 'deletedAt') || data.deletedAt is timestamp);
       }
 
-      allow read: if isSignedIn();
+      // Each clause corresponds to one of the feed's partitioned queries, plus
+      // the host's own-listings query. Keep them in sync: a query that isn't
+      // provably covered by one clause is rejected wholesale, not filtered.
+      allow read: if isSignedIn()
+          && (resource.data.get('visibility', 'everyone') == 'everyone'
+              || resource.data.hostUserID == request.auth.uid
+              || request.auth.uid in resource.data.get('allowedViewerIDs', []));
 
       allow create: if isFullMember()
           && request.resource.data.hostUserID == request.auth.uid

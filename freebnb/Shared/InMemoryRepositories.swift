@@ -12,11 +12,24 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     private var homes: [Home]
     init(homes: [Home] = []) { self.homes = homes }
 
-    func listenToListings(
+    /// Mirrors what Firestore's rules would return for `viewerID`: publicly
+    /// visible listings, plus any listing naming the viewer in `allowedViewerIDs`.
+    /// A listing that is neither is simply not readable, exactly as server-side.
+    private func visible(to viewerID: String) -> [Home] {
+        homes.filter { home in
+            if home.visibility == .friendsOnly {
+                return !viewerID.isEmpty && (home.allowedViewerIDs ?? []).contains(viewerID)
+            }
+            return true
+        }
+    }
+
+    func listenToVisibleListings(
+        viewerID: String,
         limit: Int,
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener {
-        handler(.success(Array(homes.filter { $0.deletedAt == nil }.prefix(limit))))
+        handler(.success(Array(visible(to: viewerID).filter { $0.deletedAt == nil }.prefix(limit))))
         return NoopListener()
     }
 
@@ -28,8 +41,8 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         return NoopListener()
     }
 
-    func fetchListings(afterID: String?, limit: Int) async throws -> [Home] {
-        let active = homes.filter { $0.deletedAt == nil }.sorted { $0.id < $1.id }
+    func fetchVisibleListings(viewerID: String, afterID: String?, limit: Int) async throws -> [Home] {
+        let active = visible(to: viewerID).filter { $0.deletedAt == nil }.sorted { $0.id < $1.id }
         let start: Int
         if let afterID, let idx = active.firstIndex(where: { $0.id == afterID }) {
             start = idx + 1

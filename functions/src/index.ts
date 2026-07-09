@@ -115,6 +115,57 @@ export const onMessageCreated = functions.firestore
   });
 
 // ---------------------------------------------------------------------------
+// onFriendEdgeWritten
+// Keeps `homes.allowedViewerIDs` — the denormalized read ACL that Firestore
+// rules enforce friends-only visibility with — in sync with the friend graph.
+//
+// Only the accepted/not-accepted transition matters: a pending edge grants
+// nothing, and an accepted edge that is deleted revokes access. The client
+// stamps the array on every listing save, so this trigger only has to carry
+// the delta between saves.
+// ---------------------------------------------------------------------------
+type FriendEdgeData = { userA: string; userB: string; status?: string };
+
+// Adds or removes `viewerID` from every listing hosted by `hostID`.
+async function setViewerOnListings(
+  hostID: string,
+  viewerID: string,
+  grant: boolean
+): Promise<void> {
+  const snap = await db.collection("homes").where("hostUserID", "==", hostID).get();
+  const change = grant
+    ? admin.firestore.FieldValue.arrayUnion(viewerID)
+    : admin.firestore.FieldValue.arrayRemove(viewerID);
+  for (let i = 0; i < snap.docs.length; i += 500) {
+    const batch = db.batch();
+    for (const doc of snap.docs.slice(i, i + 500)) {
+      batch.update(doc.ref, { allowedViewerIDs: change });
+    }
+    await batch.commit();
+  }
+}
+
+export const onFriendEdgeWritten = functions.firestore
+  .document("friendEdges/{edgeID}")
+  .onWrite(async (change) => {
+    const before = change.before.exists ? (change.before.data() as FriendEdgeData) : undefined;
+    const after = change.after.exists ? (change.after.data() as FriendEdgeData) : undefined;
+
+    const wasFriends = before?.status === "accepted";
+    const isFriends = after?.status === "accepted";
+    if (wasFriends === isFriends) return;
+
+    const edge = after ?? before;
+    if (!edge?.userA || !edge?.userB) return;
+
+    // Friendship is symmetric: each user becomes a viewer of the other's homes.
+    await Promise.all([
+      setViewerOnListings(edge.userA, edge.userB, isFriends),
+      setViewerOnListings(edge.userB, edge.userA, isFriends),
+    ]);
+  });
+
+// ---------------------------------------------------------------------------
 // onUserDeleted
 // Server-side cascade when a Firebase Auth user is removed.
 // The iOS client soft-deletes listings before calling user.delete(), so this

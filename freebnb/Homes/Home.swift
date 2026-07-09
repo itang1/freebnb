@@ -263,6 +263,14 @@ struct Home: Identifiable, Hashable, Codable {
     // Nil is treated as .everyone.
     var visibility: ListingVisibility? = nil
 
+    // Denormalized read ACL: the host plus every accepted friend of the host.
+    // Firestore rules cannot join to `friendEdges` at query time, so friends-only
+    // visibility is enforced by reading this array directly (see firestore.rules)
+    // and by querying `allowedViewerIDs contains me`. Written by the client on
+    // every listing save and kept in sync by the `onFriendEdgeWritten` function.
+    // Nil only on documents predating the backfill; treat as "host only".
+    var allowedViewerIDs: [String]? = nil
+
     // MARK: Soft delete
     // Nil means active. Set by the repository to the server timestamp on delete;
     // the HomeStore filters out non-nil entries so deleted listings never appear
@@ -276,6 +284,14 @@ struct Home: Identifiable, Hashable, Codable {
     // Non-optional view of photo URLs for view code.
     var photos: [String] { photoURLs ?? [] }
 
+    /// The read ACL a listing should carry: the host, then their accepted friends,
+    /// de-duplicated. Kept here so the client write path and the backfill script
+    /// agree on one definition.
+    static func viewerIDs(hostUserID: String, friendIDs: some Sequence<String>) -> [String] {
+        var seen: Set<String> = []
+        return ([hostUserID] + friendIDs).filter { seen.insert($0).inserted }
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, hostUserID, hostName, address, description
         case contactPreference, hostContactInfo, hostMotivation
@@ -285,6 +301,7 @@ struct Home: Identifiable, Hashable, Codable {
         case blockedDateRanges
         case latitude, longitude
         case visibility
+        case allowedViewerIDs
         case deletedAt
     }
 }
@@ -314,6 +331,7 @@ extension Home {
         latitude            = try c.decodeIfPresent(Double.self,              forKey: .latitude)
         longitude          = try c.decodeIfPresent(Double.self,               forKey: .longitude)
         visibility         = try c.decodeIfPresent(ListingVisibility.self,    forKey: .visibility)
+        allowedViewerIDs   = try c.decodeIfPresent([String].self,             forKey: .allowedViewerIDs)
         deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)
     }
 }

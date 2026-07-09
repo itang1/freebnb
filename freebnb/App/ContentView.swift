@@ -36,6 +36,12 @@ struct ContentView: View {
     /// Filters out blocked hosts and friends-only listings you can't see, then
     /// orders friends' listings first, then your own, then everyone else.
     ///
+    /// Firestore rules and the partitioned feed queries are what actually keep a
+    /// friends-only listing out of a stranger's hands; the visibility check here
+    /// is a second line of defence for a stale `allowedViewerIDs` (a friend
+    /// removed since the listing was last written). Block filtering, by contrast,
+    /// is client-only by design — the block list is private to the blocker.
+    ///
     /// Swift's sort is not stable, so the comparator falls through to the listing
     /// id: without a total order, equal-ranked rows reshuffle between recomputes.
     static func feed(

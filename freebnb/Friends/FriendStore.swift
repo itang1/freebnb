@@ -83,6 +83,14 @@ final class FriendStore {
 
     var pendingCount: Int { pendingIncoming.count }
 
+    /// UIDs of everyone the signed-in user is actually friends with. Stamped onto
+    /// a listing's `allowedViewerIDs` on save so the rules can enforce friends-only
+    /// visibility without joining to `friendEdges`.
+    var friendIDs: [String] {
+        guard let uid = Auth.auth().currentUser?.uid else { return [] }
+        return friendEdges.map { $0.otherUserID(relativeTo: uid) }
+    }
+
     func isFriend(_ userID: String) -> Bool {
         guard let uid = Auth.auth().currentUser?.uid else { return false }
         return friendEdges.contains { $0.otherUserID(relativeTo: uid) == userID }

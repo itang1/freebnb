@@ -37,7 +37,9 @@ private func makeHome(
     id: String = UUID().uuidString,
     hostUserID: String,
     hostName: String = "Host",
-    deletedAt: Date? = nil
+    deletedAt: Date? = nil,
+    visibility: ListingVisibility? = nil,
+    allowedViewerIDs: [String]? = nil
 ) -> Home {
     Home(
         hostUserID: hostUserID,
@@ -51,14 +53,21 @@ private func makeHome(
         guestPolicy: GuestPolicy(maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false),
         amenities: makeAmenities()
     )
-    .with(id: id, deletedAt: deletedAt)
+    .with(id: id, deletedAt: deletedAt, visibility: visibility, allowedViewerIDs: allowedViewerIDs)
 }
 
 private extension Home {
-    func with(id: String, deletedAt: Date?) -> Home {
+    func with(
+        id: String,
+        deletedAt: Date?,
+        visibility: ListingVisibility?,
+        allowedViewerIDs: [String]?
+    ) -> Home {
         var copy = self
         copy.id = id
         copy.deletedAt = deletedAt
+        copy.visibility = visibility
+        copy.allowedViewerIDs = allowedViewerIDs
         return copy
     }
 }
@@ -158,6 +167,68 @@ struct HomesRepositoryTests {
             if case .success(let homes) = result { box.value = homes }
         }
         #expect(box.value.allSatisfy { $0.hostName == "New" })
+    }
+
+    // The repository — not the view layer — is now the visibility boundary, so
+    // these assert on what a viewer can even fetch. They mirror the two clauses
+    // of the `homes` read rule in firestore.rules; if one drifts, so must the other.
+
+    private static let friendsOnlyFeed = [
+        makeHome(id: "a", hostUserID: "stranger", visibility: .friendsOnly, allowedViewerIDs: ["stranger"]),
+        makeHome(id: "b", hostUserID: "friend", visibility: .friendsOnly, allowedViewerIDs: ["friend", "me"]),
+        makeHome(id: "c", hostUserID: "me", visibility: .friendsOnly, allowedViewerIDs: ["me"]),
+        makeHome(id: "d", hostUserID: "stranger", visibility: .everyone, allowedViewerIDs: ["stranger"]),
+        makeHome(id: "e", hostUserID: "stranger", visibility: nil, allowedViewerIDs: nil)
+    ]
+
+    @Test func feedHidesFriendsOnlyListingsFromNonViewers() async throws {
+        let repo = InMemoryHomesRepository(homes: Self.friendsOnlyFeed)
+        let visible = try await repo.fetchVisibleListings(viewerID: "me", afterID: nil, limit: 10)
+        // "a" is friends-only and doesn't name "me"; "e" is legacy, so it reads as everyone.
+        #expect(visible.map(\.id) == ["b", "c", "d", "e"])
+    }
+
+    @Test func anonymousViewerSeesOnlyPublicListings() async throws {
+        let repo = InMemoryHomesRepository(homes: Self.friendsOnlyFeed)
+        let visible = try await repo.fetchVisibleListings(viewerID: "", afterID: nil, limit: 10)
+        #expect(visible.map(\.id) == ["d", "e"])
+    }
+
+    @Test func pagingSkipsListingsTheViewerCannotSee() async throws {
+        let repo = InMemoryHomesRepository(homes: Self.friendsOnlyFeed)
+        let page = try await repo.fetchVisibleListings(viewerID: "me", afterID: "b", limit: 2)
+        #expect(page.map(\.id) == ["c", "d"])
+    }
+}
+
+// MARK: - Feed page merging
+
+struct MergeVisibleListingsTests {
+    /// The two partitioned queries overlap on nothing in principle, but a listing
+    /// that is both `everyone` and names the viewer arrives twice. Ordering by id
+    /// makes the merge deterministic and the de-duplication stable.
+    @Test func mergeDeduplicatesAndOrdersByID() {
+        let overlap = makeHome(id: "b", hostUserID: "friend", visibility: .everyone, allowedViewerIDs: ["friend", "me"])
+        let merged = mergeVisibleListings([
+            makeHome(id: "c", hostUserID: "x", visibility: .everyone),
+            overlap,
+            makeHome(id: "a", hostUserID: "y", visibility: .everyone),
+            overlap
+        ], limit: 10)
+        #expect(merged.map(\.id) == ["a", "b", "c"])
+    }
+
+    /// Each half is fetched with the caller's page size, so the merge holds up to
+    /// twice that. Truncating after the sort is what makes the result the true
+    /// globally-first page rather than the first page of one partition.
+    @Test func mergeTruncatesToLimitAfterOrdering() {
+        let merged = mergeVisibleListings([
+            makeHome(id: "d", hostUserID: "x"),
+            makeHome(id: "a", hostUserID: "x"),
+            makeHome(id: "c", hostUserID: "x"),
+            makeHome(id: "b", hostUserID: "x")
+        ], limit: 2)
+        #expect(merged.map(\.id) == ["a", "b"])
     }
 }
 

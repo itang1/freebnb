@@ -113,7 +113,7 @@ final class CreateListingViewModel {
         return true
     }
 
-    func save(homeStore: HomeStore, hostUserID: String, hostName: String) async {
+    func save(homeStore: HomeStore, hostUserID: String, hostName: String, friendIDs: [String]) async {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -169,6 +169,10 @@ final class CreateListingViewModel {
             cancellationPolicy: cancellationPolicy
         )
         home.visibility = visibility
+        // Recomputed on every save rather than carried over from `editing`, so an
+        // edit picks up friends added since the listing was created. The
+        // `onFriendEdgeWritten` function keeps it current between saves.
+        home.allowedViewerIDs = Home.viewerIDs(hostUserID: hostUserID, friendIDs: friendIDs)
         // Preserve the listing id when editing
         if let existing = editing { home.id = existing.id }
 
@@ -194,6 +198,7 @@ struct CreateListingPage: View {
     @Environment(HomeStore.self) private var homeStore
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(FriendStore.self) private var friendStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var vm: CreateListingViewModel
@@ -249,7 +254,8 @@ struct CreateListingPage: View {
                             await vm.save(
                                 homeStore: homeStore,
                                 hostUserID: authManager.userID,
-                                hostName: userProfileStore.displayName ?? ""
+                                hostName: userProfileStore.displayName ?? "",
+                                friendIDs: friendStore.friendIDs
                             )
                             if vm.errorMessage == nil { dismiss() }
                         }
@@ -459,4 +465,5 @@ struct CreateListingPage: View {
         .environment(HomeStore())
         .environment(AuthManager())
         .environment(UserProfileStore())
+        .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
 }

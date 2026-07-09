@@ -34,6 +34,9 @@ final class HomeStore {
     // merge, so paging no longer re-downloads earlier pages on each load-more.
     @ObservationIgnored private var livePage: [Home] = []
     @ObservationIgnored private var pagedListings: [Home] = []
+    // Pinned when the listener starts so `loadMore` pages the same partition the
+    // live page came from, even if auth changes mid-scroll.
+    @ObservationIgnored private var viewerID: String = ""
 
     init(
         repository: HomesRepository = FirestoreHomesRepository(),
@@ -59,11 +62,13 @@ final class HomeStore {
         activeListener = nil
         ownListingsListener?.cancel()
         ownListingsListener = nil
-        guard signedIn ?? (Auth.auth().currentUser != nil) else {
+        let uid = Auth.auth().currentUser?.uid
+        guard signedIn ?? (uid != nil) else {
             livePage = []
             pagedListings = []
             listings = []
             ownListings = []
+            viewerID = ""
             canLoadMore = true
             isLoading = false
             return
@@ -73,21 +78,29 @@ final class HomeStore {
         // pages, so start paging fresh.
         pagedListings = []
         canLoadMore = true
+        viewerID = currentViewerID
         // The live listener covers only the first page. Fetch one past the page
         // size so we can tell "more exist beyond the first page" from "that's
         // all" without an extra round trip.
-        activeListener = repository.listenToListings(limit: pageSize + 1) { [weak self] result in
+        activeListener = repository.listenToVisibleListings(viewerID: viewerID, limit: pageSize + 1) { [weak self] result in
             Task { @MainActor [weak self] in
                 self?.apply(result: result)
             }
         }
-        if let uid = Auth.auth().currentUser?.uid {
+        if let uid {
             ownListingsListener = repository.listenToOwnListings(hostUserID: uid) { [weak self] result in
                 Task { @MainActor [weak self] in
                     self?.applyOwnListings(result: result)
                 }
             }
         }
+    }
+
+    // Guests can never appear in a listing's `allowedViewerIDs` (they cannot be
+    // friends), so they browse as an empty viewer and skip that query entirely.
+    private var currentViewerID: String {
+        guard let user = Auth.auth().currentUser, !user.isAnonymous else { return "" }
+        return user.uid
     }
 
     private func applyOwnListings(result: Result<[Home], Error>) {
@@ -138,7 +151,7 @@ final class HomeStore {
             do {
                 // Cursor page after the last loaded listing; no earlier pages
                 // are re-downloaded.
-                let next = try await repository.fetchListings(afterID: afterID, limit: pageSize)
+                let next = try await repository.fetchVisibleListings(viewerID: viewerID, afterID: afterID, limit: pageSize)
                 pagedListings.append(contentsOf: next)
                 canLoadMore = next.count == pageSize
                 self.error = nil
