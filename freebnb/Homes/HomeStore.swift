@@ -23,6 +23,10 @@ final class HomeStore {
     /// demand elsewhere; a listing absent from this map is one whose address the
     /// user has not earned (or has not requested yet).
     private(set) var listingLocations: [String: ListingLocation] = [:]
+    /// House manuals the current user is allowed to see, keyed by listing id.
+    /// Cached on demand alongside `listingLocations`, gated by the same
+    /// accepted-guest rule.
+    private(set) var listingManuals: [String: HouseManual] = [:]
     private(set) var isLoading = true
     private(set) var isLoadingMore = false
     private(set) var canLoadMore = true
@@ -89,6 +93,7 @@ final class HomeStore {
             ownListings = []
             // Addresses are entitlements of the signed-in user, not of the device.
             listingLocations = [:]
+            listingManuals = [:]
             attemptedLocationIDs = []
             viewerID = ""
             canLoadMore = true
@@ -158,6 +163,34 @@ final class HomeStore {
         } catch {
             log.info("location unavailable for \(homeID, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    /// Fetches and caches the listing's house manual. Returns nil when the caller
+    /// isn't an accepted guest or the host hasn't written one — both expected,
+    /// non-error outcomes.
+    @discardableResult
+    func manual(for homeID: String) async -> HouseManual? {
+        if let cached = listingManuals[homeID] { return cached }
+        do {
+            guard let manual = try await repository.fetchManual(homeID: homeID) else { return nil }
+            listingManuals[homeID] = manual
+            return manual
+        } catch {
+            log.info("manual unavailable for \(homeID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    /// Writes the host's house manual and refreshes the local cache so the editor
+    /// and the guest-facing card reflect it immediately.
+    func saveManual(homeID: String, manual: HouseManual) async throws {
+        do {
+            try await repository.saveManual(homeID: homeID, manual: manual)
+            listingManuals[homeID] = manual
+        } catch {
+            log.error("manual save error: \(error.localizedDescription, privacy: .public)")
+            throw error
         }
     }
 

@@ -11,6 +11,7 @@ import Foundation
 final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     private var homes: [Home]
     private var locations: [String: ListingLocation] = [:]
+    private var manuals: [String: HouseManual] = [:]
     init(homes: [Home] = []) { self.homes = homes }
 
     /// Mirrors what Firestore's rules would return for `viewerID`: publicly
@@ -87,6 +88,14 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
 
     func saveLocation(homeID: String, location: ListingLocation) async throws {
         locations[homeID] = location
+    }
+
+    func fetchManual(homeID: String) async throws -> HouseManual? {
+        manuals[homeID]
+    }
+
+    func saveManual(homeID: String, manual: HouseManual) async throws {
+        manuals[homeID] = manual
     }
 }
 
