@@ -31,8 +31,22 @@ struct RequestStaySheet: View {
         listing.blockedDateRanges?.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
     }
 
+    // A stay this guest has already had accepted for this listing that overlaps
+    // the requested dates. The rules hide other guests' bookings, so this is the
+    // only double-booking a client can honestly detect — but it's the common one
+    // (re-requesting dates you're already confirmed for) and it would fail the
+    // host's overlap check at accept time anyway (L10).
+    private var acceptedConflict: StayRequest? {
+        requestStore.outgoingRequests.first { req in
+            req.listingID == listing.id
+                && req.status == .accepted
+                && req.overlaps(checkIn: checkIn, checkOut: checkOut)
+        }
+    }
+
     private var canSend: Bool {
-        !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays && blockedConflict == nil
+        !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays
+            && blockedConflict == nil && acceptedConflict == nil
     }
 
     var body: some View {
@@ -58,6 +72,12 @@ struct RequestStaySheet: View {
                     if let conflict = blockedConflict {
                         let f = AppDateFormatters.shortDay
                         Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                    if let conflict = acceptedConflict {
+                        let f = AppDateFormatters.shortDay
+                        Label("You already have an accepted stay here \(f.string(from: conflict.checkIn)) – \(f.string(from: conflict.checkOut))", systemImage: "calendar.badge.exclamationmark")
                             .font(.caption)
                             .foregroundColor(.red)
                     }

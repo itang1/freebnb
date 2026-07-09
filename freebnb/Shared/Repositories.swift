@@ -659,8 +659,7 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
                 .getDocuments()
             for doc in snap.documents where doc.documentID != request.id {
                 guard let other = try? doc.data(as: StayRequest.self) else { continue }
-                // Half-open interval overlap: [checkIn, checkOut).
-                if other.checkIn < request.checkOut && request.checkIn < other.checkOut {
+                if other.overlaps(checkIn: request.checkIn, checkOut: request.checkOut) {
                     throw StayRequestError.overlappingStay
                 }
             }

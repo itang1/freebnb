@@ -90,6 +90,13 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
     }
 
+    /// Half-open interval overlap: `[checkIn, checkOut)` against another window.
+    /// The one definition of "these dates collide" shared by stay acceptance
+    /// (the double-booking guard) and the request sheet's conflict warning.
+    func overlaps(checkIn otherCheckIn: Date, checkOut otherCheckOut: Date) -> Bool {
+        checkIn < otherCheckOut && otherCheckIn < checkOut
+    }
+
     static func == (lhs: StayRequest, rhs: StayRequest) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
