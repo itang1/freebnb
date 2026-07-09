@@ -1,5 +1,13 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
+import {
+  Collections,
+  Subcollections,
+  friendEdgeDocPattern,
+  listingPhotosPrefix,
+  messageDocPattern,
+  privateProfilePath,
+} from "./paths";
 
 admin.initializeApp();
 
@@ -89,7 +97,7 @@ export const scheduledFirestoreBackup = functions.pubsub
 // fan-out over the recipient's conversations (see A9 for the scaling ceiling).
 async function unreadConversationCount(userID: string): Promise<number> {
   const snap = await db
-    .collection("conversations")
+    .collection(Collections.conversations)
     .where("participants", "array-contains", userID)
     .get();
   let count = 0;
@@ -104,7 +112,7 @@ async function unreadConversationCount(userID: string): Promise<number> {
 }
 
 export const onMessageCreated = functions.firestore
-  .document("messages/{messageID}")
+  .document(messageDocPattern)
   .onCreate(async (snap) => {
     const msg = snap.data() as {
       senderUserID: string;
@@ -124,7 +132,7 @@ export const onMessageCreated = functions.firestore
     // treats a missing counter as 0, so the first message lands the count at 1.
     const participants = [...msg.participants].sort();
     const conversationID = participants.join("_");
-    const convRef = db.collection("conversations").doc(conversationID);
+    const convRef = db.collection(Collections.conversations).doc(conversationID);
 
     await convRef.set(
       {
@@ -147,8 +155,8 @@ export const onMessageCreated = functions.firestore
     // subdocument; the sender's display name is on the public user doc; the
     // recipient's mute lives on the conversation doc we just wrote.
     const [recipientPrivate, senderDoc, convSnap] = await Promise.all([
-      db.doc(`users/${recipientID}/private/profile`).get(),
-      db.collection("users").doc(senderID).get(),
+      db.doc(privateProfilePath(recipientID)).get(),
+      db.collection(Collections.users).doc(senderID).get(),
       convRef.get(),
     ]);
 
@@ -201,7 +209,7 @@ async function setViewerOnListings(
   viewerID: string,
   grant: boolean
 ): Promise<void> {
-  const snap = await db.collection("homes").where("hostUserID", "==", hostID).get();
+  const snap = await db.collection(Collections.homes).where("hostUserID", "==", hostID).get();
   const change = grant
     ? admin.firestore.FieldValue.arrayUnion(viewerID)
     : admin.firestore.FieldValue.arrayRemove(viewerID);
@@ -215,7 +223,7 @@ async function setViewerOnListings(
 }
 
 export const onFriendEdgeWritten = functions.firestore
-  .document("friendEdges/{edgeID}")
+  .document(friendEdgeDocPattern)
   .onWrite(async (change) => {
     const before = change.before.exists ? (change.before.data() as FriendEdgeData) : undefined;
     const after = change.after.exists ? (change.after.data() as FriendEdgeData) : undefined;
@@ -245,7 +253,7 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
 
   // Soft-delete the user's listings (kept for history), chunked under the
   // 500-op batch cap for prolific hosts.
-  const listingsSnap = await db.collection("homes").where("hostUserID", "==", uid).get();
+  const listingsSnap = await db.collection(Collections.homes).where("hostUserID", "==", uid).get();
   for (let i = 0; i < listingsSnap.docs.length; i += 500) {
     const batch = db.batch();
     const now = admin.firestore.FieldValue.serverTimestamp();
@@ -259,12 +267,12 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
   // Drop each listing's private location and the markers granting guests access
   // to it, and revoke the addresses this user held as a guest elsewhere.
   await Promise.all([
-    ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection("private"))),
-    ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection("accepted"))),
-    deleteQueryInChunks(db.collectionGroup("accepted").where("guestUserID", "==", uid)),
+    ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection(Subcollections.private))),
+    ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection(Subcollections.accepted))),
+    deleteQueryInChunks(db.collectionGroup(Subcollections.accepted).where("guestUserID", "==", uid)),
     // Listing photos live in Storage, not Firestore, so the document cascade
     // above never reaches them. Drop the whole listings/{uid}/ tree (S7).
-    deleteStoragePrefix(`listings/${uid}/`),
+    deleteStoragePrefix(listingPhotosPrefix(uid)),
   ]);
 
   // Hard-cascade the user's own messages, stay requests (as guest and host),
@@ -272,21 +280,21 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
   // Only messages the user authored are removed, preserving the other party's
   // side of any shared conversation.
   await Promise.all([
-    deleteQueryInChunks(db.collection("messages").where("senderUserID", "==", uid)),
-    deleteQueryInChunks(db.collection("stayRequests").where("guestUserID", "==", uid)),
-    deleteQueryInChunks(db.collection("stayRequests").where("hostUserID", "==", uid)),
-    deleteQueryInChunks(db.collection("friendEdges").where("userA", "==", uid)),
-    deleteQueryInChunks(db.collection("friendEdges").where("userB", "==", uid)),
-    deleteQueryInChunks(db.collection("reports").where("reporterUserID", "==", uid)),
+    deleteQueryInChunks(db.collection(Collections.messages).where("senderUserID", "==", uid)),
+    deleteQueryInChunks(db.collection(Collections.stayRequests).where("guestUserID", "==", uid)),
+    deleteQueryInChunks(db.collection(Collections.stayRequests).where("hostUserID", "==", uid)),
+    deleteQueryInChunks(db.collection(Collections.friendEdges).where("userA", "==", uid)),
+    deleteQueryInChunks(db.collection(Collections.friendEdges).where("userB", "==", uid)),
+    deleteQueryInChunks(db.collection(Collections.reports).where("reporterUserID", "==", uid)),
     // Conversation summaries carry the user's name in lastMessage and their
     // unread/mute state, so drop every summary they took part in. The other
     // party's own messages survive; their next message rebuilds the summary.
-    deleteQueryInChunks(db.collection("conversations").where("participants", "array-contains", uid)),
+    deleteQueryInChunks(db.collection(Collections.conversations).where("participants", "array-contains", uid)),
   ]);
 
   // Finally remove the private subdocument and the public user document.
-  await db.doc(`users/${uid}/private/profile`).delete();
-  await db.collection("users").doc(uid).delete();
+  await db.doc(privateProfilePath(uid)).delete();
+  await db.collection(Collections.users).doc(uid).delete();
 });
 
 // ---------------------------------------------------------------------------
@@ -312,7 +320,7 @@ export const acceptStayRequest = functions.https.onCall(async (data, context) =>
     throw new functions.https.HttpsError("invalid-argument", "hostNote must be a string.");
   }
 
-  const requestRef = db.collection("stayRequests").doc(requestID);
+  const requestRef = db.collection(Collections.stayRequests).doc(requestID);
 
   await db.runTransaction(async (t) => {
     const reqSnap = await t.get(requestRef);
@@ -339,7 +347,7 @@ export const acceptStayRequest = functions.https.onCall(async (data, context) =>
     // requests for this listing inside the txn so a concurrent accept that
     // committed first is seen here and blocks this one.
     const accepted = await t.get(
-      db.collection("stayRequests")
+      db.collection(Collections.stayRequests)
         .where("listingID", "==", req.listingID)
         .where("status", "==", "accepted")
     );
@@ -365,7 +373,7 @@ export const acceptStayRequest = functions.https.onCall(async (data, context) =>
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...(typeof hostNote === "string" ? { hostNote } : {}),
     });
-    t.set(db.collection("homes").doc(req.listingID).collection("accepted").doc(req.guestUserID), {
+    t.set(db.collection(Collections.homes).doc(req.listingID).collection(Subcollections.accepted).doc(req.guestUserID), {
       requestID,
       guestUserID: req.guestUserID,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -399,16 +407,16 @@ export const exportUserData = functions.https.onCall(async (_data, context) => {
     friendEdgesBSnap,
     reportsSnap,
   ] = await Promise.all([
-    db.collection("users").doc(uid).get(),
-    db.doc(`users/${uid}/private/profile`).get(),
-    db.collection("homes").where("hostUserID", "==", uid).get(),
-    db.collection("stayRequests").where("guestUserID", "==", uid).get(),
-    db.collection("stayRequests").where("hostUserID", "==", uid).get(),
-    db.collection("messages").where("participants", "array-contains", uid).get(),
-    db.collection("conversations").where("participants", "array-contains", uid).get(),
-    db.collection("friendEdges").where("userA", "==", uid).get(),
-    db.collection("friendEdges").where("userB", "==", uid).get(),
-    db.collection("reports").where("reporterUserID", "==", uid).get(),
+    db.collection(Collections.users).doc(uid).get(),
+    db.doc(privateProfilePath(uid)).get(),
+    db.collection(Collections.homes).where("hostUserID", "==", uid).get(),
+    db.collection(Collections.stayRequests).where("guestUserID", "==", uid).get(),
+    db.collection(Collections.stayRequests).where("hostUserID", "==", uid).get(),
+    db.collection(Collections.messages).where("participants", "array-contains", uid).get(),
+    db.collection(Collections.conversations).where("participants", "array-contains", uid).get(),
+    db.collection(Collections.friendEdges).where("userA", "==", uid).get(),
+    db.collection(Collections.friendEdges).where("userB", "==", uid).get(),
+    db.collection(Collections.reports).where("reporterUserID", "==", uid).get(),
   ]);
 
   const withID = (d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() });

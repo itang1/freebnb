@@ -216,14 +216,14 @@ struct FirestoreHomesRepository: HomesRepository {
     // tiebreak so a single composite index (its implicit __name__ DESC) serves
     // the whole order and cursor pagination has a total order to page against.
     private func everyoneQuery() -> Query {
-        db.collection("homes")
+        db.collection(FirestorePaths.homes)
             .whereField("visibility", isEqualTo: ListingVisibility.everyone.rawValue)
             .order(by: "createdAt", descending: true)
             .order(by: FieldPath.documentID(), descending: true)
     }
 
     private func allowedQuery(viewerID: String) -> Query {
-        db.collection("homes")
+        db.collection(FirestorePaths.homes)
             .whereField("allowedViewerIDs", arrayContains: viewerID)
             .order(by: "createdAt", descending: true)
             .order(by: FieldPath.documentID(), descending: true)
@@ -272,7 +272,7 @@ struct FirestoreHomesRepository: HomesRepository {
         hostUserID: String,
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener {
-        let reg = db.collection("homes")
+        let reg = db.collection(FirestorePaths.homes)
             .whereField("hostUserID", isEqualTo: hostUserID)
             // Bound the listener so a prolific host doesn't stream every
             // listing they've ever created on each launch.
@@ -315,13 +315,13 @@ struct FirestoreHomesRepository: HomesRepository {
             if home.createdAt == nil {
                 data["createdAt"] = FieldValue.serverTimestamp()
             }
-            try await db.collection("homes").document(home.id).setData(data)
+            try await db.collection(FirestorePaths.homes).document(home.id).setData(data)
         }
     }
 
     func delete(homeID: String) async throws {
         try await withRetry { [db] in
-            try await db.collection("homes").document(homeID).updateData([
+            try await db.collection(FirestorePaths.homes).document(homeID).updateData([
                 "deletedAt": FieldValue.serverTimestamp()
             ])
         }
@@ -329,7 +329,7 @@ struct FirestoreHomesRepository: HomesRepository {
 
     func updateHostName(userID: String, newName: String) async throws {
         try await withRetry { [db] in
-            let snap = try await db.collection("homes")
+            let snap = try await db.collection(FirestorePaths.homes)
                 .whereField("hostUserID", isEqualTo: userID)
                 .getDocuments()
             let refs = snap.documents.map(\.reference)
@@ -347,7 +347,7 @@ struct FirestoreHomesRepository: HomesRepository {
 
     func softDeleteAllListings(hostUserID: String) async throws {
         try await withRetry { [db] in
-            let snap = try await db.collection("homes")
+            let snap = try await db.collection(FirestorePaths.homes)
                 .whereField("hostUserID", isEqualTo: hostUserID)
                 .getDocuments()
             let refs = snap.documents.map(\.reference)
@@ -383,13 +383,13 @@ struct FirestoreHomesRepository: HomesRepository {
 /// silently hides addresses rather than failing loudly.
 enum FirestorePaths {
     static func listingLocation(_ db: Firestore, homeID: String) -> DocumentReference {
-        db.collection("homes").document(homeID).collection("private").document("location")
+        db.collection(FirestorePaths.homes).document(homeID).collection(FirestorePaths.privateCollection).document(FirestorePaths.locationDocID)
     }
 
     /// Marker document whose mere existence grants `guestUserID` read access to
     /// the listing's private location. Written when the host accepts a stay.
     static func acceptedGuest(_ db: Firestore, homeID: String, guestUserID: String) -> DocumentReference {
-        db.collection("homes").document(homeID).collection("accepted").document(guestUserID)
+        db.collection(FirestorePaths.homes).document(homeID).collection(FirestorePaths.accepted).document(guestUserID)
     }
 }
 
@@ -472,7 +472,7 @@ struct FirestoreMessagesRepository: MessagesRepository {
         limit: Int,
         handler: @escaping @Sendable (Result<[Conversation], Error>) -> Void
     ) -> RepositoryListener {
-        let reg = db.collection("conversations")
+        let reg = db.collection(FirestorePaths.conversations)
             .whereField("participants", arrayContains: userID)
             .order(by: "updatedAt", descending: true)
             .limit(to: limit)
@@ -496,7 +496,7 @@ struct FirestoreMessagesRepository: MessagesRepository {
         userID: String,
         onError: @escaping @Sendable (Error) -> Void
     ) {
-        db.collection("conversations").document(conversationID).updateData(
+        db.collection(FirestorePaths.conversations).document(conversationID).updateData(
             [FieldPath(["unreadCounts", userID]): 0]
         ) { error in if let error { onError(error) } }
     }
@@ -510,7 +510,7 @@ struct FirestoreMessagesRepository: MessagesRepository {
         let change = muted
             ? FieldValue.arrayUnion([userID])
             : FieldValue.arrayRemove([userID])
-        db.collection("conversations").document(conversationID).updateData(
+        db.collection(FirestorePaths.conversations).document(conversationID).updateData(
             ["mutedBy": change]
         ) { error in if let error { onError(error) } }
     }
@@ -521,7 +521,7 @@ struct FirestoreMessagesRepository: MessagesRepository {
         handler: @escaping @Sendable (Result<(messages: [Message], hasMore: Bool), Error>) -> Void
     ) -> RepositoryListener {
         // Fetch limit+1 to detect whether older messages exist.
-        let reg = db.collection("messages")
+        let reg = db.collection(FirestorePaths.messages)
             .whereField("participants", isEqualTo: participants.sorted())
             .order(by: "timestamp", descending: true)
             .limit(to: limit + 1)
@@ -570,8 +570,8 @@ struct FirestoreMessagesRepository: MessagesRepository {
         message: Message,
         encodedMessage: [String: Any]
     ) async throws {
-        let rateRef = db.collection("rateLimits").document(message.senderUserID)
-        let msgRef = db.collection("messages").document(message.id)
+        let rateRef = db.collection(FirestorePaths.rateLimits).document(message.senderUserID)
+        let msgRef = db.collection(FirestorePaths.messages).document(message.id)
         try await withRetry {
             _ = try await db.runTransaction { txn, errorPointer -> Any? in
                 let snap: DocumentSnapshot
@@ -641,7 +641,7 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
     ) -> RepositoryListener {
         let field = role == .guest ? "guestUserID" : "hostUserID"
-        let reg = db.collection("stayRequests")
+        let reg = db.collection(FirestorePaths.stayRequests)
             .whereField(field, isEqualTo: userID)
             .order(by: "createdAt", descending: true)
             // Bound the listener; most-recent-first keeps active requests in view.
@@ -663,13 +663,13 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
 
     func create(_ request: StayRequest) async throws {
         try await withRetry { [db] in
-            try db.collection("stayRequests").document(request.id).setData(from: request)
+            try db.collection(FirestorePaths.stayRequests).document(request.id).setData(from: request)
         }
     }
 
     func updateListingHostName(hostUserID: String, newName: String) async throws {
         try await withRetry { [db] in
-            let snap = try await db.collection("stayRequests")
+            let snap = try await db.collection(FirestorePaths.stayRequests)
                 .whereField("hostUserID", isEqualTo: hostUserID)
                 .getDocuments()
             let refs = snap.documents.map(\.reference)
@@ -698,7 +698,7 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         let request = request
         try await withRetry { [db] in
             let batch = db.batch()
-            batch.updateData(payload, forDocument: db.collection("stayRequests").document(request.id))
+            batch.updateData(payload, forDocument: db.collection(FirestorePaths.stayRequests).document(request.id))
             // A declined or cancelled stay must not leave the guest holding the
             // host's street address. Deleting a marker that was never written is
             // a no-op, so this covers requests that never reached `accepted`.
@@ -717,7 +717,7 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         // this catches the common conflict instantly. It is NOT the enforcement
         // point — two devices could both pass it — so the authoritative, atomic
         // check is the acceptStayRequest transaction the callable runs (L1).
-        let snap = try await db.collection("stayRequests")
+        let snap = try await db.collection(FirestorePaths.stayRequests)
             .whereField("listingID", isEqualTo: request.listingID)
             .whereField("status", isEqualTo: StayRequestStatus.accepted.rawValue)
             .getDocuments()
@@ -776,7 +776,7 @@ protocol UserProfileRepository: Sendable {
 // live in this owner-only subdocument, split out of the world-readable user
 // doc so they are never exposed to other users. Clients read/write them only
 // for the current user; Cloud Functions reach them via elevated access.
-private let privateProfileDocID = "profile"
+private let privateProfileDocID = FirestorePaths.profileDocID
 
 /// Cancels several underlying listeners as a single unit.
 struct CompositeListener: RepositoryListener {
@@ -844,15 +844,15 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
     init(db: Firestore = .firestore()) { self.db = db }
 
     private func privateDoc(_ userID: String) -> DocumentReference {
-        db.collection("users").document(userID)
-            .collection("private").document(privateProfileDocID)
+        db.collection(FirestorePaths.users).document(userID)
+            .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
     }
 
     func listenToCurrentProfile(
         userID: String,
         handler: @escaping @Sendable (Result<UserProfile?, Error>) -> Void
     ) -> RepositoryListener {
-        let publicRef = db.collection("users").document(userID)
+        let publicRef = db.collection(FirestorePaths.users).document(userID)
         let merger = CurrentProfileMerger(handler: handler)
         let publicReg = publicRef.addSnapshotListener { snapshot, error in
             merger.setPublic(snapshot: snapshot, error: error)
@@ -871,22 +871,22 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
 
     func createInitialProfile(userID: String, displayName: String, email: String?) async throws {
         try await withRetry { [db] in
-            try await db.collection("users").document(userID).setData([
+            try await db.collection(FirestorePaths.users).document(userID).setData([
                 "displayName": displayName,
                 "createdAt": FieldValue.serverTimestamp(),
                 "updatedAt": FieldValue.serverTimestamp()
             ])
             var privateData: [String: Any] = ["updatedAt": FieldValue.serverTimestamp()]
             if let email { privateData["email"] = email }
-            try await db.collection("users").document(userID)
-                .collection("private").document(privateProfileDocID)
+            try await db.collection(FirestorePaths.users).document(userID)
+                .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
                 .setData(privateData, merge: true)
         }
     }
 
     func updateDisplayName(userID: String, newName: String) async throws {
         try await withRetry { [db] in
-            try await db.collection("users").document(userID).setData([
+            try await db.collection(FirestorePaths.users).document(userID).setData([
                 "displayName": newName,
                 "updatedAt": FieldValue.serverTimestamp()
             ], merge: true)
@@ -895,8 +895,8 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
 
     func updateSavedListings(userID: String, listingIDs: [String]) async throws {
         try await withRetry { [db] in
-            try await db.collection("users").document(userID)
-                .collection("private").document(privateProfileDocID)
+            try await db.collection(FirestorePaths.users).document(userID)
+                .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
                 .setData([
                     "savedListingIDs": listingIDs,
                     "updatedAt": FieldValue.serverTimestamp()
@@ -906,8 +906,8 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
 
     func updateBlockedUsers(userID: String, blockedUserIDs: [String]) async throws {
         try await withRetry { [db] in
-            try await db.collection("users").document(userID)
-                .collection("private").document(privateProfileDocID)
+            try await db.collection(FirestorePaths.users).document(userID)
+                .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
                 .setData([
                     "blockedUserIDs": blockedUserIDs,
                     "updatedAt": FieldValue.serverTimestamp()
@@ -924,13 +924,13 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             "createdAt": FieldValue.serverTimestamp()
         ]
         try await withRetry { [db] in
-            _ = try await db.collection("reports").addDocument(data: payload)
+            _ = try await db.collection(FirestorePaths.reports).addDocument(data: payload)
         }
     }
 
     func fetchProfile(userID: String) async throws -> UserProfile? {
         try await withRetry { [db] in
-            let snap = try await db.collection("users").document(userID).getDocument()
+            let snap = try await db.collection(FirestorePaths.users).document(userID).getDocument()
             guard snap.exists else { return nil }
             return try snap.data(as: UserProfile.self)
         }
@@ -939,16 +939,16 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
     func deleteProfile(userID: String) async throws {
         try await withRetry { [db] in
             // Remove the private subdocument first, then the public doc.
-            try await db.collection("users").document(userID)
-                .collection("private").document(privateProfileDocID).delete()
-            try await db.collection("users").document(userID).delete()
+            try await db.collection(FirestorePaths.users).document(userID)
+                .collection(FirestorePaths.privateCollection).document(privateProfileDocID).delete()
+            try await db.collection(FirestorePaths.users).document(userID).delete()
         }
     }
 
     func updateFCMToken(userID: String, token: String) async throws {
         try await withRetry { [db] in
-            try await db.collection("users").document(userID)
-                .collection("private").document(privateProfileDocID)
+            try await db.collection(FirestorePaths.users).document(userID)
+                .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
                 .setData([
                     "fcmToken": token,
                     "updatedAt": FieldValue.serverTimestamp()
@@ -960,7 +960,7 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
         let end = trimmed + "\u{f8ff}"
-        let snap = try await db.collection("users")
+        let snap = try await db.collection(FirestorePaths.users)
             .whereField("displayName", isGreaterThanOrEqualTo: trimmed)
             .whereField("displayName", isLessThan: end)
             .limit(to: 10)
@@ -992,7 +992,7 @@ struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
         field: String,
         handler: @escaping @Sendable (Result<[FriendEdge], Error>) -> Void
     ) -> RepositoryListener {
-        let reg = db.collection("friendEdges")
+        let reg = db.collection(FirestorePaths.friendEdges)
             .whereField(field, isEqualTo: userID)
             .limit(to: friendEdgesListenerLimit)
             .addSnapshotListener { snapshot, error in
@@ -1012,13 +1012,13 @@ struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
     func createEdge(_ edge: FriendEdge) async throws {
         let edgeID = FriendEdge.edgeID(edge.userA, edge.userB)
         try await withRetry { [db] in
-            try db.collection("friendEdges").document(edgeID).setData(from: edge)
+            try db.collection(FirestorePaths.friendEdges).document(edgeID).setData(from: edge)
         }
     }
 
     func updateStatus(edgeID: String, status: FriendStatus) async throws {
         try await withRetry { [db] in
-            try await db.collection("friendEdges").document(edgeID).updateData([
+            try await db.collection(FirestorePaths.friendEdges).document(edgeID).updateData([
                 "status": status.rawValue,
                 "updatedAt": FieldValue.serverTimestamp()
             ])
@@ -1027,7 +1027,7 @@ struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
 
     func deleteEdge(edgeID: String) async throws {
         try await withRetry { [db] in
-            try await db.collection("friendEdges").document(edgeID).delete()
+            try await db.collection(FirestorePaths.friendEdges).document(edgeID).delete()
         }
     }
 }
