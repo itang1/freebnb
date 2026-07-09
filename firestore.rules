@@ -149,11 +149,11 @@ service cloud.firestore {
     // `visibility == 'everyone'` and `allowedViewerIDs contains me` — and merges
     // them (see FirestoreHomesRepository).
     //
-    // Documents predating the `allowedViewerIDs` backfill have neither field, so
-    // they read as 'everyone'. Run scripts/backfill_visibility.js before relying
-    // on this rule to hide anything, and scripts/backfill_address_privacy.js
-    // before deploying — legacy documents carry `address.street`, which the
-    // listing validator below now rejects, so any write to them would fail.
+    // A document lacking `visibility`/`allowedViewerIDs` reads as 'everyone', and
+    // one still carrying `address.street` would fail the listing validator below.
+    // Pre-migration legacy listings were cleared and re-seeded in the current
+    // schema (scripts/seed_test_data.js --reset), so no such documents remain;
+    // there is no in-place backfill step to run before relying on this rule.
     //
     // Only the host may write their own listings.
     // -------------------------------------------------------------------------
