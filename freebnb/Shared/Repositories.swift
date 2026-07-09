@@ -104,9 +104,9 @@ protocol HomesRepository: Sendable {
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener
 
-    /// One-shot cursor page of visible listings after `afterID` (document-ID
-    /// order). Used to fetch older pages without re-downloading earlier ones.
-    func fetchVisibleListings(viewerID: String, afterID: String?, limit: Int) async throws -> [Home]
+    /// One-shot cursor page of visible listings after `cursor` (recency order).
+    /// Used to fetch older pages without re-downloading earlier ones.
+    func fetchVisibleListings(viewerID: String, after cursor: ListingCursor?, limit: Int) async throws -> [Home]
 
     func save(_ home: Home) async throws
     func delete(homeID: String) async throws
@@ -121,15 +121,38 @@ protocol HomesRepository: Sendable {
     func saveLocation(homeID: String, location: ListingLocation) async throws
 }
 
+/// The feed's canonical order: newest first, with document id descending as a
+/// total-order tiebreak for listings sharing a `createdAt`. Matches the
+/// `(createdAt DESC, documentID DESC)` order-by both feed queries use, so
+/// client-side merges and the in-memory double page identically to Firestore.
+/// A listing with no `createdAt` (pre-backfill legacy) sorts last; the ordered
+/// query excludes it entirely, so it should never reach here in practice.
+func recencyOrdered(_ homes: [Home]) -> [Home] {
+    homes.sorted { a, b in
+        let aDate = a.createdAt ?? .distantPast
+        let bDate = b.createdAt ?? .distantPast
+        if aDate != bDate { return aDate > bDate }
+        return a.id > b.id
+    }
+}
+
+/// Pagination boundary for the recency feed: the `(createdAt, id)` of the last
+/// listing already shown. Both fields are needed because the queries order by
+/// `(createdAt DESC, documentID DESC)`; a cursor on `createdAt` alone could skip
+/// or duplicate listings that share a timestamp.
+struct ListingCursor: Sendable {
+    let createdAt: Date
+    let id: String
+}
+
 /// De-duplicates and orders the results of the visibility-partitioned queries,
-/// truncating to the caller's page size. Document-ID order matches the
-/// `order(by: FieldPath.documentID())` both underlying queries use, so taking
-/// the first `limit` of the merged set yields exactly the globally-first
-/// `limit` visible listings.
+/// truncating to the caller's page size. Because both underlying queries return
+/// results already in `recencyOrdered` order, taking the first `limit` of the
+/// merged set yields exactly the globally-first `limit` visible listings.
 func mergeVisibleListings(_ homes: [Home], limit: Int) -> [Home] {
     var seen = Set<String>()
     var merged: [Home] = []
-    for home in homes.sorted(by: { $0.id < $1.id }) where seen.insert(home.id).inserted {
+    for home in recencyOrdered(homes) where seen.insert(home.id).inserted {
         merged.append(home)
         if merged.count == limit { break }
     }
@@ -188,16 +211,21 @@ struct FirestoreHomesRepository: HomesRepository {
     // `allowedViewerIDs` names this viewer. Both are provably safe to the rules
     // engine. Their union (minus the overlap on the viewer's own public listings)
     // is exactly what the old client-side filter produced.
+    // Recency order (createdAt DESC), with documentID DESC as a same-direction
+    // tiebreak so a single composite index (its implicit __name__ DESC) serves
+    // the whole order and cursor pagination has a total order to page against.
     private func everyoneQuery() -> Query {
         db.collection("homes")
             .whereField("visibility", isEqualTo: ListingVisibility.everyone.rawValue)
-            .order(by: FieldPath.documentID())
+            .order(by: "createdAt", descending: true)
+            .order(by: FieldPath.documentID(), descending: true)
     }
 
     private func allowedQuery(viewerID: String) -> Query {
         db.collection("homes")
             .whereField("allowedViewerIDs", arrayContains: viewerID)
-            .order(by: FieldPath.documentID())
+            .order(by: "createdAt", descending: true)
+            .order(by: FieldPath.documentID(), descending: true)
     }
 
     func listenToVisibleListings(
@@ -255,14 +283,18 @@ struct FirestoreHomesRepository: HomesRepository {
         return FirestoreListenerBox(reg)
     }
 
-    func fetchVisibleListings(viewerID: String, afterID: String?, limit: Int) async throws -> [Home] {
+    func fetchVisibleListings(viewerID: String, after cursor: ListingCursor?, limit: Int) async throws -> [Home] {
         try await withRetry {
             func page(_ query: Query) async throws -> [Home] {
                 var query = query.limit(to: limit)
-                if let afterID { query = query.start(after: [afterID]) }
+                // Cursor values must line up with the order-by fields:
+                // createdAt (as a Timestamp) then the document id.
+                if let cursor {
+                    query = query.start(after: [Timestamp(date: cursor.createdAt), cursor.id])
+                }
                 return decode(try await query.getDocuments().documents, context: "page")
             }
-            // Both suffixes are already document-ID ordered, so the first `limit`
+            // Both suffixes are already recency-ordered, so the first `limit`
             // of their merge is the true next page of the union.
             async let everyone = page(everyoneQuery())
             guard !viewerID.isEmpty else {
@@ -275,7 +307,14 @@ struct FirestoreHomesRepository: HomesRepository {
 
     func save(_ home: Home) async throws {
         try await withRetry { [db] in
-            try db.collection("homes").document(home.id).setData(from: home)
+            var data = try Firestore.Encoder().encode(home)
+            // A new listing gets the server timestamp the feed orders by; the
+            // rules require createdAt to equal request.time on create. An edit
+            // carries the existing (non-nil) value through unchanged.
+            if home.createdAt == nil {
+                data["createdAt"] = FieldValue.serverTimestamp()
+            }
+            try await db.collection("homes").document(home.id).setData(data)
         }
     }
 

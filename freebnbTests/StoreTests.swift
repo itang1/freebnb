@@ -62,7 +62,7 @@ struct HomeStoreTests {
 
         try await store.save(home)
 
-        let saved = try await repo.fetchVisibleListings(viewerID: "host1", afterID: nil, limit: 10)
+        let saved = try await repo.fetchVisibleListings(viewerID: "host1", after: nil, limit: 10)
         #expect(saved.map(\.id) == [home.id])
     }
 }

@@ -39,7 +39,8 @@ private func makeHome(
     hostName: String = "Host",
     deletedAt: Date? = nil,
     visibility: ListingVisibility? = nil,
-    allowedViewerIDs: [String]? = nil
+    allowedViewerIDs: [String]? = nil,
+    createdAt: Date? = nil
 ) -> Home {
     Home(
         hostUserID: hostUserID,
@@ -53,7 +54,7 @@ private func makeHome(
         guestPolicy: GuestPolicy(maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false),
         amenities: makeAmenities()
     )
-    .with(id: id, deletedAt: deletedAt, visibility: visibility, allowedViewerIDs: allowedViewerIDs)
+    .with(id: id, deletedAt: deletedAt, visibility: visibility, allowedViewerIDs: allowedViewerIDs, createdAt: createdAt)
 }
 
 private extension Home {
@@ -61,15 +62,24 @@ private extension Home {
         id: String,
         deletedAt: Date?,
         visibility: ListingVisibility?,
-        allowedViewerIDs: [String]?
+        allowedViewerIDs: [String]?,
+        createdAt: Date? = nil
     ) -> Home {
         var copy = self
         copy.id = id
         copy.deletedAt = deletedAt
         copy.visibility = visibility
         copy.allowedViewerIDs = allowedViewerIDs
+        copy.createdAt = createdAt
         return copy
     }
+}
+
+// Recency-ordered timestamps for feed tests: `t("a")` is newest, `t("e")` older,
+// so a listing set given createdAt = t(id) sorts alphabetically by id (which is
+// also how the pre-recency tests read).
+private func t(_ id: String) -> Date {
+    Date(timeIntervalSince1970: 100_000 - Double(id.unicodeScalars.first!.value))
 }
 
 private func makeRequest(
@@ -225,30 +235,33 @@ struct HomesRepositoryTests {
     // these assert on what a viewer can even fetch. They mirror the two clauses
     // of the `homes` read rule in firestore.rules; if one drifts, so must the other.
 
+    // createdAt = t(id) so the recency order (newest first) is a, b, c, d, e —
+    // i.e. the visibility and paging assertions below read in id order.
     private static let friendsOnlyFeed = [
-        makeHome(id: "a", hostUserID: "stranger", visibility: .friendsOnly, allowedViewerIDs: ["stranger"]),
-        makeHome(id: "b", hostUserID: "friend", visibility: .friendsOnly, allowedViewerIDs: ["friend", "me"]),
-        makeHome(id: "c", hostUserID: "me", visibility: .friendsOnly, allowedViewerIDs: ["me"]),
-        makeHome(id: "d", hostUserID: "stranger", visibility: .everyone, allowedViewerIDs: ["stranger"]),
-        makeHome(id: "e", hostUserID: "stranger", visibility: nil, allowedViewerIDs: nil)
+        makeHome(id: "a", hostUserID: "stranger", visibility: .friendsOnly, allowedViewerIDs: ["stranger"], createdAt: t("a")),
+        makeHome(id: "b", hostUserID: "friend", visibility: .friendsOnly, allowedViewerIDs: ["friend", "me"], createdAt: t("b")),
+        makeHome(id: "c", hostUserID: "me", visibility: .friendsOnly, allowedViewerIDs: ["me"], createdAt: t("c")),
+        makeHome(id: "d", hostUserID: "stranger", visibility: .everyone, allowedViewerIDs: ["stranger"], createdAt: t("d")),
+        makeHome(id: "e", hostUserID: "stranger", visibility: nil, allowedViewerIDs: nil, createdAt: t("e"))
     ]
 
     @Test func feedHidesFriendsOnlyListingsFromNonViewers() async throws {
         let repo = InMemoryHomesRepository(homes: Self.friendsOnlyFeed)
-        let visible = try await repo.fetchVisibleListings(viewerID: "me", afterID: nil, limit: 10)
+        let visible = try await repo.fetchVisibleListings(viewerID: "me", after: nil, limit: 10)
         // "a" is friends-only and doesn't name "me"; "e" is legacy, so it reads as everyone.
         #expect(visible.map(\.id) == ["b", "c", "d", "e"])
     }
 
     @Test func anonymousViewerSeesOnlyPublicListings() async throws {
         let repo = InMemoryHomesRepository(homes: Self.friendsOnlyFeed)
-        let visible = try await repo.fetchVisibleListings(viewerID: "", afterID: nil, limit: 10)
+        let visible = try await repo.fetchVisibleListings(viewerID: "", after: nil, limit: 10)
         #expect(visible.map(\.id) == ["d", "e"])
     }
 
     @Test func pagingSkipsListingsTheViewerCannotSee() async throws {
         let repo = InMemoryHomesRepository(homes: Self.friendsOnlyFeed)
-        let page = try await repo.fetchVisibleListings(viewerID: "me", afterID: "b", limit: 2)
+        let cursor = ListingCursor(createdAt: t("b"), id: "b")
+        let page = try await repo.fetchVisibleListings(viewerID: "me", after: cursor, limit: 2)
         #expect(page.map(\.id) == ["c", "d"])
     }
 }
@@ -257,16 +270,17 @@ struct HomesRepositoryTests {
 
 struct MergeVisibleListingsTests {
     /// The two partitioned queries overlap on nothing in principle, but a listing
-    /// that is both `everyone` and names the viewer arrives twice. Ordering by id
-    /// makes the merge deterministic and the de-duplication stable.
-    @Test func mergeDeduplicatesAndOrdersByID() {
-        let overlap = makeHome(id: "b", hostUserID: "friend", visibility: .everyone, allowedViewerIDs: ["friend", "me"])
+    /// that is both `everyone` and names the viewer arrives twice. Recency order
+    /// (newest first) makes the merge deterministic and the de-duplication stable.
+    @Test func mergeDeduplicatesAndOrdersByRecency() {
+        let overlap = makeHome(id: "b", hostUserID: "friend", visibility: .everyone, allowedViewerIDs: ["friend", "me"], createdAt: t("b"))
         let merged = mergeVisibleListings([
-            makeHome(id: "c", hostUserID: "x", visibility: .everyone),
+            makeHome(id: "c", hostUserID: "x", visibility: .everyone, createdAt: t("c")),
             overlap,
-            makeHome(id: "a", hostUserID: "y", visibility: .everyone),
+            makeHome(id: "a", hostUserID: "y", visibility: .everyone, createdAt: t("a")),
             overlap
         ], limit: 10)
+        // t("a") is newest, so a sorts first, then b, then c.
         #expect(merged.map(\.id) == ["a", "b", "c"])
     }
 
@@ -275,11 +289,12 @@ struct MergeVisibleListingsTests {
     /// globally-first page rather than the first page of one partition.
     @Test func mergeTruncatesToLimitAfterOrdering() {
         let merged = mergeVisibleListings([
-            makeHome(id: "d", hostUserID: "x"),
-            makeHome(id: "a", hostUserID: "x"),
-            makeHome(id: "c", hostUserID: "x"),
-            makeHome(id: "b", hostUserID: "x")
+            makeHome(id: "d", hostUserID: "x", createdAt: t("d")),
+            makeHome(id: "a", hostUserID: "x", createdAt: t("a")),
+            makeHome(id: "c", hostUserID: "x", createdAt: t("c")),
+            makeHome(id: "b", hostUserID: "x", createdAt: t("b"))
         ], limit: 2)
+        // Newest two: a then b.
         #expect(merged.map(\.id) == ["a", "b"])
     }
 }

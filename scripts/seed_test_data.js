@@ -138,6 +138,9 @@ async function seedHomes() {
     const { location, ...publicListing } = home;
     publicListing.latitude = approximate(location.latitude);
     publicListing.longitude = approximate(location.longitude);
+    // The feed orders by createdAt, and an order-by excludes docs missing the
+    // field, so a seeded listing without one never shows. Stamp it (L3).
+    publicListing.createdAt = now;
     await db.collection("homes").doc(home.id).set(publicListing, { merge: true });
     await db.collection("homes").doc(home.id)
       .collection("private").doc("location").set(location, { merge: true });

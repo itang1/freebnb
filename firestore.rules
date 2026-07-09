@@ -167,7 +167,7 @@ service cloud.firestore {
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
                  'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
-                 'visibility', 'allowedViewerIDs', 'deletedAt'
+                 'visibility', 'allowedViewerIDs', 'deletedAt', 'createdAt'
                ])
             && data.keys().hasAll([
                  'hostUserID', 'hostName', 'address',
@@ -214,7 +214,8 @@ service cloud.firestore {
                 || data.allowedViewerIDs.hasAll([data.hostUserID]))
             && (isUnset(data, 'latitude') || data.latitude is number)
             && (isUnset(data, 'longitude') || data.longitude is number)
-            && (isUnset(data, 'deletedAt') || data.deletedAt is timestamp);
+            && (isUnset(data, 'deletedAt') || data.deletedAt is timestamp)
+            && (isUnset(data, 'createdAt') || data.createdAt is timestamp);
       }
 
       // Each clause corresponds to one of the feed's partitioned queries, plus
@@ -227,6 +228,8 @@ service cloud.firestore {
 
       allow create: if isFullMember()
           && request.resource.data.hostUserID == request.auth.uid
+          // New listings stamp the server time the feed orders by (L3).
+          && request.resource.data.createdAt == request.time
           && isValidListing(request.resource.data);
 
       // Update re-validates the whole document. Without this a host could
@@ -236,6 +239,11 @@ service cloud.firestore {
           && resource.data.hostUserID == request.auth.uid
           // hostUserID is immutable after creation
           && request.resource.data.hostUserID == resource.data.hostUserID
+          // createdAt is immutable once set. A legacy listing that predates the
+          // field may stamp it (to request.time) on its next edit, never rewrite.
+          && (request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+              || (resource.data.get('createdAt', null) == null
+                  && request.resource.data.createdAt == request.time))
           && isValidListing(request.resource.data);
 
       allow delete: if isSignedIn()

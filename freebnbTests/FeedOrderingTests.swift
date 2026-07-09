@@ -26,7 +26,8 @@ private func makeAmenities() -> Amenities {
 private func makeHome(
     id: String,
     hostUserID: String,
-    visibility: ListingVisibility? = nil
+    visibility: ListingVisibility? = nil,
+    createdAt: Date? = nil
 ) -> Home {
     var home = Home(
         hostUserID: hostUserID,
@@ -42,6 +43,7 @@ private func makeHome(
     )
     home.id = id
     home.visibility = visibility
+    home.createdAt = createdAt
     return home
 }
 
@@ -91,6 +93,33 @@ struct FeedOrderingTests {
 
         // Both friends outrank the stranger; ids break the tie between them.
         #expect(feed.map(\.id) == ["y", "z", "x"])
+    }
+
+    /// Within a rank bucket, newer listings sort ahead of older ones (L3).
+    @Test func newerListingsSortFirstWithinARank() {
+        let older = makeHome(id: "a", hostUserID: "s1", createdAt: Date(timeIntervalSince1970: 1_000))
+        let newer = makeHome(id: "b", hostUserID: "s2", createdAt: Date(timeIntervalSince1970: 2_000))
+
+        let feed = ContentView.feed(
+            from: [older, newer], myID: me, friendIDs: [], blockedIDs: []
+        )
+
+        // Both are same-rank strangers; recency puts the newer one first even
+        // though its id ("b") sorts after the older one's ("a").
+        #expect(feed.map(\.id) == ["b", "a"])
+    }
+
+    /// Recency wins over the friend-first grouping only within a bucket, never
+    /// across buckets: a newer stranger still sorts below an older friend.
+    @Test func recencyDoesNotOutrankFriendGrouping() {
+        let newerStranger = makeHome(id: "a", hostUserID: "stranger", createdAt: Date(timeIntervalSince1970: 2_000))
+        let olderFriend = makeHome(id: "b", hostUserID: "friend", createdAt: Date(timeIntervalSince1970: 1_000))
+
+        let feed = ContentView.feed(
+            from: [newerStranger, olderFriend], myID: me, friendIDs: ["friend"], blockedIDs: []
+        )
+
+        #expect(feed.map(\.id) == ["b", "a"])
     }
 
     @Test func blockedHostsAreRemoved() {

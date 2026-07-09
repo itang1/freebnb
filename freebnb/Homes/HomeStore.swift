@@ -171,11 +171,11 @@ final class HomeStore {
     }
 
     // Merge the live first page with any fetched older pages into one
-    // de-duplicated list in document-ID order.
+    // de-duplicated list in recency order (newest first).
     private func recompute() {
         var seen = Set<String>()
         var merged: [Home] = []
-        for home in (livePage + pagedListings).sorted(by: { $0.id < $1.id })
+        for home in recencyOrdered(livePage + pagedListings)
             where seen.insert(home.id).inserted {
             merged.append(home)
         }
@@ -185,12 +185,15 @@ final class HomeStore {
     func loadMore() {
         guard !isLoadingMore, canLoadMore else { return }
         isLoadingMore = true
-        let afterID = listings.last?.id
+        // Page after the last loaded listing's (createdAt, id); no earlier pages
+        // are re-downloaded. A listing sourced from the ordered query always has
+        // a createdAt, so this is nil only when the list is empty.
+        let cursor = listings.last.flatMap { last in
+            last.createdAt.map { ListingCursor(createdAt: $0, id: last.id) }
+        }
         Task { @MainActor in
             do {
-                // Cursor page after the last loaded listing; no earlier pages
-                // are re-downloaded.
-                let next = try await repository.fetchVisibleListings(viewerID: viewerID, afterID: afterID, limit: pageSize)
+                let next = try await repository.fetchVisibleListings(viewerID: viewerID, after: cursor, limit: pageSize)
                 pagedListings.append(contentsOf: next)
                 canLoadMore = next.count == pageSize
                 self.error = nil

@@ -297,6 +297,14 @@ struct Home: Identifiable, Hashable, Codable {
     // in the feed while the Firestore document is preserved for history.
     var deletedAt: Date? = nil
 
+    // MARK: Creation time
+    // The feed's recency ordering key. Stamped with the server timestamp by the
+    // repository on create and preserved across edits. Nil only on documents
+    // predating this field (backfilled by scripts/backfill_created_at.js); such
+    // a document is excluded from the order-by query until it has one, which is
+    // why the backfill must run before the ordered feed ships.
+    var createdAt: Date? = nil
+
     // Identity-based equality and hashing, kept consistent per Hashable contract.
     static func == (lhs: Home, rhs: Home) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -334,6 +342,7 @@ struct Home: Identifiable, Hashable, Codable {
         case visibility
         case allowedViewerIDs
         case deletedAt
+        case createdAt
     }
 }
 
@@ -364,5 +373,6 @@ extension Home {
         visibility         = try c.decodeIfPresent(ListingVisibility.self,    forKey: .visibility)
         allowedViewerIDs   = try c.decodeIfPresent([String].self,             forKey: .allowedViewerIDs)
         deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)
+        createdAt          = try c.decodeIfPresent(Date.self,                 forKey: .createdAt)
     }
 }

@@ -30,7 +30,8 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         limit: Int,
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener {
-        handler(.success(Array(visible(to: viewerID).filter { $0.deletedAt == nil }.prefix(limit))))
+        let active = recencyOrdered(visible(to: viewerID).filter { $0.deletedAt == nil })
+        handler(.success(Array(active.prefix(limit))))
         return NoopListener()
     }
 
@@ -42,10 +43,10 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         return NoopListener()
     }
 
-    func fetchVisibleListings(viewerID: String, afterID: String?, limit: Int) async throws -> [Home] {
-        let active = visible(to: viewerID).filter { $0.deletedAt == nil }.sorted { $0.id < $1.id }
+    func fetchVisibleListings(viewerID: String, after cursor: ListingCursor?, limit: Int) async throws -> [Home] {
+        let active = recencyOrdered(visible(to: viewerID).filter { $0.deletedAt == nil })
         let start: Int
-        if let afterID, let idx = active.firstIndex(where: { $0.id == afterID }) {
+        if let cursor, let idx = active.firstIndex(where: { $0.id == cursor.id }) {
             start = idx + 1
         } else {
             start = 0

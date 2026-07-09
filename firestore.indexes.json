@@ -77,6 +77,22 @@
         { "fieldPath": "deletedAt", "order": "ASCENDING" }
       ]
     },
+    {
+      "collectionGroup": "homes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "homes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "allowedViewerIDs", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
 
     {
       "collectionGroup": "friendEdges",

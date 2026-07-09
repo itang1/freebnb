@@ -202,8 +202,12 @@ final class CreateListingViewModel {
         // edit picks up friends added since the listing was created. The
         // `onFriendEdgeWritten` function keeps it current between saves.
         home.allowedViewerIDs = Home.viewerIDs(hostUserID: hostUserID, friendIDs: friendIDs)
-        // Preserve the listing id when editing
-        if let existing = editing { home.id = existing.id }
+        // Preserve identity and creation time when editing so an edit keeps the
+        // listing's feed position instead of jumping to the top (L3).
+        if let existing = editing {
+            home.id = existing.id
+            home.createdAt = existing.createdAt
+        }
 
         // Geocode so the map view can place a pin. The exact coordinate is private
         // — publishing it would give away the street the address split just hid —

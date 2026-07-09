@@ -135,17 +135,11 @@ struct HomesPage: View {
     @State private var showSavedOnly: Bool = false
     @State private var showFriends: Bool = false
     @State private var showMap: Bool = false
-    // Stable shuffle: we track the desired display order as an array of IDs, then
-    // derive the display list from live `listings`. This means content edits to
-    // existing listings always propagate immediately (computed from live data),
-    // while additions/removals update the ID order.
-    @State private var shuffleOrder: [String] = []
-    // Stable shuffle applied to the live listings. Cached in state because it
-    // depends on the random `shuffleOrder`; recomputed only when the set of
-    // listings changes. The filter/sort/saved layer on top is derived (see
-    // `filteredListings`), not cached, so it can never fall out of sync.
-    @State private var shuffledListings: [Home] = []
 
+    // `listings` arrives already ordered newest-first (with friends' listings
+    // grouped ahead) by ContentView.feed, so the feed no longer shuffles it — a
+    // random order buried the recency signal L3 added. The default sort preserves
+    // that incoming order; the other sorts reorder it explicitly.
     var listings: [Home]
     var isLoading: Bool = false
     var isLoadingMore: Bool = false
@@ -154,14 +148,6 @@ struct HomesPage: View {
     var onLoadMore: () -> Void = {}
     var onRefresh: () async -> Void = {}
     var onSelectHome: (Home) -> Void
-
-    private func recomputeShuffled() -> [Home] {
-        let byID = Dictionary(uniqueKeysWithValues: listings.map { ($0.id, $0) })
-        var result = shuffleOrder.compactMap { byID[$0] }
-        let seen = Set(shuffleOrder)
-        result += listings.filter { !seen.contains($0.id) }
-        return result
-    }
 
     private func filterBinding(_ filter: FilterOption) -> Binding<Bool> {
         Binding(
@@ -186,14 +172,14 @@ struct HomesPage: View {
         .accessibilityHint("Opens listing details")
     }
 
-    // Single derived source of truth for the visible list: filter + sort +
-    // saved applied to the current shuffle. Computed rather than mirrored into
+    // Single derived source of truth for the visible list: filter + sort + saved
+    // applied to the incoming `listings`. Computed rather than mirrored into
     // @State so it recomputes automatically whenever any input changes (filters,
     // sort, search, the saved-only toggle, or the user's saved-listing set) and
     // can never go stale from a missing onChange trigger. This is what makes the
     // "Saved" filter update the instant a listing is bookmarked or unbookmarked.
     private var filteredListings: [Home] {
-        recomputeFiltered(from: shuffledListings)
+        recomputeFiltered(from: listings)
     }
 
     /// Placeholders stand in only before the first page arrives. Once any listing
@@ -361,24 +347,6 @@ struct HomesPage: View {
             ListingsMapView(listings: listings) { home in
                 onSelectHome(home)
             }
-        }
-        .onAppear {
-            if shuffleOrder.isEmpty && !listings.isEmpty {
-                shuffleOrder = listings.map { $0.id }.shuffled()
-            }
-            shuffledListings = recomputeShuffled()
-        }
-        .onChange(of: listings.map { $0.id }) { _, newIDs in
-            let newIDSet = Set(newIDs)
-            shuffleOrder = shuffleOrder.filter { newIDSet.contains($0) }
-            let seen = Set(shuffleOrder)
-            let added = newIDs.filter { !seen.contains($0) }.shuffled()
-            shuffleOrder.append(contentsOf: added)
-            shuffledListings = recomputeShuffled()
-        }
-        .onChange(of: listings) { _, _ in
-            // Listing content changed (not just IDs); refresh without reshuffling.
-            shuffledListings = recomputeShuffled()
         }
     }
 

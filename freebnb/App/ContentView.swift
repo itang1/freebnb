@@ -42,8 +42,9 @@ struct ContentView: View {
     /// removed since the listing was last written). Block filtering, by contrast,
     /// is client-only by design — the block list is private to the blocker.
     ///
-    /// Swift's sort is not stable, so the comparator falls through to the listing
-    /// id: without a total order, equal-ranked rows reshuffle between recomputes.
+    /// Within a rank bucket, newest listings come first (L3). Swift's sort is not
+    /// stable, so the comparator falls through to the listing id: without a total
+    /// order, rows sharing a rank and timestamp reshuffle between recomputes.
     static func feed(
         from listings: [Home],
         myID: String,
@@ -62,6 +63,9 @@ struct ContentView: View {
                 let aRank = feedRank(a, myID: myID, friendIDs: friendIDs)
                 let bRank = feedRank(b, myID: myID, friendIDs: friendIDs)
                 if aRank != bRank { return aRank < bRank }
+                let aDate = a.createdAt ?? .distantPast
+                let bDate = b.createdAt ?? .distantPast
+                if aDate != bDate { return aDate > bDate }
                 return a.id < b.id
             }
     }
