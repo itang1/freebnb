@@ -253,39 +253,54 @@ struct FirestoreHomesRepository: HomesRepository {
         }
     }
 
-    func updateHostName(userID: String, newName: String) async throws {
-        try await withRetry { [db] in
-            let snap = try await db.collection(FirestorePaths.homes)
-                .whereField("hostUserID", isEqualTo: userID)
-                .getDocuments()
-            let refs = snap.documents.map(\.reference)
-            // Commit in chunks of 500 so a prolific host's rename doesn't
-            // exceed Firestore's per-batch write limit.
-            for start in stride(from: 0, to: refs.count, by: firestoreBatchLimit) {
+    /// Pages through every listing hosted by `hostUserID` in document-id order,
+    /// applying `mutate` to each page in its own retried batch. Paging bounds
+    /// memory no matter how prolific the host, and because each page's read and
+    /// commit is its own `withRetry` scope, a transient failure resumes at the
+    /// current page rather than restarting the whole scan (A9). Both callers'
+    /// writes are idempotent, so re-committing a page after a retry is safe.
+    /// The equality filter plus an order-by on `__name__` is served by the
+    /// automatic single-field index, so this needs no composite index; and
+    /// because neither caller touches `hostUserID`, mutated docs keep matching
+    /// and the id cursor advances monotonically without skips or loops.
+    private func forEachHostListingPage(
+        hostUserID: String,
+        mutate: @Sendable @escaping (WriteBatch, DocumentReference) -> Void
+    ) async throws {
+        var cursor: DocumentSnapshot?
+        while true {
+            let startAfter = cursor
+            let snapshot = try await withRetry { [db] in
+                var query = db.collection(FirestorePaths.homes)
+                    .whereField("hostUserID", isEqualTo: hostUserID)
+                    .order(by: FieldPath.documentID())
+                    .limit(to: firestoreBatchLimit)
+                if let startAfter { query = query.start(afterDocument: startAfter) }
+                return try await query.getDocuments()
+            }
+            let documents = snapshot.documents
+            guard !documents.isEmpty else { return }
+            try await withRetry { [db] in
                 let batch = db.batch()
-                for ref in refs[start..<min(start + firestoreBatchLimit, refs.count)] {
-                    batch.updateData(["hostName": newName], forDocument: ref)
-                }
+                for document in documents { mutate(batch, document.reference) }
                 try await batch.commit()
             }
+            // A short final page means the host's listings are drained.
+            if documents.count < firestoreBatchLimit { return }
+            cursor = documents.last
+        }
+    }
+
+    func updateHostName(userID: String, newName: String) async throws {
+        try await forEachHostListingPage(hostUserID: userID) { batch, reference in
+            batch.updateData(["hostName": newName], forDocument: reference)
         }
     }
 
     func softDeleteAllListings(hostUserID: String) async throws {
-        try await withRetry { [db] in
-            let snap = try await db.collection(FirestorePaths.homes)
-                .whereField("hostUserID", isEqualTo: hostUserID)
-                .getDocuments()
-            let refs = snap.documents.map(\.reference)
-            let now = Timestamp(date: Date())
-            // Chunk under the 500-op batch cap for hosts with many listings.
-            for start in stride(from: 0, to: refs.count, by: firestoreBatchLimit) {
-                let batch = db.batch()
-                for ref in refs[start..<min(start + firestoreBatchLimit, refs.count)] {
-                    batch.updateData(["deletedAt": now], forDocument: ref)
-                }
-                try await batch.commit()
-            }
+        let now = Timestamp(date: Date())
+        try await forEachHostListingPage(hostUserID: hostUserID) { batch, reference in
+            batch.updateData(["deletedAt": now], forDocument: reference)
         }
     }
 
