@@ -393,6 +393,53 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
+    // Conversations — the denormalized per-thread summary the client's
+    // conversation list and unread badge read from. The `onMessageCreated`
+    // Cloud Function owns lastMessage, updatedAt, and the unread increments, and
+    // creates the doc (admin writes bypass these rules). Clients may only, on a
+    // conversation they belong to, clear their own unread count (mark read) or
+    // toggle their own membership in mutedBy (mute/unmute); everything else —
+    // participants, lastMessage, the other party's unread and mute state — is
+    // pinned. conversationID = sorted participants joined by "_".
+    // -------------------------------------------------------------------------
+    match /conversations/{conversationID} {
+      // The participant who is not the caller. Reads resource.data.participants,
+      // so it is only valid on read/update where the doc already exists.
+      function conversationOther() {
+        return resource.data.participants[0] == request.auth.uid
+            ? resource.data.participants[1]
+            : resource.data.participants[0];
+      }
+
+      allow read: if isSignedIn()
+          && request.auth.uid in resource.data.participants;
+
+      // Only the trigger (admin) creates summaries.
+      allow create: if false;
+
+      allow update: if isSignedIn()
+          && request.auth.uid in resource.data.participants
+          && (
+            // Mark read: zero only my own unread count, leaving the other
+            // participant's count (and everything else) untouched.
+            (changedKeys().hasOnly(['unreadCounts'])
+                && request.resource.data.unreadCounts.get(request.auth.uid, 0) == 0
+                && request.resource.data.unreadCounts.get(conversationOther(), 0)
+                     == resource.data.unreadCounts.get(conversationOther(), 0))
+            ||
+            // Mute / unmute: add or remove only myself from mutedBy, leaving the
+            // other participant's membership unchanged.
+            (changedKeys().hasOnly(['mutedBy'])
+                && request.resource.data.mutedBy is list
+                && request.resource.data.mutedBy.hasOnly(resource.data.participants)
+                && (conversationOther() in request.resource.data.mutedBy)
+                     == (conversationOther() in resource.data.get('mutedBy', [])))
+          );
+
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
     // Rate-limit counters — one per user, written only in the same commit as the
     // message it gates (see rateCounterAdvanced). A sliding fixed window: `count`
     // messages sent since `windowStart`, reset once the window elapses. The rules

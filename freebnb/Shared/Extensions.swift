@@ -36,12 +36,10 @@ enum AppDateFormatters {
 /// stringly-typed at five different call sites.
 enum UserDefaultsKey {
     static let userName              = "userName"
-    static let lastReadMessageIDs    = "lastReadMessageIDs"
     static let hasSeenOnboarding     = "hasSeenOnboarding"
     static let notificationsEnabled    = "notificationsEnabled"
     static let appearance              = "appearance"
     static let ageGateAccepted         = "ageGateAccepted"
-    static let mutedConversationIDs    = "mutedConversationIDs"
     static let selectedTab             = "selectedTab"
 }
 

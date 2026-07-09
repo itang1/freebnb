@@ -12,6 +12,7 @@
 //  repository, so nothing here reaches Firestore or production data.
 //
 
+import FirebaseFirestore
 import Foundation
 import Testing
 @testable import freebnb
@@ -180,5 +181,50 @@ struct MessageStoreTests {
 
         let sent = store.send(text: "hello", senderUserID: "alice", recipientUserID: "alice")
         #expect(!sent)
+    }
+
+    @Test func conversationParsesDocumentWithDefaults() {
+        // A summary written before anyone reads or mutes carries no unreadCounts
+        // or mutedBy; parsing must still succeed with sensible defaults.
+        let ts = Timestamp(date: Date(timeIntervalSince1970: 1_000))
+        let conv = Conversation(document: "alice_bob", data: [
+            "participants": ["alice", "bob"],
+            "lastMessage": ["text": "hi", "senderUserID": "alice", "timestamp": ts],
+            "updatedAt": ts,
+            "unreadCounts": ["bob": 2],
+        ])
+        #expect(conv?.participants == ["alice", "bob"])
+        #expect(conv?.lastMessage.text == "hi")
+        #expect(conv?.lastMessage.senderUserID == "alice")
+        #expect(conv?.unreadCounts["bob"] == 2)
+        #expect(conv?.unreadCounts["alice"] == nil)
+        #expect(conv?.mutedBy == [])
+    }
+
+    @Test func conversationRejectsMissingParticipants() {
+        #expect(Conversation(document: "x", data: ["lastMessage": ["text": "hi"]]) == nil)
+    }
+
+    @Test func conversationListReflectsReadAndMute() {
+        let now = Date()
+        let messages = [
+            Message(senderUserID: "bob", text: "hey", timestamp: now, participants: ["alice", "bob"]),
+        ]
+        let repo = InMemoryMessagesRepository(messages: messages)
+
+        let box = Box<[Conversation]>([])
+        _ = repo.listenToConversations(userID: "alice", limit: 10) { result in
+            if case .success(let convs) = result { box.value = convs }
+        }
+        #expect(box.value.count == 1)
+
+        repo.markConversationRead(conversationID: "alice_bob", userID: "alice") { _ in }
+        repo.setConversationMuted(conversationID: "alice_bob", userID: "alice", muted: true) { _ in }
+
+        _ = repo.listenToConversations(userID: "alice", limit: 10) { result in
+            if case .success(let convs) = result { box.value = convs }
+        }
+        #expect(box.value.first?.unreadCounts["alice"] == 0)
+        #expect(box.value.first?.mutedBy == ["alice"])
     }
 }

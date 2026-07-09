@@ -91,15 +91,40 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
 
 final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable {
     private var messages: [Message]
+    // Mirrors the server-side conversation summaries the onMessageCreated trigger
+    // would maintain: per-user read state and mutes for tests and previews.
+    private var readCounts: [String: [String: Int]] = [:]  // cid → uid → unread
+    private var mutedBy: [String: [String]] = [:]          // cid → [uid]
     init(messages: [Message] = []) { self.messages = messages }
 
-    func listenToMessages(
+    func listenToConversations(
         userID: String,
         limit: Int,
-        handler: @escaping @Sendable (Result<[Message], Error>) -> Void
+        handler: @escaping @Sendable (Result<[Conversation], Error>) -> Void
     ) -> RepositoryListener {
-        let filtered = messages.filter { $0.participants.contains(userID) }
-        handler(.success(Array(filtered.prefix(limit))))
+        // Group the user's messages into per-conversation summaries, standing in
+        // for the denormalized docs a Cloud Function would maintain.
+        let grouped = Dictionary(grouping: messages.filter { $0.participants.contains(userID) }) {
+            MessageStore.conversationID(userIDs: $0.participants)
+        }
+        let conversations: [Conversation] = grouped.compactMap { cid, msgs in
+            guard let last = msgs.max(by: { ($0.timestamp ?? .distantPast) < ($1.timestamp ?? .distantPast) })
+            else { return nil }
+            return Conversation(
+                id: cid,
+                participants: last.participants,
+                lastMessage: ConversationLastMessage(
+                    text: last.text,
+                    senderUserID: last.senderUserID,
+                    timestamp: last.timestamp
+                ),
+                updatedAt: last.timestamp,
+                unreadCounts: readCounts[cid] ?? [:],
+                mutedBy: mutedBy[cid] ?? []
+            )
+        }
+        .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        handler(.success(Array(conversations.prefix(limit))))
         return NoopListener()
     }
 
@@ -119,6 +144,29 @@ final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable 
 
     func send(_ message: Message, onError: @escaping @Sendable (Error) -> Void) throws {
         messages.append(message)
+    }
+
+    func markConversationRead(
+        conversationID: String,
+        userID: String,
+        onError: @escaping @Sendable (Error) -> Void
+    ) {
+        readCounts[conversationID, default: [:]][userID] = 0
+    }
+
+    func setConversationMuted(
+        conversationID: String,
+        userID: String,
+        muted: Bool,
+        onError: @escaping @Sendable (Error) -> Void
+    ) {
+        var list = mutedBy[conversationID] ?? []
+        if muted {
+            if !list.contains(userID) { list.append(userID) }
+        } else {
+            list.removeAll { $0 == userID }
+        }
+        mutedBy[conversationID] = list
     }
 }
 

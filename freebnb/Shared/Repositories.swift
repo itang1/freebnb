@@ -384,12 +384,14 @@ struct NoopPhotoUploader: PhotoUploader {
 // MARK: - Messages
 
 protocol MessagesRepository: Sendable {
-    /// Broad listener used to build the conversation list. Fetches the most
-    /// recent `limit` messages across all of the user's conversations.
-    func listenToMessages(
+    /// Listener for the conversation list. Reads the denormalized
+    /// `conversations/{id}` summary docs the `onMessageCreated` trigger
+    /// maintains, ordered most-recent first, so no single chatty thread can
+    /// evict others (L2). Fetches at most `limit` conversations.
+    func listenToConversations(
         userID: String,
         limit: Int,
-        handler: @escaping @Sendable (Result<[Message], Error>) -> Void
+        handler: @escaping @Sendable (Result<[Conversation], Error>) -> Void
     ) -> RepositoryListener
 
     /// Focused listener for a single conversation thread. `participants` must
@@ -403,34 +405,74 @@ protocol MessagesRepository: Sendable {
     ) -> RepositoryListener
 
     func send(_ message: Message, onError: @escaping @Sendable (Error) -> Void) throws
+
+    /// Clear the caller's unread count on a conversation (mark read). Writes only
+    /// the caller's own entry so rules leave the other participant's count alone.
+    func markConversationRead(
+        conversationID: String,
+        userID: String,
+        onError: @escaping @Sendable (Error) -> Void
+    )
+
+    /// Add or remove the caller from a conversation's `mutedBy` list.
+    func setConversationMuted(
+        conversationID: String,
+        userID: String,
+        muted: Bool,
+        onError: @escaping @Sendable (Error) -> Void
+    )
 }
 
 struct FirestoreMessagesRepository: MessagesRepository {
     private let db: Firestore
     init(db: Firestore = .firestore()) { self.db = db }
 
-    func listenToMessages(
+    func listenToConversations(
         userID: String,
         limit: Int,
-        handler: @escaping @Sendable (Result<[Message], Error>) -> Void
+        handler: @escaping @Sendable (Result<[Conversation], Error>) -> Void
     ) -> RepositoryListener {
-        let reg = db.collection("messages")
+        let reg = db.collection("conversations")
             .whereField("participants", arrayContains: userID)
-            .order(by: "timestamp", descending: true)
+            .order(by: "updatedAt", descending: true)
             .limit(to: limit)
             .addSnapshotListener { snapshot, error in
                 if let error { handler(.failure(error)); return }
                 let docs = snapshot?.documents ?? []
-                let messages: [Message] = docs.compactMap { doc in
-                    do { return try doc.data(as: Message.self) }
-                    catch {
-                        repoLog.error("msg decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                let conversations: [Conversation] = docs.compactMap { doc in
+                    guard let conv = Conversation(document: doc.documentID, data: doc.data()) else {
+                        repoLog.error("conv decode \(doc.documentID, privacy: .public)")
                         return nil
                     }
+                    return conv
                 }
-                handler(.success(messages))
+                handler(.success(conversations))
             }
         return FirestoreListenerBox(reg)
+    }
+
+    func markConversationRead(
+        conversationID: String,
+        userID: String,
+        onError: @escaping @Sendable (Error) -> Void
+    ) {
+        db.collection("conversations").document(conversationID).updateData(
+            [FieldPath(["unreadCounts", userID]): 0]
+        ) { error in if let error { onError(error) } }
+    }
+
+    func setConversationMuted(
+        conversationID: String,
+        userID: String,
+        muted: Bool,
+        onError: @escaping @Sendable (Error) -> Void
+    ) {
+        let change = muted
+            ? FieldValue.arrayUnion([userID])
+            : FieldValue.arrayRemove([userID])
+        db.collection("conversations").document(conversationID).updateData(
+            ["mutedBy": change]
+        ) { error in if let error { onError(error) } }
     }
 
     func listenToConversation(

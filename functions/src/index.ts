@@ -69,8 +69,32 @@ export const scheduledFirestoreBackup = functions.pubsub
 
 // ---------------------------------------------------------------------------
 // onMessageCreated
-// Sends a push notification to the recipient of a new message.
+// Maintains the denormalized `conversations/{id}` summary and pushes to the
+// recipient. The summary doc (last message, per-user unread counts, mutes) is
+// the source of truth the client's conversation list and unread badge read
+// from, so a chatty thread no longer evicts other conversations from the list
+// (L2), and read/mute state lives server-side and syncs across devices (L4).
 // ---------------------------------------------------------------------------
+
+// Counts the user's non-muted conversations that still hold unread messages —
+// the value both the app's tab badge and the APNs badge display. A small
+// fan-out over the recipient's conversations (see A9 for the scaling ceiling).
+async function unreadConversationCount(userID: string): Promise<number> {
+  const snap = await db
+    .collection("conversations")
+    .where("participants", "array-contains", userID)
+    .get();
+  let count = 0;
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const muted: string[] = data.mutedBy ?? [];
+    if (muted.includes(userID)) continue;
+    const unread: number = data.unreadCounts?.[userID] ?? 0;
+    if (unread > 0) count++;
+  }
+  return count;
+}
+
 export const onMessageCreated = functions.firestore
   .document("messages/{messageID}")
   .onCreate(async (snap) => {
@@ -78,28 +102,65 @@ export const onMessageCreated = functions.firestore
       senderUserID: string;
       participants: string[];
       text: string;
+      timestamp: admin.firestore.Timestamp;
     };
 
-    const recipientID = msg.participants.find((uid) => uid !== msg.senderUserID);
+    const senderID = msg.senderUserID;
+    const recipientID = msg.participants.find((uid) => uid !== senderID);
     if (!recipientID) return;
 
+    // Upsert the conversation summary. The conversationID mirrors the client's
+    // MessageStore.conversationID: sorted participants joined by "_". merge keeps
+    // the other participant's unread count and any mutedBy list intact; the
+    // sender is caught up (0) and the recipient's counter advances — increment()
+    // treats a missing counter as 0, so the first message lands the count at 1.
+    const participants = [...msg.participants].sort();
+    const conversationID = participants.join("_");
+    const convRef = db.collection("conversations").doc(conversationID);
+
+    await convRef.set(
+      {
+        participants,
+        lastMessage: {
+          text: msg.text,
+          senderUserID: senderID,
+          timestamp: msg.timestamp,
+        },
+        updatedAt: msg.timestamp,
+        unreadCounts: {
+          [senderID]: 0,
+          [recipientID]: admin.firestore.FieldValue.increment(1),
+        },
+      },
+      { merge: true }
+    );
+
     // The recipient's token and block list live in their owner-only private
-    // subdocument; the sender's display name is on the public user doc.
-    const [recipientPrivate, senderDoc] = await Promise.all([
+    // subdocument; the sender's display name is on the public user doc; the
+    // recipient's mute lives on the conversation doc we just wrote.
+    const [recipientPrivate, senderDoc, convSnap] = await Promise.all([
       db.doc(`users/${recipientID}/private/profile`).get(),
-      db.collection("users").doc(msg.senderUserID).get(),
+      db.collection("users").doc(senderID).get(),
+      convRef.get(),
     ]);
+
+    // A muted conversation gets no push and never counts toward the badge.
+    const mutedBy: string[] = convSnap.data()?.mutedBy ?? [];
+    if (mutedBy.includes(recipientID)) return;
 
     const recipientData = recipientPrivate.data();
 
     // Never push a notification from someone the recipient has blocked.
     const blocked: string[] = recipientData?.blockedUserIDs ?? [];
-    if (blocked.includes(msg.senderUserID)) return;
+    if (blocked.includes(senderID)) return;
 
     const fcmToken: string | undefined = recipientData?.fcmToken;
     if (!fcmToken) return;
 
     const senderName: string = senderDoc.data()?.displayName ?? "FreeBNB";
+
+    // Badge the actual number of unread conversations, not a hardcoded 1 (L4).
+    const badge = await unreadConversationCount(recipientID);
 
     await admin.messaging().send({
       token: fcmToken,
@@ -108,9 +169,9 @@ export const onMessageCreated = functions.firestore
         body: msg.text.length > 120 ? msg.text.slice(0, 120) + "…" : msg.text,
       },
       apns: {
-        payload: { aps: { sound: "default", badge: 1 } },
+        payload: { aps: { sound: "default", badge } },
       },
-      data: { type: "message", senderUserID: msg.senderUserID },
+      data: { type: "message", senderUserID: senderID },
     });
   });
 
@@ -206,6 +267,10 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
     deleteQueryInChunks(db.collection("friendEdges").where("userA", "==", uid)),
     deleteQueryInChunks(db.collection("friendEdges").where("userB", "==", uid)),
     deleteQueryInChunks(db.collection("reports").where("reporterUserID", "==", uid)),
+    // Conversation summaries carry the user's name in lastMessage and their
+    // unread/mute state, so drop every summary they took part in. The other
+    // party's own messages survive; their next message rebuilds the summary.
+    deleteQueryInChunks(db.collection("conversations").where("participants", "array-contains", uid)),
   ]);
 
   // Finally remove the private subdocument and the public user document.
@@ -232,6 +297,7 @@ export const exportUserData = functions.https.onCall(async (_data, context) => {
     guestRequestsSnap,
     hostRequestsSnap,
     messagesSnap,
+    conversationsSnap,
     friendEdgesASnap,
     friendEdgesBSnap,
     reportsSnap,
@@ -242,6 +308,7 @@ export const exportUserData = functions.https.onCall(async (_data, context) => {
     db.collection("stayRequests").where("guestUserID", "==", uid).get(),
     db.collection("stayRequests").where("hostUserID", "==", uid).get(),
     db.collection("messages").where("participants", "array-contains", uid).get(),
+    db.collection("conversations").where("participants", "array-contains", uid).get(),
     db.collection("friendEdges").where("userA", "==", uid).get(),
     db.collection("friendEdges").where("userB", "==", uid).get(),
     db.collection("reports").where("reporterUserID", "==", uid).get(),
@@ -255,6 +322,7 @@ export const exportUserData = functions.https.onCall(async (_data, context) => {
     stayRequestsAsGuest: guestRequestsSnap.docs.map(withID),
     stayRequestsAsHost: hostRequestsSnap.docs.map(withID),
     messages: messagesSnap.docs.map(withID),
+    conversations: conversationsSnap.docs.map(withID),
     friendEdges: [...friendEdgesASnap.docs, ...friendEdgesBSnap.docs].map(withID),
     reports: reportsSnap.docs.map(withID),
   };
