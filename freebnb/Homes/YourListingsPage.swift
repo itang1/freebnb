@@ -87,7 +87,7 @@ struct YourListingsPage: View {
                 NavigationLink {
                     ListingDashboardPage(listing: listing)
                 } label: {
-                    ListingRow(listing: listing)
+                    ListingRow(listing: listing, street: homeStore.listingLocations[listing.id]?.street)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
@@ -145,6 +145,8 @@ struct YourListingsPage: View {
 
 private struct ListingRow: View {
     let listing: Home
+    /// From the host's own private location doc; nil until it loads.
+    let street: String?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -152,7 +154,7 @@ private struct ListingRow: View {
                 Text("\(listing.address.city), \(listing.address.state)")
                     .font(.headline)
                     .foregroundColor(.primary)
-                Text(listing.address.street)
+                Text(street ?? listing.address.zip)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .lineLimit(1)

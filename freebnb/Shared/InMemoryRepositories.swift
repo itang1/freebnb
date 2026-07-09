@@ -10,6 +10,7 @@ import Foundation
 
 final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     private var homes: [Home]
+    private var locations: [String: ListingLocation] = [:]
     init(homes: [Home] = []) { self.homes = homes }
 
     /// Mirrors what Firestore's rules would return for `viewerID`: publicly
@@ -78,6 +79,14 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
             homes[i].deletedAt = Date()
         }
     }
+
+    func fetchLocation(homeID: String) async throws -> ListingLocation? {
+        locations[homeID]
+    }
+
+    func saveLocation(homeID: String, location: ListingLocation) async throws {
+        locations[homeID] = location
+    }
 }
 
 final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable {
@@ -115,6 +124,17 @@ final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable 
 
 final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked Sendable {
     private var requests: [StayRequest] = []
+    /// Mirrors the `homes/{id}/accepted/{guestUserID}` markers, so tests can
+    /// assert that acceptance discloses the address and a terminal status revokes it.
+    private(set) var acceptedGuests: Set<String> = []
+
+    private func markerKey(_ request: StayRequest) -> String {
+        "\(request.listingID)/\(request.guestUserID)"
+    }
+
+    func hasAddressAccess(listingID: String, guestUserID: String) -> Bool {
+        acceptedGuests.contains("\(listingID)/\(guestUserID)")
+    }
 
     func listenToRequests(
         userID: String,
@@ -130,8 +150,9 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         requests.append(request)
     }
 
-    func updateStatus(requestID: String, status: StayRequestStatus, hostNote: String?) async throws {
-        guard let i = requests.firstIndex(where: { $0.id == requestID }) else { return }
+    func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws {
+        if !status.isActive { acceptedGuests.remove(markerKey(request)) }
+        guard let i = requests.firstIndex(where: { $0.id == request.id }) else { return }
         requests[i].status = status
         if let hostNote { requests[i].hostNote = hostNote }
     }
@@ -144,7 +165,8 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
             other.checkIn < request.checkOut && request.checkIn < other.checkOut
         }
         if conflict { throw StayRequestError.overlappingStay }
-        try await updateStatus(requestID: request.id, status: .accepted, hostNote: hostNote)
+        try await updateStatus(request, status: .accepted, hostNote: hostNote)
+        acceptedGuests.insert(markerKey(request))
     }
 }
 

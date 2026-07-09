@@ -39,7 +39,7 @@ private func makeHome(id: String = UUID().uuidString, hostUserID: String) -> Hom
     var home = Home(
         hostUserID: hostUserID,
         hostName: "Host",
-        address: Address(street: "1 Main", city: "Town", state: "CA", zip: "00000"),
+        address: Address(city: "Town", state: "CA", zip: "00000"),
         description: nil,
         contactPreference: .inApp,
         hostContactInfo: nil,

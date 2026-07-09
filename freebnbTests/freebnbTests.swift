@@ -44,7 +44,7 @@ private func makeHome(
     Home(
         hostUserID: hostUserID,
         hostName: hostName,
-        address: Address(street: "1 Main", city: "Town", state: "CA", zip: "00000"),
+        address: Address(city: "Town", state: "CA", zip: "00000"),
         description: nil,
         contactPreference: .inApp,
         hostContactInfo: nil,
@@ -137,6 +137,58 @@ struct StayRequestRepositoryTests {
         try await repo.create(incoming)
 
         try await repo.accept(incoming, hostNote: nil)  // must not throw
+    }
+
+    // The `homes/{id}/accepted/{guestUserID}` marker is the whole capability: its
+    // existence is what firestore.rules checks before handing over the street
+    // address. These pin the two transitions that write and clear it.
+
+    @Test func acceptingDisclosesTheAddressToTheGuest() async throws {
+        let repo = InMemoryStayRequestsRepository()
+        let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
+        try await repo.create(request)
+        #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
+
+        try await repo.accept(request, hostNote: nil)
+        #expect(repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
+    }
+
+    @Test func cancellingAnAcceptedStayRevokesTheAddress() async throws {
+        let repo = InMemoryStayRequestsRepository()
+        let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
+        try await repo.create(request)
+        try await repo.accept(request, hostNote: nil)
+
+        try await repo.updateStatus(request, status: .cancelled, hostNote: nil)
+        #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
+    }
+
+    @Test func decliningNeverDisclosesTheAddress() async throws {
+        let repo = InMemoryStayRequestsRepository()
+        let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
+        try await repo.create(request)
+
+        try await repo.updateStatus(request, status: .declined, hostNote: "Sorry!")
+        #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
+    }
+}
+
+// MARK: - Public coordinate blurring
+
+struct ApproximateCoordinateTests {
+    /// The public coordinate must not resolve to a building. Two decimal places is
+    /// on the order of a kilometre, which is the promise HomeDetailPage's circle makes.
+    @Test func approximateRoundsToTwoDecimalPlaces() {
+        #expect(Home.approximate(37.33182) == 37.33)
+        #expect(Home.approximate(-122.03118) == -122.03)
+        #expect(Home.approximate(0) == 0)
+    }
+
+    @Test func approximateDiscardsAtLeastTenMetresOfPrecision() {
+        // 0.0001 degrees is roughly 11 m; rounding must move a coordinate that far
+        // off the exact point for any value not already on the grid.
+        let exact = 42.36159
+        #expect(abs(Home.approximate(exact) - exact) > 0.0001)
     }
 }
 

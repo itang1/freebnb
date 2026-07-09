@@ -112,6 +112,13 @@ protocol HomesRepository: Sendable {
     func delete(homeID: String) async throws
     func updateHostName(userID: String, newName: String) async throws
     func softDeleteAllListings(hostUserID: String) async throws
+
+    /// The listing's street address and exact coordinates. Throws
+    /// `permissionDenied` when the caller is neither the host nor a guest with an
+    /// accepted stay; returns nil when the listing predates the private-location
+    /// split and has no such document.
+    func fetchLocation(homeID: String) async throws -> ListingLocation?
+    func saveLocation(homeID: String, location: ListingLocation) async throws
 }
 
 /// De-duplicates and orders the results of the visibility-partitioned queries,
@@ -315,6 +322,35 @@ struct FirestoreHomesRepository: HomesRepository {
             }
         }
     }
+
+    func fetchLocation(homeID: String) async throws -> ListingLocation? {
+        try await withRetry { [db] in
+            let snap = try await FirestorePaths.listingLocation(db, homeID: homeID).getDocument()
+            guard snap.exists else { return nil }
+            return try snap.data(as: ListingLocation.self)
+        }
+    }
+
+    func saveLocation(homeID: String, location: ListingLocation) async throws {
+        try await withRetry { [db] in
+            try FirestorePaths.listingLocation(db, homeID: homeID).setData(from: location)
+        }
+    }
+}
+
+/// The two subcollection paths that implement progressive address disclosure.
+/// Both the app and `firestore.rules` depend on these exact names; a typo here
+/// silently hides addresses rather than failing loudly.
+enum FirestorePaths {
+    static func listingLocation(_ db: Firestore, homeID: String) -> DocumentReference {
+        db.collection("homes").document(homeID).collection("private").document("location")
+    }
+
+    /// Marker document whose mere existence grants `guestUserID` read access to
+    /// the listing's private location. Written when the host accepts a stay.
+    static func acceptedGuest(_ db: Firestore, homeID: String, guestUserID: String) -> DocumentReference {
+        db.collection("homes").document(homeID).collection("accepted").document(guestUserID)
+    }
 }
 
 // MARK: - Photo uploads
@@ -441,11 +477,16 @@ protocol StayRequestsRepository: Sendable {
     ) -> RepositoryListener
 
     func create(_ request: StayRequest) async throws
-    func updateStatus(requestID: String, status: StayRequestStatus, hostNote: String?) async throws
+    /// Moves a request to a new status. Any terminal status also revokes the
+    /// guest's access to the listing's exact address.
+    func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws
     /// Accepts a request only if no other already-accepted request for the same
     /// listing overlaps its dates. Throws `StayRequestError.overlappingStay` on
     /// a conflict. A best-effort double-booking guard; authoritative enforcement
     /// still belongs in a server transaction.
+    ///
+    /// Acceptance is also what discloses the exact address, by writing the
+    /// `homes/{listingID}/accepted/{guestUserID}` marker the rules check.
     func accept(_ request: StayRequest, hostNote: String?) async throws
 }
 
@@ -485,25 +526,35 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         }
     }
 
-    func updateStatus(requestID: String, status: StayRequestStatus, hostNote: String?) async throws {
+    private func statusPayload(_ status: StayRequestStatus, hostNote: String?) -> [String: Any] {
         var data: [String: Any] = [
             "status": status.rawValue,
             "updatedAt": FieldValue.serverTimestamp()
         ]
         if let hostNote { data["hostNote"] = hostNote }
-        let payload = data
+        return data
+    }
+
+    func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws {
+        let payload = statusPayload(status, hostNote: hostNote)
+        let request = request
         try await withRetry { [db] in
-            try await db.collection("stayRequests").document(requestID).updateData(payload)
+            let batch = db.batch()
+            batch.updateData(payload, forDocument: db.collection("stayRequests").document(request.id))
+            // A declined or cancelled stay must not leave the guest holding the
+            // host's street address. Deleting a marker that was never written is
+            // a no-op, so this covers requests that never reached `accepted`.
+            if !status.isActive {
+                batch.deleteDocument(
+                    FirestorePaths.acceptedGuest(db, homeID: request.listingID, guestUserID: request.guestUserID)
+                )
+            }
+            try await batch.commit()
         }
     }
 
     func accept(_ request: StayRequest, hostNote: String?) async throws {
-        var data: [String: Any] = [
-            "status": StayRequestStatus.accepted.rawValue,
-            "updatedAt": FieldValue.serverTimestamp()
-        ]
-        if let hostNote { data["hostNote"] = hostNote }
-        let payload = data
+        let payload = statusPayload(.accepted, hostNote: hostNote)
         let request = request
         try await withRetry { [db] in
             // Only accepted requests can conflict, so filter server-side rather
@@ -520,7 +571,19 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
                     throw StayRequestError.overlappingStay
                 }
             }
-            try await db.collection("stayRequests").document(request.id).updateData(payload)
+            // Accepting is also the disclosure event: the marker written here is
+            // what the rules on homes/{id}/private/location check for.
+            let batch = db.batch()
+            batch.updateData(payload, forDocument: db.collection("stayRequests").document(request.id))
+            batch.setData(
+                [
+                    "requestID": request.id,
+                    "guestUserID": request.guestUserID,
+                    "createdAt": FieldValue.serverTimestamp()
+                ],
+                forDocument: FirestorePaths.acceptedGuest(db, homeID: request.listingID, guestUserID: request.guestUserID)
+            )
+            try await batch.commit()
         }
     }
 }

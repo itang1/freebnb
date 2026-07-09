@@ -15,6 +15,7 @@ struct ListingDashboardPage: View {
     @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(HomeStore.self) private var homeStore
 
     @State private var respondingTo: StayRequest?
     @State private var actionError: String?
@@ -181,7 +182,9 @@ struct ListingDashboardPage: View {
                 .background(listing.hostMotivation.tintColor.opacity(0.12))
                 .clipShape(Capsule())
 
-                Text(listing.address.street)
+                // Prefetched for the host's own listings by HomeStore; the zip is
+                // the honest fallback while it loads.
+                Text(homeStore.listingLocations[listing.id]?.street ?? listing.address.zip)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
@@ -299,7 +302,7 @@ struct ListingDashboardPage: View {
     let home = Home(
         hostUserID: "preview-host",
         hostName: "Michaela",
-        address: Address(street: "40 Cummings Rd", city: "Brighton", state: "MA", zip: "02135"),
+        address: Address(city: "Brighton", state: "MA", zip: "02135"),
         contactPreference: .inApp,
         hostMotivation: .eager,
         sleeping: Sleeping(numGuestRooms: 1, arrangements: ["bed": 1]),

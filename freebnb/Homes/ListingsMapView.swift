@@ -73,7 +73,9 @@ struct ListingsMapView: View {
         }
     }
 
-    // Geocode any listing that doesn't already have stored coordinates.
+    // Geocode any listing that doesn't already have stored coordinates. This is a
+    // browse surface for people who have not been given the street address, so it
+    // geocodes the public part only and lands on the city, not the door.
     private func geocodeMissing() async {
         let missing = listings.filter { $0.latitude == nil || $0.longitude == nil }
         guard !missing.isEmpty else { return }
@@ -81,7 +83,7 @@ struct ListingsMapView: View {
         await withTaskGroup(of: (String, CLLocationCoordinate2D?).self) { group in
             for home in missing {
                 group.addTask {
-                    let address = "\(home.address.street), \(home.address.city), \(home.address.state) \(home.address.zip)"
+                    let address = "\(home.address.city), \(home.address.state) \(home.address.zip)"
                     let coord = try? await GeocodingCache.shared.coordinate(for: address)
                     return (home.id, coord)
                 }

@@ -113,7 +113,7 @@ final class StayRequestStore {
     }
 
     func cancel(_ request: StayRequest) async throws {
-        try await update(requestID: request.id, status: .cancelled, hostNote: nil)
+        try await update(request, status: .cancelled, hostNote: nil)
     }
 
     // MARK: - Host actions
@@ -129,7 +129,7 @@ final class StayRequestStore {
     }
 
     func decline(_ request: StayRequest, hostNote: String? = nil) async throws {
-        try await update(requestID: request.id, status: .declined, hostNote: hostNote)
+        try await update(request, status: .declined, hostNote: hostNote)
     }
 
     // MARK: - Convenience
@@ -159,9 +159,9 @@ final class StayRequestStore {
 
     // MARK: - Private
 
-    private func update(requestID: String, status: StayRequestStatus, hostNote: String?) async throws {
+    private func update(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws {
         do {
-            try await repository.updateStatus(requestID: requestID, status: status, hostNote: hostNote)
+            try await repository.updateStatus(request, status: status, hostNote: hostNote)
         } catch {
             log.error("update error: \(error.localizedDescription, privacy: .public)")
             throw error

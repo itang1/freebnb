@@ -186,6 +186,15 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
     await batch.commit();
   }
 
+  // The listing document survives as history, but the street address must not.
+  // Drop each listing's private location and the markers granting guests access
+  // to it, and revoke the addresses this user held as a guest elsewhere.
+  await Promise.all([
+    ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection("private"))),
+    ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection("accepted"))),
+    deleteQueryInChunks(db.collectionGroup("accepted").where("guestUserID", "==", uid)),
+  ]);
+
   // Hard-cascade the user's own messages, stay requests (as guest and host),
   // friend edges, and submitted reports so no personal data is left behind.
   // Only messages the user authored are removed, preserving the other party's

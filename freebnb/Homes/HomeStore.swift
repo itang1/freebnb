@@ -13,6 +13,11 @@ import os
 final class HomeStore {
     private(set) var listings: [Home] = []
     private(set) var ownListings: [Home] = []
+    /// Street addresses and exact coordinates the current user is allowed to see,
+    /// keyed by listing id. Populated eagerly for the user's own listings and on
+    /// demand elsewhere; a listing absent from this map is one whose address the
+    /// user has not earned (or has not requested yet).
+    private(set) var listingLocations: [String: ListingLocation] = [:]
     private(set) var isLoading = true
     private(set) var isLoadingMore = false
     private(set) var canLoadMore = true
@@ -68,6 +73,8 @@ final class HomeStore {
             pagedListings = []
             listings = []
             ownListings = []
+            // Addresses are entitlements of the signed-in user, not of the device.
+            listingLocations = [:]
             viewerID = ""
             canLoadMore = true
             isLoading = false
@@ -109,6 +116,32 @@ final class HomeStore {
             log.error("own listings snapshot error: \(error.localizedDescription, privacy: .public)")
         case .success(let homes):
             ownListings = homes.filter { $0.deletedAt == nil }
+            // A host can always read their own listings' addresses, and every host
+            // surface (the listing rows, the dashboard, the edit form, the incoming
+            // request rows) wants them. Bounded by ownListingsListenerLimit.
+            let missing = ownListings.map(\.id).filter { listingLocations[$0] == nil }
+            guard !missing.isEmpty else { return }
+            Task { @MainActor in
+                for homeID in missing { _ = await location(for: homeID) }
+            }
+        }
+    }
+
+    // MARK: - Progressive address disclosure
+
+    /// Fetches and caches the listing's street address. Returns nil when the
+    /// caller isn't entitled to it — a guest without an accepted stay — which is
+    /// the expected answer, not an error worth surfacing.
+    @discardableResult
+    func location(for homeID: String) async -> ListingLocation? {
+        if let cached = listingLocations[homeID] { return cached }
+        do {
+            guard let location = try await repository.fetchLocation(homeID: homeID) else { return nil }
+            listingLocations[homeID] = location
+            return location
+        } catch {
+            log.info("location unavailable for \(homeID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 
@@ -173,9 +206,17 @@ final class HomeStore {
     // Both writes throw on failure so the caller can surface an error in the
     // UI. The store logs regardless, so failures are never silent.
 
-    func save(_ home: Home) async throws {
+    /// Saves the world-readable listing document and, when `location` is given,
+    /// the private street address alongside it. The public document is written
+    /// first: a listing with no address is recoverable by re-saving, whereas an
+    /// address with no listing is orphaned data the rules can't even reach.
+    func save(_ home: Home, location: ListingLocation? = nil) async throws {
         do {
             try await repository.save(home)
+            if let location {
+                try await repository.saveLocation(homeID: home.id, location: location)
+                listingLocations[home.id] = location
+            }
         } catch {
             log.error("save error: \(error.localizedDescription, privacy: .public)")
             throw error

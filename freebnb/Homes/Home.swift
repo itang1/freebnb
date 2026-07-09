@@ -5,11 +5,28 @@
 
 import Foundation
 
+/// The world-readable part of a listing's location. The street lives in
+/// `ListingLocation`, not here, because every signed-in user can read a public
+/// listing document and an anonymous account is one tap away.
+///
+/// Documents written before the split still carry a `street` key; the synthesized
+/// decoder ignores it, and the next host save drops it. `scripts/backfill_address_privacy.js`
+/// moves it out for listings that are never re-saved.
 struct Address: Codable, Hashable {
-    var street: String
     var city: String
     var state: String
     var zip: String
+}
+
+/// The part of a listing's location that is disclosed progressively: the host
+/// always sees it, and a guest only once the host has accepted their stay.
+/// Stored at `homes/{id}/private/location`, gated by `firestore.rules` on the
+/// existence of `homes/{id}/accepted/{guestUserID}`.
+struct ListingLocation: Codable, Hashable, Sendable {
+    var street: String
+    /// Exact coordinates. `Home.latitude`/`longitude` are the rounded public copy.
+    var latitude: Double?
+    var longitude: Double?
 }
 
 enum FoodProvision: String, CaseIterable, Hashable, Codable {
@@ -254,7 +271,10 @@ struct Home: Identifiable, Hashable, Codable {
     var blockedDateRanges: [DateRange]? = nil
 
     // MARK: Location coordinates
-    // Geocoded at save time. Nil for listings created before this field was added.
+    // Geocoded at save time and then deliberately blurred: this document is
+    // world-readable, so the public coordinate is rounded to a neighbourhood
+    // (see `approximate(_:)`). Exact coordinates live in the private location
+    // subdocument. Nil for listings created before this field was added.
     var latitude: Double? = nil
     var longitude: Double? = nil
 
@@ -290,6 +310,17 @@ struct Home: Identifiable, Hashable, Codable {
     static func viewerIDs(hostUserID: String, friendIDs: some Sequence<String>) -> [String] {
         var seen: Set<String> = []
         return ([hostUserID] + friendIDs).filter { seen.insert($0).inserted }
+    }
+
+    /// Decimal places kept on the public coordinate. Two places is on the order of
+    /// a kilometre, which places a listing in a neighbourhood without pointing at
+    /// a front door. `scripts/backfill_address_privacy.js` applies the same rounding.
+    static let publicCoordinatePrecision = 2.0
+
+    /// Blurs an exact coordinate component for the world-readable document.
+    static func approximate(_ value: Double) -> Double {
+        let scale = pow(10.0, publicCoordinatePrecision)
+        return (value * scale).rounded() / scale
     }
 
     enum CodingKeys: String, CodingKey {

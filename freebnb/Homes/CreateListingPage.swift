@@ -65,7 +65,10 @@ final class CreateListingViewModel {
 
     init(editing: Home? = nil) {
         self.editing = editing
-        street = editing?.address.street ?? ""
+        // The street is not on the public listing document; when editing it has to
+        // be loaded from the private location subdoc (see `loadStreet`). Until it
+        // arrives `canSave` is false, so an edit can never blank out the address.
+        street = ""
         city = editing?.address.city ?? ""
         stateField = editing?.address.state ?? ""
         zip = editing?.address.zip ?? ""
@@ -100,6 +103,13 @@ final class CreateListingViewModel {
         visibility = editing?.visibility ?? .everyone
     }
 
+    /// Pulls the street address of the listing being edited out of its private
+    /// location document. A host always has read access to their own.
+    func loadStreet(homeStore: HomeStore) async {
+        guard let editing, street.isEmpty else { return }
+        street = await homeStore.location(for: editing.id)?.street ?? ""
+    }
+
     func canSave(displayName: String) -> Bool {
         guard !isSaving else { return false }
         guard !displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
@@ -120,6 +130,7 @@ final class CreateListingViewModel {
 
         let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedContactInfo = hostContactInfo.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedStreet = street.trimmingCharacters(in: .whitespaces)
         let sleepingRaw = sleepingCounts.reduce(into: [String: Int]()) { acc, pair in
             acc[pair.key.rawValue] = pair.value
         }
@@ -127,8 +138,8 @@ final class CreateListingViewModel {
         var home = Home(
             hostUserID: hostUserID,
             hostName: hostName,
+            // Street deliberately absent: it goes to the private location doc below.
             address: Address(
-                street: street.trimmingCharacters(in: .whitespaces),
                 city: city.trimmingCharacters(in: .whitespaces),
                 state: stateField.trimmingCharacters(in: .whitespaces),
                 zip: zip.trimmingCharacters(in: .whitespaces)
@@ -176,16 +187,21 @@ final class CreateListingViewModel {
         // Preserve the listing id when editing
         if let existing = editing { home.id = existing.id }
 
-        // Geocode so the map view can place a pin.
-        let addressString = "\(street.trimmingCharacters(in: .whitespaces)), \(city.trimmingCharacters(in: .whitespaces)), \(stateField.trimmingCharacters(in: .whitespaces)) \(zip.trimmingCharacters(in: .whitespaces))"
+        // Geocode so the map view can place a pin. The exact coordinate is private
+        // — publishing it would give away the street the address split just hid —
+        // so the listing document carries a rounded copy.
+        let addressString = "\(trimmedStreet), \(city.trimmingCharacters(in: .whitespaces)), \(stateField.trimmingCharacters(in: .whitespaces)) \(zip.trimmingCharacters(in: .whitespaces))"
+        var location = ListingLocation(street: trimmedStreet, latitude: nil, longitude: nil)
         if let placemark = try? await CLGeocoder().geocodeAddressString(addressString).first,
-           let location = placemark.location {
-            home.latitude  = location.coordinate.latitude
-            home.longitude = location.coordinate.longitude
+           let coordinate = placemark.location?.coordinate {
+            location.latitude  = coordinate.latitude
+            location.longitude = coordinate.longitude
+            home.latitude  = Home.approximate(coordinate.latitude)
+            home.longitude = Home.approximate(coordinate.longitude)
         }
 
         do {
-            try await homeStore.save(home)
+            try await homeStore.save(home, location: location)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -264,6 +280,7 @@ struct CreateListingPage: View {
                 }
             }
             .disabled(vm.isSaving)
+            .task { await vm.loadStreet(homeStore: homeStore) }
         }
     }
 

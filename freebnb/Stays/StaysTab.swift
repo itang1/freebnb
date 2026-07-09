@@ -243,14 +243,15 @@ struct StaysTab: View {
     ) -> some View {
         let home = listing(for: request)
         // Show the street address when the host has more than one listing so the
-        // guest's request can be traced to the right property.
+        // guest's request can be traced to the right property. This row is only
+        // ever rendered for the host, whose own addresses HomeStore prefetches.
         let multiListing = homeStore.listings.filter {
             $0.hostUserID == authManager.userID
         }.count > 1
         let row = IncomingRequestRow(
             request: request,
             guestName: guestName(for: request),
-            listingAddress: multiListing ? home?.address.street : nil,
+            listingAddress: multiListing ? home.flatMap { homeStore.listingLocations[$0.id]?.street } : nil,
             showActions: showActions,
             onAccept: onAccept,
             onDecline: onDecline

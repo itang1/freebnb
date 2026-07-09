@@ -13,10 +13,15 @@ struct HomeDetailPage: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(StayRequestStore.self) private var requestStore
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(HomeStore.self) private var homeStore
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var mapState: MapState = .loading
-    @State private var geocodeTask: Task<Void, Never>?
+    /// Non-nil once the exact address has been disclosed to this viewer: they are
+    /// the host, or the host accepted their stay. Everyone else sees the city and
+    /// a blurred coordinate.
+    @State private var exactLocation: ListingLocation?
+    @State private var isExactCoordinate = false
     @State private var showReport = false
     @State private var showBlockConfirm = false
     // Bridge @Observable → @State so the toolbar re-renders reliably.
@@ -168,6 +173,15 @@ struct HomeDetailPage: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
+                if exactLocation == nil {
+                    Label(
+                        "\(home.hostName) shares the exact address once they accept your stay.",
+                        systemImage: "lock.fill"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+
                 mapSection
 
                 Button(action: openInMaps) {
@@ -178,7 +192,7 @@ struct HomeDetailPage: View {
                         .foregroundColor(.onAccent)
                         .cornerRadius(10)
                 }
-                .disabled(mapState != .loaded)
+                .disabled(mapState != .loaded || exactLocation == nil)
 
                 if authManager.userID != home.hostUserID {
                     Divider().padding(.vertical, 8)
@@ -209,15 +223,16 @@ struct HomeDetailPage: View {
             .padding()
         }
         .onAppear {
-            startGeocoding()
             isListingSaved = userProfileStore.isSaved(home.id)
+        }
+        // Disclosure has to resolve before the map does: an accepted guest gets a
+        // pin on the front door, everyone else gets a circle over the neighbourhood.
+        .task {
+            exactLocation = await homeStore.location(for: home.id)
+            await resolveMapLocation()
         }
         .onChange(of: userProfileStore.currentProfile?.savedListingIDs) { _, _ in
             isListingSaved = userProfileStore.isSaved(home.id)
-        }
-        .onDisappear {
-            geocodeTask?.cancel()
-            geocodeTask = nil
         }
         .navigationTitle(home.hostName)
         .toolbar {
@@ -308,6 +323,10 @@ struct HomeDetailPage: View {
 
     // MARK: - Map section
 
+    /// Roughly the blur `Home.approximate(_:)` applies, so the circle honestly
+    /// covers where the listing could be rather than implying a smaller area.
+    private static let approximateRadiusMeters: CLLocationDistance = 1_200
+
     @ViewBuilder
     private var mapSection: some View {
         Group {
@@ -316,8 +335,14 @@ struct HomeDetailPage: View {
                 SkeletonMapBlock()
             case .loaded:
                 Map(initialPosition: .region(region)) {
-                    ForEach(mapItems, id: \.self) { item in
-                        Marker(item.name ?? "Location", coordinate: item.placemark.coordinate)
+                    if isExactCoordinate {
+                        ForEach(mapItems, id: \.self) { item in
+                            Marker(item.name ?? "Location", coordinate: item.placemark.coordinate)
+                        }
+                    } else if let center = mapItems.first?.placemark.coordinate {
+                        MapCircle(center: center, radius: Self.approximateRadiusMeters)
+                            .foregroundStyle(Color.accent.opacity(0.18))
+                            .stroke(Color.accent.opacity(0.5), lineWidth: 1)
                     }
                 }
                 .frame(height: 250)
@@ -340,50 +365,55 @@ struct HomeDetailPage: View {
 
     // MARK: - Geocoding
 
-    private func startGeocoding() {
+    /// Resolves the best coordinate this viewer is entitled to, preferring the
+    /// exact one from the private location document, then the blurred public one,
+    /// and only geocoding for listings saved before coordinates were stored.
+    private func resolveMapLocation() async {
         guard mapState == .loading else { return }
-        let hostName = home.hostName
 
-        // Listings save their geocoded coordinates at creation time. Reuse them
-        // and skip the network geocode entirely; only fall back to geocoding the
-        // address string for legacy listings saved before coordinates existed.
+        if let latitude = exactLocation?.latitude, let longitude = exactLocation?.longitude {
+            show(CLLocationCoordinate2D(latitude: latitude, longitude: longitude), exact: true)
+            return
+        }
         if let latitude = home.latitude, let longitude = home.longitude {
-            let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-            let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-            item.name = hostName
-            mapItems = [item]
-            region = MKCoordinateRegion(
-                center: coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-            )
-            mapState = .loaded
+            show(CLLocationCoordinate2D(latitude: latitude, longitude: longitude), exact: false)
             return
         }
 
+        // Legacy listing with no stored coordinate. `formattedAddress` already
+        // reflects what this viewer may see, so geocoding it can't leak a street
+        // they weren't given.
         let address = formattedAddress
-        geocodeTask?.cancel()
-        geocodeTask = Task {
-            do {
-                let coordinate = try await GeocodingCache.shared.coordinate(for: address)
-                guard !Task.isCancelled else { return }
-                let placemark = MKPlacemark(coordinate: coordinate)
-                let item = MKMapItem(placemark: placemark)
-                item.name = hostName
-                mapItems = [item]
-                region = MKCoordinateRegion(
-                    center: coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                )
-                mapState = .loaded
-            } catch {
-                guard !Task.isCancelled else { return }
-                mapState = .failed
-            }
+        let exact = exactLocation != nil
+        do {
+            let coordinate = try await GeocodingCache.shared.coordinate(for: address)
+            guard !Task.isCancelled else { return }
+            show(coordinate, exact: exact)
+        } catch {
+            guard !Task.isCancelled else { return }
+            mapState = .failed
         }
     }
 
+    private func show(_ coordinate: CLLocationCoordinate2D, exact: Bool) {
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        item.name = home.hostName
+        mapItems = [item]
+        isExactCoordinate = exact
+        // A blurred point deserves a wider frame; zooming to a street on a
+        // kilometre-accurate coordinate would imply precision that isn't there.
+        let span = exact ? 0.01 : 0.05
+        region = MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
+        )
+        mapState = .loaded
+    }
+
     private var formattedAddress: String {
-        "\(home.address.street), \(home.address.city), \(home.address.state) \(home.address.zip)"
+        let area = "\(home.address.city), \(home.address.state) \(home.address.zip)"
+        guard let street = exactLocation?.street, !street.isEmpty else { return area }
+        return "\(street), \(area)"
     }
 
     // MARK: - Contact section
@@ -489,7 +519,7 @@ struct HomeDetailPage: View {
         HomeDetailPage(home: Home(
             hostUserID: "preview-host",
             hostName: "Michaela",
-            address: Address(street: "40 Cummings Rd", city: "Brighton", state: "MA", zip: "02135"),
+            address: Address(city: "Brighton", state: "MA", zip: "02135"),
             description: "Spots misses you!",
             contactPreference: .inApp,
             hostMotivation: .eager,
@@ -508,5 +538,6 @@ struct HomeDetailPage: View {
         .environment(AuthManager())
         .environment(StayRequestStore())
         .environment(UserProfileStore())
+        .environment(HomeStore())
     }
 }

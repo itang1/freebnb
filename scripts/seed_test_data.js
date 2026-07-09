@@ -63,12 +63,16 @@ const amenities = {
   providesToiletries: false, foodProvision: "some"
 };
 
+// `address` is the world-readable part only, and `allowedViewerIDs` is the read
+// ACL the rules enforce friends-only visibility with. Each listing's street and
+// exact coordinates are seeded separately into homes/{id}/private/location.
 const homes = [
   {
     id: "seed-home-ada-1",
     hostUserID: "seed-host-ada",
     hostName: "Ada",
-    address: { street: "1 Innovation Way", city: "Cupertino", state: "CA", zip: "95014" },
+    address: { city: "Cupertino", state: "CA", zip: "95014" },
+    location: { street: "1 Innovation Way", latitude: 37.3323, longitude: -122.0055 },
     description: "Sunny guest room, five minutes from downtown.",
     contactPreference: "inApp",
     hostContactInfo: null,
@@ -77,13 +81,15 @@ const homes = [
     guestPolicy: { maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "flexible",
-    visibility: "everyone"
+    visibility: "everyone",
+    allowedViewerIDs: ["seed-host-ada"]
   },
   {
     id: "seed-home-alan-1",
     hostUserID: "seed-host-alan",
     hostName: "Alan",
-    address: { street: "42 Turing Rd", city: "Palo Alto", state: "CA", zip: "94301" },
+    address: { city: "Palo Alto", state: "CA", zip: "94301" },
+    location: { street: "42 Turing Rd", latitude: 37.4419, longitude: -122.1430 },
     description: "Quiet couch in a converted attic studio.",
     contactPreference: "inApp",
     hostContactInfo: null,
@@ -92,9 +98,15 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 3, kidsAllowed: false, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "moderate",
-    visibility: "everyone"
+    visibility: "everyone",
+    allowedViewerIDs: ["seed-host-alan"]
   }
 ];
+
+// Must match Home.approximate(_:) in Swift: the public coordinate is blurred.
+function approximate(value) {
+  return Math.round(value * 100) / 100;
+}
 
 function daysFromNow(n) {
   return admin.firestore.Timestamp.fromDate(new Date(Date.now() + n * 86_400_000));
@@ -123,7 +135,12 @@ async function seedUsers() {
 
 async function seedHomes() {
   for (const home of homes) {
-    await db.collection("homes").doc(home.id).set(home, { merge: true });
+    const { location, ...publicListing } = home;
+    publicListing.latitude = approximate(location.latitude);
+    publicListing.longitude = approximate(location.longitude);
+    await db.collection("homes").doc(home.id).set(publicListing, { merge: true });
+    await db.collection("homes").doc(home.id)
+      .collection("private").doc("location").set(location, { merge: true });
   }
   console.log(`Seeded ${homes.length} listings.`);
 }
@@ -163,6 +180,13 @@ async function seedStayRequests() {
   ];
   for (const request of requests) {
     await db.collection("stayRequests").doc(request.id).set(request, { merge: true });
+    // An accepted stay is what discloses the host's street address; the app
+    // writes this marker on accept, so the seed has to as well.
+    if (request.status === "accepted") {
+      await db.collection("homes").doc(request.listingID)
+        .collection("accepted").doc(request.guestUserID)
+        .set({ requestID: request.id, guestUserID: request.guestUserID, createdAt: now }, { merge: true });
+    }
   }
   console.log(`Seeded ${requests.length} stay requests.`);
 }

@@ -29,6 +29,14 @@ service cloud.firestore {
                .data.get('blockedUserIDs', []).hasAny([senderID]);
     }
 
+    // True when the caller hosts the listing. get() runs with elevated privilege,
+    // so this works from a subcollection rule that cannot read the parent doc
+    // through `resource`. Denies (rather than errors) when the listing is gone.
+    function isListingHost(homeID) {
+      return exists(/databases/$(database)/documents/homes/$(homeID))
+          && get(/databases/$(database)/documents/homes/$(homeID)).data.hostUserID == request.auth.uid;
+    }
+
     // The keys an update actually touches. Anything absent from the caller's
     // allowlist is thereby pinned to its existing value.
     function changedKeys() {
@@ -114,7 +122,9 @@ service cloud.firestore {
     //
     // Documents predating the `allowedViewerIDs` backfill have neither field, so
     // they read as 'everyone'. Run scripts/backfill_visibility.js before relying
-    // on this rule to hide anything.
+    // on this rule to hide anything, and scripts/backfill_address_privacy.js
+    // before deploying — legacy documents carry `address.street`, which the
+    // listing validator below now rejects, so any write to them would fail.
     //
     // Only the host may write their own listings.
     // -------------------------------------------------------------------------
@@ -140,6 +150,11 @@ service cloud.firestore {
             && data.hostName.size() < 200
             // Nested struct validation
             && data.address is map
+            // The public address is city-level. `street` belongs in the private
+            // location subdocument; rejecting it here is what keeps a modified
+            // client from putting it back on the world-readable document.
+            && data.address.keys().hasOnly(['city', 'state', 'zip'])
+            && data.address.keys().hasAll(['city', 'state'])
             && data.sleeping is map
             && data.guestPolicy is map
             && data.amenities is map
@@ -196,6 +211,55 @@ service cloud.firestore {
 
       allow delete: if isSignedIn()
           && resource.data.hostUserID == request.auth.uid;
+
+      // -----------------------------------------------------------------------
+      // Exact location — the street address and unrounded coordinates.
+      // Readable by the host, and by a guest whose stay the host has accepted.
+      // Never world-readable: the public listing document carries city/state/zip
+      // and a coordinate rounded to roughly a kilometre.
+      // -----------------------------------------------------------------------
+      match /private/{docID} {
+        allow read: if isSignedIn()
+            && (isListingHost(homeID)
+                || exists(/databases/$(database)/documents/homes/$(homeID)/accepted/$(request.auth.uid)));
+
+        allow create, update: if isFullMember()
+            && isListingHost(homeID)
+            && request.resource.data.keys().hasOnly(['street', 'latitude', 'longitude'])
+            && request.resource.data.street is string
+            && request.resource.data.street.size() > 0
+            && request.resource.data.street.size() < 300
+            && (isUnset(request.resource.data, 'latitude')
+                || request.resource.data.latitude is number)
+            && (isUnset(request.resource.data, 'longitude')
+                || request.resource.data.longitude is number);
+
+        allow delete: if isFullMember() && isListingHost(homeID);
+      }
+
+      // -----------------------------------------------------------------------
+      // Accepted-guest markers. Existence is the capability: the private location
+      // rule above checks for `accepted/{callerUID}`. The host writes one when
+      // accepting a stay and removes it if the stay is later declined or
+      // cancelled; the guest may remove their own to give the address back.
+      // -----------------------------------------------------------------------
+      match /accepted/{guestID} {
+        allow read: if isSignedIn()
+            && (request.auth.uid == guestID || isListingHost(homeID));
+
+        allow create: if isFullMember()
+            && isListingHost(homeID)
+            && request.resource.data.keys().hasOnly(['requestID', 'guestUserID', 'createdAt'])
+            && request.resource.data.guestUserID == guestID
+            && request.resource.data.requestID is string
+            && request.resource.data.createdAt == request.time;
+
+        // A grant is not editable in place; revoke and re-issue.
+        allow update: if false;
+
+        allow delete: if isSignedIn()
+            && (request.auth.uid == guestID || isListingHost(homeID));
+      }
     }
 
     // -------------------------------------------------------------------------

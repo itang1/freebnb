@@ -311,7 +311,7 @@ struct ChipIcon: View {
     HomeCard(listing: Home(
         hostUserID: "preview-host",
         hostName: "Shai",
-        address: Address(street: "1257 Lincoln Ave", city: "Pasadena", state: "CA", zip: "91103"),
+        address: Address(city: "Pasadena", state: "CA", zip: "91103"),
         description: "Next to the Rose Bowl.",
         contactPreference: .inApp,
         hostMotivation: .eager,
