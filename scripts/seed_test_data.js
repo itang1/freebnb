@@ -383,6 +383,39 @@ function approximate(value) {
   return Math.round(value * 100) / 100;
 }
 
+// Mirror of Geohash.encode(...) in Swift: the base-32 geohash of the blurred
+// public coordinate, used as the proximity index key (feature 11). Keep the
+// alphabet and precision in sync with the Swift implementation.
+const GEOHASH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz";
+function geohashEncode(latitude, longitude, precision = 6) {
+  let latRange = [-90, 90];
+  let lonRange = [-180, 180];
+  let hash = "";
+  let bit = 0;
+  let ch = 0;
+  let evenBit = true;
+  while (hash.length < precision) {
+    if (evenBit) {
+      const mid = (lonRange[0] + lonRange[1]) / 2;
+      if (longitude >= mid) { ch |= 1 << (4 - bit); lonRange[0] = mid; }
+      else { lonRange[1] = mid; }
+    } else {
+      const mid = (latRange[0] + latRange[1]) / 2;
+      if (latitude >= mid) { ch |= 1 << (4 - bit); latRange[0] = mid; }
+      else { latRange[1] = mid; }
+    }
+    evenBit = !evenBit;
+    if (bit < 4) {
+      bit += 1;
+    } else {
+      hash += GEOHASH_BASE32[ch];
+      bit = 0;
+      ch = 0;
+    }
+  }
+  return hash;
+}
+
 function daysFromNow(n) {
   return admin.firestore.Timestamp.fromDate(new Date(Date.now() + n * 86_400_000));
 }
@@ -448,6 +481,7 @@ async function seedHomes() {
     const { location, ...publicListing } = home;
     publicListing.latitude = approximate(location.latitude);
     publicListing.longitude = approximate(location.longitude);
+    publicListing.geohash = geohashEncode(publicListing.latitude, publicListing.longitude);
     // The feed orders by createdAt, and an order-by excludes docs missing the
     // field, so a seeded listing without one never shows. Stamp it (L3).
     publicListing.createdAt = now;

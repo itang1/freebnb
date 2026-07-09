@@ -167,7 +167,7 @@ service cloud.firestore {
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
                  'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
-                 'visibility', 'allowedViewerIDs', 'deletedAt', 'createdAt'
+                 'geohash', 'visibility', 'allowedViewerIDs', 'deletedAt', 'createdAt'
                ])
             && data.keys().hasAll([
                  'hostUserID', 'hostName', 'address',
@@ -214,6 +214,7 @@ service cloud.firestore {
                 || data.allowedViewerIDs.hasAll([data.hostUserID]))
             && (isUnset(data, 'latitude') || data.latitude is number)
             && (isUnset(data, 'longitude') || data.longitude is number)
+            && isOptionalString(data, 'geohash', 12)
             && (isUnset(data, 'deletedAt') || data.deletedAt is timestamp)
             && (isUnset(data, 'createdAt') || data.createdAt is timestamp);
       }
