@@ -15,6 +15,7 @@
 		FCAA00022FA000000000AA01 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00012FA000000000AA01 /* FirebaseCrashlytics */; };
 		FCAA00042FA000000000AA01 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00032FA000000000AA01 /* FirebaseAnalytics */; };
 		FCAA00062FA000000000AA01 /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00052FA000000000AA01 /* FirebasePerformance */; };
+		FCAA00082FA000000000AA01 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00072FA000000000AA01 /* FirebaseFunctions */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +74,7 @@
 				FCAA00022FA000000000AA01 /* FirebaseCrashlytics in Frameworks */,
 				FCAA00042FA000000000AA01 /* FirebaseAnalytics in Frameworks */,
 				FCAA00062FA000000000AA01 /* FirebasePerformance in Frameworks */,
+				FCAA00082FA000000000AA01 /* FirebaseFunctions in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -152,6 +154,7 @@
 				FCAA00012FA000000000AA01 /* FirebaseCrashlytics */,
 				FCAA00032FA000000000AA01 /* FirebaseAnalytics */,
 				FCAA00052FA000000000AA01 /* FirebasePerformance */,
+				FCAA00072FA000000000AA01 /* FirebaseFunctions */,
 			);
 			productName = freebnb;
 			productReference = FC3EE6B62E3360ED004B2E1B /* freebnb.app */;
@@ -698,6 +701,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebasePerformance;
+		};
+		FCAA00072FA000000000AA01 /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -8,6 +8,7 @@
 
 import FirebaseAuth
 @preconcurrency import FirebaseFirestore
+@preconcurrency import FirebaseFunctions
 import Foundation
 import os
 
@@ -628,7 +629,11 @@ protocol StayRequestsRepository: Sendable {
 
 struct FirestoreStayRequestsRepository: StayRequestsRepository {
     private let db: Firestore
-    init(db: Firestore = .firestore()) { self.db = db }
+    private let functions: Functions
+    init(db: Firestore = .firestore(), functions: Functions = .functions()) {
+        self.db = db
+        self.functions = functions
+    }
 
     func listenToRequests(
         userID: String,
@@ -707,36 +712,44 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
     }
 
     func accept(_ request: StayRequest, hostNote: String?) async throws {
-        let payload = statusPayload(.accepted, hostNote: hostNote)
-        let request = request
-        try await withRetry { [db] in
-            // Only accepted requests can conflict, so filter server-side rather
-            // than reading every request ever made against this listing. Served
-            // by the (listingID, status, createdAt) composite index.
-            let snap = try await db.collection("stayRequests")
-                .whereField("listingID", isEqualTo: request.listingID)
-                .whereField("status", isEqualTo: StayRequestStatus.accepted.rawValue)
-                .getDocuments()
-            for doc in snap.documents where doc.documentID != request.id {
-                guard let other = try? doc.data(as: StayRequest.self) else { continue }
-                if other.overlaps(checkIn: request.checkIn, checkOut: request.checkOut) {
-                    throw StayRequestError.overlappingStay
-                }
+        // Fast-path UX guard: reject an obvious overlap without a round trip to
+        // the function. The host can read every request to their own listing, so
+        // this catches the common conflict instantly. It is NOT the enforcement
+        // point — two devices could both pass it — so the authoritative, atomic
+        // check is the acceptStayRequest transaction the callable runs (L1).
+        let snap = try await db.collection("stayRequests")
+            .whereField("listingID", isEqualTo: request.listingID)
+            .whereField("status", isEqualTo: StayRequestStatus.accepted.rawValue)
+            .getDocuments()
+        for doc in snap.documents where doc.documentID != request.id {
+            guard let other = try? doc.data(as: StayRequest.self) else { continue }
+            if other.overlaps(checkIn: request.checkIn, checkOut: request.checkOut) {
+                throw StayRequestError.overlappingStay
             }
-            // Accepting is also the disclosure event: the marker written here is
-            // what the rules on homes/{id}/private/location check for.
-            let batch = db.batch()
-            batch.updateData(payload, forDocument: db.collection("stayRequests").document(request.id))
-            batch.setData(
-                [
-                    "requestID": request.id,
-                    "guestUserID": request.guestUserID,
-                    "createdAt": FieldValue.serverTimestamp()
-                ],
-                forDocument: FirestorePaths.acceptedGuest(db, homeID: request.listingID, guestUserID: request.guestUserID)
-            )
-            try await batch.commit()
         }
+
+        // Authoritative accept: an admin transaction re-checks overlap and writes
+        // the status plus the address-disclosure marker atomically. Client rules
+        // no longer permit a direct accept, so this callable is the only path.
+        var payload: [String: Any] = ["requestID": request.id]
+        if let hostNote { payload["hostNote"] = hostNote }
+        do {
+            _ = try await functions.httpsCallable("acceptStayRequest").call(payload)
+        } catch {
+            throw Self.mapAcceptError(error)
+        }
+    }
+
+    /// Surfaces the callable's double-booking rejection ("aborted") as the same
+    /// typed error the fast-path guard throws, so the UI shows one message either
+    /// way. Other failures pass through unchanged.
+    private static func mapAcceptError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        if nsError.domain == FunctionsErrorDomain,
+           FunctionsErrorCode(rawValue: nsError.code) == .aborted {
+            return StayRequestError.overlappingStay
+        }
+        return error
     }
 }
 

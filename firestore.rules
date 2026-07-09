@@ -284,12 +284,10 @@ service cloud.firestore {
         allow read: if isSignedIn()
             && (request.auth.uid == guestID || isListingHost(homeID));
 
-        allow create: if isFullMember()
-            && isListingHost(homeID)
-            && request.resource.data.keys().hasOnly(['requestID', 'guestUserID', 'createdAt'])
-            && request.resource.data.guestUserID == guestID
-            && request.resource.data.requestID is string
-            && request.resource.data.createdAt == request.time;
+        // The marker is written only by the acceptStayRequest callable (admin,
+        // which bypasses these rules), so accepting a stay and disclosing the
+        // address happen atomically. No client may forge a grant (L1).
+        allow create: if false;
 
         // A grant is not editable in place; revoke and re-issue.
         allow update: if false;
@@ -354,10 +352,12 @@ service cloud.firestore {
             (resource.data.status in ["pending", "accepted"]
                 && request.resource.data.updatedAt == request.time
                 && (
-                  // Host accepts or declines a pending request
+                  // Host declines a pending request. Acceptance is NOT a client
+                  // write: it goes through the acceptStayRequest callable, whose
+                  // admin transaction is the race-free double-booking guard (L1).
                   (isOwner(resource.data.hostUserID)
                       && resource.data.status == "pending"
-                      && request.resource.data.status in ["accepted", "declined"]
+                      && request.resource.data.status == "declined"
                       && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||

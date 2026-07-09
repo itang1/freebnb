@@ -290,6 +290,92 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
 });
 
 // ---------------------------------------------------------------------------
+// acceptStayRequest (callable)
+// Owns stay acceptance so the double-booking guard is race-free (L1). The old
+// client path read accepted requests, checked overlap in code, then wrote —
+// two hosts (or one host on two devices) accepting concurrently could both pass
+// the check. This runs the read-check-write inside one Firestore transaction,
+// which the admin SDK (unlike the iOS client) can do over a query. It also owns
+// the address-disclosure marker, so acceptance is atomic end to end.
+// Call from the app: httpsCallable("acceptStayRequest").call(["requestID": id])
+// ---------------------------------------------------------------------------
+export const acceptStayRequest = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+
+  const requestID: unknown = data?.requestID;
+  const hostNote: unknown = data?.hostNote;
+  if (typeof requestID !== "string" || requestID.length === 0) {
+    throw new functions.https.HttpsError("invalid-argument", "requestID is required.");
+  }
+  if (hostNote !== undefined && typeof hostNote !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "hostNote must be a string.");
+  }
+
+  const requestRef = db.collection("stayRequests").doc(requestID);
+
+  await db.runTransaction(async (t) => {
+    const reqSnap = await t.get(requestRef);
+    if (!reqSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Request no longer exists.");
+    }
+    const req = reqSnap.data() as {
+      hostUserID: string;
+      guestUserID: string;
+      listingID: string;
+      status: string;
+      checkIn: admin.firestore.Timestamp;
+      checkOut: admin.firestore.Timestamp;
+    };
+    // Only the host of this request may accept it, and only while it is pending.
+    if (req.hostUserID !== uid) {
+      throw new functions.https.HttpsError("permission-denied", "Only the host can accept this request.");
+    }
+    if (req.status !== "pending") {
+      throw new functions.https.HttpsError("failed-precondition", "Only a pending request can be accepted.");
+    }
+
+    // All reads must precede all writes in a transaction. Re-read the accepted
+    // requests for this listing inside the txn so a concurrent accept that
+    // committed first is seen here and blocks this one.
+    const accepted = await t.get(
+      db.collection("stayRequests")
+        .where("listingID", "==", req.listingID)
+        .where("status", "==", "accepted")
+    );
+    const inMs = req.checkIn.toMillis();
+    const outMs = req.checkOut.toMillis();
+    for (const doc of accepted.docs) {
+      if (doc.id === requestID) continue;
+      const other = doc.data() as { checkIn: admin.firestore.Timestamp; checkOut: admin.firestore.Timestamp };
+      // Half-open interval overlap: [checkIn, checkOut).
+      if (other.checkIn.toMillis() < outMs && inMs < other.checkOut.toMillis()) {
+        // "aborted" (not "failed-precondition") so the client can distinguish a
+        // double-booking from the not-pending case and show the right message.
+        throw new functions.https.HttpsError(
+          "aborted",
+          "Those dates overlap a stay already accepted for this listing."
+        );
+      }
+    }
+
+    // Accept and disclose the address in one atomic write.
+    t.update(requestRef, {
+      status: "accepted",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(typeof hostNote === "string" ? { hostNote } : {}),
+    });
+    t.set(db.collection("homes").doc(req.listingID).collection("accepted").doc(req.guestUserID), {
+      requestID,
+      guestUserID: req.guestUserID,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+
+  return { ok: true };
+});
+
+// ---------------------------------------------------------------------------
 // exportUserData (callable)
 // Returns all data we hold for the calling user: public profile, private
 // profile data, listings, stay requests, full message content, friend edges,

@@ -6,6 +6,7 @@
 import FirebaseAuth
 import FirebaseCore
 import FirebaseFirestore
+import FirebaseFunctions
 import SwiftUI
 import UserNotifications
 
@@ -105,6 +106,7 @@ struct FreeBNBApp: App {
         settings.isSSLEnabled = false
         settings.isPersistenceEnabled = false
         Firestore.firestore().settings = settings
+        Functions.functions().useEmulator(withHost: host, port: 5001)
     }
 #endif
 
