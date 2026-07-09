@@ -42,6 +42,10 @@ final class HomeStore {
     // Pinned when the listener starts so `loadMore` pages the same partition the
     // live page came from, even if auth changes mid-scroll.
     @ObservationIgnored private var viewerID: String = ""
+    // Listings whose private location has already been fetched, successfully or
+    // not. A legacy listing has no location document, so caching only the hits
+    // would refetch it on every own-listings snapshot.
+    @ObservationIgnored private var attemptedLocationIDs: Set<String> = []
 
     init(
         repository: HomesRepository = FirestoreHomesRepository(),
@@ -75,6 +79,7 @@ final class HomeStore {
             ownListings = []
             // Addresses are entitlements of the signed-in user, not of the device.
             listingLocations = [:]
+            attemptedLocationIDs = []
             viewerID = ""
             canLoadMore = true
             isLoading = false
@@ -119,10 +124,11 @@ final class HomeStore {
             // A host can always read their own listings' addresses, and every host
             // surface (the listing rows, the dashboard, the edit form, the incoming
             // request rows) wants them. Bounded by ownListingsListenerLimit.
-            let missing = ownListings.map(\.id).filter { listingLocations[$0] == nil }
+            let missing = ownListings.map(\.id).filter { !attemptedLocationIDs.contains($0) }
             guard !missing.isEmpty else { return }
+            attemptedLocationIDs.formUnion(missing)
             Task { @MainActor in
-                for homeID in missing { _ = await location(for: homeID) }
+                for homeID in missing { await location(for: homeID) }
             }
         }
     }
@@ -216,6 +222,7 @@ final class HomeStore {
             if let location {
                 try await repository.saveLocation(homeID: home.id, location: location)
                 listingLocations[home.id] = location
+                attemptedLocationIDs.insert(home.id)
             }
         } catch {
             log.error("save error: \(error.localizedDescription, privacy: .public)")
