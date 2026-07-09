@@ -49,9 +49,9 @@ const db = admin.firestore();
 const now = admin.firestore.FieldValue.serverTimestamp();
 
 const users = [
-  { uid: "seed-host-ada", email: "ada@seed.freebnb.test", password: "***REDACTED***", displayName: "Ada" },
-  { uid: "seed-host-alan", email: "alan@seed.freebnb.test", password: "***REDACTED***", displayName: "Alan" },
-  { uid: "seed-guest-grace", email: "grace@seed.freebnb.test", password: "***REDACTED***", displayName: "Grace" }
+  { uid: "seed-host-spongebob", email: "spongebob@seed.freebnb.test", password: "***REDACTED***", displayName: "SpongeBob SquarePants" },
+  { uid: "seed-host-sandy", email: "sandy@seed.freebnb.test", password: "***REDACTED***", displayName: "Sandy Cheeks" },
+  { uid: "seed-guest-patrick", email: "patrick@seed.freebnb.test", password: "***REDACTED***", displayName: "Patrick Star" }
 ];
 
 const amenities = {
@@ -68,12 +68,12 @@ const amenities = {
 // exact coordinates are seeded separately into homes/{id}/private/location.
 const homes = [
   {
-    id: "seed-home-ada-1",
-    hostUserID: "seed-host-ada",
-    hostName: "Ada",
-    address: { city: "Cupertino", state: "CA", zip: "95014" },
-    location: { street: "1 Innovation Way", latitude: 37.3323, longitude: -122.0055 },
-    description: "Sunny guest room, five minutes from downtown.",
+    id: "seed-home-spongebob-1",
+    hostUserID: "seed-host-spongebob",
+    hostName: "SpongeBob SquarePants",
+    address: { city: "Honolulu", state: "HI", zip: "96815" },
+    location: { street: "3821 Kalakaua Ave", latitude: 21.2793, longitude: -157.8292 },
+    description: "Bright yellow beach bungalow two blocks from the water, squarish and cheerful just like its owner. Great for anyone who loves the smell of fry cooking and doesn't mind an early jellyfishing session.",
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "eager",
@@ -82,15 +82,15 @@ const homes = [
     amenities,
     cancellationPolicy: "flexible",
     visibility: "everyone",
-    allowedViewerIDs: ["seed-host-ada"]
+    allowedViewerIDs: ["seed-host-spongebob"]
   },
   {
-    id: "seed-home-alan-1",
-    hostUserID: "seed-host-alan",
-    hostName: "Alan",
-    address: { city: "Palo Alto", state: "CA", zip: "94301" },
-    location: { street: "42 Turing Rd", latitude: 37.4419, longitude: -122.1430 },
-    description: "Quiet couch in a converted attic studio.",
+    id: "seed-home-sandy-1",
+    hostUserID: "seed-host-sandy",
+    hostName: "Sandy Cheeks",
+    address: { city: "Houston", state: "TX", zip: "77058" },
+    location: { street: "2101 NASA Parkway", latitude: 29.5518, longitude: -95.0982 },
+    description: "Quiet guest room near the space center, decked out with rock-climbing gear and a homemade oxygen-tank display. Karate mat included. Not much room to swing a lasso, but it's snug.",
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "open",
@@ -99,7 +99,7 @@ const homes = [
     amenities,
     cancellationPolicy: "moderate",
     visibility: "everyone",
-    allowedViewerIDs: ["seed-host-alan"]
+    allowedViewerIDs: ["seed-host-sandy"]
   }
 ];
 
@@ -153,10 +153,10 @@ async function seedStayRequests() {
       listingCity: homes[0].address.city,
       listingHostName: homes[0].hostName,
       hostUserID: homes[0].hostUserID,
-      guestUserID: "seed-guest-grace",
+      guestUserID: "seed-guest-patrick",
       checkIn: daysFromNow(7),
       checkOut: daysFromNow(9),
-      guestNote: "Excited to visit!",
+      guestNote: "Excited to visit, buddy!",
       hostNote: null,
       status: "pending",
       createdAt: now,
@@ -168,11 +168,11 @@ async function seedStayRequests() {
       listingCity: homes[1].address.city,
       listingHostName: homes[1].hostName,
       hostUserID: homes[1].hostUserID,
-      guestUserID: "seed-guest-grace",
+      guestUserID: "seed-guest-patrick",
       checkIn: daysFromNow(14),
       checkOut: daysFromNow(16),
       guestNote: null,
-      hostNote: "Looking forward to hosting you.",
+      hostNote: "Looking forward to hosting you. Bring your karate gi.",
       status: "accepted",
       createdAt: now,
       updatedAt: now
