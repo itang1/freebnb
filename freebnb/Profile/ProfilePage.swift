@@ -382,6 +382,7 @@ private struct SettingsRow: View {
 private struct EditNameSheet: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(HomeStore.self) private var homeStore
+    @Environment(StayRequestStore.self) private var stayRequestStore
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) var dismiss
     @State private var name = ""
@@ -431,7 +432,10 @@ private struct EditNameSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         do {
             try await userProfileStore.updateDisplayName(trimmed)
+            // Fan the new name out to both denormalized copies: listing cards
+            // (homes.hostName) and trip rows (stayRequests.listingHostName, L7).
             try await homeStore.updateHostName(for: authManager.userID, newName: trimmed)
+            try await stayRequestStore.updateHostName(for: authManager.userID, newName: trimmed)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

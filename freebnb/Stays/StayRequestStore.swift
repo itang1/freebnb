@@ -116,6 +116,17 @@ final class StayRequestStore {
         try await update(request, status: .cancelled, hostNote: nil)
     }
 
+    /// Propagates a host's display-name change to `listingHostName` on every
+    /// request they host, so trip rows don't keep showing the old name (L7).
+    func updateHostName(for hostUserID: String, newName: String) async throws {
+        do {
+            try await repository.updateListingHostName(hostUserID: hostUserID, newName: newName)
+        } catch {
+            log.error("update host name error: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
     // MARK: - Host actions
 
     func accept(_ request: StayRequest, hostNote: String? = nil) async throws {

@@ -331,21 +331,33 @@ service cloud.firestore {
       // affectedKeys(), so a host cannot rewrite the dates while "accepting"
       // and a guest cannot rewrite them while cancelling.
       allow update: if isSignedIn()
-          // No edits from a terminal state
-          && resource.data.status in ["pending", "accepted"]
-          && request.resource.data.updatedAt == request.time
           && (
-            // Host accepts or declines a pending request
+            // Name propagation: a host rewrites only the denormalized
+            // listingHostName on requests they host, so a rename doesn't leave
+            // trip rows showing the old name (L7). Allowed on any status, since
+            // past trips should show the current name too; touches nothing else.
             (isOwner(resource.data.hostUserID)
-                && resource.data.status == "pending"
-                && request.resource.data.status in ["accepted", "declined"]
-                && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
-                && isOptionalString(request.resource.data, 'hostNote', 2000))
+                && changedKeys().hasOnly(['listingHostName'])
+                && request.resource.data.listingHostName is string
+                && request.resource.data.listingHostName.size() > 0
+                && request.resource.data.listingHostName.size() < 200)
             ||
-            // Guest cancels a pending or accepted request
-            (isOwner(resource.data.guestUserID)
-                && request.resource.data.status == "cancelled"
-                && changedKeys().hasOnly(['status', 'updatedAt']))
+            // Status transitions: no edits once the request is terminal.
+            (resource.data.status in ["pending", "accepted"]
+                && request.resource.data.updatedAt == request.time
+                && (
+                  // Host accepts or declines a pending request
+                  (isOwner(resource.data.hostUserID)
+                      && resource.data.status == "pending"
+                      && request.resource.data.status in ["accepted", "declined"]
+                      && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
+                      && isOptionalString(request.resource.data, 'hostNote', 2000))
+                  ||
+                  // Guest cancels a pending or accepted request
+                  (isOwner(resource.data.guestUserID)
+                      && request.resource.data.status == "cancelled"
+                      && changedKeys().hasOnly(['status', 'updatedAt']))
+                ))
           );
 
       allow delete: if false;

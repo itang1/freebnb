@@ -570,6 +570,10 @@ protocol StayRequestsRepository: Sendable {
     ) -> RepositoryListener
 
     func create(_ request: StayRequest) async throws
+    /// Rewrites the denormalized `listingHostName` on every request this user
+    /// hosts, so a display-name change doesn't leave trip rows showing the old
+    /// name forever (L7). Touches only that field.
+    func updateListingHostName(hostUserID: String, newName: String) async throws
     /// Moves a request to a new status. Any terminal status also revokes the
     /// guest's access to the listing's exact address.
     func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws
@@ -616,6 +620,23 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
     func create(_ request: StayRequest) async throws {
         try await withRetry { [db] in
             try db.collection("stayRequests").document(request.id).setData(from: request)
+        }
+    }
+
+    func updateListingHostName(hostUserID: String, newName: String) async throws {
+        try await withRetry { [db] in
+            let snap = try await db.collection("stayRequests")
+                .whereField("hostUserID", isEqualTo: hostUserID)
+                .getDocuments()
+            let refs = snap.documents.map(\.reference)
+            // Chunk under the 500-op batch cap for hosts with many requests.
+            for start in stride(from: 0, to: refs.count, by: firestoreBatchLimit) {
+                let batch = db.batch()
+                for ref in refs[start..<min(start + firestoreBatchLimit, refs.count)] {
+                    batch.updateData(["listingHostName": newName], forDocument: ref)
+                }
+                try await batch.commit()
+            }
         }
     }
 

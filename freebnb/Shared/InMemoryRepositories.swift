@@ -198,6 +198,12 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         requests.append(request)
     }
 
+    func updateListingHostName(hostUserID: String, newName: String) async throws {
+        for i in requests.indices where requests[i].hostUserID == hostUserID {
+            requests[i].listingHostName = newName
+        }
+    }
+
     func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws {
         if !status.isActive { acceptedGuests.remove(markerKey(request)) }
         guard let i = requests.firstIndex(where: { $0.id == request.id }) else { return }
@@ -210,7 +216,7 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
             other.id != request.id &&
             other.listingID == request.listingID &&
             other.status == .accepted &&
-            other.checkIn < request.checkOut && request.checkIn < other.checkOut
+            other.overlaps(checkIn: request.checkIn, checkOut: request.checkOut)
         }
         if conflict { throw StayRequestError.overlappingStay }
         try await updateStatus(request, status: .accepted, hostNote: hostNote)

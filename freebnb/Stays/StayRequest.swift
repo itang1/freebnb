@@ -45,7 +45,9 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     let listingID: String
     // Denormalized so the request row is displayable without fetching the listing.
     let listingCity: String
-    let listingHostName: String
+    // Denormalized copy of the host's display name, rewritten in place when the
+    // host renames (L7); `var` so the in-memory repository can update it.
+    var listingHostName: String
     let hostUserID: String
     let guestUserID: String
     var checkIn: Date
