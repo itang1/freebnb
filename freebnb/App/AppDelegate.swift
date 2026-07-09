@@ -70,9 +70,17 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let info = response.notification.request.content.userInfo
-        if let type = info["type"] as? String, type == "message",
-           let senderID = info["senderUserID"] as? String {
-            router?.pendingConversationUserID = senderID
+        switch info["type"] as? String {
+        case "message":
+            if let senderID = info["senderUserID"] as? String {
+                router?.pendingConversationUserID = senderID
+            }
+        case "stay_request", "stay_update":
+            // Both stay-event kinds land the user on the Stays tab, where the
+            // relevant request is already visible in its section.
+            router?.pendingStayEvent = true
+        default:
+            break
         }
         completionHandler()
     }

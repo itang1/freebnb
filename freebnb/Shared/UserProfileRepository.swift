@@ -25,6 +25,7 @@ protocol UserProfileRepository: Sendable {
     func fetchProfile(userID: String) async throws -> UserProfile?
     func deleteProfile(userID: String) async throws
     func updateFCMToken(userID: String, token: String) async throws
+    func updateNotificationPrefs(userID: String, prefs: NotificationPreferences) async throws
     func searchProfiles(query: String) async throws -> [UserProfile]
     func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws
 }
@@ -46,6 +47,7 @@ private final class CurrentProfileMerger: @unchecked Sendable {
     private var fcmToken: String?
     private var blockedUserIDs: [String]?
     private var savedListingIDs: [String]?
+    private var notificationPrefs: NotificationPreferences?
 
     init(handler: @escaping @Sendable (Result<UserProfile?, Error>) -> Void) {
         self.handler = handler
@@ -73,6 +75,7 @@ private final class CurrentProfileMerger: @unchecked Sendable {
         fcmToken = data?["fcmToken"] as? String
         blockedUserIDs = data?["blockedUserIDs"] as? [String]
         savedListingIDs = data?["savedListingIDs"] as? [String]
+        notificationPrefs = NotificationPreferences(firestore: data?["notificationPrefs"] as? [String: Any])
         if hasPublic { emit() }
     }
 
@@ -86,6 +89,7 @@ private final class CurrentProfileMerger: @unchecked Sendable {
         profile.fcmToken = fcmToken
         profile.blockedUserIDs = blockedUserIDs
         profile.savedListingIDs = savedListingIDs
+        profile.notificationPrefs = notificationPrefs
         handler(.success(profile))
     }
 }
@@ -202,6 +206,17 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
                 .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
                 .setData([
                     "fcmToken": token,
+                    "updatedAt": FieldValue.serverTimestamp()
+                ], merge: true)
+        }
+    }
+
+    func updateNotificationPrefs(userID: String, prefs: NotificationPreferences) async throws {
+        try await withRetry { [db] in
+            try await db.collection(FirestorePaths.users).document(userID)
+                .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
+                .setData([
+                    "notificationPrefs": prefs.firestoreValue,
                     "updatedAt": FieldValue.serverTimestamp()
                 ], merge: true)
         }

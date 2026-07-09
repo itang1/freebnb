@@ -10,6 +10,11 @@ import Observation
 final class DeepLinkRouter {
     var pendingConversationUserID: String?
 
+    /// A stay-event push (new request / accepted / declined) the user tapped.
+    /// Consumed by ContentView to switch to the Stays tab. Unlike an invite, this
+    /// only navigates — it never mutates data — so acting on it directly is safe.
+    var pendingStayEvent: Bool = false
+
     /// An incoming `freebnb://invite` deep link awaiting the user's explicit
     /// confirmation. Set from the URL handler; consumed by ContentView once the
     /// user is signed in and the inviter has been validated. A deep link must
