@@ -62,6 +62,10 @@ final class CreateListingViewModel {
     // Save state
     var isSaving = false
     var errorMessage: String?
+    // Set when geocoding the address returned nothing. The listing is still
+    // saveable without a map pin, but the host is told rather than left to
+    // wonder why their listing never shows on the map (L6).
+    var geocodeFailed = false
 
     init(editing: Home? = nil) {
         self.editing = editing
@@ -123,9 +127,23 @@ final class CreateListingViewModel {
         return true
     }
 
-    func save(homeStore: HomeStore, hostUserID: String, hostName: String, friendIDs: [String]) async {
+    /// Persists the listing. Returns `true` when the sheet should dismiss.
+    ///
+    /// When geocoding the address fails and `allowMissingCoordinates` is false,
+    /// nothing is written: `geocodeFailed` is set and the view offers the host a
+    /// retry or an explicit "save without a map pin". Passing
+    /// `allowMissingCoordinates: true` is that second choice.
+    @discardableResult
+    func save(
+        homeStore: HomeStore,
+        hostUserID: String,
+        hostName: String,
+        friendIDs: [String],
+        allowMissingCoordinates: Bool = false
+    ) async -> Bool {
         isSaving = true
         errorMessage = nil
+        geocodeFailed = false
         defer { isSaving = false }
 
         let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -189,21 +207,33 @@ final class CreateListingViewModel {
 
         // Geocode so the map view can place a pin. The exact coordinate is private
         // — publishing it would give away the street the address split just hid —
-        // so the listing document carries a rounded copy.
+        // so the listing document carries a rounded copy. Routed through the
+        // shared cache (not a fresh CLGeocoder) so browsing and re-saves respect
+        // CLGeocoder's rate limit (L6).
         let addressString = "\(trimmedStreet), \(city.trimmingCharacters(in: .whitespaces)), \(stateField.trimmingCharacters(in: .whitespaces)) \(zip.trimmingCharacters(in: .whitespaces))"
         var location = ListingLocation(street: trimmedStreet, latitude: nil, longitude: nil)
-        if let placemark = try? await CLGeocoder().geocodeAddressString(addressString).first,
-           let coordinate = placemark.location?.coordinate {
+        do {
+            let coordinate = try await GeocodingCache.shared.coordinate(for: addressString)
             location.latitude  = coordinate.latitude
             location.longitude = coordinate.longitude
             home.latitude  = Home.approximate(coordinate.latitude)
             home.longitude = Home.approximate(coordinate.longitude)
+        } catch {
+            // Don't save a listing with no coordinates behind the host's back.
+            // Surface the failure so they can fix the address and retry, or
+            // knowingly save without a map pin.
+            guard allowMissingCoordinates else {
+                geocodeFailed = true
+                return false
+            }
         }
 
         do {
             try await homeStore.save(home, location: location)
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 }
@@ -247,6 +277,17 @@ struct CreateListingPage: View {
                 visibilitySection
                 descriptionSection
 
+                if vm.geocodeFailed {
+                    Section {
+                        Label("We couldn't place that address on the map. Fix it and tap Save to retry, or save without a map location.", systemImage: "mappin.slash")
+                            .font(.subheadline)
+                            .foregroundColor(.orange)
+                        Button("Save without map location") {
+                            Task { if await saveListing(allowMissingCoordinates: true) { dismiss() } }
+                        }
+                    }
+                }
+
                 if let errorMessage = vm.errorMessage {
                     Section {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -266,15 +307,7 @@ struct CreateListingPage: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        Task {
-                            await vm.save(
-                                homeStore: homeStore,
-                                hostUserID: authManager.userID,
-                                hostName: userProfileStore.displayName ?? "",
-                                friendIDs: friendStore.friendIDs
-                            )
-                            if vm.errorMessage == nil { dismiss() }
-                        }
+                        Task { if await saveListing() { dismiss() } }
                     }
                     .disabled(!vm.canSave(displayName: userProfileStore.displayName ?? ""))
                 }
@@ -282,6 +315,20 @@ struct CreateListingPage: View {
             .disabled(vm.isSaving)
             .task { await vm.loadStreet(homeStore: homeStore) }
         }
+    }
+
+    // MARK: - Actions
+
+    /// Bridges the toolbar and the "save without map location" button to the
+    /// view model. Returns `true` when the sheet should dismiss.
+    private func saveListing(allowMissingCoordinates: Bool = false) async -> Bool {
+        await vm.save(
+            homeStore: homeStore,
+            hostUserID: authManager.userID,
+            hostName: userProfileStore.displayName ?? "",
+            friendIDs: friendStore.friendIDs,
+            allowMissingCoordinates: allowMissingCoordinates
+        )
     }
 
     // MARK: - Sections
