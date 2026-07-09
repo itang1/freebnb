@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: Build & test (iOS)
+    runs-on: macos-15
+    env:
+      SCHEME: freebnb
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.4.app
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: SwiftLint
+        run: swiftlint lint --reporter github-actions-logging
+
+      # The real GoogleService-Info.plist is a secret and never committed. Firebase
+      # only reads it at FirebaseApp.configure() time, and the test target boots the
+      # app (it runs in the app host), so a well-formed placeholder is enough for the
+      # suite to launch. It never talks to a real project.
+      - name: Write placeholder GoogleService-Info.plist
+        run: |
+          cat > freebnb/GoogleService-Info.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>API_KEY</key>
+            <string>AIzaSyDUMMYCIPLACEHOLDERKEY0000000000000</string>
+            <key>GCM_SENDER_ID</key>
+            <string>000000000000</string>
+            <key>PLIST_VERSION</key>
+            <string>1</string>
+            <key>BUNDLE_ID</key>
+            <string>com.freebnb.app</string>
+            <key>PROJECT_ID</key>
+            <string>freebnb-ci</string>
+            <key>STORAGE_BUCKET</key>
+            <string>freebnb-ci.appspot.com</string>
+            <key>IS_ADS_ENABLED</key>
+            <false/>
+            <key>IS_ANALYTICS_ENABLED</key>
+            <false/>
+            <key>IS_APPINVITE_ENABLED</key>
+            <true/>
+            <key>IS_GCM_ENABLED</key>
+            <true/>
+            <key>IS_SIGNIN_ENABLED</key>
+            <true/>
+            <key>GOOGLE_APP_ID</key>
+            <string>1:000000000000:ios:0000000000000000000000</string>
+            <key>DATABASE_URL</key>
+            <string>https://freebnb-ci.firebaseio.com</string>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Resolve simulator destination
+        id: sim
+        run: |
+          cat > /tmp/pick_sim.py <<'PY'
+          import json, subprocess, sys
+          data = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"]))
+          for runtime in sorted(data["devices"]):
+              if "iOS" not in runtime:
+                  continue
+              for dev in data["devices"][runtime]:
+                  if dev["name"].startswith("iPhone"):
+                      print(dev["udid"])
+                      sys.exit(0)
+          sys.exit("No available iPhone simulator found")
+          PY
+          UDID=$(python3 /tmp/pick_sim.py)
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Using simulator $UDID"
+
+      - name: Build & test
+        run: |
+          xcodebuild test \
+            -project freebnb.xcodeproj \
+            -scheme "$SCHEME" \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: TestResults.xcresult
+          if-no-files-found: ignore
+
+  functions:
+    name: Build (Cloud Functions)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript build
+        run: npm run build
