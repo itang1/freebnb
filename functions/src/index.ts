@@ -17,6 +17,14 @@ async function deleteQueryInChunks(query: FirebaseFirestore.Query): Promise<void
   }
 }
 
+// Deletes every Storage object under `prefix` from the default bucket. Used to
+// cascade a user's listing photos (listings/{uid}/**) on account deletion:
+// the Firestore listing survives as history, but the binary assets are personal
+// data and a cost leak (S7). A missing bucket or empty prefix is a no-op.
+async function deleteStoragePrefix(prefix: string): Promise<void> {
+  await admin.storage().bucket().deleteFiles({ prefix });
+}
+
 // ---------------------------------------------------------------------------
 // scheduledFirestoreBackup
 // Exports all Firestore collections to GCS once a day at 03:00 UTC.
@@ -254,6 +262,9 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
     ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection("private"))),
     ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection("accepted"))),
     deleteQueryInChunks(db.collectionGroup("accepted").where("guestUserID", "==", uid)),
+    // Listing photos live in Storage, not Firestore, so the document cascade
+    // above never reaches them. Drop the whole listings/{uid}/ tree (S7).
+    deleteStoragePrefix(`listings/${uid}/`),
   ]);
 
   // Hard-cascade the user's own messages, stay requests (as guest and host),
