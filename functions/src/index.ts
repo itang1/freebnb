@@ -260,31 +260,7 @@ export const exportUserData = functions.https.onCall(async (_data, context) => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// checkMessageRate (callable, internal helper)
-// Rejects a message send if the user has exceeded 30 messages in 60 seconds.
-// The iOS client calls this before writing to Firestore; it is not a hard
-// enforcement layer — add Firestore rules or a write trigger for that.
-// ---------------------------------------------------------------------------
-const MESSAGE_RATE_LIMIT = 30;
-const MESSAGE_RATE_WINDOW_MS = 60_000;
-
-export const checkMessageRate = functions.https.onCall(async (_data, context) => {
-  const uid = context.auth?.uid;
-  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
-
-  const since = admin.firestore.Timestamp.fromMillis(Date.now() - MESSAGE_RATE_WINDOW_MS);
-  const snap = await db
-    .collection("messages")
-    .where("senderUserID", "==", uid)
-    .where("timestamp", ">=", since)
-    .get();
-
-  if (snap.size >= MESSAGE_RATE_LIMIT) {
-    throw new functions.https.HttpsError(
-      "resource-exhausted",
-      "Slow down — you're sending messages too quickly."
-    );
-  }
-  return { allowed: true };
-});
+// Message rate limiting is enforced in the write path by firestore.rules: every
+// message create must advance the sender's rateLimits/{uid} counter, which the
+// rules cap at 30 messages per 60s window. The former checkMessageRate callable
+// (an advisory, ignored-result pre-check) has been removed in favour of it.

@@ -37,10 +37,39 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/homes/$(homeID)).data.hostUserID == request.auth.uid;
     }
 
+    // True when `homeID` is a live listing (exists, not soft-deleted) whose host
+    // is exactly `claimedHostID`. Used to stop a guest from fabricating a stay
+    // request that names an arbitrary victim as host or targets a dead listing
+    // (S8). get() reads with elevated privilege, so it works even for a
+    // friends-only listing the guest can legitimately see.
+    function listingHasActiveHost(homeID, claimedHostID) {
+      return exists(/databases/$(database)/documents/homes/$(homeID))
+          && get(/databases/$(database)/documents/homes/$(homeID)).data.hostUserID == claimedHostID
+          && get(/databases/$(database)/documents/homes/$(homeID)).data.get('deletedAt', null) == null;
+    }
+
     // The keys an update actually touches. Anything absent from the caller's
     // allowlist is thereby pinned to its existing value.
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // True when this write also validly advances the caller's rateLimits counter
+    // in the same commit — either opening a fresh window (count resets to 1 at
+    // request.time) or incrementing an already-open one. getAfter() reads the
+    // post-commit state, so tying a message create to it forces every send to
+    // consume a slot the rateLimits rules cap at MESSAGE_RATE_LIMIT per window.
+    // Caveat: a batch of N message creates paired with a single counter
+    // increment all see the same getAfter() and so share one slot; rules cannot
+    // count sibling writes. App Check is the primary control against such a
+    // hand-rolled client (see the deployment checklist); this is defense in depth
+    // against the naive send-in-a-loop that the audit's S4 describes.
+    function rateCounterAdvanced(uid) {
+      return (getAfter(/databases/$(database)/documents/rateLimits/$(uid)).data.windowStart == request.time
+              && getAfter(/databases/$(database)/documents/rateLimits/$(uid)).data.count == 1)
+          || (exists(/databases/$(database)/documents/rateLimits/$(uid))
+              && getAfter(/databases/$(database)/documents/rateLimits/$(uid)).data.count
+                 == get(/databases/$(database)/documents/rateLimits/$(uid)).data.count + 1);
     }
 
     // Optional-field helpers. The Swift Firestore encoder omits nil optionals
@@ -287,6 +316,13 @@ service cloud.firestore {
           && request.resource.data.checkIn is timestamp
           && request.resource.data.checkOut is timestamp
           && request.resource.data.checkOut > request.resource.data.checkIn
+          // Check-in must not be in the past. checkIn is a local start-of-day, so
+          // a one-day grace keeps a same-day request valid regardless of the
+          // guest's timezone offset from UTC while still rejecting stale dates.
+          && request.resource.data.checkIn > request.time - duration.value(1, 'd')
+          // The named host must actually own the (live) listing being requested,
+          // so a request can't be aimed at an arbitrary user's inbox (S8).
+          && listingHasActiveHost(request.resource.data.listingID, request.resource.data.hostUserID)
           && isOptionalString(request.resource.data, 'guestNote', 2000);
 
       // Status transitions may touch nothing but the status, the note belonging
@@ -347,9 +383,59 @@ service cloud.firestore {
                  ? request.resource.data.participants[1]
                  : request.resource.data.participants[0],
                request.auth.uid
-             );
+             )
+          // Enforce the per-user send rate in the write path: the same commit
+          // must advance the sender's rateLimits counter, which the rules below
+          // cap at MESSAGE_RATE_LIMIT per window (S4).
+          && rateCounterAdvanced(request.auth.uid);
 
       allow update, delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Rate-limit counters — one per user, written only in the same commit as the
+    // message it gates (see rateCounterAdvanced). A sliding fixed window: `count`
+    // messages sent since `windowStart`, reset once the window elapses. The rules
+    // are what make the limit real — they refuse an increment past the cap and
+    // refuse to reopen the window before it has expired, so a modified client
+    // cannot grant itself extra headroom by rewriting the doc.
+    // -------------------------------------------------------------------------
+    match /rateLimits/{userID} {
+      // Window length and per-window cap. Keep in sync with the client's advisory
+      // pre-check (MessageStore.sendRateLimit / sendRateWindow).
+      function windowSeconds() { return 60; }
+      function messageCap() { return 30; }
+
+      allow read: if isSignedIn() && isOwner(userID);
+
+      // First message ever (or first after a full reset that deleted the doc):
+      // a fresh window stamped at request.time with a single message in it.
+      allow create: if isFullMember()
+          && isOwner(userID)
+          && request.resource.data.keys().hasOnly(['windowStart', 'count'])
+          && request.resource.data.windowStart == request.time
+          && request.resource.data.count == 1;
+
+      allow update: if isFullMember()
+          && isOwner(userID)
+          && request.resource.data.keys().hasOnly(['windowStart', 'count'])
+          && request.resource.data.count is int
+          && (
+            // The previous window has elapsed: open a new one at request.time.
+            (request.time >= resource.data.windowStart + duration.value(windowSeconds(), 's')
+                && request.resource.data.windowStart == request.time
+                && request.resource.data.count == 1)
+            ||
+            // Still inside the open window: increment by one, up to the cap. The
+            // window start is pinned, so the window cannot be slid forward to
+            // dodge the cap.
+            (request.resource.data.windowStart == resource.data.windowStart
+                && request.time < resource.data.windowStart + duration.value(windowSeconds(), 's')
+                && request.resource.data.count == resource.data.count + 1
+                && request.resource.data.count <= messageCap())
+          );
+
+      allow delete: if false;
     }
 
     // -------------------------------------------------------------------------

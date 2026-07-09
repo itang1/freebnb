@@ -459,10 +459,61 @@ struct FirestoreMessagesRepository: MessagesRepository {
         return FirestoreListenerBox(reg)
     }
 
+    // Window and per-window cap for the write-path rate limit. Must match the
+    // rateLimits rules (windowSeconds()/messageCap()) in firestore.rules and the
+    // client-side advisory pre-check in MessageStore.
+    private static let rateWindow: TimeInterval = 60
+
     func send(_ message: Message, onError: @escaping @Sendable (Error) -> Void) throws {
-        let ref = db.collection("messages").document(message.id)
-        try ref.setData(from: message) { error in
-            if let error { onError(error) }
+        // Encode up front so a bad payload throws synchronously (as the old
+        // setData(from:) did) rather than inside the transaction.
+        let encodedMessage = try Firestore.Encoder().encode(message)
+        let db = self.db
+        // The message and the sender's rate-limit counter are committed together
+        // in one transaction, so firestore.rules can gate the message create on
+        // the counter advancing (see rateCounterAdvanced). A transaction has no
+        // local-cache echo, so MessageStore shows the message optimistically
+        // until the conversation listener delivers the committed copy.
+        Task {
+            do {
+                try await Self.commitRateLimited(db: db, message: message, encodedMessage: encodedMessage)
+            } catch {
+                onError(error)
+            }
+        }
+    }
+
+    private static func commitRateLimited(
+        db: Firestore,
+        message: Message,
+        encodedMessage: [String: Any]
+    ) async throws {
+        let rateRef = db.collection("rateLimits").document(message.senderUserID)
+        let msgRef = db.collection("messages").document(message.id)
+        try await withRetry {
+            _ = try await db.runTransaction { txn, errorPointer -> Any? in
+                let snap: DocumentSnapshot
+                do {
+                    snap = try txn.getDocument(rateRef)
+                } catch let error as NSError {
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                // Still inside the open window: increment and keep windowStart.
+                // Otherwise open a fresh window stamped at the server's write time,
+                // which the rules require to equal request.time.
+                var counter: [String: Any] = ["windowStart": FieldValue.serverTimestamp(), "count": 1]
+                if snap.exists,
+                   let windowStart = snap.get("windowStart") as? Timestamp,
+                   let count = snap.get("count") as? Int,
+                   Date().timeIntervalSince(windowStart.dateValue()) < rateWindow {
+                    counter = ["windowStart": windowStart, "count": count + 1]
+                }
+                txn.setData(counter, forDocument: rateRef)
+                txn.setData(encodedMessage, forDocument: msgRef)
+                return nil
+            }
         }
     }
 }

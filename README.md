@@ -45,7 +45,7 @@ The iOS app is organized by feature (`Auth`, `Homes`, `Stays`, `Messaging`, `Fri
 
 Stores never talk to Firestore directly. Each one depends on a repository protocol (`Shared/Repositories.swift`), with a Firestore-backed implementation for production and in-memory doubles (`Shared/InMemoryRepositories.swift`) for unit tests and SwiftUI previews. Listeners are capped and the feed is cursor-paginated so read costs stay predictable.
 
-The backend is intentionally thin. Firestore security rules are the real authorization boundary (guests can read but not write, blocked users cannot message, private profile data is owner-only), and Cloud Functions handle what clients can't be trusted with: push notification fan-out on new messages, the account-deletion data cascade, user data export, message rate limiting, and a daily scheduled Firestore backup.
+The backend is intentionally thin. Firestore security rules are the real authorization boundary (guests can read but not write, blocked users cannot message, message sends are rate-limited via a per-user counter gated in the write path, private profile data is owner-only), and Cloud Functions handle what clients can't be trusted with: push notification fan-out on new messages, the account-deletion data cascade, user data export, and a daily scheduled Firestore backup.
 
 ## Design palette
 

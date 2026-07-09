@@ -9,10 +9,6 @@ import Foundation
 import Observation
 import os
 
-#if canImport(FirebaseFunctions)
-import FirebaseFunctions
-#endif
-
 struct Message: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let senderUserID: String
@@ -73,6 +69,12 @@ final class MessageStore {
     private var threadResolvedIDs: Set<String> = []
 
     private var failedMessages: [String: Message] = [:]
+    // Optimistically-shown sends whose transaction has not yet committed. A
+    // rate-limited send commits through a Firestore transaction, which (unlike a
+    // plain setData) produces no local-cache echo, so the message would otherwise
+    // not appear until the server round-trips. Cleared once the conversation
+    // listener delivers the committed copy, or moved to `failedMessages` on error.
+    private var pendingMessages: [String: Message] = [:]
     private var currentUserID: String?
     /// Last-read message ID per conversation, persisted across launches.
     private var lastReadIDs: [String: String] = {
@@ -92,10 +94,11 @@ final class MessageStore {
     @ObservationIgnored private let log = AppLog.logger("messaging")
     @ObservationIgnored private let summaryLimit = 50
     @ObservationIgnored private let threadPageSize = 50
-    // Client-side advisory rate limit mirroring the checkMessageRate Cloud
-    // Function (30 messages / 60s). This is a UX guard, not a security control;
-    // real enforcement belongs in Firestore rules or a write trigger. When the
-    // FirebaseFunctions product is linked, sends are also verified server-side.
+    // Client-side advisory rate limit (30 messages / 60s). A fast-path UX guard
+    // that blocks obvious spamming before it reaches Firestore; the real
+    // enforcement is in firestore.rules, which gates every message create on the
+    // sender's rateLimits counter (see FirestoreMessagesRepository). Keep these
+    // values in sync with the rules' messageCap()/windowSeconds().
     @ObservationIgnored private let sendRateLimit = 30
     @ObservationIgnored private let sendRateWindow: TimeInterval = 60
     @ObservationIgnored private var recentSendTimestamps: [Date] = []
@@ -136,6 +139,7 @@ final class MessageStore {
             pendingIDs = []
             failedIDs = []
             failedMessages = [:]
+            pendingMessages = [:]
             // Signed out: nothing is coming, so stop showing skeletons.
             isLoadingConversations = false
             return
@@ -156,11 +160,19 @@ final class MessageStore {
         case .failure(let error):
             log.error("snapshot error: \(error.localizedDescription, privacy: .public)")
         case .success(let all):
-            pendingIDs.subtract(Set(all.map { $0.id }))
+            clearOptimistic(delivered: all)
             conversations = Dictionary(grouping: all) {
                 MessageStore.conversationID(userIDs: $0.participants)
             }
         }
+    }
+
+    /// Drops the optimistic and pending-id bookkeeping for messages the server
+    /// has now confirmed, so `messages(for:)` shows the committed copy alone.
+    private func clearOptimistic(delivered: [Message]) {
+        let ids = Set(delivered.map(\.id))
+        pendingIDs.subtract(ids)
+        for id in ids { pendingMessages.removeValue(forKey: id) }
     }
 
     // MARK: - Per-conversation listeners (thread view)
@@ -227,7 +239,7 @@ final class MessageStore {
         case .failure(let error):
             log.error("thread snapshot error \(conversationID, privacy: .public): \(error.localizedDescription, privacy: .public)")
         case .success(let (messages, hasMore)):
-            pendingIDs.subtract(Set(messages.map { $0.id }))
+            clearOptimistic(delivered: messages)
             threadMessages[conversationID] = messages
             threadHasMore[conversationID] = hasMore
         }
@@ -296,10 +308,16 @@ final class MessageStore {
     func messages(for conversationID: String) -> [Message] {
         // Prefer the per-conversation snapshot (more complete) when available.
         let sent = threadMessages[conversationID] ?? conversations[conversationID] ?? []
-        let failed = failedMessages.values.filter {
-            MessageStore.conversationID(userIDs: $0.participants) == conversationID
+        // Once the committed copy has arrived it wins, so drop any optimistic or
+        // failed entry sharing its id to avoid showing the message twice.
+        let sentIDs = Set(sent.map(\.id))
+        func inConversation(_ m: Message) -> Bool {
+            MessageStore.conversationID(userIDs: m.participants) == conversationID
+                && !sentIDs.contains(m.id)
         }
-        return (sent + failed).sorted { Self.sortKey($0) < Self.sortKey($1) }
+        let pending = pendingMessages.values.filter(inConversation)
+        let failed = failedMessages.values.filter(inConversation)
+        return (sent + pending + failed).sorted { Self.sortKey($0) < Self.sortKey($1) }
     }
 
     func state(of messageID: String) -> MessageState {
@@ -328,7 +346,6 @@ final class MessageStore {
         }
         isSendRateLimited = false
         recentSendTimestamps.append(Date())
-        verifyServerRateLimit()
 
         let participants = [senderUserID, recipientUserID].sorted()
         let msg = Message(
@@ -338,6 +355,12 @@ final class MessageStore {
             participants: participants
         )
         pendingIDs.insert(msg.id)
+        // Show the message immediately. The stored timestamp is a client stamp so
+        // it sorts to the end of the thread; the committed copy (server timestamp)
+        // replaces it when the listener delivers it.
+        var optimistic = msg
+        optimistic.timestamp = Date()
+        pendingMessages[msg.id] = optimistic
         do {
             try repository.send(msg) { [weak self] error in
                 Task { @MainActor [weak self] in
@@ -357,21 +380,6 @@ final class MessageStore {
         return recentSendTimestamps.count >= sendRateLimit
     }
 
-    /// Best-effort server-side rate verification. Only compiled when the
-    /// FirebaseFunctions product is linked; failures are logged, not surfaced,
-    /// since the client-side window already gated this send.
-    private func verifyServerRateLimit() {
-#if canImport(FirebaseFunctions)
-        Task {
-            do {
-                _ = try await Functions.functions().httpsCallable("checkMessageRate").call()
-            } catch {
-                log.error("server rate check failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-#endif
-    }
-
     func retry(_ messageID: String) {
         guard let failed = failedMessages.removeValue(forKey: messageID) else { return }
         failedIDs.remove(messageID)
@@ -387,6 +395,7 @@ final class MessageStore {
     private func markFailed(msg: Message, error: Error) {
         log.error("write error \(msg.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
         pendingIDs.remove(msg.id)
+        pendingMessages.removeValue(forKey: msg.id)
         failedIDs.insert(msg.id)
         var stamped = msg
         stamped.timestamp = Date()
