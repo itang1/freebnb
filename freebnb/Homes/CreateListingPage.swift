@@ -234,6 +234,7 @@ final class CreateListingViewModel {
 
         do {
             try await homeStore.save(home, location: location)
+            Telemetry.log(.createListingCompleted, parameters: ["is_edit": editing != nil])
             return true
         } catch {
             errorMessage = error.localizedDescription

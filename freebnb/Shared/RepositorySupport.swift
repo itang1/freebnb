@@ -20,10 +20,6 @@ enum AppLog {
     }
 }
 
-// Shared by the repository files (each split into its own file), so it is
-// module-internal rather than file-private.
-let repoLog = AppLog.logger("repository")
-
 // Firestore caps a WriteBatch at 500 operations.
 let firestoreBatchLimit = 500
 

@@ -77,6 +77,8 @@ final class AuthManager {
             authMethod = .none
             isSignedIn = false
         }
+        // Attribute crash reports and analytics to the current user (A6).
+        Telemetry.setUserID(user?.uid)
     }
 
     // MARK: - Sign in with Apple
@@ -141,8 +143,10 @@ final class AuthManager {
                     if !fullName.isEmpty {
                         UserDefaults.standard.set(fullName, forKey: UserDefaultsKey.userName)
                     }
+                    Telemetry.log(.signInCompleted, parameters: ["method": "apple"])
                 } catch {
                     log.error("apple sign in failed: \(error.localizedDescription, privacy: .public)")
+                    Telemetry.log(.signInFailed, parameters: ["method": "apple"])
                     authError = .signInFailed
                 }
             }
@@ -157,8 +161,10 @@ final class AuthManager {
             defer { isLoading = false }
             do {
                 _ = try await Auth.auth().signInAnonymously()
+                Telemetry.log(.signInCompleted, parameters: ["method": "guest"])
             } catch {
                 log.error("anonymous sign in failed: \(error.localizedDescription, privacy: .public)")
+                Telemetry.log(.signInFailed, parameters: ["method": "guest"])
                 authError = .guestFailed
             }
         }

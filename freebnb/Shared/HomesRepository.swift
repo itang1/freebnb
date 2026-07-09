@@ -125,7 +125,10 @@ struct FirestoreHomesRepository: HomesRepository {
         documents.compactMap { doc in
             do { return try doc.data(as: Home.self) }
             catch {
-                repoLog.error("\(context, privacy: .public) home decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                // Count the dropped document so a corrupt listing surfaces as a
+                // decode-failure rate instead of vanishing silently (A5). The
+                // query context (feed/own/page) rides along in the id field.
+                Telemetry.decodeFailure(collection: FirestorePaths.homes, documentID: "\(context)/\(doc.documentID)", error: error)
                 return nil
             }
         }
