@@ -12,6 +12,11 @@ import os
 @Observable
 final class HomeStore {
     private(set) var listings: [Home] = []
+    /// The feed the UI renders: `listings` with blocked hosts and unreachable
+    /// friends-only listings removed, ordered friends-first then by recency.
+    /// Derived here (A1) so the filter-and-sort runs once when its inputs change,
+    /// not on every view render as it did when this lived in `ContentView`.
+    private(set) var visibleListings: [Home] = []
     private(set) var ownListings: [Home] = []
     /// Street addresses and exact coordinates the current user is allowed to see,
     /// keyed by listing id. Populated eagerly for the user's own listings and on
@@ -46,6 +51,10 @@ final class HomeStore {
     // not. A legacy listing has no location document, so caching only the hits
     // would refetch it on every own-listings snapshot.
     @ObservationIgnored private var attemptedLocationIDs: Set<String> = []
+    // Feed derivation context supplied by the surrounding stores (auth, friends,
+    // blocks). Held here so `visibleListings` recomputes only when it or the raw
+    // listings change. See `updateFeedContext`.
+    @ObservationIgnored private var feedContext = FeedContext()
 
     init(
         repository: HomesRepository = FirestoreHomesRepository(),
@@ -76,6 +85,7 @@ final class HomeStore {
             livePage = []
             pagedListings = []
             listings = []
+            visibleListings = []
             ownListings = []
             // Addresses are entitlements of the signed-in user, not of the device.
             listingLocations = [:]
@@ -180,6 +190,72 @@ final class HomeStore {
             merged.append(home)
         }
         listings = merged
+        recomputeVisible()
+    }
+
+    // MARK: - Derived feed (A1)
+
+    /// Supplies the viewer identity, friend set, and block set the feed is
+    /// filtered and ranked against. Recomputes `visibleListings` only when the
+    /// context actually changes, so the view layer can call this freely.
+    func updateFeedContext(myID: String, friendIDs: Set<String>, blockedIDs: Set<String>) {
+        let next = FeedContext(myID: myID, friendIDs: friendIDs, blockedIDs: blockedIDs)
+        guard next != feedContext else { return }
+        feedContext = next
+        recomputeVisible()
+    }
+
+    private func recomputeVisible() {
+        visibleListings = Self.feed(
+            from: listings,
+            myID: feedContext.myID,
+            friendIDs: feedContext.friendIDs,
+            blockedIDs: feedContext.blockedIDs
+        )
+    }
+
+    /// Filters out blocked hosts and friends-only listings you can't see, then
+    /// orders friends' listings first, then your own, then everyone else.
+    ///
+    /// Firestore rules and the partitioned feed queries are what actually keep a
+    /// friends-only listing out of a stranger's hands; the visibility check here
+    /// is a second line of defence for a stale `allowedViewerIDs` (a friend
+    /// removed since the listing was last written). Block filtering, by contrast,
+    /// is client-only by design — the block list is private to the blocker.
+    ///
+    /// Within a rank bucket, newest listings come first (L3). Swift's sort is not
+    /// stable, so the comparator falls through to the listing id: without a total
+    /// order, rows sharing a rank and timestamp reshuffle between recomputes.
+    static func feed(
+        from listings: [Home],
+        myID: String,
+        friendIDs: Set<String>,
+        blockedIDs: Set<String>
+    ) -> [Home] {
+        listings
+            .filter { home in
+                guard !blockedIDs.contains(home.hostUserID) else { return false }
+                if home.visibility == .friendsOnly {
+                    return home.hostUserID == myID || friendIDs.contains(home.hostUserID)
+                }
+                return true
+            }
+            .sorted { a, b in
+                let aRank = feedRank(a, myID: myID, friendIDs: friendIDs)
+                let bRank = feedRank(b, myID: myID, friendIDs: friendIDs)
+                if aRank != bRank { return aRank < bRank }
+                let aDate = a.createdAt ?? .distantPast
+                let bDate = b.createdAt ?? .distantPast
+                if aDate != bDate { return aDate > bDate }
+                return a.id < b.id
+            }
+    }
+
+    /// Lower sorts earlier: friends' listings, then your own, then everyone else.
+    static func feedRank(_ home: Home, myID: String, friendIDs: Set<String>) -> Int {
+        if friendIDs.contains(home.hostUserID) { return 0 }
+        if home.hostUserID == myID { return 1 }
+        return 2
     }
 
     func loadMore() {
@@ -278,4 +354,12 @@ final class HomeStore {
             throw error
         }
     }
+}
+
+/// The viewer-specific inputs the feed is filtered and ranked against. Equatable
+/// so `HomeStore` can skip recomputing the feed when nothing relevant changed.
+struct FeedContext: Equatable {
+    var myID: String = ""
+    var friendIDs: Set<String> = []
+    var blockedIDs: Set<String> = []
 }

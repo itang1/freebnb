@@ -2,7 +2,7 @@
 //  FeedOrderingTests.swift
 //  freebnbTests
 //
-//  Covers ContentView's feed derivation: block filtering, friends-only
+//  Covers HomeStore's feed derivation: block filtering, friends-only
 //  visibility, and — the reason this file exists — that the ordering is a total
 //  order. Swift's sort is not stable, so a comparator that reports "equal" for
 //  distinct rows lets them reshuffle between recomputes (L9).
@@ -57,7 +57,7 @@ struct FeedOrderingTests {
             makeHome(id: "a", hostUserID: "friend")
         ]
 
-        let feed = ContentView.feed(
+        let feed = HomeStore.feed(
             from: listings, myID: me, friendIDs: ["friend"], blockedIDs: []
         )
 
@@ -73,7 +73,7 @@ struct FeedOrderingTests {
 
         let expected = ["a", "b", "c", "d", "e", "f"]
         for _ in 0..<200 {
-            let feed = ContentView.feed(
+            let feed = HomeStore.feed(
                 from: listings.shuffled(), myID: me, friendIDs: [], blockedIDs: []
             )
             #expect(feed.map(\.id) == expected)
@@ -87,7 +87,7 @@ struct FeedOrderingTests {
             makeHome(id: "x", hostUserID: "stranger")
         ]
 
-        let feed = ContentView.feed(
+        let feed = HomeStore.feed(
             from: listings.shuffled(), myID: me, friendIDs: ["friend1", "friend2"], blockedIDs: []
         )
 
@@ -100,7 +100,7 @@ struct FeedOrderingTests {
         let older = makeHome(id: "a", hostUserID: "s1", createdAt: Date(timeIntervalSince1970: 1_000))
         let newer = makeHome(id: "b", hostUserID: "s2", createdAt: Date(timeIntervalSince1970: 2_000))
 
-        let feed = ContentView.feed(
+        let feed = HomeStore.feed(
             from: [older, newer], myID: me, friendIDs: [], blockedIDs: []
         )
 
@@ -115,7 +115,7 @@ struct FeedOrderingTests {
         let newerStranger = makeHome(id: "a", hostUserID: "stranger", createdAt: Date(timeIntervalSince1970: 2_000))
         let olderFriend = makeHome(id: "b", hostUserID: "friend", createdAt: Date(timeIntervalSince1970: 1_000))
 
-        let feed = ContentView.feed(
+        let feed = HomeStore.feed(
             from: [newerStranger, olderFriend], myID: me, friendIDs: ["friend"], blockedIDs: []
         )
 
@@ -128,7 +128,7 @@ struct FeedOrderingTests {
             makeHome(id: "b", hostUserID: "stranger")
         ]
 
-        let feed = ContentView.feed(
+        let feed = HomeStore.feed(
             from: listings, myID: me, friendIDs: [], blockedIDs: ["blocked"]
         )
 
@@ -143,7 +143,7 @@ struct FeedOrderingTests {
             makeHome(id: "d", hostUserID: "stranger", visibility: .everyone)
         ]
 
-        let feed = ContentView.feed(
+        let feed = HomeStore.feed(
             from: listings, myID: me, friendIDs: ["friend"], blockedIDs: []
         )
 
@@ -155,7 +155,7 @@ struct FeedOrderingTests {
     @Test func listingsWithNoVisibilityFieldAreVisibleToEveryone() {
         let listings = [makeHome(id: "a", hostUserID: "stranger", visibility: nil)]
 
-        let feed = ContentView.feed(
+        let feed = HomeStore.feed(
             from: listings, myID: me, friendIDs: [], blockedIDs: []
         )
 

@@ -137,7 +137,7 @@ struct HomesPage: View {
     @State private var showMap: Bool = false
 
     // `listings` arrives already ordered newest-first (with friends' listings
-    // grouped ahead) by ContentView.feed, so the feed no longer shuffles it — a
+    // grouped ahead) by HomeStore.feed, so the feed no longer shuffles it — a
     // random order buried the recency signal L3 added. The default sort preserves
     // that incoming order; the other sorts reorder it explicitly.
     var listings: [Home]

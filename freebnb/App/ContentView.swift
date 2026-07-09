@@ -21,60 +21,16 @@ struct ContentView: View {
     @State private var messagesDeepLinkUserID: String? = nil
     @State private var inviteToConfirm: PendingInvite? = nil
 
-    private var visibleListings: [Home] {
+    // The viewer identity, friend set, and block set the feed is filtered and
+    // ranked against. Cheap to build; pushing it into HomeStore only recomputes
+    // the feed when this value actually changes (A1).
+    private var feedContext: FeedContext {
         let myID = authManager.userID
-        let blocked = userProfileStore.currentProfile?.blockedIDs ?? []
-        let friendIDs = Set(friendStore.friendEdges.map { $0.otherUserID(relativeTo: myID) })
-        return Self.feed(
-            from: homeStore.listings,
+        return FeedContext(
             myID: myID,
-            friendIDs: friendIDs,
-            blockedIDs: Set(blocked)
+            friendIDs: Set(friendStore.friendEdges.map { $0.otherUserID(relativeTo: myID) }),
+            blockedIDs: Set(userProfileStore.currentProfile?.blockedIDs ?? [])
         )
-    }
-
-    /// Filters out blocked hosts and friends-only listings you can't see, then
-    /// orders friends' listings first, then your own, then everyone else.
-    ///
-    /// Firestore rules and the partitioned feed queries are what actually keep a
-    /// friends-only listing out of a stranger's hands; the visibility check here
-    /// is a second line of defence for a stale `allowedViewerIDs` (a friend
-    /// removed since the listing was last written). Block filtering, by contrast,
-    /// is client-only by design — the block list is private to the blocker.
-    ///
-    /// Within a rank bucket, newest listings come first (L3). Swift's sort is not
-    /// stable, so the comparator falls through to the listing id: without a total
-    /// order, rows sharing a rank and timestamp reshuffle between recomputes.
-    static func feed(
-        from listings: [Home],
-        myID: String,
-        friendIDs: Set<String>,
-        blockedIDs: Set<String>
-    ) -> [Home] {
-        listings
-            .filter { home in
-                guard !blockedIDs.contains(home.hostUserID) else { return false }
-                if home.visibility == .friendsOnly {
-                    return home.hostUserID == myID || friendIDs.contains(home.hostUserID)
-                }
-                return true
-            }
-            .sorted { a, b in
-                let aRank = feedRank(a, myID: myID, friendIDs: friendIDs)
-                let bRank = feedRank(b, myID: myID, friendIDs: friendIDs)
-                if aRank != bRank { return aRank < bRank }
-                let aDate = a.createdAt ?? .distantPast
-                let bDate = b.createdAt ?? .distantPast
-                if aDate != bDate { return aDate > bDate }
-                return a.id < b.id
-            }
-    }
-
-    /// Lower sorts earlier: friends' listings, then your own, then everyone else.
-    static func feedRank(_ home: Home, myID: String, friendIDs: Set<String>) -> Int {
-        if friendIDs.contains(home.hostUserID) { return 0 }
-        if home.hostUserID == myID { return 1 }
-        return 2
     }
 
     // Validates an incoming invite deep link and, if the inviter is a real user,
@@ -99,7 +55,7 @@ struct ContentView: View {
                 TabView(selection: $selectedTab) {
                     NavigationStack(path: $listingsPath) {
                         HomesPage(
-                            listings: visibleListings,
+                            listings: homeStore.visibleListings,
                             isLoading: homeStore.isLoading,
                             isLoadingMore: homeStore.isLoadingMore,
                             canLoadMore: homeStore.canLoadMore,
@@ -146,6 +102,16 @@ struct ContentView: View {
                     .tag(4)
                 }
                 .tint(.accent)
+                // Keep HomeStore's derived feed in sync with who the viewer is,
+                // who they're friends with, and who they've blocked. Fires on
+                // appear (initial) and whenever any of those change.
+                .onChange(of: feedContext, initial: true) { _, context in
+                    homeStore.updateFeedContext(
+                        myID: context.myID,
+                        friendIDs: context.friendIDs,
+                        blockedIDs: context.blockedIDs
+                    )
+                }
                 .sheet(isPresented: $showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
                     OnboardingPage(isPresented: $showOnboarding)
                 }
