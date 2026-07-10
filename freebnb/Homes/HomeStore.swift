@@ -259,7 +259,7 @@ final class HomeStore {
     /// Within a rank bucket, newest listings come first (L3). Swift's sort is not
     /// stable, so the comparator falls through to the listing id: without a total
     /// order, rows sharing a rank and timestamp reshuffle between recomputes.
-    static func feed(
+    nonisolated static func feed(
         from listings: [Home],
         myID: String,
         friendIDs: Set<String>,
@@ -285,7 +285,7 @@ final class HomeStore {
     }
 
     /// Lower sorts earlier: friends' listings, then your own, then everyone else.
-    static func feedRank(_ home: Home, myID: String, friendIDs: Set<String>) -> Int {
+    nonisolated static func feedRank(_ home: Home, myID: String, friendIDs: Set<String>) -> Int {
         if friendIDs.contains(home.hostUserID) { return 0 }
         if home.hostUserID == myID { return 1 }
         return 2
