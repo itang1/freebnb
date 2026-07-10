@@ -202,6 +202,12 @@ struct HomesPage: View {
     // random order buried the recency signal L3 added. The default sort preserves
     // that incoming order; the other sorts reorder it explicitly.
     var listings: [Home]
+    /// Viewer identity and friend set, supplied by `ContentView` from the same
+    /// `FeedContext` that ranks the feed. Used to explain each card (feature 18)
+    /// and to populate the network rail (feature 10). Empty for a signed-out or
+    /// anonymous viewer, which collapses both features to nothing.
+    var viewerID: String = ""
+    var friendIDs: Set<String> = []
     var isLoading: Bool = false
     var isLoadingMore: Bool = false
     var canLoadMore: Bool = false
@@ -225,7 +231,10 @@ struct HomesPage: View {
         Button {
             onSelectHome(listing)
         } label: {
-            HomeCard(listing: listing)
+            HomeCard(
+                listing: listing,
+                reason: FeedSections.reason(for: listing, myID: viewerID, friendIDs: friendIDs)
+            )
         }
         .buttonStyle(.pressableCard)
         .accessibilityLabel("\(listing.hostName) in \(listing.address.city), \(listing.address.state)")
@@ -253,6 +262,15 @@ struct HomesPage: View {
     /// Placeholders stand in only before the first page arrives. Once any listing
     /// is on screen, a filter that matches nothing is a result, not a load.
     private var showingSkeletons: Bool { isLoading && filteredListings.isEmpty }
+
+    /// The rail's members (feature 10), drawn from the whole loaded feed rather
+    /// than `filteredListings`. It is suppressed while a narrowing control is
+    /// active: someone who has typed a city is answering their own question, and
+    /// a rail of listings that ignore the query would be noise on top of it.
+    private var networkRailListings: [Home] {
+        guard !isNarrowingFeed else { return [] }
+        return FeedSections.newFromYourNetwork(listings, myID: viewerID, friendIDs: friendIDs)
+    }
 
     // Search, filters, and the saved-only toggle all narrow `listings`, which
     // holds only the pages fetched so far. So a query matching nothing on page
@@ -376,6 +394,18 @@ struct HomesPage: View {
 
             ScrollView {
                 LazyVStack(spacing: 15) {
+                    let rail = networkRailListings
+                    if !showingSkeletons && !rail.isEmpty {
+                        NetworkRail(
+                            listings: rail,
+                            viewerID: viewerID,
+                            friendIDs: friendIDs,
+                            onSelectHome: onSelectHome
+                        )
+                        .padding(.bottom, 4)
+                        .transition(.opacity)
+                    }
+
                     Group {
                         if showingSkeletons {
                             ForEach(0..<4, id: \.self) { _ in

@@ -19,6 +19,9 @@ private func AmenityRow<Content: View>(
 
 struct HomeCard: View {
     let listing: Home
+    /// Why this listing reached the viewer. Nil for a public listing from outside
+    /// the viewer's network, which needs no explanation.
+    var reason: FeedReason?
 
     private let cardImageHeight: CGFloat = 190
 
@@ -29,6 +32,10 @@ struct HomeCard: View {
 
             // Body
             VStack(alignment: .leading, spacing: 10) {
+                if let reason {
+                    FeedReasonChip(reason: reason)
+                }
+
                 // Summary pills
                 HStack(spacing: 6) {
                     SummaryPill(icon: "door.left.hand.open", text: "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")")
@@ -268,6 +275,30 @@ struct HomeCard: View {
         }
     }
 
+}
+
+/// "Why you're seeing this" (feature 18). Reads as a statement about the graph,
+/// so it is announced as one sentence rather than as an icon beside a word.
+struct FeedReasonChip: View {
+    let reason: FeedReason
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: reason.iconName)
+                .font(.caption2)
+                .accessibilityHidden(true)
+            Text(reason.label)
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .foregroundColor(Color.accent)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.accent.opacity(0.15))
+        .clipShape(Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Why you're seeing this: \(reason.label)")
+    }
 }
 
 struct SummaryPill: View {

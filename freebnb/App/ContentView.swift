@@ -56,6 +56,8 @@ struct ContentView: View {
                     NavigationStack(path: $listingsPath) {
                         HomesPage(
                             listings: homeStore.visibleListings,
+                            viewerID: feedContext.myID,
+                            friendIDs: feedContext.friendIDs,
                             isLoading: homeStore.isLoading,
                             isLoadingMore: homeStore.isLoadingMore,
                             canLoadMore: homeStore.canLoadMore,
