@@ -59,9 +59,26 @@ service cloud.firestore {
     // True when the caller hosts the listing. get() runs with elevated privilege,
     // so this works from a subcollection rule that cannot read the parent doc
     // through `resource`. Denies (rather than errors) when the listing is gone.
+    //
+    // This is the *identity* question — who owns the listing — and is deliberately
+    // distinct from `isListingManager` below. A co-host manages a listing; they do
+    // not become its host. Every place that decides who receives a stay request,
+    // who may grant a guest the street address, or who may delete the listing
+    // outright keeps asking this one.
     function isListingHost(homeID) {
       return exists(/databases/$(database)/documents/homes/$(homeID))
           && get(/databases/$(database)/documents/homes/$(homeID)).data.hostUserID == request.auth.uid;
+    }
+
+    // True when the caller may *manage* the listing: its host, or one of the
+    // co-hosts the host has named (feature 14). This is the question the listing's
+    // own description and its progressively-disclosed subdocuments ask, because a
+    // roommate who cannot read the street address cannot let a guest in.
+    function isListingManager(homeID) {
+      return exists(/databases/$(database)/documents/homes/$(homeID))
+          && (get(/databases/$(database)/documents/homes/$(homeID)).data.hostUserID == request.auth.uid
+              || get(/databases/$(database)/documents/homes/$(homeID))
+                   .data.get('coHostUserIDs', []).hasAny([request.auth.uid]));
     }
 
     // True when `homeID` is a live listing (exists, not soft-deleted) whose host
@@ -212,7 +229,8 @@ service cloud.firestore {
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
                  'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
-                 'geohash', 'visibility', 'allowedViewerIDs', 'deletedAt', 'createdAt'
+                 'geohash', 'visibility', 'allowedViewerIDs', 'coHostUserIDs',
+                 'deletedAt', 'createdAt'
                ])
             && data.keys().hasAll([
                  'hostUserID', 'hostName', 'address',
@@ -260,6 +278,11 @@ service cloud.firestore {
             && isOptionalList(data, 'allowedViewerIDs', 1000)
             && (isUnset(data, 'allowedViewerIDs')
                 || data.allowedViewerIDs.hasAll([data.hostUserID]))
+            // Co-hosts (feature 14). A partner or roommate, not a second owner:
+            // capped small, and never the host themselves, whose powers are not
+            // a subset of a co-host's and must not be confused with them.
+            && isOptionalList(data, 'coHostUserIDs', 5)
+            && !data.get('coHostUserIDs', []).hasAny([data.hostUserID])
             && (isUnset(data, 'latitude') || data.latitude is number)
             && (isUnset(data, 'longitude') || data.longitude is number)
             && isOptionalString(data, 'geohash', 12)
@@ -270,31 +293,86 @@ service cloud.firestore {
       // Each clause corresponds to one of the feed's partitioned queries, plus
       // the host's own-listings query. Keep them in sync: a query that isn't
       // provably covered by one clause is rejected wholesale, not filtered.
+      // The keys a co-host may rewrite: the description of the home itself.
+      // Everything absent from this list — who hosts the listing, how to reach
+      // them, who can see it, who else may manage it, and whether it still
+      // exists — is thereby pinned, because `changedKeys().hasOnly()` rejects any
+      // write that touches a key outside it.
+      function coHostEditableKeys() {
+        return ['description', 'hostMotivation', 'sleeping', 'guestPolicy',
+                'amenities', 'cancellationPolicy', 'photoURLs',
+                'blockedDateRanges', 'latitude', 'longitude', 'geohash'];
+      }
+
+      // The co-hosts this write adds. Rules cannot loop, so a roster change is
+      // admitted one addition at a time and that one is checked against the
+      // friend graph; see the update rule.
+      function addedCoHosts() {
+        return request.resource.data.get('coHostUserIDs', [])
+                 .removeAll(resource.data.get('coHostUserIDs', []));
+      }
+
+      // A co-host can read the listing they manage even if the host later
+      // unfriends them and drops them out of `allowedViewerIDs`. The roster is
+      // the grant; removing someone from it is how you take it back. This clause
+      // is what makes the client's `coHostUserIDs contains me` query legal.
       allow read: if isSignedIn()
           && (resource.data.get('visibility', 'everyone') == 'everyone'
               || resource.data.hostUserID == request.auth.uid
-              || request.auth.uid in resource.data.get('allowedViewerIDs', []));
+              || request.auth.uid in resource.data.get('allowedViewerIDs', [])
+              || request.auth.uid in resource.data.get('coHostUserIDs', []));
 
       allow create: if isFullMember()
           && request.resource.data.hostUserID == request.auth.uid
           // New listings stamp the server time the feed orders by (L3).
           && request.resource.data.createdAt == request.time
+          // A listing is born with no co-hosts. Admitting a roster here would
+          // mean validating every name in it against the friend graph, and rules
+          // cannot loop — so co-hosts are added afterwards, one update at a time.
+          && request.resource.data.get('coHostUserIDs', []).size() == 0
           && isValidListing(request.resource.data);
 
       // Update re-validates the whole document. Without this a host could
       // corrupt their own listing into a shape the client cannot decode, and
       // decode failures are silently dropped, so the listing would just vanish.
       allow update: if isSignedIn()
-          && resource.data.hostUserID == request.auth.uid
-          // hostUserID is immutable after creation
+          // hostUserID is immutable after creation. This is what stops a co-host
+          // from writing themselves into the host's chair, and it is checked
+          // before either branch below so neither can forget it.
           && request.resource.data.hostUserID == resource.data.hostUserID
           // createdAt is immutable once set. A legacy listing that predates the
           // field may stamp it (to request.time) on its next edit, never rewrite.
           && (request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
               || (resource.data.get('createdAt', null) == null
                   && request.resource.data.createdAt == request.time))
-          && isValidListing(request.resource.data);
+          && isValidListing(request.resource.data)
+          && (
+            // The host. May rewrite anything the validator allows, including the
+            // co-host roster — but only one addition per write, because that is
+            // the most a loop-free rule can check against the friend graph. A
+            // co-host must be an accepted friend: they are about to be handed the
+            // street address, and "co-host" must not become a way to grant a
+            // stranger read access to the host's front door. Removals are
+            // unconstrained; taking a capability back is always safe.
+            (isOwner(resource.data.hostUserID)
+                && (addedCoHosts().size() == 0
+                    || (addedCoHosts().size() == 1
+                        && areFriends(addedCoHosts()[0], resource.data.hostUserID))))
+            ||
+            // A co-host. May describe the home — its capacity, amenities,
+            // availability, photos — and nothing else. In particular they cannot
+            // touch `allowedViewerIDs` (which the client rebuilds from the saving
+            // user's friends, and which would silently republish a friends-only
+            // listing to a second social graph the host never saw), `visibility`,
+            // `hostName`, the host's contact details, the co-host roster, or
+            // `deletedAt`. That last one is why a co-host cannot soft-delete a
+            // listing through the update rule after being refused the delete rule.
+            (resource.data.get('coHostUserIDs', []).hasAny([request.auth.uid])
+                && changedKeys().hasOnly(coHostEditableKeys()))
+          );
 
+      // Host only. Deleting someone else's listing is not "managing" it, and a
+      // soft delete is unrecoverable from the client.
       allow delete: if isSignedIn()
           && resource.data.hostUserID == request.auth.uid;
 
@@ -328,17 +406,20 @@ service cloud.firestore {
             && isOptionalString(data, 'houseNotes', 2000)
             && isOptionalString(data, 'hostPhone', 40);
       }
+      // A co-host reads and writes both documents: a roommate who cannot see the
+      // street address or the door code cannot let a guest in, and the check-in
+      // instructions are exactly the thing they are there to keep current.
       match /private/{docID} {
         allow read: if isSignedIn()
-            && (isListingHost(homeID)
+            && (isListingManager(homeID)
                 || exists(/databases/$(database)/documents/homes/$(homeID)/accepted/$(request.auth.uid)));
 
         allow create, update: if isFullMember()
-            && isListingHost(homeID)
+            && isListingManager(homeID)
             && ((docID == 'location' && isValidLocation(request.resource.data))
                 || (docID == 'manual' && isValidManual(request.resource.data)));
 
-        allow delete: if isFullMember() && isListingHost(homeID);
+        allow delete: if isFullMember() && isListingManager(homeID);
       }
 
       // -----------------------------------------------------------------------
@@ -346,6 +427,13 @@ service cloud.firestore {
       // rule above checks for `accepted/{callerUID}`. The host writes one when
       // accepting a stay and removes it if the stay is later declined or
       // cancelled; the guest may remove their own to give the address back.
+      //
+      // `isListingHost`, not `isListingManager`: admitting a stranger into
+      // someone's home, and handing them its street address, is the host's
+      // decision. A co-host keeps the listing accurate; they do not decide who
+      // sleeps in it. Stay requests are addressed to `hostUserID` for the same
+      // reason (see `listingHasActiveHost`), so a co-host never sees the request
+      // either. If that ever changes, these two must change together.
       // -----------------------------------------------------------------------
       match /accepted/{guestID} {
         allow read: if isSignedIn()
