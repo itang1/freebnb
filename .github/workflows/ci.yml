@@ -140,11 +140,11 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_16.4.app
 
-      # The emulator suite is a Java process.
+      # The emulator suite is a Java process. firebase-tools requires 21+.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - uses: actions/setup-node@v4
         with:
