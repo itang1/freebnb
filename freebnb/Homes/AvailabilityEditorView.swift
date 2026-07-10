@@ -28,6 +28,7 @@ struct AvailabilityEditorView: View {
     private static let monthsAhead = 12
 
     init(listing: Home) {
+        self.listing = listing
         let upcoming = AvailabilityCalendar.upcoming(listing.blockedDateRanges ?? [])
         _blockedDays = State(initialValue: AvailabilityCalendar.blockedDays(in: upcoming))
     }
