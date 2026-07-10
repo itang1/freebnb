@@ -58,6 +58,10 @@ struct FreeBNBApp: App {
         Self.configureEmulatorIfRequested()
         Self.resetStateIfUITesting()
 #endif
+        // Enable crash reporting and analytics collection (A6). Must follow
+        // FirebaseApp.configure(), and the emulator check above, so an emulator
+        // or UI-test run is correctly excluded from collection.
+        Telemetry.configure()
 #if canImport(FirebaseMessaging)
         Messaging.messaging().isAutoInitEnabled = true
 #endif

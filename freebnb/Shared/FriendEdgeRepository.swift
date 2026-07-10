@@ -44,7 +44,7 @@ struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
                 let edges: [FriendEdge] = (snapshot?.documents ?? []).compactMap { doc in
                     do { return try doc.data(as: FriendEdge.self) }
                     catch {
-                        repoLog.error("friendEdge decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        Telemetry.decodeFailure(collection: FirestorePaths.friendEdges, documentID: doc.documentID, error: error)
                         return nil
                     }
                 }

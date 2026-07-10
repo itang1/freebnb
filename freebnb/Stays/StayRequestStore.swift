@@ -106,6 +106,7 @@ final class StayRequestStore {
         )
         do {
             try await repository.create(request)
+            Telemetry.log(.stayRequestSent)
         } catch {
             log.error("send error: \(error.localizedDescription, privacy: .public)")
             throw error
@@ -133,6 +134,7 @@ final class StayRequestStore {
         do {
             // Guards against accepting a request that double-books the listing.
             try await repository.accept(request, hostNote: hostNote)
+            Telemetry.log(.stayRequestAccepted)
         } catch {
             log.error("accept error: \(error.localizedDescription, privacy: .public)")
             throw error

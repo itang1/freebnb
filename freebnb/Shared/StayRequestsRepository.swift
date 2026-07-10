@@ -65,7 +65,7 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
                 let requests: [StayRequest] = docs.compactMap { doc in
                     do { return try doc.data(as: StayRequest.self) }
                     catch {
-                        repoLog.error("request decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        Telemetry.decodeFailure(collection: FirestorePaths.stayRequests, documentID: doc.documentID, error: error)
                         return nil
                     }
                 }

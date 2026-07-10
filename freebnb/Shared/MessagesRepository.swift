@@ -70,7 +70,7 @@ struct FirestoreMessagesRepository: MessagesRepository {
                 let docs = snapshot?.documents ?? []
                 let conversations: [Conversation] = docs.compactMap { doc in
                     guard let conv = Conversation(document: doc.documentID, data: doc.data()) else {
-                        repoLog.error("conv decode \(doc.documentID, privacy: .public)")
+                        Telemetry.decodeFailure(collection: FirestorePaths.conversations, documentID: doc.documentID)
                         return nil
                     }
                     return conv
@@ -121,7 +121,7 @@ struct FirestoreMessagesRepository: MessagesRepository {
                 let messages: [Message] = docs.prefix(limit).compactMap { doc in
                     do { return try doc.data(as: Message.self) }
                     catch {
-                        repoLog.error("conv msg decode \(doc.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        Telemetry.decodeFailure(collection: FirestorePaths.messages, documentID: doc.documentID, error: error)
                         return nil
                     }
                 }
