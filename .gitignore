@@ -25,3 +25,8 @@ FEATURES.md
 
 # Secrets - never commit
 .secrets/
+
+# Firebase emulator debug logs
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

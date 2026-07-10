@@ -204,6 +204,15 @@ final class UserProfileStore {
         }
     }
 
+    /// Fetches the user's full data export and writes it to a temporary JSON file,
+    /// returning its URL for the share sheet (L12). The caller owns presenting it.
+    func exportDataFile() async throws -> URL {
+        let data = try await repository.exportUserData()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("FreeBNB-my-data.json")
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
     func saveFCMToken(_ token: String) async throws {
         guard let userID = Auth.auth().currentUser?.uid else { return }
         do {
