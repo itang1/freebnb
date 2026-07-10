@@ -88,7 +88,9 @@ final class StayRequestStore {
         guestUserID: String,
         checkIn: Date,
         checkOut: Date,
-        guestNote: String?
+        guestNote: String?,
+        guestCount: Int? = nil,
+        arrivalWindow: ArrivalWindow? = nil
     ) async throws {
         let trimmedNote = guestNote.flatMap {
             let t = $0.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -102,7 +104,9 @@ final class StayRequestStore {
             guestUserID: guestUserID,
             checkIn: checkIn,
             checkOut: checkOut,
-            guestNote: trimmedNote
+            guestNote: trimmedNote,
+            guestCount: guestCount,
+            arrivalWindow: arrivalWindow
         )
         do {
             try await repository.create(request)

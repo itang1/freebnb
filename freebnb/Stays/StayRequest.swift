@@ -29,6 +29,37 @@ enum StayRequestRole: Sendable {
     case host
 }
 
+/// Roughly when the guest expects to arrive, so the host can plan the handoff
+/// (feature 20). Stored by raw value; the rules validate membership in this set.
+enum ArrivalWindow: String, Codable, Hashable, CaseIterable, Sendable {
+    case flexible  = "flexible"
+    case morning   = "morning"
+    case afternoon = "afternoon"
+    case evening   = "evening"
+    case lateNight = "lateNight"
+
+    var displayName: String {
+        switch self {
+        case .flexible:  return "Flexible / not sure"
+        case .morning:   return "Morning (8am–12pm)"
+        case .afternoon: return "Afternoon (12–5pm)"
+        case .evening:   return "Evening (5–9pm)"
+        case .lateNight: return "Late (after 9pm)"
+        }
+    }
+
+    /// Short form for compact request rows.
+    var shortName: String {
+        switch self {
+        case .flexible:  return "Flexible arrival"
+        case .morning:   return "Morning arrival"
+        case .afternoon: return "Afternoon arrival"
+        case .evening:   return "Evening arrival"
+        case .lateNight: return "Late arrival"
+        }
+    }
+}
+
 enum StayRequestError: LocalizedError {
     case overlappingStay
 
@@ -54,6 +85,11 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     var checkOut: Date
     var guestNote: String?
     var hostNote: String?
+    // Number of guests and rough arrival time, captured on the request so the
+    // host isn't left guessing (feature 20). Optional so requests created before
+    // these fields decode cleanly; nil renders as "not specified".
+    var guestCount: Int?
+    var arrivalWindow: ArrivalWindow?
     var status: StayRequestStatus
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
@@ -69,6 +105,8 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         checkOut: Date,
         guestNote: String? = nil,
         hostNote: String? = nil,
+        guestCount: Int? = nil,
+        arrivalWindow: ArrivalWindow? = nil,
         status: StayRequestStatus = .pending,
         createdAt: Date? = nil,
         updatedAt: Date? = nil
@@ -83,6 +121,8 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         self.checkOut = checkOut
         self.guestNote = guestNote
         self.hostNote = hostNote
+        self.guestCount = guestCount
+        self.arrivalWindow = arrivalWindow
         self.status = status
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -90,6 +130,15 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
 
     var nights: Int {
         max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
+    }
+
+    /// Compact "2 guests · Morning arrival" line for request rows, or nil when
+    /// neither field was captured (older requests).
+    var partySummary: String? {
+        var parts: [String] = []
+        if let guestCount { parts.append("\(guestCount) guest\(guestCount == 1 ? "" : "s")") }
+        if let arrivalWindow { parts.append(arrivalWindow.shortName) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// Half-open interval overlap: `[checkIn, checkOut)` against another window.
