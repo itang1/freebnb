@@ -125,3 +125,104 @@ jobs:
 
       - name: TypeScript build
         run: npm run build
+
+  emulator-tests:
+    name: Firestore rules regression (emulator)
+    runs-on: macos-15
+    env:
+      SCHEME: freebnb
+      # Must match EmulatorSupport.projectID so the secondary app and the
+      # emulator share a namespace.
+      EMULATOR_PROJECT: freebnb-emulator-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.4.app
+
+      # The emulator suite is a Java process.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install firebase-tools
+        run: npm install -g firebase-tools
+
+      # Same placeholder as the build job: FirebaseApp.configure() reads it at
+      # launch even though these tests drive a separate emulator-pointed app.
+      - name: Write placeholder GoogleService-Info.plist
+        run: |
+          cat > freebnb/GoogleService-Info.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>API_KEY</key>
+            <string>AIzaSyDUMMYCIPLACEHOLDERKEY0000000000000</string>
+            <key>GCM_SENDER_ID</key>
+            <string>000000000000</string>
+            <key>PLIST_VERSION</key>
+            <string>1</string>
+            <key>BUNDLE_ID</key>
+            <string>com.freebnb.app</string>
+            <key>PROJECT_ID</key>
+            <string>freebnb-ci</string>
+            <key>STORAGE_BUCKET</key>
+            <string>freebnb-ci.appspot.com</string>
+            <key>IS_ADS_ENABLED</key>
+            <false/>
+            <key>IS_ANALYTICS_ENABLED</key>
+            <false/>
+            <key>IS_APPINVITE_ENABLED</key>
+            <true/>
+            <key>IS_GCM_ENABLED</key>
+            <true/>
+            <key>IS_SIGNIN_ENABLED</key>
+            <true/>
+            <key>GOOGLE_APP_ID</key>
+            <string>1:000000000000:ios:0000000000000000000000</string>
+            <key>DATABASE_URL</key>
+            <string>https://freebnb-ci.firebaseio.com</string>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Resolve simulator destination
+        id: sim
+        run: |
+          cat > /tmp/pick_sim.py <<'PY'
+          import json, subprocess, sys
+          data = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"]))
+          for runtime in sorted(data["devices"]):
+              if "iOS" not in runtime:
+                  continue
+              for dev in data["devices"][runtime]:
+                  if dev["name"].startswith("iPhone"):
+                      print(dev["udid"])
+                      sys.exit(0)
+          sys.exit("No available iPhone simulator found")
+          PY
+          UDID=$(python3 /tmp/pick_sim.py)
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      # emulators:exec boots Firestore + Auth, runs the command, then tears them
+      # down. Only the emulator-backed suite runs; EmulatorSupport's reachability
+      # gate lets that suite execute here (and skip everywhere the emulator is
+      # absent). The simulator reaches the emulator via the host's localhost.
+      - name: Run emulator-backed rules tests
+        run: |
+          firebase emulators:exec \
+            --only firestore,auth \
+            --project "$EMULATOR_PROJECT" \
+            "xcodebuild test \
+              -project freebnb.xcodeproj \
+              -scheme \"$SCHEME\" \
+              -destination \"id=${{ steps.sim.outputs.udid }}\" \
+              -only-testing:freebnbTests/FirestoreHomesRepositoryEmulatorTests \
+              CODE_SIGNING_ALLOWED=NO"
