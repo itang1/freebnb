@@ -292,7 +292,11 @@ const homes = [
     guestPolicy: { maxGuests: 2, maxStayDays: 5, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "moderate",
-    visibility: "friendsOnly",
+    // The middle tier (feature 7). The ACL below is only the first degree, which
+    // is all a client could ever compute; `rebuildListingACLs` widens it to the
+    // second degree once the functions run. Until then it behaves as friendsOnly,
+    // which is the safe direction to be wrong in.
+    visibility: "friendsOfFriends",
     allowedViewerIDs: ["seed-host-sandy", "seed-guest-patrick", ...TEST_ACCOUNT_UIDS]
   },
   {
@@ -476,7 +480,7 @@ async function deleteCollection(name) {
 // profiles are harmless. This is what wipes the pre-migration legacy data so the
 // demo starts from a clean, consistent state.
 async function resetDemoData() {
-  const collections = ["homes", "stayRequests", "friendEdges", "conversations", "messages"];
+  const collections = ["homes", "stayRequests", "friendEdges", "conversations", "messages", "reviews", "references"];
   for (const name of collections) {
     const count = await deleteCollection(name);
     console.log(`Reset: deleted ${count} doc(s) from ${name}.`);
@@ -516,6 +520,9 @@ function stayRequest({ id, listingID, guestUserID, checkInDays, checkOutDays, st
     guestNote,
     hostNote,
     status,
+    // A completed stay is one that finished; it is what unlocks reviews and what
+    // trustStats counts (feature 4). Everything else has no completion time.
+    ...(status === "completed" ? { completedAt: now } : {}),
     createdAt: now,
     updatedAt: now
   };
@@ -543,7 +550,53 @@ const stayRequests = [
     stayRequest({ id: "seed-request-sandy-krabs2", listingID: "seed-home-krabs-2", guestUserID: "seed-host-sandy",
       checkInDays: 12, checkOutDays: 15, status: "accepted", guestNote: "A little vacation from Texas heat.", hostNote: "Money's money. See you in Miami." }),
     stayRequest({ id: "seed-request-neptune-squidward2", listingID: "seed-home-squidward-2", guestUserID: "seed-host-neptune",
-      checkInDays: 40, checkOutDays: 42, status: "pending", guestNote: "A king requires the finest suite." })
+      checkInDays: 40, checkOutDays: 42, status: "pending", guestNote: "A king requires the finest suite." }),
+    // Finished stays, so the Stays tab has something to review and the profiles
+    // have reputations to show. Their dates are in the past, as completion requires.
+    stayRequest({ id: "seed-request-completed-patrick-krabs", listingID: "seed-home-krabs-1", guestUserID: "seed-guest-patrick",
+      checkInDays: -30, checkOutDays: -27, status: "completed", guestNote: "Is mayonnaise an instrument?", hostNote: "It is not." }),
+    stayRequest({ id: "seed-request-completed-sandy-spongebob", listingID: "seed-home-spongebob-1", guestUserID: "seed-host-sandy",
+      checkInDays: -20, checkOutDays: -17, status: "completed", guestNote: "Y'all got a spare room?", hostNote: "Always!" }),
+    stayRequest({ id: "seed-request-completed-gary-pearl", listingID: "seed-home-pearl-1", guestUserID: "seed-guest-gary",
+      checkInDays: -12, checkOutDays: -10, status: "completed", guestNote: "Meow." })
+];
+
+// Post-stay reviews (feature 1). The document id is "{stayRequestID}_{authorUID}",
+// which is what firestore.rules enforces as "one review per person per stay".
+// `subjectUserID` is whose profile the review lands on, and whose trustStats the
+// `onReviewWritten` trigger recomputes from it.
+function review({ stayRequestID, authorUserID, role, rating, publicComment }) {
+  const stay = stayRequests.find((r) => r.id === stayRequestID);
+  if (!stay) throw new Error(`review references unknown stay ${stayRequestID}`);
+  const subjectUserID = role === "guestReviewingHost" ? stay.hostUserID : stay.guestUserID;
+  const id = `${stayRequestID}_${authorUserID}`;
+  return { id, stayRequestID, listingID: stay.listingID, authorUserID, subjectUserID, role, rating, publicComment,
+    createdAt: now, updatedAt: now };
+}
+
+const reviews = [
+  review({ stayRequestID: "seed-request-completed-patrick-krabs", authorUserID: "seed-guest-patrick",
+    role: "guestReviewingHost", rating: 4, publicComment: "Mr. Krabs charged me for the towels but the couch was comfy." }),
+  review({ stayRequestID: "seed-request-completed-patrick-krabs", authorUserID: "seed-host-krabs",
+    role: "hostReviewingGuest", rating: 3, publicComment: "Ate everything in the fridge. Paid for none of it." }),
+  review({ stayRequestID: "seed-request-completed-sandy-spongebob", authorUserID: "seed-host-sandy",
+    role: "guestReviewingHost", rating: 5, publicComment: "SpongeBob is the finest host in Bikini Bottom. Spotless pineapple." }),
+  review({ stayRequestID: "seed-request-completed-sandy-spongebob", authorUserID: "seed-host-spongebob",
+    role: "hostReviewingGuest", rating: 5, publicComment: "Sandy left the place cleaner than she found it!" }),
+  review({ stayRequestID: "seed-request-completed-gary-pearl", authorUserID: "seed-guest-gary",
+    role: "guestReviewingHost", rating: 5, publicComment: "Meow." })
+];
+
+// Friend-written character references (feature 1). One per (subject, author),
+// and the rules require an accepted friend edge between the two — which
+// seedFriendEdges creates for every pair of seed users.
+const references = [
+  { id: "seed-host-spongebob_seed-guest-patrick", subjectUserID: "seed-host-spongebob", authorUserID: "seed-guest-patrick",
+    text: "SpongeBob is my best friend and he has never once let me down. He also makes breakfast." },
+  { id: "seed-host-sandy_seed-host-spongebob", subjectUserID: "seed-host-sandy", authorUserID: "seed-host-spongebob",
+    text: "Sandy is the smartest, kindest person I know. You will be safe at her place." },
+  { id: "seed-host-krabs_seed-host-pearl", subjectUserID: "seed-host-krabs", authorUserID: "seed-host-pearl",
+    text: "He's my dad. He's cheap, but he's honest about it." }
 ];
 
 async function seedStayRequests() {
@@ -572,8 +625,9 @@ function friendEdge(a, b, status, initiator) {
 // Friends tab shows incoming/outgoing states. Two invariants hold here:
 //   1. Every stay request below is between two accepted friends — you connect
 //      before you ask to stay — so each guest/host pair has an accepted edge.
-//   2. friendsOnly listings (Plankton, Sandy's Austin place) name their viewers
-//      in allowedViewerIDs, and those viewers are accepted friends of the host.
+//   2. Restricted listings (Plankton's friendsOnly place, Sandy's Austin place
+//      on the friendsOfFriends tier) name their viewers in allowedViewerIDs, and
+//      those viewers are accepted friends of the host.
 // The dev account is wired to be friends with everyone at the end (S1).
 const explicitFriendEdges = [
     friendEdge("seed-guest-patrick", "seed-host-spongebob", "accepted", "seed-guest-patrick"),
@@ -699,6 +753,61 @@ async function seedConversations() {
   console.log(`Seeded ${conversationThreads.length} conversation threads.`);
 }
 
+async function seedReviews() {
+  for (const item of reviews) {
+    await db.collection("reviews").doc(item.id).set(item, { merge: true });
+  }
+  console.log(`Seeded ${reviews.length} reviews.`);
+}
+
+async function seedReferences() {
+  for (const item of references) {
+    await db.collection("references").doc(item.id).set({ ...item, createdAt: now, updatedAt: now }, { merge: true });
+  }
+  console.log(`Seeded ${references.length} character references.`);
+}
+
+// Mirrors `recomputeTrustStats` in functions/src/index.ts. The Cloud Function is
+// the source of truth in a deployed project, but it doesn't run against a bare
+// emulator, so the seed computes the same numbers from the same documents —
+// otherwise every seeded profile shows no reputation at all.
+async function seedTrustStats() {
+  const MIN_RESPONSES_FOR_RATE = 3;
+  for (const user of users) {
+    const uid = user.uid;
+    const asHost = stayRequests.filter((r) => r.hostUserID === uid);
+    const aboutThem = reviews.filter((r) => r.subjectUserID === uid);
+
+    let staysHosted = 0;
+    let receivedCount = 0;
+    let respondedCount = 0;
+    for (const request of asHost) {
+      if (request.status === "completed") staysHosted++;
+      // A guest-cancelled request was withdrawn, not ignored.
+      if (request.status === "cancelled") continue;
+      receivedCount++;
+      if (request.status !== "pending") respondedCount++;
+    }
+
+    const ratings = aboutThem.map((r) => r.rating);
+    await db.collection("users").doc(uid).set({
+      trustStats: {
+        staysHosted,
+        staysTaken: stayRequests.filter((r) => r.guestUserID === uid && r.status === "completed").length,
+        reviewCount: ratings.length,
+        averageRating: ratings.length ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length : null,
+        responseRate: receivedCount >= MIN_RESPONSES_FOR_RATE ? respondedCount / receivedCount : null,
+        respondedCount,
+        receivedCount,
+        // Nothing verifies identity yet (feature 3 is unimplemented), so the badge
+        // is off for everyone. Flipping one here would be a lie in the demo.
+        idVerified: false
+      }
+    }, { merge: true });
+  }
+  console.log(`Seeded trust stats for ${users.length} users.`);
+}
+
 async function main() {
   console.log(`Seeding against ${useProd ? "PRODUCTION (freebnb-6814a)" : "the local emulator suite"}...`);
   if (resetFirst) {
@@ -709,6 +818,10 @@ async function main() {
   await seedStayRequests();
   await seedFriendEdges();
   await seedConversations();
+  await seedReviews();
+  await seedReferences();
+  // Last: it reads the stay requests and reviews the steps above wrote.
+  await seedTrustStats();
   console.log("Done. Sign in with any seed-*@seed.freebnb.test / ***REDACTED*** account (or the dev@freebnb.test button in DEBUG builds) to explore.");
   process.exit(0);
 }
@@ -722,4 +835,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { users, homes, homesByID, stayRequests, friendEdges, conversationThreads };
+module.exports = { users, homes, homesByID, stayRequests, reviews, references, friendEdges, conversationThreads };

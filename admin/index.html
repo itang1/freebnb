@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>FreeBNB moderation</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>FreeBNB moderation</h1>
+    <div id="session" hidden>
+      <span id="who"></span>
+      <button id="sign-out" class="ghost">Sign out</button>
+    </div>
+  </header>
+
+  <!-- Gate. The console never guesses at permission: it signs in, then asks
+       Firestore for reports. If the rules refuse, that is the answer. -->
+  <section id="gate">
+    <p>Sign in with a moderator account.</p>
+    <button id="sign-in" class="primary">Sign in with Google</button>
+    <p id="gate-error" class="error" hidden></p>
+  </section>
+
+  <main id="console" hidden>
+    <nav id="filters" aria-label="Triage state">
+      <button data-status="new" class="active">New</button>
+      <button data-status="reviewing">Reviewing</button>
+      <button data-status="actioned">Actioned</button>
+      <button data-status="dismissed">Dismissed</button>
+    </nav>
+
+    <p id="empty" hidden>Nothing in this queue.</p>
+    <p id="loading">Loading…</p>
+    <ul id="reports"></ul>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
