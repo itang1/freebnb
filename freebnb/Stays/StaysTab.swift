@@ -173,7 +173,7 @@ struct StaysTab: View {
         do {
             try await requestStore.cancel(request)
             messageStore.send(
-                text: "Request cancelled · \(dateRangeText(request))",
+                text: "Request cancelled · \(request.dateRangeText)",
                 senderUserID: authManager.userID,
                 recipientUserID: request.hostUserID
             )
@@ -186,7 +186,7 @@ struct StaysTab: View {
         actionError = nil
         do {
             try await requestStore.accept(request, hostNote: hostNote)
-            var text = "✅ Stay accepted · \(dateRangeText(request))"
+            var text = "✅ Stay accepted · \(request.dateRangeText)"
             if let note = hostNote, !note.isEmpty { text += "\n\(note)" }
             messageStore.send(
                 text: text,
@@ -204,7 +204,7 @@ struct StaysTab: View {
         do {
             try await requestStore.decline(request)
             messageStore.send(
-                text: "Stay request declined · \(dateRangeText(request))",
+                text: "Stay request declined · \(request.dateRangeText)",
                 senderUserID: authManager.userID,
                 recipientUserID: request.guestUserID
             )
@@ -268,11 +268,6 @@ struct StaysTab: View {
     /// Looks up the full Home object for a request from the cached listings.
     private func listing(for request: StayRequest) -> Home? {
         homeStore.listings.first { $0.id == request.listingID }
-    }
-
-    private func dateRangeText(_ request: StayRequest) -> String {
-        let f = AppDateFormatters.shortDay
-        return "\(f.string(from: request.checkIn)) – \(f.string(from: request.checkOut))"
     }
 }
 

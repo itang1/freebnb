@@ -12,7 +12,7 @@ This README covers technical details for engineers. User-facing documentation li
 
 ## What's in the app
 
-- **Listings**: Hosts create, edit, and manage listings with photos, amenities, capacity, availability, and house preferences. Guests browse a paginated feed, an interactive map with pin clustering, or a city search, and can save listings and filter across every listing attribute.
+- **Listings**: Hosts create, edit, and manage listings with amenities, capacity, availability, and house preferences. Guests browse a paginated feed, an interactive map with pin clustering, or a city search, and can save listings and filter across every listing attribute. Photo upload is scaffolded but not shipped: the model, Storage rules, and a `PhotoUploader` seam exist, but the default implementation is a no-op, and there is no picker or gallery yet.
 - **Stays**: Guests request stays for specific dates; hosts review, confirm, or decline from a per-listing dashboard.
 - **Messaging**: Real-time in-app chat between guests and hosts, scoped per listing, with new-message push notifications.
 - **Friends**: Friend connections drive the feed (friends' listings sort first) and the network-based visibility model.
@@ -25,7 +25,7 @@ This README covers technical details for engineers. User-facing documentation li
 |-------|-----------|
 | UI | SwiftUI (iOS 18.5+), MapKit |
 | Auth | Firebase Auth (Sign in with Apple, anonymous sessions) |
-| Data | Cloud Firestore (real-time listeners, security rules), Firebase Storage for photos |
+| Data | Cloud Firestore (real-time listeners, security rules); Firebase Storage rules are in place for photos, which are not yet shipped |
 | Backend | Cloud Functions (TypeScript, Node 20) |
 | Testing | Swift Testing with injected in-memory repositories, XCUITest |
 | Tooling | SwiftLint, Firebase Emulator Suite |

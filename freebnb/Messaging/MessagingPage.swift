@@ -2,8 +2,9 @@
 //  MessagingPage.swift
 //  freebnb
 //
-//  The one-to-one chat view. The conversation list, its row, the message
-//  bubble, and the navigation route now live in sibling files (A2).
+//  The one-to-one chat view. It owns the thread's state and chrome; the
+//  banners, bubble list, input bar, toolbar menu, and request actions all live
+//  in sibling files (A2).
 //
 
 import SwiftUI
@@ -41,18 +42,6 @@ struct MessagingPage: View {
     private var isMuted: Bool { messageStore.isMuted(conversationID) }
     private var isBlocked: Bool { userProfileStore.isBlocked(otherUserID) }
 
-    private var trimmedSearchQuery: String { searchQuery.trimmingCharacters(in: .whitespaces) }
-    private var isLoadingThread: Bool { messageStore.isLoadingThread(conversationID) }
-
-    private var allMessages: [Message] { messageStore.messages(for: conversationID) }
-    private var messages: [Message] {
-        let q = trimmedSearchQuery
-        guard !q.isEmpty else { return allMessages }
-        return allMessages.filter { $0.text.localizedCaseInsensitiveContains(q) }
-    }
-    private var hasMoreMessages: Bool { messageStore.hasMoreMessages(conversationID) }
-    private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
-
     private var activeRequest: StayRequest? {
         requestStore.outgoingRequests.first(where: { $0.hostUserID == otherUserID && $0.status.isActive })
         ?? requestStore.incomingRequests.first(where: { $0.guestUserID == otherUserID && $0.status.isActive })
@@ -60,84 +49,45 @@ struct MessagingPage: View {
 
     private var iAmGuest: Bool { activeRequest?.guestUserID == currentUserID }
 
+    private var actions: MessagingRequestActions {
+        MessagingRequestActions(requestStore: requestStore,
+                                messageStore: messageStore,
+                                currentUserID: currentUserID)
+    }
+
     @ObservationIgnored private let log = AppLog.logger("messaging")
 
     var body: some View {
         VStack(spacing: 0) {
             // Listing context — shown when a specific listing is associated.
             if let listing {
-                listingContextBanner(listing)
+                ListingContextBanner(listing: listing, isMuted: isMuted)
                 Divider()
             }
 
-            if let req = activeRequest {
-                requestBanner(req)
+            if let request = activeRequest {
+                StayRequestBanner(
+                    request: request,
+                    iAmGuest: iAmGuest,
+                    isBusy: bannerBusy,
+                    onCancel: { run { try await actions.cancel(request) } },
+                    onDecline: { run { try await actions.decline(request) } },
+                    onAccept: { respondingTo = request }
+                )
                 Divider()
             }
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        if hasMoreMessages {
-                            Button {
-                                messageStore.loadMoreMessages(conversationID, participants: participants)
-                            } label: {
-                                Label("Load older messages", systemImage: "arrow.up.circle")
-                                    .font(.subheadline)
-                                    .foregroundColor(Color.accent)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.top, 8)
-                        }
-
-                        if messages.isEmpty {
-                            if !trimmedSearchQuery.isEmpty {
-                                Text("No messages match \"\(trimmedSearchQuery)\"")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.top, 48)
-                                    .padding(.horizontal, 24)
-                            } else if isLoadingThread {
-                                // Only stands in for the unknown-yet state: a thread
-                                // already backed by the global snapshot skips this.
-                                SkeletonMessageThread()
-                                    .accessibilityElement()
-                                    .accessibilityLabel("Loading messages")
-                            } else {
-                                Text("Send \(otherName) a message to get started.")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.top, 48)
-                                    .padding(.horizontal, 24)
-                            }
-                        }
-                        ForEach(messages) { message in
-                            MessageBubble(
-                                message: message,
-                                currentUserID: currentUserID,
-                                state: messageStore.state(of: message.id),
-                                onRetry: { messageStore.retry(message.id) },
-                                onDiscard: { messageStore.discardFailed(message.id) },
-                                onReport: { reportedMessage = message }
-                            )
-                            .id(message.id)
-                        }
-                    }
-                    .padding()
-                }
-                .scrollDismissesKeyboard(.immediately)
-                .onChange(of: allMessages.last?.id) { _, lastID in
-                    if let lastID, searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-                        withAnimation { proxy.scrollTo(lastID, anchor: .bottom) }
-                    }
-                    messageStore.markRead(conversationID: conversationID)
-                }
-            }
+            MessageThread(
+                conversationID: conversationID,
+                participants: participants,
+                currentUserID: currentUserID,
+                otherName: otherName,
+                searchQuery: searchQuery.trimmingCharacters(in: .whitespaces),
+                onReport: { reportedMessage = $0 }
+            )
 
             Divider()
-            inputBar
+            MessageInputBar(otherName: otherName, draft: $draft, isFocused: $inputFocused, onSend: sendMessage)
         }
         .background(Color.primaryBackground.ignoresSafeArea())
         .navigationTitle(otherName)
@@ -152,40 +102,18 @@ struct MessagingPage: View {
                         .foregroundColor(Color.accent)
                 }
             }
-            // Secondary: conversation actions menu
             ToolbarItem(placement: .topBarLeading) {
-                Menu {
-                    if isMuted {
-                        Button {
-                            messageStore.unmuteConversation(conversationID)
-                        } label: {
-                            Label("Unmute Conversation", systemImage: "bell")
-                        }
-                    } else {
-                        Button {
-                            messageStore.muteConversation(conversationID)
-                        } label: {
-                            Label("Mute Conversation", systemImage: "bell.slash")
-                        }
-                    }
-
-                    Divider()
-
-                    Button(role: .destructive) {
-                        showReportUser = true
-                    } label: {
-                        Label("Report \(otherName)", systemImage: "flag")
-                    }
-
-                    Button(role: .destructive) {
-                        showBlockConfirm = true
-                    } label: {
-                        Label(isBlocked ? "Unblock \(otherName)" : "Block \(otherName)",
-                              systemImage: isBlocked ? "person.fill.checkmark" : "person.fill.xmark")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
+                ConversationActionsMenu(
+                    otherName: otherName,
+                    isMuted: isMuted,
+                    isBlocked: isBlocked,
+                    onToggleMute: {
+                        isMuted ? messageStore.unmuteConversation(conversationID)
+                                : messageStore.muteConversation(conversationID)
+                    },
+                    onReport: { showReportUser = true },
+                    onToggleBlock: { showBlockConfirm = true }
+                )
             }
         }
         .task {
@@ -201,9 +129,9 @@ struct MessagingPage: View {
                 RequestStaySheet(listing: listing)
             }
         }
-        .sheet(item: $respondingTo) { req in
-            AcceptSheet(request: req) { hostNote in
-                await acceptRequest(req, hostNote: hostNote)
+        .sheet(item: $respondingTo) { request in
+            AcceptSheet(request: request) { hostNote in
+                await accept(request, hostNote: hostNote)
             }
         }
         .sheet(item: $reportedMessage) { msg in
@@ -254,182 +182,41 @@ struct MessagingPage: View {
         }
     }
 
-    // MARK: - Listing context banner
-
-    private func listingContextBanner(_ home: Home) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "house.fill")
-                .font(.subheadline)
-                .foregroundColor(.accent)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Re: \(home.hostName)'s place")
-                    .font(.subheadline).fontWeight(.semibold)
-                Text("\(home.address.city), \(home.address.state)")
-                    .font(.caption).foregroundColor(.secondary)
-            }
-            Spacer()
-            if isMuted {
-                Image(systemName: "bell.slash.fill")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .accessibilityLabel("Muted")
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color.accent.opacity(0.07))
-    }
-
-    // MARK: - Request banner
-
-    @ViewBuilder
-    private func requestBanner(_ request: StayRequest) -> some View {
-        let bannerColor: Color = request.status == .accepted ? .green : .orange
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    StatusBadge(status: request.status)
-                    Text(dateRangeText(request))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                if let note = request.guestNote, !note.isEmpty {
-                    Text("\"\(note)\"")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-
-            if iAmGuest, request.status.isActive {
-                Button("Cancel") {
-                    guard !bannerBusy else { return }
-                    bannerBusy = true
-                    Task {
-                        await cancelRequest(request)
-                        bannerBusy = false
-                    }
-                }
-                .font(.caption)
-                .foregroundColor(.red)
-                .disabled(bannerBusy)
-            } else if !iAmGuest, request.status == .pending {
-                HStack(spacing: 8) {
-                    Button("Decline") {
-                        guard !bannerBusy else { return }
-                        bannerBusy = true
-                        Task {
-                            await declineRequest(request)
-                            bannerBusy = false
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .disabled(bannerBusy)
-                    Button("Accept") { respondingTo = request }
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.onAccent)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(Color.accent)
-                        .clipShape(Capsule())
-                        .disabled(bannerBusy)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(bannerColor.opacity(0.08))
-    }
-
-    // MARK: - Input bar
-
-    private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            TextField("Message \(otherName)...", text: $draft, axis: .vertical)
-                .textFieldStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(20)
-                .focused($inputFocused)
-                .lineLimit(1...5)
-
-            Button(action: sendMessage) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(trimmedDraft.isEmpty ? .secondary.opacity(0.4) : .accent)
-            }
-            .disabled(trimmedDraft.isEmpty)
-            .accessibilityLabel("Send message")
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
-        .background(Color.primaryBackground)
-    }
-
-    // MARK: - Sending
+    // MARK: - Actions
 
     private func sendMessage() {
-        let trimmed = trimmedDraft
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if messageStore.send(text: trimmed, senderUserID: currentUserID, recipientUserID: otherUserID) {
             draft = ""
         }
     }
 
-    // MARK: - Request actions
-
-    private func dateRangeText(_ request: StayRequest) -> String {
-        let f = AppDateFormatters.shortDay
-        return "\(f.string(from: request.checkIn)) – \(f.string(from: request.checkOut))"
-    }
-
-    private func cancelRequest(_ request: StayRequest) async {
-        do {
-            try await requestStore.cancel(request)
-            messageStore.send(
-                text: "Request cancelled · \(dateRangeText(request))",
-                senderUserID: currentUserID,
-                recipientUserID: request.hostUserID
-            )
-        } catch {
-            log.error("cancel request failed: \(error.localizedDescription, privacy: .public)")
-            errorMessage = error.localizedDescription
+    /// Runs a banner action, coalescing double-taps and surfacing failures.
+    private func run(_ action: @escaping () async throws -> Void) {
+        guard !bannerBusy else { return }
+        bannerBusy = true
+        Task {
+            await perform(action)
+            bannerBusy = false
         }
     }
 
-    private func acceptRequest(_ request: StayRequest, hostNote: String?) async {
-        do {
-            try await requestStore.accept(request, hostNote: hostNote)
-            var text = "✅ Stay accepted · \(dateRangeText(request))"
-            if let note = hostNote, !note.isEmpty { text += "\n\(note)" }
-            messageStore.send(
-                text: text,
-                senderUserID: currentUserID,
-                recipientUserID: request.guestUserID
-            )
-            respondingTo = nil
-        } catch {
-            log.error("accept request failed: \(error.localizedDescription, privacy: .public)")
-            errorMessage = error.localizedDescription
-        }
+    private func accept(_ request: StayRequest, hostNote: String?) async {
+        let succeeded = await perform { try await actions.accept(request, hostNote: hostNote) }
+        if succeeded { respondingTo = nil }
     }
 
-    private func declineRequest(_ request: StayRequest) async {
+    /// Returns whether the action completed; on failure it logs and raises the alert.
+    @discardableResult
+    private func perform(_ action: () async throws -> Void) async -> Bool {
         do {
-            try await requestStore.decline(request)
-            messageStore.send(
-                text: "Stay request declined · \(dateRangeText(request))",
-                senderUserID: currentUserID,
-                recipientUserID: request.guestUserID
-            )
+            try await action()
+            return true
         } catch {
-            log.error("decline request failed: \(error.localizedDescription, privacy: .public)")
+            log.error("stay request action failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
+            return false
         }
     }
 }

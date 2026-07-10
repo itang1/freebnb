@@ -7,14 +7,16 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 
-# Python venv
+# Python venv. Anchored to the repo root with a leading slash: unanchored,
+# `lib/` and `bin/` match at every depth and would silently swallow real source
+# directories. functions/lib is covered by functions/.gitignore.
 .venv/
 venv/
-bin/
-lib/
-share/
-include/
-pyvenv.cfg
+/bin/
+/lib/
+/share/
+/include/
+/pyvenv.cfg
 
 # Project
 freebnb/Shared/sampleData.swift

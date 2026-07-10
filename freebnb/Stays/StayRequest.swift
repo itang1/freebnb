@@ -152,6 +152,14 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
+extension StayRequest {
+    /// "Mar 5 – Mar 9", the form used by every stay row and chat banner.
+    var dateRangeText: String {
+        let f = AppDateFormatters.shortDay
+        return "\(f.string(from: checkIn)) – \(f.string(from: checkOut))"
+    }
+}
+
 extension [StayRequest] {
     /// Newest first. Requests without a server timestamp yet sort to the front
     /// so newly created pending items appear immediately.
