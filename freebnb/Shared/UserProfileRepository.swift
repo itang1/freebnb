@@ -26,6 +26,9 @@ protocol UserProfileRepository: Sendable {
     func deleteProfile(userID: String) async throws
     func updateFCMToken(userID: String, token: String) async throws
     func updateNotificationPrefs(userID: String, prefs: NotificationPreferences) async throws
+    /// Stores (or, with nil, clears) the person this user shares their stays with.
+    /// Owner-only data: it never leaves the private subdocument.
+    func updateEmergencyContact(userID: String, contact: EmergencyContact?) async throws
     func searchProfiles(query: String) async throws -> [UserProfile]
     func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws
     /// Invokes the `exportUserData` callable and returns the result as
@@ -51,6 +54,7 @@ private final class CurrentProfileMerger: @unchecked Sendable {
     private var blockedUserIDs: [String]?
     private var savedListingIDs: [String]?
     private var notificationPrefs: NotificationPreferences?
+    private var emergencyContact: EmergencyContact?
 
     init(handler: @escaping @Sendable (Result<UserProfile?, Error>) -> Void) {
         self.handler = handler
@@ -79,6 +83,7 @@ private final class CurrentProfileMerger: @unchecked Sendable {
         blockedUserIDs = data?["blockedUserIDs"] as? [String]
         savedListingIDs = data?["savedListingIDs"] as? [String]
         notificationPrefs = NotificationPreferences(firestore: data?["notificationPrefs"] as? [String: Any])
+        emergencyContact = EmergencyContact(firestore: data?["emergencyContact"] as? [String: Any])
         if hasPublic { emit() }
     }
 
@@ -93,6 +98,7 @@ private final class CurrentProfileMerger: @unchecked Sendable {
         profile.blockedUserIDs = blockedUserIDs
         profile.savedListingIDs = savedListingIDs
         profile.notificationPrefs = notificationPrefs
+        profile.emergencyContact = emergencyContact
         handler(.success(profile))
     }
 }
@@ -183,6 +189,12 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             "targetType": targetType,
             "targetID": targetID,
             "reason": reason,
+            // Enters the moderation console's queue at the top (feature 6). The
+            // rules pin both of these on create: a user files a `new` report from
+            // a person, never an `actioned` one or one impersonating the
+            // keyword-moderation triggers.
+            "status": "new",
+            "source": "user",
             "createdAt": FieldValue.serverTimestamp()
         ]
         try await withRetry { [db] in
@@ -224,6 +236,18 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
                 .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
                 .setData([
                     "notificationPrefs": prefs.firestoreValue,
+                    "updatedAt": FieldValue.serverTimestamp()
+                ], merge: true)
+        }
+    }
+
+    func updateEmergencyContact(userID: String, contact: EmergencyContact?) async throws {
+        let value: Any = contact.map { $0.firestoreValue as Any } ?? FieldValue.delete()
+        try await withRetry { [db] in
+            try await db.collection(FirestorePaths.users).document(userID)
+                .collection(FirestorePaths.privateCollection).document(privateProfileDocID)
+                .setData([
+                    "emergencyContact": value,
                     "updatedAt": FieldValue.serverTimestamp()
                 ], merge: true)
         }

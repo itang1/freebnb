@@ -142,23 +142,41 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
     }
 }
 
+/// Who can see a listing, ordered most private to most open — which is also the
+/// order the picker offers them in (feature 7).
+///
+/// Both restricted tiers are enforced through the same denormalized
+/// `allowedViewerIDs` array, because Firestore rules cannot join to `friendEdges`
+/// at query time. What differs is who the server puts in that array: the host's
+/// friends for `friendsOnly`, and those friends' friends as well for
+/// `friendsOfFriends`. The `rebuildListingACLs` Cloud Function owns it.
 enum ListingVisibility: String, Codable, CaseIterable, Hashable, Sendable {
-    case everyone   = "everyone"
-    case friendsOnly = "friendsOnly"
+    case friendsOnly      = "friendsOnly"
+    case friendsOfFriends = "friendsOfFriends"
+    case everyone         = "everyone"
 
     var displayName: String {
         switch self {
-        case .everyone:    return "Everyone"
-        case .friendsOnly: return "Friends only"
+        case .friendsOnly:      return "Friends only"
+        case .friendsOfFriends: return "Friends of friends"
+        case .everyone:         return "Everyone"
         }
     }
 
     var description: String {
         switch self {
-        case .everyone:    return "Anyone on FreeBNB can see this listing."
-        case .friendsOnly: return "Only people you are connected with can see this listing."
+        case .friendsOnly:
+            return "Only people you are connected with can see this listing."
+        case .friendsOfFriends:
+            return "Your friends, and anyone they are connected with, can see this listing."
+        case .everyone:
+            return "Anyone on FreeBNB can see this listing."
         }
     }
+
+    /// True when the listing is gated by `allowedViewerIDs` rather than open to
+    /// every signed-in user.
+    var isRestricted: Bool { self != .everyone }
 }
 
 struct DateRange: Codable, Hashable, Identifiable, Sendable {
@@ -321,9 +339,11 @@ struct Home: Identifiable, Hashable, Codable {
     // Non-optional view of photo URLs for view code.
     var photos: [String] { photoURLs ?? [] }
 
-    /// The read ACL a listing should carry: the host, then their accepted friends,
-    /// de-duplicated. Kept here so the client write path and the seed script
-    /// agree on one definition.
+    /// The read ACL a listing starts with: the host, then their accepted friends,
+    /// de-duplicated. Kept here so the client write path and the seed script agree
+    /// on one definition. A `friendsOfFriends` listing needs a wider ACL than the
+    /// client can compute (it can only read its own friend edges), so
+    /// `rebuildListingACLs` widens it server-side right after the save.
     static func viewerIDs(hostUserID: String, friendIDs: some Sequence<String>) -> [String] {
         var seen: Set<String> = []
         return ([hostUserID] + friendIDs).filter { seen.insert($0).inserted }

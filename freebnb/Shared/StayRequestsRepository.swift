@@ -30,6 +30,14 @@ protocol StayRequestsRepository: Sendable {
     /// Moves a request to a new status. Any terminal status also revokes the
     /// guest's access to the listing's exact address.
     func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws
+    /// Closes out an accepted stay that has begun, which is what unlocks both
+    /// parties' reviews (feature 4). Either party may call it.
+    ///
+    /// Deliberately does *not* revoke the address: a guest who taps this on the
+    /// first morning of a five-night stay should not lock themselves out of the
+    /// street they are standing on. The nightly `expireCompletedStays` sweep
+    /// withdraws the grant once checkout has actually passed.
+    func markCompleted(_ request: StayRequest) async throws
     /// Accepts a request only if no other already-accepted request for the same
     /// listing overlaps its dates. Throws `StayRequestError.overlappingStay` on
     /// a conflict. A best-effort double-booking guard; authoritative enforcement
@@ -121,6 +129,19 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
                 )
             }
             try await batch.commit()
+        }
+    }
+
+    func markCompleted(_ request: StayRequest) async throws {
+        let requestID = request.id
+        try await withRetry { [db] in
+            try await db.collection(FirestorePaths.stayRequests).document(requestID).updateData([
+                "status": StayRequestStatus.completed.rawValue,
+                // The rules require both to equal request.time, which is exactly
+                // what the server resolves these sentinels to.
+                "completedAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
         }
     }
 

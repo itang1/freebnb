@@ -38,6 +38,30 @@ struct ProfilePage: View {
                 } else {
                     sectionLabel("Account")
                     VStack(spacing: 0) {
+                        // What everyone else sees: reputation, reviews, references.
+                        NavigationLink {
+                            UserProfilePage(
+                                userID: authManager.userID,
+                                fallbackName: userProfileStore.displayName ?? "You"
+                            )
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "person.crop.circle")
+                                    .frame(width: 28)
+                                    .foregroundColor(Color.accent)
+                                Text("Your public profile")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
+
+                        rowDivider
+
                         SettingsRow(icon: "pencil", label: "Edit Name", chevron: true,
                                     trailingText: userProfileStore.displayName) {
                             showEditName = true
@@ -593,5 +617,7 @@ private struct EditNameSheet: View {
             .environment(UserProfileStore())
             .environment(StayRequestStore())
             .environment(HomeStore())
+            .environment(FriendStore())
+            .environment(ReviewStore())
     }
 }

@@ -14,6 +14,7 @@ struct HomeDetailPage: View {
     @Environment(StayRequestStore.self) private var requestStore
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(HomeStore.self) private var homeStore
+    @Environment(ReviewStore.self) private var reviewStore
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var mapState: MapState = .loading
@@ -63,7 +64,7 @@ struct HomeDetailPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // MARK: Host motivation + trust signals
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 5) {
                         Image(systemName: home.hostMotivation.iconName)
                             .font(.caption2)
@@ -79,6 +80,16 @@ struct HomeDetailPage: View {
                     .accessibilityLabel("Host motivation: \(home.hostMotivation.displayName)")
 
                     hostTrustSignals
+
+                    if !isHost {
+                        NavigationLink {
+                            UserProfilePage(userID: home.hostUserID, fallbackName: home.hostName)
+                        } label: {
+                            Label("View \(home.hostName)'s profile", systemImage: "person.crop.circle")
+                                .font(.subheadline)
+                                .foregroundColor(Color.accent)
+                        }
+                    }
                 }
 
                 stayLogisticsSection
@@ -185,6 +196,12 @@ struct HomeDetailPage: View {
 
                 Spacer(minLength: 10)
 
+                // What past guests said about this host (feature 1). Capped, with
+                // the full list one tap away on their profile.
+                ReviewsSection(subjectUserID: home.hostUserID, subjectName: home.hostName, limit: 3)
+
+                Spacer(minLength: 10)
+
                 if authManager.userID != home.hostUserID {
                     Text("Contact Host")
                         .font(.headline)
@@ -264,6 +281,13 @@ struct HomeDetailPage: View {
                 houseManual = await homeStore.manual(for: home.id)
             }
         }
+        // The host's reputation (feature 2). `trustStats` rides on the public
+        // user document, so one fetch fills the chips; mutual friends need the
+        // callable, and neither is worth blocking the page on.
+        .task {
+            _ = await userProfileStore.fetchProfileOnce(userID: home.hostUserID)
+            await reviewStore.loadMutualFriends(with: home.hostUserID)
+        }
         .onChange(of: userProfileStore.currentProfile?.savedListingIDs) { _, _ in
             isListingSaved = userProfileStore.isSaved(home.id)
         }
@@ -340,29 +364,18 @@ struct HomeDetailPage: View {
 // extensions still see it.
 extension HomeDetailPage {
 
-    // MARK: - Trust signals
+    // MARK: - Trust signals (feature 2)
 
+    /// Stays hosted, rating, response rate, tenure, mutual friends. Rendered from
+    /// the host's public user document, which carries `trustStats`, so this costs
+    /// the one profile fetch the page already makes.
     @ViewBuilder
     private var hostTrustSignals: some View {
-        Label("Verified name", systemImage: "checkmark.seal.fill")
-            .font(.caption)
-            .foregroundColor(Color.accent)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.accent.opacity(0.1))
-            .clipShape(Capsule())
-
-        if let profile = userProfileStore.profile(for: home.hostUserID),
-           let createdAt = profile.createdAt {
-            let year = Calendar.current.component(.year, from: createdAt)
-            Label("Since \(year)", systemImage: "calendar")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(Capsule())
-        }
+        TrustBadgeRow(
+            profile: userProfileStore.profile(for: home.hostUserID),
+            mutualFriends: reviewStore.mutualFriends(with: home.hostUserID),
+            isSelf: isHost
+        )
     }
 
     // MARK: - Map section
@@ -582,5 +595,6 @@ extension HomeDetailPage {
         .environment(StayRequestStore())
         .environment(UserProfileStore())
         .environment(HomeStore())
+        .environment(ReviewStore())
     }
 }

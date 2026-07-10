@@ -12,6 +12,10 @@ import os
 struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     @DocumentID var id: String?
     var displayName: String
+    // Reputation, on the world-readable user document because a listing card has
+    // to render it without a second fetch per host (feature 2). Written only by
+    // the server; `firestore.rules` refuses every client write to it.
+    var trustStats: TrustStats?
     var email: String?
     var savedListingIDs: [String]?
     var blockedUserIDs: [String]?
@@ -19,6 +23,8 @@ struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     // Per-category push preferences; lives in the private subdocument and is
     // merged in alongside the other owner-only fields. Absent means "all on".
     var notificationPrefs: NotificationPreferences?
+    // Who to tell about a stay (feature 5). Owner-only, like the block list.
+    var emergencyContact: EmergencyContact?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
 
@@ -26,6 +32,10 @@ struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     var blockedIDs: Set<String> { Set(blockedUserIDs ?? []) }
     /// Effective preferences, defaulting to all-enabled when none are stored.
     var effectiveNotificationPrefs: NotificationPreferences { notificationPrefs ?? NotificationPreferences() }
+    /// Reputation with an empty record rather than nil, for rendering.
+    var effectiveTrustStats: TrustStats { trustStats ?? TrustStats() }
+    /// "3 years on FreeBNB", or nil for an account with no creation timestamp.
+    var tenureText: String? { TrustStats.tenureText(joinedAt: createdAt) }
 }
 
 @MainActor
@@ -200,6 +210,22 @@ final class UserProfileStore {
         } catch {
             currentProfile = snapshot
             log.error("notification prefs update error: \(error.localizedDescription, privacy: .public)")
+            throw ProfileUpdateError.underlying(error)
+        }
+    }
+
+    /// Stores, or with nil clears, the person this user shares their stays with
+    /// (feature 5). Optimistic like the notification toggles, and reverted on
+    /// failure so the form never claims a save that didn't land.
+    func updateEmergencyContact(_ contact: EmergencyContact?) async throws {
+        guard let userID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
+        let snapshot = currentProfile
+        currentProfile?.emergencyContact = contact
+        do {
+            try await repository.updateEmergencyContact(userID: userID, contact: contact)
+        } catch {
+            currentProfile = snapshot
+            log.error("emergency contact update error: \(error.localizedDescription, privacy: .public)")
             throw ProfileUpdateError.underlying(error)
         }
     }

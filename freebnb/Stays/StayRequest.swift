@@ -9,6 +9,11 @@ import Foundation
 enum StayRequestStatus: String, Codable, Hashable, CaseIterable, Sendable {
     case pending   = "pending"
     case accepted  = "accepted"
+    /// The stay happened and is over. Reached either by a party tapping "Mark
+    /// complete" once the stay has begun, or by the nightly `expireCompletedStays`
+    /// sweep after checkout. This is the status that unlocks reviews and that
+    /// `trustStats` counts (feature 4).
+    case completed = "completed"
     case declined  = "declined"
     case cancelled = "cancelled"
 
@@ -16,12 +21,17 @@ enum StayRequestStatus: String, Codable, Hashable, CaseIterable, Sendable {
         switch self {
         case .pending:   return "Pending"
         case .accepted:  return "Accepted"
+        case .completed: return "Completed"
         case .declined:  return "Declined"
         case .cancelled: return "Cancelled"
         }
     }
 
     var isActive: Bool { self == .pending || self == .accepted }
+
+    /// True for the statuses that mean the stay actually happened. `accepted`
+    /// counts because a stay in progress has not been cancelled away.
+    var didHappen: Bool { self == .accepted || self == .completed }
 }
 
 enum StayRequestRole: Sendable {
@@ -91,6 +101,9 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     var guestCount: Int?
     var arrivalWindow: ArrivalWindow?
     var status: StayRequestStatus
+    /// When the stay was marked complete. Nil for every other status; written
+    /// alongside `status == .completed` and never rewritten.
+    var completedAt: Date?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
 
@@ -108,6 +121,7 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         guestCount: Int? = nil,
         arrivalWindow: ArrivalWindow? = nil,
         status: StayRequestStatus = .pending,
+        completedAt: Date? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil
     ) {
@@ -124,6 +138,7 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         self.guestCount = guestCount
         self.arrivalWindow = arrivalWindow
         self.status = status
+        self.completedAt = completedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -157,6 +172,37 @@ extension StayRequest {
     var dateRangeText: String {
         let f = AppDateFormatters.shortDay
         return "\(f.string(from: checkIn)) – \(f.string(from: checkOut))"
+    }
+
+    /// Which side of this stay `userID` is on, or nil if they're neither.
+    func role(of userID: String) -> StayRequestRole? {
+        if userID == hostUserID { return .host }
+        if userID == guestUserID { return .guest }
+        return nil
+    }
+
+    /// The other participant, seen from `userID`.
+    func otherParty(from userID: String) -> String {
+        userID == hostUserID ? guestUserID : hostUserID
+    }
+
+    /// Either party may close out an accepted stay once it has begun. Requiring
+    /// checkout to have passed would leave a guest who left early unable to say
+    /// so, and the nightly sweep completes anything nobody touches, so the only
+    /// thing this gate has to stop is marking a future stay complete.
+    /// `firestore.rules` enforces the same `request.time >= checkIn` bound.
+    func canBeMarkedComplete(now: Date = Date()) -> Bool {
+        status == .accepted && now >= checkIn
+    }
+
+    /// The review `userID` would write about the other party, if the stay is over.
+    func reviewRole(for userID: String) -> ReviewRole? {
+        guard status == .completed else { return nil }
+        switch role(of: userID) {
+        case .guest: return .guestReviewingHost
+        case .host:  return .hostReviewingGuest
+        case nil:    return nil
+        }
     }
 }
 

@@ -41,6 +41,7 @@ struct FreeBNBApp: App {
     @State private var userProfileStore: UserProfileStore
     @State private var stayRequestStore: StayRequestStore
     @State private var friendStore: FriendStore
+    @State private var reviewStore: ReviewStore
 
     init() {
         // App Check must be registered before FirebaseApp.configure() so the
@@ -71,6 +72,7 @@ struct FreeBNBApp: App {
         _userProfileStore = State(initialValue: UserProfileStore())
         _stayRequestStore = State(initialValue: StayRequestStore())
         _friendStore = State(initialValue: FriendStore())
+        _reviewStore = State(initialValue: ReviewStore())
     }
 
     var body: some Scene {
@@ -82,6 +84,7 @@ struct FreeBNBApp: App {
                 .environment(userProfileStore)
                 .environment(stayRequestStore)
                 .environment(friendStore)
+                .environment(reviewStore)
                 .environment(router)
                 .onAppear {
                     // Wire the store and router into the delegate.

@@ -17,9 +17,11 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     /// Mirrors what Firestore's rules would return for `viewerID`: publicly
     /// visible listings, plus any listing naming the viewer in `allowedViewerIDs`.
     /// A listing that is neither is simply not readable, exactly as server-side.
+    /// Both restricted tiers are gated by the same ACL, so this needs no notion
+    /// of how far away in the friend graph the viewer is.
     private func visible(to viewerID: String) -> [Home] {
         homes.filter { home in
-            if home.visibility == .friendsOnly {
+            if home.visibility?.isRestricted == true {
                 return !viewerID.isEmpty && (home.allowedViewerIDs ?? []).contains(viewerID)
             }
             return true
@@ -221,6 +223,14 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         if let hostNote { requests[i].hostNote = hostNote }
     }
 
+    func markCompleted(_ request: StayRequest) async throws {
+        guard let i = requests.firstIndex(where: { $0.id == request.id }) else { return }
+        requests[i].status = .completed
+        requests[i].completedAt = Date()
+        // The address marker survives, exactly as it does server-side: the
+        // nightly sweep, not completion, is what revokes it.
+    }
+
     func accept(_ request: StayRequest, hostNote: String?) async throws {
         let conflict = requests.contains { other in
             other.id != request.id &&
@@ -278,6 +288,10 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
         profiles[userID]?.notificationPrefs = prefs
     }
 
+    func updateEmergencyContact(userID: String, contact: EmergencyContact?) async throws {
+        profiles[userID]?.emergencyContact = contact
+    }
+
     func searchProfiles(query: String) async throws -> [UserProfile] {
         let q = query.lowercased()
         return profiles.values.filter { $0.displayName.lowercased().hasPrefix(q) }
@@ -287,6 +301,62 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
 
     func exportUserData() async throws -> Data {
         try JSONSerialization.data(withJSONObject: ["profile": [:], "listings": []], options: [.prettyPrinted])
+    }
+}
+
+final class InMemoryReviewsRepository: ReviewsRepository, @unchecked Sendable {
+    private var reviews: [String: Review] = [:]
+    private var feedback: [String: PrivateFeedback] = [:]
+    private var references: [String: CharacterReference] = [:]
+    /// Stands in for the `mutualFriends` callable, which has no client-side
+    /// equivalent: tests seed the answer they expect.
+    var mutualFriends: [String: MutualFriends] = [:]
+
+    init(reviews: [Review] = [], references: [CharacterReference] = []) {
+        self.reviews = Dictionary(uniqueKeysWithValues: reviews.map { ($0.id, $0) })
+        self.references = Dictionary(uniqueKeysWithValues: references.map { ($0.id, $0) })
+    }
+
+    func fetchReviews(subjectUserID: String) async throws -> [Review] {
+        reviews.values.filter { $0.subjectUserID == subjectUserID }.sortedByDate()
+    }
+
+    func fetchReviewsWritten(byUserID authorUserID: String) async throws -> [Review] {
+        reviews.values.filter { $0.authorUserID == authorUserID }.sortedByDate()
+    }
+
+    func submit(_ review: Review, privateFeedback: String?) async throws {
+        // Mirrors the rules: an edit preserves createdAt, a create stamps it.
+        var stored = review
+        stored.createdAt = reviews[review.id]?.createdAt ?? Date()
+        stored.updatedAt = Date()
+        reviews[review.id] = stored
+        if let privateFeedback { feedback[review.id] = PrivateFeedback(text: privateFeedback) }
+    }
+
+    func fetchPrivateFeedback(reviewID: String) async throws -> PrivateFeedback? {
+        feedback[reviewID]
+    }
+
+    func fetchReferences(subjectUserID: String) async throws -> [CharacterReference] {
+        references.values
+            .filter { $0.subjectUserID == subjectUserID }
+            .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    func submitReference(_ reference: CharacterReference) async throws {
+        var stored = reference
+        stored.createdAt = references[reference.id]?.createdAt ?? Date()
+        stored.updatedAt = Date()
+        references[reference.id] = stored
+    }
+
+    func deleteReference(id: String) async throws {
+        references.removeValue(forKey: id)
+    }
+
+    func fetchMutualFriends(userID: String) async throws -> MutualFriends {
+        mutualFriends[userID] ?? .empty
     }
 }
 

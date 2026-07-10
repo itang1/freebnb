@@ -149,6 +149,33 @@ final class StayRequestStore {
         try await update(request, status: .declined, hostNote: hostNote)
     }
 
+    // MARK: - Completion (feature 4)
+
+    /// Closes out a stay that has begun, from either side. Completion is what
+    /// unlocks reviews and what the server counts into both parties' trust stats.
+    func markCompleted(_ request: StayRequest) async throws {
+        do {
+            try await repository.markCompleted(request)
+        } catch {
+            log.error("mark completed error: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
+    /// Stays either side may close out right now: accepted, and under way.
+    var completableStays: [StayRequest] {
+        (incomingRequests + outgoingRequests).filter { $0.canBeMarkedComplete() }
+    }
+
+    /// Finished stays, newest first — the ones that can be reviewed. Whether a
+    /// given one *still needs* a review is `ReviewStore`'s question, not this
+    /// store's; it depends on what the signed-in user has already written.
+    var completedStays: [StayRequest] {
+        (incomingRequests + outgoingRequests)
+            .filter { $0.status == .completed }
+            .sortedByDate()
+    }
+
     // MARK: - Convenience
 
     /// Returns the most recent active (pending or accepted) request the guest

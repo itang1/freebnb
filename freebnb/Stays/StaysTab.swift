@@ -13,12 +13,25 @@ struct StaysTab: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(HomeStore.self) private var homeStore
+    @Environment(ReviewStore.self) private var reviewStore
     @State private var respondingTo: StayRequest?
+    @State private var reviewing: ReviewTarget?
+    @State private var sharingStay: StayRequest?
+    @State private var completing: StayRequest?
     @State private var actionError: String?
     @State private var selectedTab: StaysTabSelection = .trips
     @State private var showPast = false
 
     enum StaysTabSelection { case trips, listings }
+
+    /// A stay plus the role the signed-in user reviews it in. Carried together so
+    /// the sheet never has to re-derive who is reviewing whom.
+    struct ReviewTarget: Identifiable {
+        let stay: StayRequest
+        let role: ReviewRole
+        let subjectName: String
+        var id: String { stay.id }
+    }
 
     // Outgoing (guest / traveler)
     private var pendingOut:  [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .pending  } }
@@ -29,6 +42,13 @@ struct StaysTab: View {
     private var pendingIn:  [StayRequest] { requestStore.incomingRequests.filter { $0.status == .pending  } }
     private var acceptedIn: [StayRequest] { requestStore.incomingRequests.filter { $0.status == .accepted } }
     private var pastIn:     [StayRequest] { requestStore.incomingRequests.filter { !$0.status.isActive   } }
+
+    /// Finished stays this user hasn't reviewed yet (features 1 and 4). Empty
+    /// until `ReviewStore` knows what they've already written, so nobody is asked
+    /// twice for a review they already left.
+    private var awaitingReview: [StayRequest] {
+        requestStore.completedStays.filter { reviewStore.needsReview(stayRequestID: $0.id) }
+    }
 
     private var hasActive: Bool {
         !pendingOut.isEmpty || !acceptedOut.isEmpty || !pendingIn.isEmpty || !acceptedIn.isEmpty
@@ -61,111 +81,192 @@ struct StaysTab: View {
                 await accept(req, hostNote: hostNote)
             }
         }
+        .sheet(item: $reviewing) { target in
+            WriteReviewSheet(stay: target.stay, role: target.role, subjectName: target.subjectName)
+                .environment(reviewStore)
+                .environment(authManager)
+        }
+        .sheet(item: $sharingStay) { stay in
+            SafetyCheckInSheet(
+                stay: stay,
+                location: homeStore.listingLocations[stay.listingID],
+                manual: homeStore.listingManuals[stay.listingID]
+            )
+            .environment(userProfileStore)
+        }
+        .confirmationDialog(
+            "Mark this stay complete?",
+            isPresented: Binding(get: { completing != nil }, set: { if !$0 { completing = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Mark complete") {
+                if let stay = completing { Task { await markComplete(stay) } }
+            }
+        } message: {
+            Text("This closes the stay out and lets you both leave a review. It can't be undone.")
+        }
     }
 
     // MARK: - Trips view
 
+    @ViewBuilder
     private var tripsView: some View {
-        Group {
-            if let error = requestStore.listenerError {
-                ContentUnavailableView {
-                    Label("Couldn't load stays", systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                } description: {
-                    Text(error)
-                        .font(.caption)
-                    Button("Retry") { requestStore.reload() }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(Color.accent)
-                        .padding(.top, 8)
-                }
-                .background(Color.primaryBackground.ignoresSafeArea())
-            } else if !hasAny {
-                ContentUnavailableView {
-                    Label("No trips yet", systemImage: "suitcase")
-                        .foregroundStyle(Color.accent)
-                } description: {
-                    Text("Open a listing, message the host, and request to stay. Your trips appear here.")
-                }
-                .background(Color.primaryBackground.ignoresSafeArea())
-            } else {
-                List {
-                    if let actionError {
-                        Section {
-                            Label(actionError, systemImage: "exclamationmark.triangle.fill")
-                                .font(.subheadline)
-                                .foregroundColor(.red)
-                        }
-                    }
+        if let error = requestStore.listenerError {
+            listenerErrorState(error)
+        } else if !hasAny {
+            emptyState
+        } else {
+            staysList
+        }
+    }
 
-                    if !pendingOut.isEmpty {
-                        Section("Waiting to hear back") {
-                            ForEach(pendingOut, id: \.id) { req in
-                                outgoingRow(req, onCancel: { Task { await cancel(req) } })
-                            }
-                        }
-                    }
-                    if !acceptedOut.isEmpty {
-                        Section("Confirmed trips") {
-                            ForEach(acceptedOut, id: \.id) { req in outgoingRow(req) }
-                        }
-                    }
+    private func listenerErrorState(_ error: String) -> some View {
+        ContentUnavailableView {
+            Label("Couldn't load stays", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.red)
+        } description: {
+            Text(error)
+                .font(.caption)
+            Button("Retry") { requestStore.reload() }
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(Color.accent)
+                .padding(.top, 8)
+        }
+        .background(Color.primaryBackground.ignoresSafeArea())
+    }
 
-                    if !pendingIn.isEmpty {
-                        Section("Needs your response") {
-                            ForEach(pendingIn, id: \.id) { req in
-                                incomingRow(
-                                    req,
-                                    showActions: true,
-                                    onAccept:  { respondingTo = req },
-                                    onDecline: { Task { await decline(req) } }
-                                )
-                            }
-                        }
-                    }
-                    if !acceptedIn.isEmpty {
-                        Section("Upcoming hosting") {
-                            ForEach(acceptedIn, id: \.id) { req in incomingRow(req) }
-                        }
-                    }
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("No trips yet", systemImage: "suitcase")
+                .foregroundStyle(Color.accent)
+        } description: {
+            Text("Open a listing, message the host, and request to stay. Your trips appear here.")
+        }
+        .background(Color.primaryBackground.ignoresSafeArea())
+    }
 
-                    if hasPast {
-                        Section {
-                            Button {
-                                withAnimation { showPast.toggle() }
-                            } label: {
-                                Label(showPast ? "Hide past stays" : "Show past stays",
-                                      systemImage: showPast ? "chevron.up" : "chevron.down")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        if showPast {
-                            if !pastOut.isEmpty {
-                                Section("Past trips") {
-                                    ForEach(pastOut, id: \.id) { req in outgoingRow(req) }
-                                }
-                            }
-                            if !pastIn.isEmpty {
-                                Section("Past hosting") {
-                                    ForEach(pastIn, id: \.id) { req in incomingRow(req) }
-                                }
-                            }
-                        }
-                    }
+    private var staysList: some View {
+        List {
+            if let actionError {
+                Section {
+                    Label(actionError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline)
+                        .foregroundColor(.red)
                 }
-                .refreshable { requestStore.reload() }
-                .scrollContentBackground(.hidden)
-                .background(Color.primaryBackground.ignoresSafeArea())
-                .task(id: actionError) {
-                    guard actionError != nil else { return }
-                    try? await Task.sleep(for: .seconds(4))
-                    actionError = nil
+            }
+            reviewSection
+            travelerSections
+            hostSections
+            pastSection
+        }
+        .refreshable { requestStore.reload() }
+        .scrollContentBackground(.hidden)
+        .background(Color.primaryBackground.ignoresSafeArea())
+        .task(id: actionError) {
+            guard actionError != nil else { return }
+            try? await Task.sleep(for: .seconds(4))
+            actionError = nil
+        }
+    }
+
+    /// First on the page: a stay is freshest the day it ends, and an unreviewed
+    /// stay is the one thing here that both parties are waiting on each other for.
+    @ViewBuilder
+    private var reviewSection: some View {
+        if !awaitingReview.isEmpty {
+            Section("Needs your review") {
+                ForEach(awaitingReview, id: \.id) { req in
+                    ReviewPromptRow(
+                        request: req,
+                        subjectName: subjectName(for: req),
+                        onReview: { startReview(req) }
+                    )
                 }
             }
         }
     }
 
+    @ViewBuilder
+    private var travelerSections: some View {
+        if !pendingOut.isEmpty {
+            Section("Waiting to hear back") {
+                ForEach(pendingOut, id: \.id) { req in
+                    outgoingRow(req, onCancel: { Task { await cancel(req) } })
+                }
+            }
+        }
+        if !acceptedOut.isEmpty {
+            Section("Confirmed trips") {
+                ForEach(acceptedOut, id: \.id) { req in
+                    outgoingRow(
+                        req,
+                        onShare: { sharingStay = req },
+                        onComplete: req.canBeMarkedComplete() ? { completing = req } : nil
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var hostSections: some View {
+        if !pendingIn.isEmpty {
+            Section("Needs your response") {
+                ForEach(pendingIn, id: \.id) { req in
+                    incomingRow(
+                        req,
+                        showActions: true,
+                        onAccept:  { respondingTo = req },
+                        onDecline: { Task { await decline(req) } }
+                    )
+                }
+            }
+        }
+        if !acceptedIn.isEmpty {
+            Section("Upcoming hosting") {
+                ForEach(acceptedIn, id: \.id) { req in
+                    incomingRow(
+                        req,
+                        onComplete: req.canBeMarkedComplete() ? { completing = req } : nil
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pastSection: some View {
+        if hasPast {
+            Section {
+                Button {
+                    withAnimation { showPast.toggle() }
+                } label: {
+                    Label(showPast ? "Hide past stays" : "Show past stays",
+                          systemImage: showPast ? "chevron.up" : "chevron.down")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+            if showPast {
+                if !pastOut.isEmpty {
+                    Section("Past trips") {
+                        ForEach(pastOut, id: \.id) { req in outgoingRow(req) }
+                    }
+                }
+                if !pastIn.isEmpty {
+                    Section("Past hosting") {
+                        ForEach(pastIn, id: \.id) { req in incomingRow(req) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Actions, row builders, and lookups live in a same-file extension rather than
+// in the struct body: extensions do not count toward SwiftLint's type_body_length,
+// and `private` is file-scoped, so they still see the view's state.
+extension StaysTab {
     // MARK: - Actions
 
     private func cancel(_ request: StayRequest) async {
@@ -213,21 +314,50 @@ struct StaysTab: View {
         }
     }
 
+    private func markComplete(_ request: StayRequest) async {
+        actionError = nil
+        completing = nil
+        do {
+            try await requestStore.markCompleted(request)
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
+    private func startReview(_ request: StayRequest) {
+        guard let role = request.reviewRole(for: authManager.userID) else { return }
+        reviewing = ReviewTarget(stay: request, role: role, subjectName: subjectName(for: request))
+    }
+
     private func guestName(for request: StayRequest) -> String {
         userProfileStore.displayName(for: request.guestUserID) ?? "FreeBNB User"
+    }
+
+    /// The other party's name, seen from the signed-in user. A guest reviews the
+    /// host by their denormalized listing name; a host reviews the guest by their
+    /// profile name.
+    private func subjectName(for request: StayRequest) -> String {
+        request.hostUserID == authManager.userID
+            ? guestName(for: request)
+            : request.listingHostName
     }
 
     // MARK: - Row builders
 
     /// Wraps an OutgoingRequestRow in a NavigationLink if the listing is cached.
     @ViewBuilder
-    private func outgoingRow(_ request: StayRequest, onCancel: (() -> Void)? = nil) -> some View {
+    private func outgoingRow(
+        _ request: StayRequest,
+        onCancel: (() -> Void)? = nil,
+        onShare: (() -> Void)? = nil,
+        onComplete: (() -> Void)? = nil
+    ) -> some View {
         if let home = listing(for: request) {
             NavigationLink { HomeDetailPage(home: home) } label: {
-                OutgoingRequestRow(request: request, onCancel: onCancel)
+                OutgoingRequestRow(request: request, onCancel: onCancel, onShare: onShare, onComplete: onComplete)
             }
         } else {
-            OutgoingRequestRow(request: request, onCancel: onCancel)
+            OutgoingRequestRow(request: request, onCancel: onCancel, onShare: onShare, onComplete: onComplete)
         }
     }
 
@@ -239,7 +369,8 @@ struct StaysTab: View {
         _ request: StayRequest,
         showActions: Bool = false,
         onAccept: (() -> Void)? = nil,
-        onDecline: (() -> Void)? = nil
+        onDecline: (() -> Void)? = nil,
+        onComplete: (() -> Void)? = nil
     ) -> some View {
         let home = listing(for: request)
         // Show the street address when the host has more than one listing so the
@@ -254,7 +385,8 @@ struct StaysTab: View {
             listingAddress: multiListing ? home.flatMap { homeStore.listingLocations[$0.id]?.street } : nil,
             showActions: showActions,
             onAccept: onAccept,
-            onDecline: onDecline
+            onDecline: onDecline,
+            onComplete: onComplete
         )
         if !showActions, let home {
             NavigationLink { HomeDetailPage(home: home) } label: { row }
@@ -268,209 +400,5 @@ struct StaysTab: View {
     /// Looks up the full Home object for a request from the cached listings.
     private func listing(for request: StayRequest) -> Home? {
         homeStore.listings.first { $0.id == request.listingID }
-    }
-}
-
-// MARK: - Outgoing row (traveler view)
-
-struct OutgoingRequestRow: View {
-    let request: StayRequest
-    var onCancel: (() -> Void)? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(request.listingHostName)
-                    .font(.headline)
-                Spacer()
-                StatusBadge(status: request.status)
-            }
-
-            Text("\(request.listingCity) · \(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            Text("\(request.nights) night\(request.nights == 1 ? "" : "s")")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            if let summary = request.partySummary {
-                Label(summary, systemImage: "person.2")
-                    .font(.caption).foregroundColor(.secondary)
-            }
-
-            if let note = request.guestNote, !note.isEmpty {
-                Text("\"\(note)\"")
-                    .font(.caption).foregroundColor(.secondary).italic().lineLimit(2)
-            }
-
-            if let note = request.hostNote, !note.isEmpty {
-                Text("Host note: \(note)")
-                    .font(.caption).foregroundColor(.secondary).lineLimit(2)
-            }
-
-            if let onCancel, request.status.isActive {
-                Button(role: .destructive, action: onCancel) {
-                    Text("Cancel request")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.secondary.opacity(0.1))
-                        .foregroundColor(.red)
-                        .cornerRadius(8)
-                }
-                .buttonStyle(.pressable)
-                .padding(.top, 4)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-// MARK: - Incoming row (host view)
-
-struct IncomingRequestRow: View {
-    let request: StayRequest
-    let guestName: String
-    /// Street address of the listing. Pass when the host has multiple listings so
-    /// the guest can see which property the request is for.
-    var listingAddress: String? = nil
-    var showActions: Bool = false
-    var onAccept:  (() -> Void)? = nil
-    var onDecline: (() -> Void)? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(guestName)
-                    .font(.headline)
-                Spacer()
-                StatusBadge(status: request.status)
-            }
-
-            if let listingAddress {
-                Text("\(request.listingCity) · \(listingAddress)")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                Text("\(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            } else {
-                Text("\(request.listingCity) · \(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-
-            Text("\(request.nights) night\(request.nights == 1 ? "" : "s")")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            if let summary = request.partySummary {
-                Label(summary, systemImage: "person.2")
-                    .font(.caption).foregroundColor(.secondary)
-            }
-
-            if let note = request.guestNote, !note.isEmpty {
-                Text("\"\(note)\"")
-                    .font(.caption).foregroundColor(.secondary).italic().lineLimit(2)
-            }
-
-            if let note = request.hostNote, !note.isEmpty {
-                Text("Your note: \(note)")
-                    .font(.caption).foregroundColor(.secondary).lineLimit(2)
-            }
-
-            if showActions {
-                HStack(spacing: 12) {
-                    Button(action: { onDecline?() }) {
-                        Text("Decline")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(Color.secondary.opacity(0.1))
-                            .foregroundColor(.primary)
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(.pressable)
-
-                    Button(action: { onAccept?() }) {
-                        Text("Accept")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(Color.accent)
-                            .foregroundColor(.onAccent)
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(.pressable)
-                }
-                .padding(.top, 4)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-// MARK: - Status badge
-
-struct StatusBadge: View {
-    let status: StayRequestStatus
-
-    var body: some View {
-        Text(status.displayName)
-            .font(.caption)
-            .fontWeight(.medium)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(badgeColor.opacity(0.15))
-            .foregroundColor(badgeColor)
-            .clipShape(Capsule())
-    }
-
-    private var badgeColor: Color {
-        switch status {
-        case .pending:   return .orange
-        case .accepted:  return .green
-        case .declined:  return .secondary
-        case .cancelled: return .secondary
-        }
-    }
-}
-
-// MARK: - Accept sheet (lets host add an optional note)
-
-struct AcceptSheet: View {
-    let request: StayRequest
-    let onConfirm: (String?) async -> Void
-
-    @State private var note = ""
-    @State private var isConfirming = false
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Add a note (optional)") {
-                    TextField("Anything the guest should know...", text: $note, axis: .vertical)
-                        .lineLimit(2...6)
-                }
-            }
-            .navigationTitle("Accept Request")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.disabled(isConfirming)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Accept") {
-                        isConfirming = true
-                        Task {
-                            let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                            await onConfirm(trimmed.isEmpty ? nil : trimmed)
-                            isConfirming = false
-                        }
-                    }
-                    .disabled(isConfirming)
-                }
-            }
-            .disabled(isConfirming)
-        }
     }
 }
