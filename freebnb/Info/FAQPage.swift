@@ -44,7 +44,7 @@ struct FAQPage: View {
         FAQItem(
             question: "Can I browse and message hosts without creating an account?",
             // swiftlint:disable:next line_length
-            answer: "Yes. When you tap \"Continue as Guest\", FreeBNB quietly creates an invisible account for you behind the scenes with a random ID. You never have to pick a username or password. That ID is saved on your device, so your messages and session persist across app opens. Messages you send are tied to that ID, and if a host replies, you'll see it in real time. The only limitation is that your guest ID is device-specific: if you switch phones or reinstall the app, you'll get a new ID and won't be able to recover your old messages."
+            answer: "No. Every host on FreeBNB is someone you know, so every guest needs to be someone identifiable too — FreeBNB uses Sign in with Apple for every account, with no anonymous browsing."
         )
     ]
 

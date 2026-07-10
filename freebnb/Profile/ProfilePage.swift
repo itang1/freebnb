@@ -165,12 +165,17 @@ struct ProfilePage: View {
                 .padding(.bottom, 20)
 
                 // Only offered when the app is pointed at the Auth emulator, so the
-                // seeded credential is never sent to the production project.
+                // seeded credentials are never sent to the production project.
                 #if DEBUG
                 if EmulatorEnvironment.isActive {
                     sectionLabel("Dev")
                     VStack(spacing: 0) {
-                        SettingsRow(icon: "envelope", label: "Sign in as dev@freebnb.test",
+                        SettingsRow(icon: "person.fill.questionmark", label: "Sign in as guest",
+                                    accessibilityID: "profile.guestSignInButton") {
+                            authManager.signInWithEmail("guest@freebnb.test", password: "***REDACTED***")
+                        }
+                        rowDivider
+                        SettingsRow(icon: "hammer.fill", label: "Sign in as devna",
                                     accessibilityID: "profile.devSignInButton") {
                             authManager.signInWithEmail("dev@freebnb.test", password: "***REDACTED***")
                         }

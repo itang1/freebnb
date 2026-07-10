@@ -62,13 +62,20 @@ const now = admin.firestore.FieldValue.serverTimestamp();
 // into the private profile; omitted means an empty list. They let the seed mimic
 // a lived-in account (bookmarks, a block) rather than a pristine one.
 //
-// The dev account matches the DEBUG "Sign in as dev@freebnb.test" button
-// (ProfilePage). seedFriendEdges makes it an accepted friend of every other
-// seed user (S1), so it can browse friends-only listings while testing; those
-// listings also name it in allowedViewerIDs so the rules let it through.
+// The dev and guest-tester accounts match the DEBUG-only "Sign in as devna" /
+// "Sign in as guest" buttons (WelcomePage, ProfilePage). Both are real,
+// persistent seed users rather than throwaway anonymous Auth accounts, so
+// "browsing without an account" never creates a real account connected to
+// nobody — it signs into a fixed account connected only to the SpongeBob
+// cast. seedFriendEdges makes each an accepted friend of every other seed
+// user (S1), so both can browse friends-only listings while testing; those
+// listings also name them in allowedViewerIDs so the rules let them through.
 const DEV_UID = "seed-dev-tester";
+const GUEST_UID = "seed-guest-tester";
+const TEST_ACCOUNT_UIDS = [DEV_UID, GUEST_UID];
 const users = [
-  { uid: DEV_UID, email: "dev@freebnb.test", password: "***REDACTED***", displayName: "Dev Tester" },
+  { uid: DEV_UID, email: "dev@freebnb.test", password: "***REDACTED***", displayName: "Devna" },
+  { uid: GUEST_UID, email: "guest@freebnb.test", password: "***REDACTED***", displayName: "Guesta" },
   { uid: "seed-host-spongebob", email: "spongebob@seed.freebnb.test", password: "***REDACTED***", displayName: "SpongeBob SquarePants" },
   { uid: "seed-host-sandy", email: "sandy@seed.freebnb.test", password: "***REDACTED***", displayName: "Sandy Cheeks", savedListingIDs: ["seed-home-squidward-2"] },
   { uid: "seed-host-squidward", email: "squidward@seed.freebnb.test", password: "***REDACTED***", displayName: "Squidward Tentacles" },
@@ -252,7 +259,7 @@ const homes = [
     amenities: sparseAmenities,
     cancellationPolicy: "strict",
     visibility: "friendsOnly",
-    allowedViewerIDs: ["seed-host-plankton", "seed-guest-patrick", DEV_UID]
+    allowedViewerIDs: ["seed-host-plankton", "seed-guest-patrick", ...TEST_ACCOUNT_UIDS]
   },
   {
     id: "seed-home-spongebob-2",
@@ -286,7 +293,7 @@ const homes = [
     amenities,
     cancellationPolicy: "moderate",
     visibility: "friendsOnly",
-    allowedViewerIDs: ["seed-host-sandy", "seed-guest-patrick", DEV_UID]
+    allowedViewerIDs: ["seed-host-sandy", "seed-guest-patrick", ...TEST_ACCOUNT_UIDS]
   },
   {
     id: "seed-home-squidward-2",
@@ -594,13 +601,18 @@ const explicitFriendEdges = [
     friendEdge("seed-host-pearl", "seed-guest-patrick", "pending", "seed-host-pearl")
 ];
 
-// S1: the dev account is an accepted friend of every other seed user, so it can
-// see every friends-only listing while testing.
-const devFriendEdges = users
-  .filter((u) => u.uid !== DEV_UID)
-  .map((u) => friendEdge(DEV_UID, u.uid, "accepted", DEV_UID));
+// S1: each test account (dev, guest-tester) is an accepted friend of every
+// other seed user, so both can see every friends-only listing while testing.
+// Neither is ever a friend of a real (non-seed) user — that's the whole point
+// of replacing anonymous "browse without an account" with a fixed guest
+// persona: it's connected only to the SpongeBob cast, never to real people.
+const testAccountFriendEdges = TEST_ACCOUNT_UIDS.flatMap((testUID) =>
+  users
+    .filter((u) => u.uid !== testUID)
+    .map((u) => friendEdge(testUID, u.uid, "accepted", testUID))
+);
 
-const friendEdges = [...explicitFriendEdges, ...devFriendEdges];
+const friendEdges = [...explicitFriendEdges, ...testAccountFriendEdges];
 
 async function seedFriendEdges() {
   for (const edge of friendEdges) {

@@ -18,7 +18,6 @@ enum AuthError: LocalizedError, Equatable {
     case cancelled
     case invalidToken
     case signInFailed
-    case guestFailed
     case deleteFailed
     case reauthRequired
     case nonceGenerationFailed
@@ -28,7 +27,6 @@ enum AuthError: LocalizedError, Equatable {
         case .cancelled:             return nil
         case .invalidToken:          return "Sign in returned an invalid token."
         case .signInFailed:          return "Sign in failed. Please try again."
-        case .guestFailed:           return "Could not continue as guest. Please try again."
         case .deleteFailed:          return "Could not delete account. Please try again."
         case .reauthRequired:        return "Please sign in again to delete your account."
         case .nonceGenerationFailed: return "Could not prepare sign in. Please try again."
@@ -63,13 +61,22 @@ final class AuthManager {
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
+    // The seeded guest-tester account's fixed uid (scripts/seed_test_data.js),
+    // signed into via the DEBUG-only "Sign in as guest" button. Recognizing it
+    // here — rather than deriving `.guest` purely from `isAnonymous` — lets
+    // that button exercise the same restricted guest UI a true anonymous
+    // session used to, without the app ever creating disposable, unconnected
+    // Firebase Auth users. No real Sign in with Apple uid can ever equal this
+    // fixed string, so the check is harmless outside DEBUG.
+    static let guestTesterUID = "seed-guest-tester"
+
     // MARK: - Single source of truth
 
     private func applyAuthState(_ user: User?) {
         if let user {
             userID     = user.uid
             userEmail  = user.email ?? ""
-            authMethod = user.isAnonymous ? .guest : .apple
+            authMethod = (user.isAnonymous || user.uid == Self.guestTesterUID) ? .guest : .apple
             isSignedIn = true
         } else {
             userID     = ""
@@ -153,27 +160,11 @@ final class AuthManager {
         }
     }
 
-    // MARK: - Guest
-
-    func continueAsGuest() {
-        Task { @MainActor in
-            isLoading = true
-            defer { isLoading = false }
-            do {
-                _ = try await Auth.auth().signInAnonymously()
-                Telemetry.log(.signInCompleted, parameters: ["method": "guest"])
-            } catch {
-                log.error("anonymous sign in failed: \(error.localizedDescription, privacy: .public)")
-                Telemetry.log(.signInFailed, parameters: ["method": "guest"])
-                authError = .guestFailed
-            }
-        }
-    }
-
     // MARK: - Debug sign-in (emulator only)
 
     #if DEBUG
-    /// Email/password sign-in for the seeded development accounts.
+    /// Email/password sign-in for the seeded development accounts (devna, the
+    /// guest tester).
     ///
     /// Compile-gated to DEBUG *and* refused unless this process is pointed at the
     /// Auth emulator. A hardcoded credential that only ever reaches localhost is
