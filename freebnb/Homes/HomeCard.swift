@@ -6,6 +6,7 @@
 import SwiftUI
 
 @ViewBuilder
+// swiftlint:disable:next identifier_name
 private func AmenityRow<Content: View>(
     isVisible: Bool,
     @ViewBuilder content: () -> Content

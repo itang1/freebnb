@@ -43,3 +43,10 @@ identifier_name:
     - id
     - to
     - db
+
+# Xcode names the UI test target and its generated launch-test class after the
+# (intentionally lowercase) product name "freebnb", not a type-style capital.
+type_name:
+  excluded:
+    - freebnbUITests
+    - freebnbUITestsLaunchTests

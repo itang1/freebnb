@@ -332,6 +332,13 @@ struct HomeDetailPage: View {
             if let saveError { Text(saveError) }
         }
     }
+}
+
+// Kept as an extension in the same file (not a separate one) so these stay
+// under SwiftLint's type_body_length cap without losing access to the
+// struct's `private` state — private is file-scoped, so same-file
+// extensions still see it.
+extension HomeDetailPage {
 
     // MARK: - Trust signals
 
@@ -549,7 +556,6 @@ struct HomeDetailPage: View {
         .accessibilityElement(children: .combine)
     }
 }
-
 
 #Preview {
     NavigationStack {
