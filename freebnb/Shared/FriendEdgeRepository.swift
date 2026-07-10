@@ -25,11 +25,18 @@ protocol FriendEdgeRepository: Sendable {
     func createEdge(_ edge: FriendEdge) async throws
     func updateStatus(edgeID: String, status: FriendStatus) async throws
     func deleteEdge(edgeID: String) async throws
+    /// Friends-of-friends ranked by shared-friend count, computed by the
+    /// `suggestFriends` callable (the graph can't be traversed client-side).
+    func fetchSuggestions() async throws -> [FriendSuggestion]
 }
 
 struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
     private let db: Firestore
-    init(db: Firestore = .firestore()) { self.db = db }
+    private let functions: Functions
+    init(db: Firestore = .firestore(), functions: Functions = .functions()) {
+        self.db = db
+        self.functions = functions
+    }
 
     func listenToEdges(
         userID: String,
@@ -72,6 +79,18 @@ struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
     func deleteEdge(edgeID: String) async throws {
         try await withRetry { [db] in
             try await db.collection(FirestorePaths.friendEdges).document(edgeID).delete()
+        }
+    }
+
+    func fetchSuggestions() async throws -> [FriendSuggestion] {
+        let result = try await functions.httpsCallable("suggestFriends").call()
+        guard let data = result.data as? [String: Any],
+              let raw = data["suggestions"] as? [[String: Any]] else { return [] }
+        return raw.compactMap { dict in
+            guard let userID = dict["userID"] as? String,
+                  let displayName = dict["displayName"] as? String else { return nil }
+            let mutual = (dict["mutualCount"] as? NSNumber)?.intValue ?? 0
+            return FriendSuggestion(userID: userID, displayName: displayName, mutualCount: mutual)
         }
     }
 }

@@ -319,4 +319,6 @@ final class InMemoryFriendEdgeRepository: FriendEdgeRepository, @unchecked Senda
     func deleteEdge(edgeID: String) async throws {
         edges.removeValue(forKey: edgeID)
     }
+
+    func fetchSuggestions() async throws -> [FriendSuggestion] { [] }
 }
