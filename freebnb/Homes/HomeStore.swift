@@ -367,19 +367,23 @@ final class HomeStore {
         try await save(updated)
     }
 
+    /// Uploads in parallel but returns the URLs in the order the images were given.
+    /// A task group yields results as they finish, so appending them as they arrive
+    /// would order a listing's photos by upload speed — and `photoURLs[0]` is the
+    /// card's cover image, which the host chose deliberately.
     private func uploadImages(_ images: [Data], for home: Home) async throws -> [URL] {
         let uploader = photoUploader
         let listingID = home.id
         let hostUserID = home.hostUserID
-        return try await withThrowingTaskGroup(of: URL.self) { group in
-            for data in images {
+        return try await withThrowingTaskGroup(of: (offset: Int, url: URL).self) { group in
+            for (offset, data) in images.enumerated() {
                 group.addTask {
-                    try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID)
+                    (offset, try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID))
                 }
             }
-            var urls: [URL] = []
-            for try await url in group { urls.append(url) }
-            return urls
+            var urls = [URL?](repeating: nil, count: images.count)
+            for try await (offset, url) in group { urls[offset] = url }
+            return urls.compactMap { $0 }
         }
     }
 
