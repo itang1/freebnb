@@ -30,6 +30,8 @@ enum FirestorePaths {
     // Well-known document ids
     /// The listing's private street address: `homes/{id}/private/location`.
     static let locationDocID = "location"
+    /// The listing's private house manual: `homes/{id}/private/manual`.
+    static let manualDocID = "manual"
     /// The user's private profile: `users/{uid}/private/profile`.
     static let profileDocID = "profile"
 }

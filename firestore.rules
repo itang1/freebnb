@@ -250,11 +250,35 @@ service cloud.firestore {
           && resource.data.hostUserID == request.auth.uid;
 
       // -----------------------------------------------------------------------
-      // Exact location — the street address and unrounded coordinates.
-      // Readable by the host, and by a guest whose stay the host has accepted.
-      // Never world-readable: the public listing document carries city/state/zip
-      // and a coordinate rounded to roughly a kilometre.
+      // Progressively-disclosed listing data. Two documents live here:
+      //   - `location`: the exact street address and unrounded coordinates.
+      //   - `manual`:   the host's check-in guide (feature 15).
+      // Both are readable by the host and by a guest whose stay the host has
+      // accepted, and never world-readable — the public listing document carries
+      // only city/state/zip and a coordinate rounded to roughly a kilometre.
       // -----------------------------------------------------------------------
+      function isValidLocation(data) {
+        return data.keys().hasOnly(['street', 'latitude', 'longitude'])
+            && data.street is string
+            && data.street.size() > 0
+            && data.street.size() < 300
+            && (isUnset(data, 'latitude') || data.latitude is number)
+            && (isUnset(data, 'longitude') || data.longitude is number);
+      }
+      // Every field the HouseManual model encodes; all optional free text with
+      // size caps so the document can't be stuffed toward the 1 MiB limit.
+      function isValidManual(data) {
+        return data.keys().hasOnly([
+                 'checkInInstructions', 'wifiNetwork', 'wifiPassword',
+                 'keyHandoff', 'houseNotes', 'hostPhone'
+               ])
+            && isOptionalString(data, 'checkInInstructions', 2000)
+            && isOptionalString(data, 'wifiNetwork', 200)
+            && isOptionalString(data, 'wifiPassword', 200)
+            && isOptionalString(data, 'keyHandoff', 2000)
+            && isOptionalString(data, 'houseNotes', 2000)
+            && isOptionalString(data, 'hostPhone', 40);
+      }
       match /private/{docID} {
         allow read: if isSignedIn()
             && (isListingHost(homeID)
@@ -262,14 +286,8 @@ service cloud.firestore {
 
         allow create, update: if isFullMember()
             && isListingHost(homeID)
-            && request.resource.data.keys().hasOnly(['street', 'latitude', 'longitude'])
-            && request.resource.data.street is string
-            && request.resource.data.street.size() > 0
-            && request.resource.data.street.size() < 300
-            && (isUnset(request.resource.data, 'latitude')
-                || request.resource.data.latitude is number)
-            && (isUnset(request.resource.data, 'longitude')
-                || request.resource.data.longitude is number);
+            && ((docID == 'location' && isValidLocation(request.resource.data))
+                || (docID == 'manual' && isValidManual(request.resource.data)));
 
         allow delete: if isFullMember() && isListingHost(homeID);
       }

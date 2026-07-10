@@ -22,6 +22,10 @@ struct HomeDetailPage: View {
     /// a blurred coordinate.
     @State private var exactLocation: ListingLocation?
     @State private var isExactCoordinate = false
+    /// The host's house manual, loaded only once disclosure resolves (host or
+    /// accepted guest). nil while loading or when none exists / not entitled.
+    @State private var houseManual: HouseManual?
+    @State private var showManualEditor = false
     @State private var showReport = false
     @State private var showBlockConfirm = false
     // Bridge @Observable → @State so the toolbar re-renders reliably.
@@ -32,6 +36,27 @@ struct HomeDetailPage: View {
         case loading
         case loaded
         case failed
+    }
+
+    private var isHost: Bool { authManager.userID == home.hostUserID }
+
+    /// The viewer's own confirmed stay at this listing, if any — drives the
+    /// guest-facing logistics card.
+    private var acceptedStay: StayRequest? {
+        requestStore.outgoingRequests.first {
+            $0.listingID == home.id && $0.status == .accepted
+        }
+    }
+
+    /// Host sees the manual editor entry point; an accepted guest sees their
+    /// confirmed-stay card. Everyone else sees nothing here.
+    @ViewBuilder
+    private var stayLogisticsSection: some View {
+        if isHost {
+            HouseManualHostCard(manual: houseManual) { showManualEditor = true }
+        } else if let stay = acceptedStay {
+            StayLogisticsCard(stay: stay, home: home, manual: houseManual, location: exactLocation)
+        }
     }
 
     var body: some View {
@@ -55,6 +80,8 @@ struct HomeDetailPage: View {
 
                     hostTrustSignals
                 }
+
+                stayLogisticsSection
 
                 // MARK: Details
                 Text("Details")
@@ -230,6 +257,12 @@ struct HomeDetailPage: View {
         .task {
             exactLocation = await homeStore.location(for: home.id)
             await resolveMapLocation()
+            // The manual shares the location's accepted-guest gate, so only fetch
+            // it once the viewer is entitled: the host, or a guest whose stay was
+            // accepted (a disclosed address is the same entitlement).
+            if isHost || acceptedStay != nil || exactLocation != nil {
+                houseManual = await homeStore.manual(for: home.id)
+            }
         }
         .onChange(of: userProfileStore.currentProfile?.savedListingIDs) { _, _ in
             isListingSaved = userProfileStore.isSaved(home.id)
@@ -265,6 +298,10 @@ struct HomeDetailPage: View {
         }
         .sheet(isPresented: $showReport) {
             ReportSheet(targetType: .listing, targetID: home.id, targetName: "\(home.hostName)'s listing in \(home.address.city)")
+        }
+        .sheet(isPresented: $showManualEditor) {
+            HouseManualEditorView(homeID: home.id)
+                .environment(homeStore)
         }
         .confirmationDialog(
             userProfileStore.isBlocked(home.hostUserID)

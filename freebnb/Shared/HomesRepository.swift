@@ -46,6 +46,11 @@ protocol HomesRepository: Sendable {
     /// split and has no such document.
     func fetchLocation(homeID: String) async throws -> ListingLocation?
     func saveLocation(homeID: String, location: ListingLocation) async throws
+    /// The host-authored house manual, gated by the same accepted-guest rule as
+    /// the location. Returns nil when the caller isn't entitled to it or none
+    /// has been written.
+    func fetchManual(homeID: String) async throws -> HouseManual?
+    func saveManual(homeID: String, manual: HouseManual) async throws
 }
 
 /// The feed's canonical order: newest first, with document id descending as a
@@ -320,6 +325,20 @@ struct FirestoreHomesRepository: HomesRepository {
             try FirestorePaths.listingLocation(db, homeID: homeID).setData(from: location)
         }
     }
+
+    func fetchManual(homeID: String) async throws -> HouseManual? {
+        try await withRetry { [db] in
+            let snap = try await FirestorePaths.listingManual(db, homeID: homeID).getDocument()
+            guard snap.exists else { return nil }
+            return try snap.data(as: HouseManual.self)
+        }
+    }
+
+    func saveManual(homeID: String, manual: HouseManual) async throws {
+        try await withRetry { [db] in
+            try FirestorePaths.listingManual(db, homeID: homeID).setData(from: manual)
+        }
+    }
 }
 
 /// The two subcollection paths that implement progressive address disclosure.
@@ -328,6 +347,12 @@ struct FirestoreHomesRepository: HomesRepository {
 extension FirestorePaths {
     static func listingLocation(_ db: Firestore, homeID: String) -> DocumentReference {
         db.collection(FirestorePaths.homes).document(homeID).collection(FirestorePaths.privateCollection).document(FirestorePaths.locationDocID)
+    }
+
+    /// The listing's private house manual, sharing the accepted-guest visibility
+    /// gate with the location document.
+    static func listingManual(_ db: Firestore, homeID: String) -> DocumentReference {
+        db.collection(FirestorePaths.homes).document(homeID).collection(FirestorePaths.privateCollection).document(FirestorePaths.manualDocID)
     }
 
     /// Marker document whose mere existence grants `guestUserID` read access to
