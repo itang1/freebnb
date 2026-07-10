@@ -11,6 +11,7 @@ import SwiftUI
 enum FilterCategory: String, CaseIterable {
     case host = "Host"
     case guestsAndSpace = "Guests & Space"
+    case accessibility = "Accessibility"
     case amenities = "Amenities"
     case roomsAndLaundry = "Rooms & Laundry"
     case provisions = "Provisions"
@@ -70,9 +71,20 @@ extension FilterOption {
         // Guests & Space
         FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.sleeping.numGuestRooms > 0 },
         FilterOption(id: "sleepingBed", label: "Guest has Bed", category: .guestsAndSpace) { ($0.sleeping.sleepingCounts[.bed] ?? 0) > 0 },
+        // A listing that never recorded a bed size matches neither of these. It
+        // cannot support the claim, and a guest who filters for a queen has said
+        // plainly that a maybe is not good enough (feature 17).
+        FilterOption(id: "bedForTwo", label: "Queen or King Bed", category: .guestsAndSpace) { $0.sleeping.hasBedForTwo },
+        FilterOption(id: "twoBathrooms", label: "2+ Bathrooms", category: .guestsAndSpace) { $0.sleeping.numBathrooms >= 2 },
         .bool("kidsAllowed", "Kids Allowed", .guestsAndSpace, \.guestPolicy.kidsAllowed),
         .bool("guestPetsAllowed", "Guest Can Bring Pets", .guestsAndSpace, \.guestPolicy.guestPetsAllowed),
         .bool("hostHasPets", "Host Has Pets", .guestsAndSpace, \.amenities.hostHasPets),
+
+        // Accessibility. Each is a claim the host made, so an absent one filters
+        // the listing out rather than admitting it on a guess.
+        .bool("stepFreeEntry", "Step-free Entry", .accessibility, \.amenities.hasStepFreeEntry),
+        .bool("elevator", "Elevator", .accessibility, \.amenities.hasElevator),
+        .bool("accessibleBathroom", "Accessible Bathroom", .accessibility, \.amenities.hasAccessibleBathroom),
 
         // Amenities
         .bool("ac", "Air Conditioning", .amenities, \.amenities.hasAC),

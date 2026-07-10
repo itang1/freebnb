@@ -92,26 +92,35 @@ const users = [
   { uid: "seed-guest-barnacleboy", email: "barnacleboy@seed.freebnb.test", password: "***REDACTED***", displayName: "Barnacle Boy" }
 ];
 
+// The accessibility trio (feature 17) is false here on purpose: most hosts have
+// not answered, and `false` means "did not say", never "said no". Seeding it true
+// everywhere would make the accessibility filters look like they match anything.
 const amenities = {
   hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
   hasMicrowave: true, hasTV: false, hasWifi: true,
   hasPrivateGuestBathroom: true, hostHasPets: false, parkingDetails: "Street parking",
   hasInUnitLaundry: true, hasCoinLaundryNearby: false,
   providesPillows: true, providesBlankets: true, providesTowels: true,
-  providesToiletries: false, foodProvision: "some"
+  providesToiletries: false, foodProvision: "some",
+  hasStepFreeEntry: false, hasElevator: false, hasAccessibleBathroom: false
 };
 
 // A cozier, fully-stocked variant: TV, all meals, toiletries, coin laundry nearby.
+// Also the ground-floor, step-free listing, so the accessibility filters have
+// something to return in the demo.
 const cozyAmenities = {
   ...amenities, hasTV: true, hasInUnitLaundry: false, hasCoinLaundryNearby: true,
-  providesToiletries: true, foodProvision: "all", parkingDetails: "Driveway parking"
+  providesToiletries: true, foodProvision: "all", parkingDetails: "Driveway parking",
+  hasStepFreeEntry: true, hasAccessibleBathroom: true
 };
 
 // A bare-bones variant: no AC, shared bathroom, bring-your-own-everything.
+// An upper-floor apartment: there is an elevator, and nothing else is claimed.
 const sparseAmenities = {
   ...amenities, hasAC: false, hasPrivateGuestBathroom: false, hasInUnitLaundry: false,
   hasCoinLaundryNearby: true, providesTowels: false, providesToiletries: false,
-  foodProvision: "bareMinimum", parkingDetails: "No parking"
+  foodProvision: "bareMinimum", parkingDetails: "No parking",
+  hasElevator: true
 };
 
 // `address` is the world-readable part only, and `allowedViewerIDs` is the read
@@ -135,7 +144,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "eager",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 }, numBathrooms: 1, bedSizes: { queen: 1 } },
     guestPolicy: { maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "flexible",
@@ -152,7 +161,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "open",
-    sleeping: { numGuestRooms: 1, arrangements: { couch: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { couch: 1 }, numBathrooms: 1 },
     guestPolicy: { maxGuests: 1, maxStayDays: 3, kidsAllowed: false, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "moderate",
@@ -169,7 +178,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "selective",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 }, numBathrooms: 2, bedSizes: { king: 1 } },
     guestPolicy: { maxGuests: 1, maxStayDays: 4, kidsAllowed: false, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "strict",
@@ -186,7 +195,7 @@ const homes = [
     contactPreference: "contactInfo",
     hostContactInfo: "Call the Krusty Krab and ask for Mr. Krabs",
     hostMotivation: "open",
-    sleeping: { numGuestRooms: 2, arrangements: { bed: 1, futon: 1 } },
+    sleeping: { numGuestRooms: 2, arrangements: { bed: 1, futon: 1 }, numBathrooms: 2, bedSizes: { queen: 1 } },
     guestPolicy: { maxGuests: 3, maxStayDays: 5, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "strict",
@@ -203,7 +212,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "eager",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1, airMattress: 2 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1, airMattress: 2 }, numBathrooms: 1, bedSizes: { full: 1 } },
     guestPolicy: { maxGuests: 4, maxStayDays: 3, kidsAllowed: true, guestPetsAllowed: true },
     amenities: cozyAmenities,
     cancellationPolicy: "flexible",
@@ -237,7 +246,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "open",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 }, numBathrooms: 1, bedSizes: { queen: 1 } },
     guestPolicy: { maxGuests: 1, maxStayDays: 10, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "flexible",
@@ -271,7 +280,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "eager",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1, couch: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1, couch: 1 }, numBathrooms: 1, bedSizes: { twin: 1 } },
     guestPolicy: { maxGuests: 3, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: true },
     amenities: cozyAmenities,
     cancellationPolicy: "flexible",
@@ -288,7 +297,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "open",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 }, numBathrooms: 1, bedSizes: { queen: 1 } },
     guestPolicy: { maxGuests: 2, maxStayDays: 5, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "moderate",
@@ -309,7 +318,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "selective",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 }, numBathrooms: 2, bedSizes: { king: 1 } },
     guestPolicy: { maxGuests: 1, maxStayDays: 4, kidsAllowed: false, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "strict",
@@ -326,7 +335,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "open",
-    sleeping: { numGuestRooms: 2, arrangements: { bed: 2 } },
+    sleeping: { numGuestRooms: 2, arrangements: { bed: 2 }, numBathrooms: 2, bedSizes: { queen: 1, twin: 1 } },
     guestPolicy: { maxGuests: 4, maxStayDays: 6, kidsAllowed: true, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "moderate",
@@ -343,7 +352,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "open",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 }, bedSizes: { full: 1 } },
     guestPolicy: { maxGuests: 2, maxStayDays: 5, kidsAllowed: false, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "moderate",
@@ -360,7 +369,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "selective",
-    sleeping: { numGuestRooms: 3, arrangements: { bed: 3 } },
+    sleeping: { numGuestRooms: 3, arrangements: { bed: 3 }, numBathrooms: 3, bedSizes: { queen: 2, king: 1 } },
     guestPolicy: { maxGuests: 6, maxStayDays: 4, kidsAllowed: true, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "strict",
@@ -377,7 +386,7 @@ const homes = [
     contactPreference: "inApp",
     hostContactInfo: null,
     hostMotivation: "eager",
-    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 } },
+    sleeping: { numGuestRooms: 1, arrangements: { bed: 1 }, numBathrooms: 1, bedSizes: { queen: 1 } },
     guestPolicy: { maxGuests: 1, maxStayDays: 14, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "flexible",

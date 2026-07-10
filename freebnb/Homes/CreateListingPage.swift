@@ -24,9 +24,11 @@ final class CreateListingViewModel {
 
     // Capacity
     var numGuestRooms: Int
+    var numBathrooms: Int
     var maxGuests: Int
     var maxStayDays: Int
     var sleepingCounts: [SleepingSurface: Int]
+    var bedSizeCounts: [BedSize: Int]
     var kidsAllowed: Bool
     var guestPetsAllowed: Bool
     var hostHasPets: Bool
@@ -45,6 +47,11 @@ final class CreateListingViewModel {
     var parkingDetails: String
     var hasInUnitLaundry: Bool
     var hasCoinLaundryNearby: Bool
+
+    // Accessibility
+    var hasStepFreeEntry: Bool
+    var hasElevator: Bool
+    var hasAccessibleBathroom: Bool
 
     // Provisions
     var providesPillows: Bool
@@ -84,9 +91,11 @@ final class CreateListingViewModel {
         stateField = source?.address.state ?? ""
         zip = source?.address.zip ?? ""
         numGuestRooms = source?.sleeping.numGuestRooms ?? 1
+        numBathrooms = source?.sleeping.numBathrooms ?? 0
         maxGuests = source?.guestPolicy.maxGuests ?? 2
         maxStayDays = source?.guestPolicy.maxStayDays ?? 7
         sleepingCounts = source?.sleeping.sleepingCounts ?? [:]
+        bedSizeCounts = source?.sleeping.bedSizeCounts ?? [:]
         kidsAllowed = source?.guestPolicy.kidsAllowed ?? true
         guestPetsAllowed = source?.guestPolicy.guestPetsAllowed ?? false
         hostHasPets = source?.amenities.hostHasPets ?? false
@@ -101,6 +110,9 @@ final class CreateListingViewModel {
         parkingDetails = source?.amenities.parkingDetails ?? ""
         hasInUnitLaundry = source?.amenities.hasInUnitLaundry ?? false
         hasCoinLaundryNearby = source?.amenities.hasCoinLaundryNearby ?? false
+        hasStepFreeEntry = source?.amenities.hasStepFreeEntry ?? false
+        hasElevator = source?.amenities.hasElevator ?? false
+        hasAccessibleBathroom = source?.amenities.hasAccessibleBathroom ?? false
         providesPillows = source?.amenities.providesPillows ?? false
         providesBlankets = source?.amenities.providesBlankets ?? false
         providesTowels = source?.amenities.providesTowels ?? false
@@ -137,9 +149,11 @@ final class CreateListingViewModel {
             draft.state = stateField
             draft.zip = zip
             draft.numGuestRooms = numGuestRooms
+            draft.numBathrooms = numBathrooms
             draft.maxGuests = maxGuests
             draft.maxStayDays = maxStayDays
             draft.sleepingCounts = sleepingCounts
+            draft.bedSizeCounts = bedSizeCounts
             draft.kidsAllowed = kidsAllowed
             draft.guestPetsAllowed = guestPetsAllowed
             draft.hostHasPets = hostHasPets
@@ -154,6 +168,9 @@ final class CreateListingViewModel {
             draft.parkingDetails = parkingDetails
             draft.hasInUnitLaundry = hasInUnitLaundry
             draft.hasCoinLaundryNearby = hasCoinLaundryNearby
+            draft.hasStepFreeEntry = hasStepFreeEntry
+            draft.hasElevator = hasElevator
+            draft.hasAccessibleBathroom = hasAccessibleBathroom
             draft.providesPillows = providesPillows
             draft.providesBlankets = providesBlankets
             draft.providesTowels = providesTowels
@@ -173,9 +190,11 @@ final class CreateListingViewModel {
             stateField = newValue.state
             zip = newValue.zip
             numGuestRooms = newValue.numGuestRooms
+            numBathrooms = newValue.numBathrooms
             maxGuests = newValue.maxGuests
             maxStayDays = newValue.maxStayDays
             sleepingCounts = newValue.sleepingCounts
+            bedSizeCounts = newValue.bedSizeCounts
             kidsAllowed = newValue.kidsAllowed
             guestPetsAllowed = newValue.guestPetsAllowed
             hostHasPets = newValue.hostHasPets
@@ -190,6 +209,9 @@ final class CreateListingViewModel {
             parkingDetails = newValue.parkingDetails
             hasInUnitLaundry = newValue.hasInUnitLaundry
             hasCoinLaundryNearby = newValue.hasCoinLaundryNearby
+            hasStepFreeEntry = newValue.hasStepFreeEntry
+            hasElevator = newValue.hasElevator
+            hasAccessibleBathroom = newValue.hasAccessibleBathroom
             providesPillows = newValue.providesPillows
             providesBlankets = newValue.providesBlankets
             providesTowels = newValue.providesTowels
@@ -262,6 +284,12 @@ final class CreateListingViewModel {
         let sleepingRaw = sleepingCounts.reduce(into: [String: Int]()) { acc, pair in
             acc[pair.key.rawValue] = pair.value
         }
+        // Bed sizes describe the beds in `sleepingRaw`, so they are dropped along
+        // with the beds. Leaving "1 queen" on a listing whose last bed just became
+        // a couch would be a claim the arrangements contradict (feature 17).
+        let bedSizesRaw = (sleepingCounts[.bed] ?? 0) > 0
+            ? bedSizeCounts.reduce(into: [String: Int]()) { acc, pair in acc[pair.key.rawValue] = pair.value }
+            : [:]
 
         var home = Home(
             hostUserID: hostUserID,
@@ -278,7 +306,9 @@ final class CreateListingViewModel {
             hostMotivation: hostMotivation,
             sleeping: Sleeping(
                 numGuestRooms: numGuestRooms,
-                arrangements: sleepingRaw
+                arrangements: sleepingRaw,
+                numBathrooms: numBathrooms,
+                bedSizes: bedSizesRaw
             ),
             guestPolicy: GuestPolicy(
                 maxGuests: maxGuests,
@@ -303,7 +333,10 @@ final class CreateListingViewModel {
                 providesBlankets: providesBlankets,
                 providesTowels: providesTowels,
                 providesToiletries: providesToiletries,
-                foodProvision: foodProvision
+                foodProvision: foodProvision,
+                hasStepFreeEntry: hasStepFreeEntry,
+                hasElevator: hasElevator,
+                hasAccessibleBathroom: hasAccessibleBathroom
             ),
             cancellationPolicy: cancellationPolicy
         )
@@ -401,7 +434,9 @@ struct CreateListingPage: View {
                 locationSection
                 capacitySection
                 sleepingSection
+                bedSizesSection
                 guestsAndPetsSection
+                accessibilitySection
                 amenitiesSection
                 roomsAndLaundrySection
                 provisionsSection
@@ -497,6 +532,13 @@ struct CreateListingPage: View {
     private var capacitySection: some View {
         Section("Capacity") {
             Stepper("Guest rooms: \(vm.numGuestRooms)", value: $vm.numGuestRooms, in: 0...10)
+            Stepper(
+                vm.numBathrooms == 0
+                    ? "Bathrooms: not specified"
+                    : "Bathrooms: \(vm.numBathrooms)",
+                value: $vm.numBathrooms,
+                in: 0...10
+            )
             Stepper("Max guests: \(vm.maxGuests)", value: $vm.maxGuests, in: 1...20)
             Stepper("Max stay: \(vm.maxStayDays) night\(vm.maxStayDays == 1 ? "" : "s")", value: $vm.maxStayDays, in: 1...365)
         }
@@ -522,6 +564,43 @@ struct CreateListingPage: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+        }
+    }
+
+    /// Only shown once the listing has a bed, since a couch has no size worth
+    /// naming. The save drops these if the last bed goes away.
+    @ViewBuilder
+    private var bedSizesSection: some View {
+        if (vm.sleepingCounts[.bed] ?? 0) > 0 {
+            Section("Bed sizes (optional)") {
+                ForEach(BedSize.allCases.sorted { $0.rank < $1.rank }, id: \.self) { size in
+                    Stepper(
+                        "\(vm.bedSizeCounts[size, default: 0]) \(size.displayName)",
+                        value: Binding(
+                            get: { vm.bedSizeCounts[size, default: 0] },
+                            set: { newValue in
+                                if newValue <= 0 { vm.bedSizeCounts.removeValue(forKey: size) }
+                                else { vm.bedSizeCounts[size] = newValue }
+                            }
+                        ),
+                        in: 0...20
+                    )
+                }
+                Text("Guests filtering for a queen or king won't see listings that leave this blank.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private var accessibilitySection: some View {
+        Section("Accessibility") {
+            Toggle("Step-free entry", isOn: $vm.hasStepFreeEntry)
+            Toggle("Elevator", isOn: $vm.hasElevator)
+            Toggle("Accessible bathroom", isOn: $vm.hasAccessibleBathroom)
+            Text("Only turn these on if you're confident. A guest may be relying on them to get through the door.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 

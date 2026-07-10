@@ -49,6 +49,11 @@ struct HomeCard: View {
                 // Summary pills
                 HStack(spacing: 6) {
                     SummaryPill(icon: "door.left.hand.open", text: "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")")
+                    // Zero bathrooms means the host never said, not that there are
+                    // none. Say nothing rather than something false.
+                    if listing.sleeping.numBathrooms > 0 {
+                        SummaryPill(icon: "shower.fill", text: "\(listing.sleeping.numBathrooms) bath\(listing.sleeping.numBathrooms == 1 ? "" : "s")")
+                    }
                     SummaryPill(icon: "person.fill", text: "\(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s")")
                     SummaryPill(icon: "calendar", text: "up to \(listing.guestPolicy.maxStayDays) night\(listing.guestPolicy.maxStayDays == 1 ? "" : "s")")
                 }
@@ -97,6 +102,19 @@ struct HomeCard: View {
                         }
                         if listing.amenities.hasCoinLaundryNearby {
                             ChipIcon(systemName: "washer.circle.fill", color: .purple, label: "Coin laundry nearby")
+                        }
+                    }
+
+                    // MARK: Accessibility
+                    AmenityRow(isVisible: listing.amenities.hasAnyAccessibility) {
+                        if listing.amenities.hasStepFreeEntry {
+                            ChipIcon(systemName: "figure.roll", color: .green, label: "Step-free entry")
+                        }
+                        if listing.amenities.hasElevator {
+                            ChipIcon(systemName: "arrow.up.arrow.down.circle.fill", color: .green, label: "Elevator")
+                        }
+                        if listing.amenities.hasAccessibleBathroom {
+                            ChipIcon(systemName: "accessibility", color: .green, label: "Accessible bathroom")
                         }
                     }
 

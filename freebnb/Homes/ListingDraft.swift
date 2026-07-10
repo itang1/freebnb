@@ -26,12 +26,15 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var zip = ""
 
     var numGuestRooms = 1
+    var numBathrooms = 0
     var maxGuests = 2
     var maxStayDays = 7
     /// Keyed by `SleepingSurface.rawValue`, the same shape `Sleeping.arrangements`
     /// uses. A `[SleepingSurface: Int]` would need `CodingKeyRepresentable` to
     /// survive a round trip through JSON as anything but an array of pairs.
     var sleepingArrangements: [String: Int] = [:]
+    /// Keyed by `BedSize.rawValue`, for the same reason.
+    var bedSizes: [String: Int] = [:]
     var kidsAllowed = true
     var guestPetsAllowed = false
     var hostHasPets = false
@@ -48,6 +51,10 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var parkingDetails = ""
     var hasInUnitLaundry = false
     var hasCoinLaundryNearby = false
+
+    var hasStepFreeEntry = false
+    var hasElevator = false
+    var hasAccessibleBathroom = false
 
     var providesPillows = false
     var providesBlankets = false
@@ -80,6 +87,22 @@ struct ListingDraft: Codable, Equatable, Sendable {
         }
         set {
             sleepingArrangements = newValue.reduce(into: [:]) { result, pair in
+                if pair.value > 0 { result[pair.key.rawValue] = pair.value }
+            }
+        }
+    }
+
+    /// Typed view of the bed sizes, with the same round-trip guarantee.
+    var bedSizeCounts: [BedSize: Int] {
+        get {
+            bedSizes.reduce(into: [:]) { result, pair in
+                if let size = BedSize(rawValue: pair.key), pair.value > 0 {
+                    result[size] = pair.value
+                }
+            }
+        }
+        set {
+            bedSizes = newValue.reduce(into: [:]) { result, pair in
                 if pair.value > 0 { result[pair.key.rawValue] = pair.value }
             }
         }

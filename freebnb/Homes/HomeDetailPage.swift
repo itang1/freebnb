@@ -100,10 +100,18 @@ struct HomeDetailPage: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Guest Rooms: \(home.sleeping.numGuestRooms)")
+                    // Omitted rather than shown as zero: an unanswered question,
+                    // not an answer of "none" (feature 17).
+                    if home.sleeping.numBathrooms > 0 {
+                        Text("Bathrooms: \(home.sleeping.numBathrooms)")
+                    }
                     Text("Max Guests: \(home.guestPolicy.maxGuests)")
                     Text("Max Stay: \(home.guestPolicy.maxStayDays) night\(home.guestPolicy.maxStayDays == 1 ? "" : "s")")
                     if !home.sleeping.sleepingCounts.isEmpty {
                         Text("Sleeping Arrangements: \(home.sleeping.arrangementsDescription)")
+                    }
+                    if !home.sleeping.bedSizeCounts.isEmpty {
+                        Text("Bed Sizes: \(home.sleeping.bedSizesDescription)")
                     }
                 }
                 .font(.subheadline)
@@ -118,6 +126,28 @@ struct HomeDetailPage: View {
                     amenityRow("Host Has Pets", available: home.amenities.hostHasPets)
                 }
                 .font(.subheadline)
+
+                // MARK: Accessibility
+                // Only rendered when the host claimed something. A grid of grey
+                // crosses would read as "this home is inaccessible", which is not
+                // what an unanswered question means.
+                if home.amenities.hasAnyAccessibility {
+                    Text("Accessibility")
+                        .font(.headline)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        if home.amenities.hasStepFreeEntry {
+                            amenityRow("Step-free Entry", available: true)
+                        }
+                        if home.amenities.hasElevator {
+                            amenityRow("Elevator", available: true)
+                        }
+                        if home.amenities.hasAccessibleBathroom {
+                            amenityRow("Accessible Bathroom", available: true)
+                        }
+                    }
+                    .font(.subheadline)
+                }
 
                 // MARK: Amenities
                 Text("Amenities")

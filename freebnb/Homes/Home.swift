@@ -64,6 +64,38 @@ enum SleepingSurface: String, CaseIterable, Hashable, Codable {
     }
 }
 
+/// The size of a `SleepingSurface.bed` (feature 17). Separate from the surface
+/// because a couch has no size worth naming and an air mattress's is nobody's
+/// deciding factor, whereas "is the bed big enough for two of us" routinely is.
+enum BedSize: String, CaseIterable, Hashable, Codable {
+    case twin  = "twin"
+    case full  = "full"
+    case queen = "queen"
+    case king  = "king"
+
+    var displayName: String {
+        switch self {
+        case .twin:  return "twin"
+        case .full:  return "full"
+        case .queen: return "queen"
+        case .king:  return "king"
+        }
+    }
+
+    /// Sleeps two adults comfortably. Backs the "Queen or king bed" filter.
+    var sleepsTwo: Bool { self == .queen || self == .king }
+
+    /// Menu and summary order: smallest first.
+    var rank: Int {
+        switch self {
+        case .twin:  return 0
+        case .full:  return 1
+        case .queen: return 2
+        case .king:  return 3
+        }
+    }
+}
+
 enum HostContactPreference: String, Hashable, Codable {
     case inApp       = "inApp"
     case contactInfo = "contactInfo"
@@ -196,6 +228,16 @@ struct Sleeping: Codable, Hashable {
     // Firestore-compatible [String: Int] map; use sleepingCounts for a typed view.
     var arrangements: [String: Int]
 
+    // MARK: Richer capacity (feature 17)
+    // Bathrooms a guest may use, shared or private. Zero means the host never
+    // said — the UI hides the pill rather than guessing at one, since claiming a
+    // bathroom that may not exist is worse than saying nothing.
+    var numBathrooms: Int = 0
+    // Sizes of the beds counted in `arrangements["bed"]`, keyed by
+    // `BedSize.rawValue`; use `bedSizeCounts` for a typed view. Empty when the
+    // host didn't say, which is also the only thing a legacy document can mean.
+    var bedSizes: [String: Int] = [:]
+
     var sleepingCounts: [SleepingSurface: Int] {
         var result: [SleepingSurface: Int] = [:]
         for (raw, count) in arrangements {
@@ -206,11 +248,52 @@ struct Sleeping: Codable, Hashable {
         return result
     }
 
+    /// Typed view of `bedSizes`, dropping raw values that no longer name a size.
+    var bedSizeCounts: [BedSize: Int] {
+        var result: [BedSize: Int] = [:]
+        for (raw, count) in bedSizes {
+            if let size = BedSize(rawValue: raw), count > 0 {
+                result[size] = count
+            }
+        }
+        return result
+    }
+
+    /// Whether any bed sleeps two adults. Backs the "Queen or king bed" filter.
+    var hasBedForTwo: Bool { bedSizeCounts.keys.contains(where: \.sleepsTwo) }
+
     var arrangementsDescription: String {
         sleepingCounts
             .sorted { $0.key.rawValue < $1.key.rawValue }
             .map { "\($0.value) \($0.key.displayName)" }
             .joined(separator: ", ")
+    }
+
+    /// "1 queen, 2 twins", smallest first. Empty when no sizes were recorded.
+    var bedSizesDescription: String {
+        bedSizeCounts
+            .sorted { $0.key.rank < $1.key.rank }
+            .map { "\($0.value) \($0.key.displayName)\($0.value == 1 ? "" : "s")" }
+            .joined(separator: ", ")
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case numGuestRooms, arrangements, numBathrooms, bedSizes
+    }
+}
+
+// Fields added after the initial schema decode with `decodeIfPresent`, so a
+// listing written before they existed still decodes instead of vanishing from
+// the feed — a decode failure is dropped silently (A5). In an extension so the
+// memberwise initializer survives; its new parameters carry defaults, so existing
+// call sites are unaffected.
+extension Sleeping {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        numGuestRooms = try c.decode(Int.self, forKey: .numGuestRooms)
+        arrangements  = try c.decode([String: Int].self, forKey: .arrangements)
+        numBathrooms  = try c.decodeIfPresent(Int.self, forKey: .numBathrooms) ?? 0
+        bedSizes      = try c.decodeIfPresent([String: Int].self, forKey: .bedSizes) ?? [:]
     }
 }
 
@@ -243,11 +326,65 @@ struct Amenities: Codable, Hashable {
     var providesToiletries: Bool
     var foodProvision: FoodProvision
 
+    // MARK: Accessibility (feature 17)
+    // Declared last, and defaulted, so the memberwise initializer keeps working
+    // for every call site written before they existed. False means "the host did
+    // not say it is accessible", never "the host said it isn't" — which is why
+    // these are filters a guest opts into, and why nothing renders a red X for an
+    // absent one.
+    var hasStepFreeEntry: Bool = false
+    var hasElevator: Bool = false
+    var hasAccessibleBathroom: Bool = false
+
+    /// Whether the host claimed any accessibility attribute at all.
+    var hasAnyAccessibility: Bool { hasStepFreeEntry || hasElevator || hasAccessibleBathroom }
+
+    /// Backs the "Most Amenities" sort. Accessibility is deliberately excluded:
+    /// step-free entry is a fact about a home, not a perk it competes on, and
+    /// ranking homes by it would push accessible listings up the feed for guests
+    /// who never asked.
     var count: Int {
         [hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi,
          hasPrivateGuestBathroom, hostHasPets, hasInUnitLaundry, hasCoinLaundryNearby,
          providesPillows, providesBlankets, providesTowels, providesToiletries]
             .filter { $0 }.count
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi
+        case hasPrivateGuestBathroom, hostHasPets, parkingDetails
+        case hasInUnitLaundry, hasCoinLaundryNearby
+        case providesPillows, providesBlankets, providesTowels, providesToiletries
+        case foodProvision
+        case hasStepFreeEntry, hasElevator, hasAccessibleBathroom
+    }
+}
+
+// Same reasoning as `Sleeping` above: the accessibility keys post-date the schema,
+// so a listing saved without them must still decode.
+extension Amenities {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hasAC                   = try c.decode(Bool.self, forKey: .hasAC)
+        hasHeating              = try c.decode(Bool.self, forKey: .hasHeating)
+        hasKitchen              = try c.decode(Bool.self, forKey: .hasKitchen)
+        hasFridgeSpace          = try c.decode(Bool.self, forKey: .hasFridgeSpace)
+        hasMicrowave            = try c.decode(Bool.self, forKey: .hasMicrowave)
+        hasTV                   = try c.decode(Bool.self, forKey: .hasTV)
+        hasWifi                 = try c.decode(Bool.self, forKey: .hasWifi)
+        hasPrivateGuestBathroom = try c.decode(Bool.self, forKey: .hasPrivateGuestBathroom)
+        hostHasPets             = try c.decode(Bool.self, forKey: .hostHasPets)
+        parkingDetails          = try c.decode(String.self, forKey: .parkingDetails)
+        hasInUnitLaundry        = try c.decode(Bool.self, forKey: .hasInUnitLaundry)
+        hasCoinLaundryNearby    = try c.decode(Bool.self, forKey: .hasCoinLaundryNearby)
+        providesPillows         = try c.decode(Bool.self, forKey: .providesPillows)
+        providesBlankets        = try c.decode(Bool.self, forKey: .providesBlankets)
+        providesTowels          = try c.decode(Bool.self, forKey: .providesTowels)
+        providesToiletries      = try c.decode(Bool.self, forKey: .providesToiletries)
+        foodProvision           = try c.decode(FoodProvision.self, forKey: .foodProvision)
+        hasStepFreeEntry        = try c.decodeIfPresent(Bool.self, forKey: .hasStepFreeEntry) ?? false
+        hasElevator             = try c.decodeIfPresent(Bool.self, forKey: .hasElevator) ?? false
+        hasAccessibleBathroom   = try c.decodeIfPresent(Bool.self, forKey: .hasAccessibleBathroom) ?? false
     }
 }
 
