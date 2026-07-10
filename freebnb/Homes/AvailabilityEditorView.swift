@@ -2,7 +2,10 @@
 //  AvailabilityEditorView.swift
 //  freebnb
 //
-//  Host view for marking dates as blocked/unavailable.
+//  Host view for marking dates as blocked/unavailable (feature 16). The host taps
+//  days on a month grid; the flat set of blocked days is collapsed back into
+//  `DateRange`s only on save, because ranges are the storage format and a set is
+//  what a tappable calendar wants. See `AvailabilityCalendar`.
 //
 
 import SwiftUI
@@ -13,87 +16,55 @@ struct AvailabilityEditorView: View {
     @Environment(HomeStore.self) private var homeStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var blockedRanges: [DateRange]
-    @State private var newStart: Date = Calendar.current.startOfDay(for: Date())
-    @State private var newEnd: Date = Calendar.current.startOfDay(
-        for: Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-    )
+    @State private var blockedDays: Set<Date>
     @State private var isSaving = false
     @State private var errorMessage: String?
+    /// Rebuilt only when the blocked days change. Writing the .ics inside `body`
+    /// would put a file write on every SwiftUI render pass.
+    @State private var exportURL: URL?
+
+    /// A year is as far ahead as anyone plans a spare couch, and it bounds the
+    /// number of grids the scroll view has to build.
+    private static let monthsAhead = 12
 
     init(listing: Home) {
-        self.listing = listing
-        _blockedRanges = State(initialValue: (listing.blockedDateRanges ?? [])
-            .filter { $0.end > Date() }
-            .sorted { $0.start < $1.start })
+        let upcoming = AvailabilityCalendar.upcoming(listing.blockedDateRanges ?? [])
+        _blockedDays = State(initialValue: AvailabilityCalendar.blockedDays(in: upcoming))
     }
 
-    private var canAdd: Bool {
-        newEnd > newStart && !overlapsExisting(start: newStart, end: newEnd)
+    /// Derived on demand rather than mirrored into state, so the summary list can
+    /// never disagree with the grid above it.
+    private var blockedRanges: [DateRange] {
+        AvailabilityCalendar.ranges(from: blockedDays)
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Text("Mark dates when your listing is unavailable. Guests cannot request stays that overlap a blocked period.")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Tap the days when your listing is unavailable. Guests cannot request stays that overlap a blocked day.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                }
 
-                Section("Block a date range") {
-                    DatePicker("Start", selection: $newStart, in: Date()..., displayedComponents: .date)
-                    DatePicker("End", selection: $newEnd,
-                               in: (Calendar.current.date(byAdding: .day, value: 1, to: newStart) ?? newStart)...,
-                               displayedComponents: .date)
-                    if overlapsExisting(start: newStart, end: newEnd) {
-                        Label("Overlaps an existing blocked range", systemImage: "exclamationmark.circle")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                    Button("Add blocked range") {
-                        addRange()
-                    }
-                    .disabled(!canAdd)
-                    .foregroundColor(canAdd ? .accent : .secondary)
-                }
+                    AvailabilityLegend()
 
-                if !blockedRanges.isEmpty {
-                    Section("Blocked periods") {
-                        ForEach(blockedRanges) { range in
-                            HStack {
-                                Image(systemName: "calendar.badge.minus")
-                                    .foregroundColor(.orange)
-                                    .accessibilityHidden(true)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(rangeLabel(range))
-                                        .font(.subheadline)
-                                    Text(durationLabel(range))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .onDelete { indexSet in
-                            blockedRanges.remove(atOffsets: indexSet)
+                    ForEach(AvailabilityCalendar.months(count: Self.monthsAhead), id: \.self) { month in
+                        AvailabilityMonthGrid(month: month, blockedDays: blockedDays) { day in
+                            blockedDays = AvailabilityCalendar.toggling(day, in: blockedDays)
                         }
                     }
-                } else {
-                    Section {
-                        Label("No blocked dates — all dates available.", systemImage: "checkmark.circle")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                }
 
-                if let errorMessage {
-                    Section {
+                    summary
+
+                    if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline)
                             .foregroundColor(.red)
                     }
                 }
+                .padding()
             }
+            .background(Color.primaryBackground.ignoresSafeArea())
             .navigationTitle("Availability")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -107,29 +78,79 @@ struct AvailabilityEditorView: View {
                 }
             }
             .disabled(isSaving)
+            .task(id: blockedDays) { refreshExport() }
         }
     }
 
-    private func addRange() {
-        let range = DateRange(start: newStart, end: newEnd)
-        blockedRanges.append(range)
-        blockedRanges.sort { $0.start < $1.start }
-        newStart = Calendar.current.startOfDay(for: Date())
-        newEnd = Calendar.current.startOfDay(
-            for: Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    // MARK: - Summary and export
+
+    @ViewBuilder
+    private var summary: some View {
+        let ranges = blockedRanges
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Blocked periods")
+                .font(.headline)
+
+            if ranges.isEmpty {
+                Label("No blocked dates — all dates available.", systemImage: "checkmark.circle")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(ranges) { range in
+                    HStack(spacing: 10) {
+                        Image(systemName: "calendar.badge.minus")
+                            .foregroundColor(.orange)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rangeLabel(range))
+                                .font(.subheadline)
+                            Text(durationLabel(range))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                // Handed to the share sheet rather than written through EventKit,
+                // which would ask for calendar permission just to give the host
+                // back what they typed.
+                if let exportURL {
+                    ShareLink(item: exportURL) {
+                        Label("Export to Calendar", systemImage: "square.and.arrow.up")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    /// Rebuilds the .ics for the current blocked periods. Nil when nothing is
+    /// blocked, which is also what hides the button.
+    private func refreshExport() {
+        exportURL = CalendarInvite.icsFile(
+            events: blockedRanges.enumerated().map { index, range in
+                CalendarInvite.Event(
+                    uid: "\(listing.id)-blocked-\(index)",
+                    title: "Unavailable — \(listing.address.city)",
+                    location: "\(listing.address.city), \(listing.address.state)",
+                    notes: nil,
+                    startDay: range.start,
+                    endDay: range.end
+                )
+            },
+            filename: "FreeBNB-Availability.ics"
         )
     }
 
-    private func overlapsExisting(start: Date, end: Date) -> Bool {
-        blockedRanges.contains { $0.overlaps(checkIn: start, checkOut: end) }
-    }
+    // MARK: - Save
 
     private func save() async {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
         var updated = listing
-        updated.blockedDateRanges = blockedRanges.isEmpty ? nil : blockedRanges
+        let ranges = blockedRanges
+        updated.blockedDateRanges = ranges.isEmpty ? nil : ranges
         do {
             try await homeStore.save(updated)
             dismiss()
@@ -138,9 +159,17 @@ struct AvailabilityEditorView: View {
         }
     }
 
+    // MARK: - Labels
+
+    /// `end` is exclusive, so the last blocked night is the day before it. Showing
+    /// the exclusive bound would tell the host they had blocked a day they hadn't.
     private func rangeLabel(_ range: DateRange) -> String {
-        let f = AppDateFormatters.shortDay
-        return "\(f.string(from: range.start)) – \(f.string(from: range.end))"
+        let formatter = AppDateFormatters.shortDay
+        let lastBlocked = Calendar.current.date(byAdding: .day, value: -1, to: range.end) ?? range.start
+        if Calendar.current.isDate(range.start, inSameDayAs: lastBlocked) {
+            return formatter.string(from: range.start)
+        }
+        return "\(formatter.string(from: range.start)) – \(formatter.string(from: lastBlocked))"
     }
 
     private func durationLabel(_ range: DateRange) -> String {

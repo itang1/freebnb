@@ -60,6 +60,31 @@ struct HomeDetailPage: View {
         }
     }
 
+    /// The guest's read-only view of the same grid the host fills in (feature 16).
+    /// Three months is what fits before the page turns into a calendar app; a
+    /// guest planning further out will be asking the host anyway.
+    private var availabilitySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Spacer(minLength: 10)
+            Text("Availability")
+                .font(.headline)
+
+            let blocked = AvailabilityCalendar.blockedDays(
+                in: AvailabilityCalendar.upcoming(home.blockedDateRanges ?? [])
+            )
+            if blocked.isEmpty {
+                Label("Every upcoming date is open.", systemImage: "checkmark.circle")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                AvailabilityLegend()
+                ForEach(AvailabilityCalendar.months(count: 3), id: \.self) { month in
+                    AvailabilityMonthGrid(month: month, blockedDays: blocked)
+                }
+            }
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -202,6 +227,9 @@ struct HomeDetailPage: View {
                     .accessibilityElement(children: .combine)
                 }
                 .font(.subheadline)
+
+                // MARK: Availability
+                availabilitySection
 
                 // MARK: Cancellation Policy
                 let policy = home.cancellationPolicy ?? .flexible
