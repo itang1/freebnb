@@ -12,6 +12,10 @@ export const Collections = {
   messages: "messages",
   reports: "reports",
   rateLimits: "rateLimits",
+  // Post-stay two-way reviews, one per (stay request, author).
+  reviews: "reviews",
+  // Friend-written character references on a profile, one per (subject, author).
+  references: "references",
 } as const;
 
 export const Subcollections = {
@@ -26,6 +30,8 @@ export const Docs = {
   location: "location",
   // The user's private profile: users/{uid}/private/profile.
   profile: "profile",
+  // The reviewer's note to the reviewed: reviews/{reviewID}/private/feedback.
+  feedback: "feedback",
 } as const;
 
 // users/{uid}/private/profile — the owner-only profile document.
@@ -45,3 +51,8 @@ export const homeDocPattern = `${Collections.homes}/{homeID}`;
 export const messageDocPattern = `${Collections.messages}/{messageID}`;
 export const friendEdgeDocPattern = `${Collections.friendEdges}/{edgeID}`;
 export const stayRequestDocPattern = `${Collections.stayRequests}/{requestID}`;
+// Reviews are keyed "{stayRequestID}_{authorUserID}" and references
+// "{subjectUserID}_{authorUserID}". Those deterministic ids are what make
+// "exactly one per pair" enforceable in firestore.rules rather than by a query
+// the client could skip; the functions only ever read them, never mint them.
+export const reviewDocPattern = `${Collections.reviews}/{reviewID}`;

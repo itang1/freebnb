@@ -10,6 +10,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functionsV1 from "firebase-functions/v1";
 import {
   Collections,
+  Docs,
   Subcollections,
   friendEdgeDocPattern,
   homeDocPattern,
@@ -17,8 +18,10 @@ import {
   listingPhotosPrefix,
   messageDocPattern,
   privateProfilePath,
+  reviewDocPattern,
   stayRequestDocPattern,
 } from "./paths";
+import { autoReportReason, scanText } from "./moderation";
 
 admin.initializeApp();
 
@@ -276,29 +279,101 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
 });
 
 // ---------------------------------------------------------------------------
-// onFriendEdgeWritten
-// Keeps `homes.allowedViewerIDs` — the denormalized read ACL that Firestore
-// rules enforce friends-only visibility with — in sync with the friend graph.
+// Listing read ACLs and the friend graph
 //
-// Only the accepted/not-accepted transition matters: a pending edge grants
-// nothing, and an accepted edge that is deleted revokes access. The client
-// stamps the array on every listing save, so this trigger only has to carry
-// the delta between saves.
+// `homes.allowedViewerIDs` is the denormalized read ACL that firestore.rules
+// enforces restricted visibility with, because rules cannot join to
+// `friendEdges` at query time. Two tiers share it (feature 7):
+//
+//   friendsOnly       → host + accepted friends
+//   friendsOfFriends  → host + accepted friends + those friends' friends
+//
+// Only the server can build the second one: a client may read only its own
+// friend edges, so it cannot see two hops out. The client still stamps the
+// first-degree array on save (so a friends-only listing is correct the instant
+// it is written), and `onHomeWrittenACL` widens it immediately afterwards.
+//
+// Everything below rebuilds the array from the graph rather than applying a
+// delta. A delta is unsound for friends-of-friends — removing one edge may or
+// may not revoke a viewer, depending on whether another path still reaches them
+// — and a full rebuild is idempotent, which is what makes the retries safe.
 // ---------------------------------------------------------------------------
 type FriendEdgeData = { userA: string; userB: string; status?: string };
 
-// Adds or removes `viewerID` from every listing hosted by `hostID`, one bounded
-// page at a time. The id cursor keeps the fan-out from loading a prolific host's
-// entire catalogue into memory, and because arrayUnion/arrayRemove are
-// idempotent, a retry that re-commits a page is harmless (A9).
-async function setViewerOnListings(
-  hostID: string,
-  viewerID: string,
-  grant: boolean
-): Promise<void> {
-  const change = grant
-    ? admin.firestore.FieldValue.arrayUnion(viewerID)
-    : admin.firestore.FieldValue.arrayRemove(viewerID);
+// The rules cap `allowedViewerIDs` at 1000 entries, and the whole array is
+// downloaded with every feed document, so a very well-connected host's
+// friends-of-friends set is truncated rather than allowed to bloat the feed.
+const ACL_CAP = 1000;
+// Bounds the second hop: a user with an enormous friend list must not turn one
+// edge write into thousands of reads.
+const FRIEND_FANOUT_CAP = 200;
+
+/** Accepted friends of one user, read from both halves of the edge. */
+async function acceptedFriendsOf(userID: string): Promise<string[]> {
+  const [aSnap, bSnap] = await Promise.all([
+    db.collection(Collections.friendEdges).where("userA", "==", userID).where("status", "==", "accepted").get(),
+    db.collection(Collections.friendEdges).where("userB", "==", userID).where("status", "==", "accepted").get(),
+  ]);
+  return [...aSnap.docs.map((d) => d.data().userB as string), ...bSnap.docs.map((d) => d.data().userA as string)];
+}
+
+/**
+ * Everyone within two hops of `userID`, excluding `userID` themselves. First-
+ * degree friends are included: they can see a friends-of-friends listing too.
+ */
+async function withinTwoHopsOf(userID: string, friends: string[]): Promise<string[]> {
+  const reachable = new Set<string>(friends);
+  const secondHops = await Promise.all(
+    friends.slice(0, FRIEND_FANOUT_CAP).map((friendID) => acceptedFriendsOf(friendID))
+  );
+  for (const hop of secondHops) for (const candidate of hop) reachable.add(candidate);
+  reachable.delete(userID);
+  return [...reachable];
+}
+
+/** Order-insensitive set equality, so a rebuild that changes nothing writes nothing. */
+function sameMembers(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((id) => set.has(id));
+}
+
+/**
+ * Recomputes `allowedViewerIDs` for every listing hosted by `hostID` (or just
+ * one, when `onlyHomeID` is given) and writes back only the documents whose ACL
+ * actually changed.
+ *
+ * Writing only on a real change is what keeps `onHomeWrittenACL` from looping:
+ * its own update re-fires the trigger, the second pass computes the same array,
+ * and the recursion stops there.
+ */
+async function rebuildListingACLs(hostID: string, onlyHomeID?: string): Promise<void> {
+  const friends = await acceptedFriendsOf(hostID);
+  // The second hop is only paid for when a listing actually needs it.
+  let twoHops: string[] | undefined;
+
+  // The ACL a listing should carry, given its tier. The host is always in it:
+  // the rules refuse a listing that locks its own host out.
+  const desiredFor = async (data: FirebaseFirestore.DocumentData): Promise<string[]> => {
+    if ((data.visibility ?? "everyone") === "friendsOfFriends") {
+      if (!twoHops) twoHops = await withinTwoHopsOf(hostID, friends);
+      return [...new Set([hostID, ...twoHops])].slice(0, ACL_CAP);
+    }
+    return [...new Set([hostID, ...friends])].slice(0, ACL_CAP);
+  };
+
+  // Updating one listing reads one document, not the host's whole catalogue.
+  if (onlyHomeID) {
+    const ref = db.collection(Collections.homes).doc(onlyHomeID);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const data = snap.data() as FirebaseFirestore.DocumentData;
+    const desired = await desiredFor(data);
+    if (sameMembers(data.allowedViewerIDs ?? [], desired)) return;
+    await ref.update({ allowedViewerIDs: desired });
+    return;
+  }
+
   const base = db
     .collection(Collections.homes)
     .where("hostUserID", "==", hostID)
@@ -310,14 +385,31 @@ async function setViewerOnListings(
     if (cursor) query = query.startAfter(cursor);
     const snap = await query.get();
     if (snap.empty) return;
+
     const batch = db.batch();
-    for (const doc of snap.docs) batch.update(doc.ref, { allowedViewerIDs: change });
-    await batch.commit();
+    let writes = 0;
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const desired = await desiredFor(data);
+      if (sameMembers(data.allowedViewerIDs ?? [], desired)) continue;
+      batch.update(doc.ref, { allowedViewerIDs: desired });
+      writes++;
+    }
+    if (writes > 0) await batch.commit();
+
     if (snap.size < PAGE_SIZE) return;
     cursor = snap.docs[snap.docs.length - 1].id;
   }
 }
 
+// ---------------------------------------------------------------------------
+// onFriendEdgeWritten
+// An edge changing accepted-ness moves more ACLs than the two users' own.
+// If A befriends B, then for every friend F of A, B is now within two hops of F,
+// so F's friends-of-friends listings must admit them. Rebuilding A, B, and both
+// of their friend sets covers exactly that blast radius — and no further, since
+// a third-hop user's two-hop set is unchanged.
+// ---------------------------------------------------------------------------
 export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async (event) => {
   const change = event.data;
   const before = change?.before.exists ? (change.before.data() as FriendEdgeData) : undefined;
@@ -330,11 +422,206 @@ export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async
   const edge = after ?? before;
   if (!edge?.userA || !edge?.userB) return;
 
-  // Friendship is symmetric: each user becomes a viewer of the other's homes.
-  await Promise.all([
-    setViewerOnListings(edge.userA, edge.userB, isFriends),
-    setViewerOnListings(edge.userB, edge.userA, isFriends),
+  const [friendsOfA, friendsOfB] = await Promise.all([
+    acceptedFriendsOf(edge.userA),
+    acceptedFriendsOf(edge.userB),
   ]);
+  const affected = new Set<string>([
+    edge.userA,
+    edge.userB,
+    ...friendsOfA.slice(0, FRIEND_FANOUT_CAP),
+    ...friendsOfB.slice(0, FRIEND_FANOUT_CAP),
+  ]);
+
+  await Promise.all([...affected].map((hostID) => rebuildListingACLs(hostID)));
+});
+
+// ---------------------------------------------------------------------------
+// onHomeWrittenACL
+// The client stamps a first-degree ACL on save because it cannot compute more
+// than that. This widens a friends-of-friends listing to its true audience the
+// moment it is written, and repairs any listing whose ACL drifted. It is a
+// separate trigger from onHomeDeleted so each stays about one thing.
+// ---------------------------------------------------------------------------
+export const onHomeWrittenACL = onDocumentWritten(homeDocPattern, async (event) => {
+  const after = event.data?.after.exists ? event.data.after.data() : undefined;
+  if (!after) return; // deletes are onHomeDeleted's business
+  const hostUserID: string | undefined = after.hostUserID;
+  if (!hostUserID) return;
+
+  await rebuildListingACLs(hostUserID, event.params.homeID);
+});
+
+// ---------------------------------------------------------------------------
+// Trust stats (feature 2)
+//
+// The reputation numbers on `users/{uid}.trustStats`. They are recomputed from
+// scratch whenever a stay or a review moves, never incremented in place: an
+// increment that runs twice on a retry inflates someone's record permanently,
+// and these are exactly the numbers a stranger decides to sleep in a house on.
+//
+// firestore.rules pins `trustStats` against every client write, so this function
+// (writing with admin credentials) is the only thing that can move them.
+// ---------------------------------------------------------------------------
+
+/** Below this many received requests, a response rate is noise. Mirrors TrustStats.minimumResponses. */
+const MIN_RESPONSES_FOR_RATE = 3;
+
+type TrustStats = {
+  staysHosted: number;
+  staysTaken: number;
+  reviewCount: number;
+  averageRating: number | null;
+  responseRate: number | null;
+  respondedCount: number;
+  receivedCount: number;
+};
+
+async function recomputeTrustStats(userID: string): Promise<void> {
+  const [asHost, asGuest, aboutThem] = await Promise.all([
+    db.collection(Collections.stayRequests).where("hostUserID", "==", userID).get(),
+    db.collection(Collections.stayRequests).where("guestUserID", "==", userID).get(),
+    db.collection(Collections.reviews).where("subjectUserID", "==", userID).get(),
+  ]);
+
+  let staysHosted = 0;
+  let receivedCount = 0;
+  let respondedCount = 0;
+  for (const doc of asHost.docs) {
+    const status: string = doc.data().status;
+    if (status === "completed") staysHosted++;
+    // A guest-cancelled request was withdrawn, not ignored, so it is neither
+    // asked nor answered. Everything else landed in the host's inbox.
+    if (status === "cancelled") continue;
+    receivedCount++;
+    if (status !== "pending") respondedCount++;
+  }
+
+  const staysTaken = asGuest.docs.filter((d) => d.data().status === "completed").length;
+
+  const ratings = aboutThem.docs.map((d) => d.data().rating as number).filter((r) => typeof r === "number");
+  const averageRating = ratings.length > 0
+    ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length
+    : null;
+
+  const stats: TrustStats = {
+    staysHosted,
+    staysTaken,
+    reviewCount: ratings.length,
+    averageRating,
+    responseRate: receivedCount >= MIN_RESPONSES_FOR_RATE ? respondedCount / receivedCount : null,
+    respondedCount,
+    receivedCount,
+  };
+
+  // Never resurrect a deleted account as a stats-only document: the public user
+  // doc must always carry a displayName for the client to decode it.
+  const userRef = db.collection(Collections.users).doc(userID);
+  if (!(await userRef.get()).exists) return;
+  await userRef.set({ trustStats: stats }, { merge: true });
+}
+
+// ---------------------------------------------------------------------------
+// onReviewWritten
+// A review changes the reviewed person's rating, so recompute their stats.
+// ---------------------------------------------------------------------------
+export const onReviewWritten = onDocumentWritten(reviewDocPattern, async (event) => {
+  const change = event.data;
+  const subjectUserID: string | undefined =
+    (change?.after.exists ? change.after.data() : change?.before.data())?.subjectUserID;
+  if (!subjectUserID) return;
+  await recomputeTrustStats(subjectUserID);
+});
+
+// ---------------------------------------------------------------------------
+// Keyword moderation (feature 6)
+// Nothing is blocked or hidden: a hit files a report into the same triage queue
+// a human report lands in, tagged `source: "auto"`. A false positive costs a
+// moderator one click; a false negative that silently ate a real message would
+// cost a user their conversation.
+//
+// The report id is derived from the target, so a retry (or an edit that trips
+// the same terms again) overwrites the open report rather than spamming the
+// queue with duplicates.
+// ---------------------------------------------------------------------------
+async function fileAutoReport(opts: {
+  targetType: "user" | "listing" | "message";
+  targetID: string;
+  authorUserID: string;
+  reason: string;
+}): Promise<void> {
+  await db.collection(Collections.reports).doc(`auto_${opts.targetType}_${opts.targetID}`).set({
+    reporterUserID: opts.authorUserID,
+    targetType: opts.targetType,
+    targetID: opts.targetID,
+    reason: opts.reason,
+    status: "new",
+    source: "auto",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  logger.info("Auto-filed moderation report", { targetType: opts.targetType, targetID: opts.targetID });
+}
+
+export const moderateNewMessage = onDocumentCreated(messageDocPattern, async (event) => {
+  const msg = event.data?.data();
+  if (!msg) return;
+  const hit = scanText(msg.text);
+  if (!hit) return;
+  await fileAutoReport({
+    targetType: "message",
+    targetID: event.params.messageID,
+    authorUserID: msg.senderUserID,
+    reason: autoReportReason(hit),
+  });
+});
+
+export const moderateListingContent = onDocumentWritten(homeDocPattern, async (event) => {
+  const after = event.data?.after.exists ? event.data.after.data() : undefined;
+  if (!after || after.deletedAt) return;
+  // The free-text fields a host controls. Structured fields are enum-validated
+  // by the rules and cannot carry prose.
+  const hit = scanText([after.description, after.hostContactInfo, after.hostName].filter(Boolean).join("\n"));
+  if (!hit) return;
+  await fileAutoReport({
+    targetType: "listing",
+    targetID: event.params.homeID,
+    authorUserID: after.hostUserID,
+    reason: autoReportReason(hit),
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mutualFriends (callable)
+// "You and Priya have 3 friends in common" (feature 2). Server-side because
+// `friendEdges` documents are readable only by the two users they connect, so a
+// client cannot see anyone else's edges to intersect them.
+// Call from the app: httpsCallable("mutualFriends").call(["userID": id])
+// ---------------------------------------------------------------------------
+export const mutualFriends = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
+
+  const otherID: unknown = request.data?.userID;
+  if (typeof otherID !== "string" || otherID.length === 0) {
+    throw new HttpsError("invalid-argument", "userID is required.");
+  }
+  if (otherID === uid) return { count: 0, names: [] };
+
+  const [mine, theirs] = await Promise.all([acceptedFriendsOf(uid), acceptedFriendsOf(otherID)]);
+  const mineSet = new Set(mine);
+  const shared = [...new Set(theirs.filter((id) => mineSet.has(id)))];
+
+  // Only a couple of names are ever rendered ("Priya, Sam and 3 others"), so
+  // resolve only those rather than every mutual friend.
+  const NAMES_SHOWN = 2;
+  const names = await Promise.all(
+    shared.slice(0, NAMES_SHOWN).map(async (friendID) => {
+      const snap = await db.collection(Collections.users).doc(friendID).get();
+      return (snap.data()?.displayName as string) ?? "FreeBNB User";
+    })
+  );
+
+  return { count: shared.length, names };
 });
 
 // ---------------------------------------------------------------------------
@@ -372,6 +659,44 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
     deleteStoragePrefix(listingPhotosPrefix(uid)),
   ]);
 
+  // Reviews and references naming this user go too — both the ones they wrote
+  // and the ones written about them, since a review of a deleted account names a
+  // person who no longer exists and can no longer answer it. Each review carries
+  // a private/feedback subdocument that Firestore would otherwise strand.
+  const reviewAndReferenceDocs = await Promise.all([
+    db.collection(Collections.reviews).where("authorUserID", "==", uid).get(),
+    db.collection(Collections.reviews).where("subjectUserID", "==", uid).get(),
+    db.collection(Collections.references).where("authorUserID", "==", uid).get(),
+    db.collection(Collections.references).where("subjectUserID", "==", uid).get(),
+  ]);
+  const reviewDocs = [...reviewAndReferenceDocs[0].docs, ...reviewAndReferenceDocs[1].docs];
+  await Promise.all(reviewDocs.map((doc) => deleteQueryInChunks(doc.ref.collection(Subcollections.private))));
+
+  // Everyone whose reputation was computed partly from this user's stays or
+  // reviews. Collected before the deletions, recomputed after them.
+  const [guestStays, hostStays] = await Promise.all([
+    db.collection(Collections.stayRequests).where("guestUserID", "==", uid).get(),
+    db.collection(Collections.stayRequests).where("hostUserID", "==", uid).get(),
+  ]);
+  const counterparties = new Set<string>();
+  const remember = (id: unknown) => {
+    if (typeof id === "string" && id.length > 0 && id !== uid) counterparties.add(id);
+  };
+  for (const doc of reviewDocs) {
+    remember(doc.data().authorUserID);
+    remember(doc.data().subjectUserID);
+  }
+  for (const doc of [...guestStays.docs, ...hostStays.docs]) {
+    remember(doc.data().hostUserID);
+    remember(doc.data().guestUserID);
+  }
+
+  await Promise.all(
+    reviewAndReferenceDocs.flatMap((snap) =>
+      snap.docs.map((doc) => doc.ref.delete())
+    )
+  );
+
   // Hard-cascade the user's own messages, stay requests (as guest and host),
   // friend edges, and submitted reports so no personal data is left behind.
   // Only messages the user authored are removed, preserving the other party's
@@ -392,6 +717,12 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
   // Finally remove the private subdocument and the public user document.
   await db.doc(privateProfilePath(uid)).delete();
   await db.collection(Collections.users).doc(uid).delete();
+
+  // Stay-request deletions don't fire `onStayRequestWritten` (it ignores deletes),
+  // so the counterparties' stay counts and response rates would otherwise keep
+  // counting a person who no longer exists. `recomputeTrustStats` skips anyone
+  // whose own user document is already gone.
+  await Promise.all([...counterparties].map((id) => recomputeTrustStats(id)));
 });
 
 // ---------------------------------------------------------------------------
@@ -554,6 +885,14 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
   const afterStatus: string = after.status;
   const citySuffix = listingCity ? ` in ${listingCity}` : "";
 
+  // Stays hosted, stays taken, and the host's response rate all move with a
+  // status change, so both parties' reputations are recomputed before anything
+  // else. A create counts too: it is the request that lands in the host's inbox
+  // and starts the response-rate clock.
+  if (beforeStatus !== afterStatus) {
+    await Promise.all([recomputeTrustStats(hostUserID), recomputeTrustStats(guestUserID)]);
+  }
+
   // A freshly created pending request → notify the host.
   if (!before && afterStatus === "pending") {
     const guestName =
@@ -618,6 +957,10 @@ export const exportUserData = onCall(async (request) => {
     friendEdgesASnap,
     friendEdgesBSnap,
     reportsSnap,
+    reviewsWrittenSnap,
+    reviewsReceivedSnap,
+    referencesWrittenSnap,
+    referencesReceivedSnap,
   ] = await Promise.all([
     db.collection(Collections.users).doc(uid).get(),
     db.doc(privateProfilePath(uid)).get(),
@@ -629,9 +972,22 @@ export const exportUserData = onCall(async (request) => {
     db.collection(Collections.friendEdges).where("userA", "==", uid).get(),
     db.collection(Collections.friendEdges).where("userB", "==", uid).get(),
     db.collection(Collections.reports).where("reporterUserID", "==", uid).get(),
+    db.collection(Collections.reviews).where("authorUserID", "==", uid).get(),
+    db.collection(Collections.reviews).where("subjectUserID", "==", uid).get(),
+    db.collection(Collections.references).where("authorUserID", "==", uid).get(),
+    db.collection(Collections.references).where("subjectUserID", "==", uid).get(),
   ]);
 
   const withID = (d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() });
+
+  // The private feedback a user wrote is theirs to export; the private feedback
+  // written *about* them is too, since they are its only other reader.
+  const privateFeedback = await Promise.all(
+    [...reviewsWrittenSnap.docs, ...reviewsReceivedSnap.docs].map(async (doc) => {
+      const snap = await doc.ref.collection(Subcollections.private).doc(Docs.feedback).get();
+      return snap.exists ? { reviewID: doc.id, ...snap.data() } : null;
+    })
+  );
 
   return {
     profile: { ...(profileSnap.data() ?? {}), ...(privateSnap.data() ?? {}) },
@@ -642,6 +998,11 @@ export const exportUserData = onCall(async (request) => {
     conversations: conversationsSnap.docs.map(withID),
     friendEdges: [...friendEdgesASnap.docs, ...friendEdgesBSnap.docs].map(withID),
     reports: reportsSnap.docs.map(withID),
+    reviewsWritten: reviewsWrittenSnap.docs.map(withID),
+    reviewsReceived: reviewsReceivedSnap.docs.map(withID),
+    referencesWritten: referencesWrittenSnap.docs.map(withID),
+    referencesReceived: referencesReceivedSnap.docs.map(withID),
+    privateFeedback: privateFeedback.filter((f) => f !== null),
   };
 });
 
@@ -659,15 +1020,6 @@ type FriendSuggestion = { userID: string; displayName: string; mutualCount: numb
 export const suggestFriends = onCall(async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
-
-  // The accepted friends of one user, read from both halves of the edge.
-  const acceptedFriendsOf = async (userID: string): Promise<string[]> => {
-    const [aSnap, bSnap] = await Promise.all([
-      db.collection(Collections.friendEdges).where("userA", "==", userID).where("status", "==", "accepted").get(),
-      db.collection(Collections.friendEdges).where("userB", "==", userID).where("status", "==", "accepted").get(),
-    ]);
-    return [...aSnap.docs.map((d) => d.data().userB), ...bSnap.docs.map((d) => d.data().userA)];
-  };
 
   // Everyone the caller already has any edge with — friends and pending both —
   // so a suggestion is never someone they're already connected to or awaiting.
@@ -728,8 +1080,12 @@ export const suggestFriends = onCall(async (request) => {
 // and revoked on decline/cancel (client) — but a stay that simply runs its
 // course and ends never revoked it, so a past guest kept the host's street
 // forever (S2). This daily sweep deletes the marker once a stay's checkOut has
-// passed, expiring the guest's access. The stay stays "accepted" as history;
-// only the address grant is withdrawn.
+// passed, expiring the guest's access.
+//
+// It also closes the stay out: `accepted` → `completed`, which is what unlocks
+// both parties' reviews and what trustStats counts (feature 4). Either party can
+// reach the same state early by tapping "Mark complete" once the stay has begun;
+// this is the backstop for the stays nobody touches.
 //
 // Re-booking safe: if the same guest still has another accepted stay at the same
 // listing whose checkout is in the future, the marker is kept. Idempotent: a
@@ -740,31 +1096,47 @@ export const expireCompletedStays = onSchedule(
   { schedule: "0 4 * * *", timeZone: "UTC" },
   async () => {
     const nowMs = Date.now();
-    // One query on an auto-indexed equality; partition in memory so no composite
-    // index is needed and a guest's still-active stay can veto the revocation.
-    const snap = await db.collection(Collections.stayRequests).where("status", "==", "accepted").get();
+    // Both statuses mean the stay was granted: `accepted` is one nobody closed
+    // out, `completed` is one a party already marked done (feature 4) but whose
+    // address grant only expires when the stay is actually over. A single `in`
+    // filter on one field needs no composite index; partition in memory so a
+    // guest's still-running stay can veto the revocation.
+    const snap = await db
+      .collection(Collections.stayRequests)
+      .where("status", "in", ["accepted", "completed"])
+      .get();
 
+    type Expiring = {
+      ref: FirebaseFirestore.DocumentReference;
+      listingID: string;
+      guestUserID: string;
+      status: string;
+    };
     const activeKeys = new Set<string>();
-    const completed: { ref: FirebaseFirestore.DocumentReference; listingID: string; guestUserID: string }[] = [];
+    const expired: Expiring[] = [];
     for (const doc of snap.docs) {
       const req = doc.data() as {
         listingID: string;
         guestUserID: string;
+        status: string;
         checkOut: admin.firestore.Timestamp;
         accessRevokedAt?: admin.firestore.Timestamp;
       };
       const key = `${req.listingID}__${req.guestUserID}`;
       if (req.checkOut.toMillis() > nowMs) {
-        activeKeys.add(key);
+        // A stay whose checkout is still ahead keeps the address alive — but only
+        // if it hasn't been closed out. Marking a stay complete early is a
+        // statement that it's over.
+        if (req.status === "accepted") activeKeys.add(key);
       } else if (!req.accessRevokedAt) {
-        completed.push({ ref: doc.ref, listingID: req.listingID, guestUserID: req.guestUserID });
+        expired.push({ ref: doc.ref, listingID: req.listingID, guestUserID: req.guestUserID, status: req.status });
       }
     }
 
-    // Drop any completed stay whose guest still has a future accepted stay at the
+    // Drop any expired stay whose guest still has a future accepted stay at the
     // same listing — that later stay keeps the marker alive. 250 revocations per
     // batch (two writes each) stays under the 500-op cap.
-    const toRevoke = completed.filter((c) => !activeKeys.has(`${c.listingID}__${c.guestUserID}`));
+    const toRevoke = expired.filter((c) => !activeKeys.has(`${c.listingID}__${c.guestUserID}`));
     let revoked = 0;
     for (let i = 0; i < toRevoke.length; i += 250) {
       const batch = db.batch();
@@ -772,7 +1144,21 @@ export const expireCompletedStays = onSchedule(
         batch.delete(
           db.collection(Collections.homes).doc(c.listingID).collection(Subcollections.accepted).doc(c.guestUserID)
         );
-        batch.update(c.ref, { accessRevokedAt: admin.firestore.FieldValue.serverTimestamp() });
+        // Close the stay out in the same commit that withdraws the address, so a
+        // stay is never left "accepted" with no way for either party to review it.
+        // `onStayRequestWritten` sees the status move and recomputes both
+        // reputations. A stay a party already completed keeps its original
+        // completedAt and only loses the address.
+        batch.update(c.ref, {
+          accessRevokedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...(c.status === "accepted"
+            ? {
+              status: "completed",
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }
+            : {}),
+        });
         revoked++;
       }
       await batch.commit();

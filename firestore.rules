@@ -11,6 +11,24 @@ service cloud.firestore {
       return request.auth.uid == userID;
     }
 
+    // A moderator. The `admin` custom claim is minted out of band by
+    // `scripts/set_admin_claim.js` (Admin SDK) and never by the app, so it cannot
+    // be self-assigned. Reads the claim through map.get() so an account without
+    // the claim evaluates to false instead of erroring on a missing key.
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.get('admin', false) == true;
+    }
+
+    // True when `a` and `b` have an accepted friend edge. The edge id is its two
+    // participants sorted alphabetically, and rules cannot sort, so both orders
+    // are probed; `||` short-circuits on the hit.
+    function areFriends(a, b) {
+      return (exists(/databases/$(database)/documents/friendEdges/$(a + '_' + b))
+              && get(/databases/$(database)/documents/friendEdges/$(a + '_' + b)).data.status == 'accepted')
+          || (exists(/databases/$(database)/documents/friendEdges/$(b + '_' + a))
+              && get(/databases/$(database)/documents/friendEdges/$(b + '_' + a)).data.status == 'accepted');
+    }
+
     // Anonymous "guest" accounts may browse (read) but must not write. The UI
     // already restricts guests; this makes it a real security boundary rather
     // than a client-side convention.
@@ -111,19 +129,23 @@ service cloud.firestore {
 
     // -------------------------------------------------------------------------
     // Users
-    // The user document is a PUBLIC projection (displayName + timestamps) that
-    // any signed-in user may read for name display in chat/listings. PII and
-    // safety-sensitive data (email, fcmToken, blockedUserIDs, savedListingIDs)
-    // live in the owner-only `private/profile` subdocument below and are never
-    // world-readable. Only the owner can create/update. Deletes are forbidden
-    // on the client; account deletion is handled by a Cloud Function cascade.
+    // The user document is a PUBLIC projection (displayName + timestamps +
+    // trustStats) that any signed-in user may read for name display in
+    // chat/listings and for the reputation chips on a listing card. PII and
+    // safety-sensitive data (email, fcmToken, blockedUserIDs, savedListingIDs,
+    // emergencyContact) live in the owner-only `private/profile` subdocument below
+    // and are never world-readable. Only the owner can create/update. Deletes are
+    // forbidden on the client; account deletion is handled by a Cloud Function
+    // cascade.
     // -------------------------------------------------------------------------
     match /users/{userID} {
-      // The public user doc holds exactly these three keys. hasOnly() keeps the
+      // The public user doc holds exactly these keys. hasOnly() keeps the
       // world-readable document from being used as a spam surface or a stealth
       // data channel; hasAll() keeps a merge write from dropping a field.
+      // `trustStats` is optional because only the recomputeTrustStats function
+      // ever writes it, and it does so with admin credentials that bypass this.
       function isValidPublicProfile(data) {
-        return data.keys().hasOnly(['displayName', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['displayName', 'createdAt', 'updatedAt', 'trustStats'])
             && data.keys().hasAll(['displayName', 'createdAt', 'updatedAt'])
             && data.displayName is string
             && data.displayName.size() > 0
@@ -137,13 +159,19 @@ service cloud.firestore {
       allow create: if isSignedIn()
           && isOwner(userID)
           && isValidPublicProfile(request.resource.data)
-          && request.resource.data.createdAt == request.time;
+          && request.resource.data.createdAt == request.time
+          // Reputation is earned, never claimed on the way in (feature 2).
+          && isUnset(request.resource.data, 'trustStats');
 
       allow update: if isSignedIn()
           && isOwner(userID)
           && isValidPublicProfile(request.resource.data)
           // createdAt must not change
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && request.resource.data.createdAt == resource.data.createdAt
+          // Neither may trustStats: a host must not be able to award themselves a
+          // verified badge, a five-star average, or a hundred completed stays.
+          // Cloud Functions write it with admin credentials, which skip this rule.
+          && request.resource.data.get('trustStats', null) == resource.data.get('trustStats', null);
 
       allow delete: if false;
 
@@ -158,8 +186,9 @@ service cloud.firestore {
     // Homes / Listings
     // A listing is readable by anyone signed in if its visibility is 'everyone',
     // and otherwise only by its host and the users named in `allowedViewerIDs`
-    // (the host's accepted friends, denormalized onto the document because rules
-    // cannot join to `friendEdges`). Clients therefore cannot query `homes`
+    // (the host's accepted friends — and, for a 'friendsOfFriends' listing, those
+    // friends' friends too — denormalized onto the document because rules cannot
+    // join to `friendEdges`). Clients therefore cannot query `homes`
     // unfiltered: a query is rejected outright if any matched document fails the
     // read rule. The feed issues two provably-safe queries instead —
     // `visibility == 'everyone'` and `allowedViewerIDs contains me` — and merges
@@ -219,8 +248,11 @@ service cloud.firestore {
                 || data.hostMotivation in ['eager', 'open', 'selective'])
             && (isUnset(data, 'cancellationPolicy')
                 || data.cancellationPolicy in ['flexible', 'moderate', 'strict'])
+            // The three graduated visibility tiers (feature 7). Both restricted
+            // tiers are read-gated by `allowedViewerIDs` below; the difference is
+            // only how wide the server builds that array.
             && (isUnset(data, 'visibility')
-                || data.visibility in ['everyone', 'friendsOnly'])
+                || data.visibility in ['everyone', 'friendsOnly', 'friendsOfFriends'])
             // The read ACL. A host may grant whoever they like access to their own
             // listing, so the only constraints are a size cap (this array is
             // downloaded with every feed document) and that the host cannot lock
@@ -347,8 +379,10 @@ service cloud.firestore {
                'id', 'listingID', 'listingCity', 'listingHostName',
                'hostUserID', 'guestUserID', 'checkIn', 'checkOut',
                'guestNote', 'hostNote', 'guestCount', 'arrivalWindow',
-               'status', 'createdAt', 'updatedAt'
+               'status', 'completedAt', 'createdAt', 'updatedAt'
              ])
+          // A stay cannot be born finished.
+          && isUnset(request.resource.data, 'completedAt')
           && request.resource.data.guestUserID == request.auth.uid
           && request.resource.data.status == "pending"
           && request.resource.data.hostUserID is string
@@ -410,6 +444,20 @@ service cloud.firestore {
                   (isOwner(resource.data.guestUserID)
                       && request.resource.data.status == "cancelled"
                       && changedKeys().hasOnly(['status', 'updatedAt']))
+                  ||
+                  // Either party closes out an accepted stay that has begun
+                  // (feature 4). Completion is what unlocks reviews and what
+                  // trustStats counts, so the checkIn bound is what stops a host
+                  // from farming completed stays by accepting and instantly
+                  // "finishing" a booking a year out. completedAt is write-once:
+                  // it is unset before this transition, by the create rule above
+                  // and by the fact that no other branch may touch it.
+                  (resource.data.status == "accepted"
+                      && request.resource.data.status == "completed"
+                      && (isOwner(resource.data.hostUserID) || isOwner(resource.data.guestUserID))
+                      && changedKeys().hasOnly(['status', 'completedAt', 'updatedAt'])
+                      && request.resource.data.completedAt == request.time
+                      && request.time >= resource.data.checkIn)
                 ))
           );
 
@@ -591,26 +639,185 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Reviews — placeholder, not yet in use.
+    // Reviews — post-stay, two-way, public (feature 1).
+    //
+    // The document id is "{stayRequestID}_{authorUID}". That is what makes "one
+    // review per person per stay" a property of the path rather than a query the
+    // client could skip: a second review lands on the same document, and the
+    // update rule below only lets its own author rewrite it.
+    //
+    // A review may only be written about a stay that actually finished, by one of
+    // its two participants, about the other one. All three facts are read off the
+    // stay request itself with an elevated get(), so a client cannot assert them.
     // -------------------------------------------------------------------------
     match /reviews/{reviewID} {
+      function stayPath(requestID) {
+        return /databases/$(database)/documents/stayRequests/$(requestID);
+      }
+      function stay(requestID) {
+        return get(stayPath(requestID)).data;
+      }
+
+      function isValidReviewBody(data) {
+        return data.rating is int
+            && data.rating >= 1
+            && data.rating <= 5
+            && isOptionalString(data, 'publicComment', 2000);
+      }
+
+      // Reviews are the public record; anyone signed in may read them.
       allow read: if isSignedIn();
-      allow write: if false;
+
+      allow create: if isFullMember()
+          && request.resource.data.keys().hasOnly([
+               'id', 'stayRequestID', 'listingID', 'authorUserID',
+               'subjectUserID', 'role', 'rating', 'publicComment',
+               'createdAt', 'updatedAt'
+             ])
+          && request.resource.data.keys().hasAll([
+               'stayRequestID', 'listingID', 'authorUserID', 'subjectUserID', 'role', 'rating'
+             ])
+          && request.resource.data.authorUserID == request.auth.uid
+          // The id pins one review per (stay, author).
+          && reviewID == request.resource.data.stayRequestID + '_' + request.auth.uid
+          && request.resource.data.get('id', reviewID) == reviewID
+          && isValidReviewBody(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && exists(stayPath(request.resource.data.stayRequestID))
+          // Only a finished stay may be reviewed (feature 4 gates feature 1).
+          && stay(request.resource.data.stayRequestID).status == 'completed'
+          && stay(request.resource.data.stayRequestID).listingID == request.resource.data.listingID
+          // ...by one of its participants, about the other, with the matching role.
+          && (
+            (request.auth.uid == stay(request.resource.data.stayRequestID).guestUserID
+                && request.resource.data.subjectUserID == stay(request.resource.data.stayRequestID).hostUserID
+                && request.resource.data.role == 'guestReviewingHost')
+            ||
+            (request.auth.uid == stay(request.resource.data.stayRequestID).hostUserID
+                && request.resource.data.subjectUserID == stay(request.resource.data.stayRequestID).guestUserID
+                && request.resource.data.role == 'hostReviewingGuest')
+          );
+
+      // The author may revise what they said. Everything that establishes who
+      // reviewed whom about which stay is pinned by affectedKeys().
+      allow update: if isSignedIn()
+          && isOwner(resource.data.authorUserID)
+          && changedKeys().hasOnly(['rating', 'publicComment', 'updatedAt'])
+          && isValidReviewBody(request.resource.data)
+          && request.resource.data.updatedAt == request.time;
+
+      // A review is a record, not a draft. Removal is a moderation action.
+      allow delete: if false;
+
+      // The private feedback channel: what the reviewer would say to the
+      // reviewed's face but not on their profile. Readable by exactly those two.
+      match /private/{docID} {
+        function reviewPath() {
+          return /databases/$(database)/documents/reviews/$(reviewID);
+        }
+        function review() {
+          return get(reviewPath()).data;
+        }
+
+        allow read: if isSignedIn()
+            && docID == 'feedback'
+            && exists(reviewPath())
+            && (isOwner(review().authorUserID) || isOwner(review().subjectUserID));
+
+        allow create, update: if isFullMember()
+            && docID == 'feedback'
+            && exists(reviewPath())
+            && isOwner(review().authorUserID)
+            && request.resource.data.keys().hasOnly(['text'])
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 2000;
+
+        allow delete: if false;
+      }
     }
 
     // -------------------------------------------------------------------------
-    // Reports — moderation inbox, written by any signed-in user,
-    // processed by Cloud Functions. Clients cannot read reports.
+    // References — a friend vouching for a friend, independent of any stay
+    // (feature 1). The document id is "{subjectUID}_{authorUID}", so one friend
+    // writes at most one reference for another, and `areFriends` means a stranger
+    // cannot vouch for anyone at all.
+    //
+    // Either party may delete: the author because they changed their mind, and
+    // the subject because a reference sits on *their* profile and they should not
+    // have to keep one they didn't ask for.
+    // -------------------------------------------------------------------------
+    match /references/{referenceID} {
+      allow read: if isSignedIn();
+
+      allow create: if isFullMember()
+          && request.resource.data.keys().hasOnly([
+               'id', 'authorUserID', 'subjectUserID', 'text', 'createdAt', 'updatedAt'
+             ])
+          && request.resource.data.keys().hasAll(['authorUserID', 'subjectUserID', 'text'])
+          && request.resource.data.authorUserID == request.auth.uid
+          && referenceID == request.resource.data.subjectUserID + '_' + request.auth.uid
+          && request.resource.data.get('id', referenceID) == referenceID
+          && request.resource.data.subjectUserID is string
+          && request.resource.data.subjectUserID != request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          // Vouching is a friendship-gated act.
+          && areFriends(request.auth.uid, request.resource.data.subjectUserID)
+          // A block severs this the same way it severs a thread (S11).
+          && !blockedEitherWay(request.auth.uid, request.resource.data.subjectUserID);
+
+      allow update: if isSignedIn()
+          && isOwner(resource.data.authorUserID)
+          && changedKeys().hasOnly(['text', 'updatedAt'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.updatedAt == request.time;
+
+      allow delete: if isSignedIn()
+          && (isOwner(resource.data.authorUserID) || isOwner(resource.data.subjectUserID));
+    }
+
+    // -------------------------------------------------------------------------
+    // Reports — the moderation inbox (feature 6). Written by any full member and
+    // by the keyword-moderation triggers (admin, which bypass these rules), read
+    // and triaged only by a moderator holding the `admin` custom claim. A reporter
+    // cannot read their own report back: the inbox is not a channel.
+    //
+    // Triage states: new → reviewing → actioned | dismissed. Nothing about the
+    // report itself (who filed it, against what, why) is editable, so triage can
+    // never rewrite the evidence.
     // -------------------------------------------------------------------------
     match /reports/{reportID} {
-      allow read: if false;
+      allow read: if isAdmin();
+
       allow create: if isFullMember()
+          && request.resource.data.keys().hasOnly([
+               'reporterUserID', 'targetType', 'targetID', 'reason',
+               'status', 'source', 'createdAt'
+             ])
           && request.resource.data.reporterUserID == request.auth.uid
           && request.resource.data.reason is string
           && request.resource.data.reason.size() > 0
           && request.resource.data.reason.size() < 2000
-          && request.resource.data.targetType in ["user", "listing", "message"];
-      allow update, delete: if false;
+          && request.resource.data.targetType in ["user", "listing", "message"]
+          // A fresh report enters triage at the top of the queue, and is filed by
+          // a person — `source: "auto"` belongs to the moderation triggers.
+          && (isUnset(request.resource.data, 'status') || request.resource.data.status == 'new')
+          && (isUnset(request.resource.data, 'source') || request.resource.data.source == 'user');
+
+      allow update: if isAdmin()
+          && changedKeys().hasOnly(['status', 'moderatorNote', 'reviewedBy', 'reviewedAt'])
+          && request.resource.data.status in ['new', 'reviewing', 'actioned', 'dismissed']
+          && isOptionalString(request.resource.data, 'moderatorNote', 2000)
+          && request.resource.data.get('reviewedBy', request.auth.uid) == request.auth.uid;
+
+      allow delete: if false;
     }
 
   }

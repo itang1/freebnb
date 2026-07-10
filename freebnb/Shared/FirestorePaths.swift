@@ -19,6 +19,10 @@ enum FirestorePaths {
     static let messages = "messages"
     static let reports = "reports"
     static let rateLimits = "rateLimits"
+    /// Post-stay two-way reviews, one per (stay request, author).
+    static let reviews = "reviews"
+    /// Friend-written character references on a profile, one per (subject, author).
+    static let references = "references"
 
     // Subcollections
     /// Private data readable only by the owner: `users/{uid}/private`,
@@ -34,4 +38,7 @@ enum FirestorePaths {
     static let manualDocID = "manual"
     /// The user's private profile: `users/{uid}/private/profile`.
     static let profileDocID = "profile"
+    /// The reviewer's note to the reviewed, never public:
+    /// `reviews/{reviewID}/private/feedback`.
+    static let feedbackDocID = "feedback"
 }
