@@ -20,6 +20,8 @@ struct RequestStaySheet: View {
         for: Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
     )
     @State private var note = ""
+    @State private var guestCount = 1
+    @State private var arrivalWindow: ArrivalWindow = .flexible
     @State private var isSending = false
     @State private var errorMessage: String?
 
@@ -83,6 +85,28 @@ struct RequestStaySheet: View {
                     }
                 }
 
+                Section("Party") {
+                    Stepper(value: $guestCount, in: 1...max(1, listing.guestPolicy.maxGuests)) {
+                        HStack {
+                            Text("Guests")
+                            Spacer()
+                            Text("\(guestCount)")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Text("This place hosts up to \(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s").")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("Arrival") {
+                    Picker("Arrival time", selection: $arrivalWindow) {
+                        ForEach(ArrivalWindow.allCases, id: \.self) { window in
+                            Text(window.displayName).tag(window)
+                        }
+                    }
+                }
+
                 Section("Note to host (optional)") {
                     TextField("Introduce yourself, share your travel context...", text: $note, axis: .vertical)
                         .lineLimit(3...8)
@@ -122,7 +146,9 @@ struct RequestStaySheet: View {
                 guestUserID: authManager.userID,
                 checkIn: checkIn,
                 checkOut: checkOut,
-                guestNote: note.isEmpty ? nil : note
+                guestNote: note.isEmpty ? nil : note,
+                guestCount: guestCount,
+                arrivalWindow: arrivalWindow
             )
             messageStore.send(
                 text: "📅 Requested to stay · \(dateRangeText(from: checkIn, to: checkOut, nights: nights))",

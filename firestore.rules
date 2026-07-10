@@ -48,6 +48,13 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/homes/$(homeID)).data.get('deletedAt', null) == null;
     }
 
+    // The listing's advertised guest capacity, used to bound a stay request's
+    // party size (feature 20). Duplicate get()s in one evaluation are cached by
+    // the rules engine, so this shares the read listingHasActiveHost already did.
+    function listingMaxGuests(homeID) {
+      return get(/databases/$(database)/documents/homes/$(homeID)).data.guestPolicy.maxGuests;
+    }
+
     // The keys an update actually touches. Anything absent from the caller's
     // allowlist is thereby pinned to its existing value.
     function changedKeys() {
@@ -330,7 +337,8 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'id', 'listingID', 'listingCity', 'listingHostName',
                'hostUserID', 'guestUserID', 'checkIn', 'checkOut',
-               'guestNote', 'hostNote', 'status', 'createdAt', 'updatedAt'
+               'guestNote', 'hostNote', 'guestCount', 'arrivalWindow',
+               'status', 'createdAt', 'updatedAt'
              ])
           && request.resource.data.guestUserID == request.auth.uid
           && request.resource.data.status == "pending"
@@ -348,7 +356,16 @@ service cloud.firestore {
           // The named host must actually own the (live) listing being requested,
           // so a request can't be aimed at an arbitrary user's inbox (S8).
           && listingHasActiveHost(request.resource.data.listingID, request.resource.data.hostUserID)
-          && isOptionalString(request.resource.data, 'guestNote', 2000);
+          && isOptionalString(request.resource.data, 'guestNote', 2000)
+          // Party size, when given, is a positive int no larger than the
+          // listing's advertised capacity (feature 20).
+          && (isUnset(request.resource.data, 'guestCount')
+              || (request.resource.data.guestCount is int
+                  && request.resource.data.guestCount >= 1
+                  && request.resource.data.guestCount <= listingMaxGuests(request.resource.data.listingID)))
+          && (isUnset(request.resource.data, 'arrivalWindow')
+              || request.resource.data.arrivalWindow in
+                   ['flexible', 'morning', 'afternoon', 'evening', 'lateNight']);
 
       // Status transitions may touch nothing but the status, the note belonging
       // to the acting role, and updatedAt. Everything else — checkIn, checkOut,

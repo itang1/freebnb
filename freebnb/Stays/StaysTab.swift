@@ -299,6 +299,11 @@ struct OutgoingRequestRow: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
+            if let summary = request.partySummary {
+                Label(summary, systemImage: "person.2")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+
             if let note = request.guestNote, !note.isEmpty {
                 Text("\"\(note)\"")
                     .font(.caption).foregroundColor(.secondary).italic().lineLimit(2)
@@ -363,6 +368,11 @@ struct IncomingRequestRow: View {
             Text("\(request.nights) night\(request.nights == 1 ? "" : "s")")
                 .font(.caption)
                 .foregroundColor(.secondary)
+
+            if let summary = request.partySummary {
+                Label(summary, systemImage: "person.2")
+                    .font(.caption).foregroundColor(.secondary)
+            }
 
             if let note = request.guestNote, !note.isEmpty {
                 Text("\"\(note)\"")
