@@ -124,6 +124,11 @@ struct ContentView: View {
                     messagesDeepLinkUserID = userID
                     router.pendingConversationUserID = nil
                 }
+                .onChange(of: router.pendingStayEvent) { _, pending in
+                    guard pending else { return }
+                    selectedTab = 1
+                    router.pendingStayEvent = false
+                }
                 // Runs on appear and whenever a new invite link arrives, so an
                 // invite that was opened before sign-in is still handled once the
                 // signed-in UI mounts. This is the real auth-state gate that

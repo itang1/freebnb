@@ -70,6 +70,27 @@ struct ProfilePage: View {
 
                     rowDivider
 
+                    NavigationLink {
+                        NotificationSettingsPage()
+                            .environment(userProfileStore)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "slider.horizontal.3")
+                                .frame(width: 28)
+                                .foregroundColor(Color.accent)
+                            Text("What you're notified about")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary.opacity(0.5))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+
+                    rowDivider
+
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 12) {
                             Image(systemName: "circle.lefthalf.filled")

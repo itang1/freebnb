@@ -265,6 +265,10 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
         profiles[userID]?.fcmToken = token
     }
 
+    func updateNotificationPrefs(userID: String, prefs: NotificationPreferences) async throws {
+        profiles[userID]?.notificationPrefs = prefs
+    }
+
     func searchProfiles(query: String) async throws -> [UserProfile] {
         let q = query.lowercased()
         return profiles.values.filter { $0.displayName.lowercased().hasPrefix(q) }

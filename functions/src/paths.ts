@@ -38,3 +38,4 @@ export const listingPhotosPrefix = (uid: string): string => `listings/${uid}/`;
 // Firestore trigger path patterns.
 export const messageDocPattern = `${Collections.messages}/{messageID}`;
 export const friendEdgeDocPattern = `${Collections.friendEdges}/{edgeID}`;
+export const stayRequestDocPattern = `${Collections.stayRequests}/{requestID}`;

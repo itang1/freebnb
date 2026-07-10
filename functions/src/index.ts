@@ -15,6 +15,7 @@ import {
   listingPhotosPrefix,
   messageDocPattern,
   privateProfilePath,
+  stayRequestDocPattern,
 } from "./paths";
 
 admin.initializeApp();
@@ -47,6 +48,55 @@ async function deleteQueryInChunks(query: FirebaseFirestore.Query): Promise<void
 // data and a cost leak (S7). A missing bucket or empty prefix is a no-op.
 async function deleteStoragePrefix(prefix: string): Promise<void> {
   await admin.storage().bucket().deleteFiles({ prefix });
+}
+
+// ---------------------------------------------------------------------------
+// Push notifications
+// Per-category preferences live in the recipient's private profile as a
+// `notificationPrefs` map. A category counts as enabled unless the map stores
+// `false` for it, so an absent map or key means opted-in — clients only persist
+// the categories a user turns off (feature 37). The client mirror is
+// NotificationCategory in NotificationPreferences.swift; keep the keys in sync.
+// ---------------------------------------------------------------------------
+type NotificationCategory = "messages" | "stayRequests" | "stayUpdates";
+
+function notificationEnabled(
+  privateData: FirebaseFirestore.DocumentData | undefined,
+  category: NotificationCategory
+): boolean {
+  const prefs = privateData?.notificationPrefs as Record<string, unknown> | undefined;
+  return prefs?.[category] !== false;
+}
+
+// Sends one push to `recipientID` for `category`, gated by their notification
+// preference, block list, and having a registered FCM token — any failed gate
+// is a silent no-op. `senderID`, when given, suppresses the push if the
+// recipient has blocked that user. A missing/unreadable private profile is
+// treated as "opted in with no token", so it simply sends nothing.
+async function sendStayPush(opts: {
+  recipientID: string;
+  category: NotificationCategory;
+  senderID?: string;
+  title: string;
+  body: string;
+  data: Record<string, string>;
+}): Promise<void> {
+  const privateData = (await db.doc(privateProfilePath(opts.recipientID)).get()).data();
+
+  if (!notificationEnabled(privateData, opts.category)) return;
+  if (opts.senderID) {
+    const blocked: string[] = privateData?.blockedUserIDs ?? [];
+    if (blocked.includes(opts.senderID)) return;
+  }
+  const fcmToken: string | undefined = privateData?.fcmToken;
+  if (!fcmToken) return;
+
+  await admin.messaging().send({
+    token: fcmToken,
+    notification: { title: opts.title, body: opts.body },
+    apns: { payload: { aps: { sound: "default" } } },
+    data: opts.data,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +243,10 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
   if (mutedBy.includes(recipientID)) return;
 
   const recipientData = recipientPrivate.data();
+
+  // Respect the recipient's per-category preference: a muted "messages"
+  // category silences the push (the unread count still advanced above).
+  if (!notificationEnabled(recipientData, "messages")) return;
 
   // Never push a notification from someone the recipient has blocked.
   const blocked: string[] = recipientData?.blockedUserIDs ?? [];
@@ -422,6 +476,69 @@ export const acceptStayRequest = onCall(async (request) => {
   });
 
   return { ok: true };
+});
+
+// ---------------------------------------------------------------------------
+// onStayRequestWritten
+// Stay-lifecycle push notifications with a deep link into the Stays tab
+// (feature 36): the host hears about a brand-new request, and the guest hears
+// when their pending request is accepted or declined. The chatty courtesy notes
+// the app also posts to the thread ride the separate "messages" category; these
+// use "stayRequests"/"stayUpdates" so each can be muted on its own (feature 37).
+// ---------------------------------------------------------------------------
+export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, async (event) => {
+  const change = event.data;
+  const before = change?.before.exists ? change.before.data() : undefined;
+  const after = change?.after.exists ? change.after.data() : undefined;
+  if (!after) return; // a deletion has no one to notify
+
+  const requestID = event.params.requestID;
+  const listingCity: string = after.listingCity ?? "";
+  const guestUserID: string = after.guestUserID;
+  const hostUserID: string = after.hostUserID;
+  const beforeStatus: string | undefined = before?.status;
+  const afterStatus: string = after.status;
+  const citySuffix = listingCity ? ` in ${listingCity}` : "";
+
+  // A freshly created pending request → notify the host.
+  if (!before && afterStatus === "pending") {
+    const guestName =
+      (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Someone";
+    await sendStayPush({
+      recipientID: hostUserID,
+      category: "stayRequests",
+      senderID: guestUserID,
+      title: "New stay request",
+      body: `${guestName} asked to stay${citySuffix}.`,
+      data: { type: "stay_request", requestID, role: "host" },
+    });
+    return;
+  }
+
+  // The host resolved a pending request → notify the guest. "cancelled" is a
+  // guest-initiated status, so it never notifies here.
+  if (beforeStatus === "pending" && afterStatus !== "pending") {
+    const hostName: string = after.listingHostName ?? "The host";
+    if (afterStatus === "accepted") {
+      await sendStayPush({
+        recipientID: guestUserID,
+        category: "stayUpdates",
+        senderID: hostUserID,
+        title: "Stay accepted 🎉",
+        body: `${hostName} accepted your request${citySuffix}.`,
+        data: { type: "stay_update", requestID, role: "guest", status: "accepted" },
+      });
+    } else if (afterStatus === "declined") {
+      await sendStayPush({
+        recipientID: guestUserID,
+        category: "stayUpdates",
+        senderID: hostUserID,
+        title: "Stay request update",
+        body: `${hostName} couldn't host your request${citySuffix}.`,
+        data: { type: "stay_update", requestID, role: "guest", status: "declined" },
+      });
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------

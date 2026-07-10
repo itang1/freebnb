@@ -16,11 +16,16 @@ struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     var savedListingIDs: [String]?
     var blockedUserIDs: [String]?
     var fcmToken: String?
+    // Per-category push preferences; lives in the private subdocument and is
+    // merged in alongside the other owner-only fields. Absent means "all on".
+    var notificationPrefs: NotificationPreferences?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
 
     var savedIDs: Set<String> { Set(savedListingIDs ?? []) }
     var blockedIDs: Set<String> { Set(blockedUserIDs ?? []) }
+    /// Effective preferences, defaulting to all-enabled when none are stored.
+    var effectiveNotificationPrefs: NotificationPreferences { notificationPrefs ?? NotificationPreferences() }
 }
 
 @MainActor
@@ -181,6 +186,22 @@ final class UserProfileStore {
     func submitReport(targetType: String, targetID: String, reason: String) async throws {
         guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         try await repository.submitReport(reporterUserID: myID, targetType: targetType, targetID: targetID, reason: reason)
+    }
+
+    /// Persists per-category push preferences to the private profile. Updates the
+    /// local copy optimistically so the toggle reflects the change without waiting
+    /// for the listener round-trip; reverts on failure.
+    func updateNotificationPrefs(_ prefs: NotificationPreferences) async throws {
+        guard let userID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
+        let snapshot = currentProfile
+        currentProfile?.notificationPrefs = prefs
+        do {
+            try await repository.updateNotificationPrefs(userID: userID, prefs: prefs)
+        } catch {
+            currentProfile = snapshot
+            log.error("notification prefs update error: \(error.localizedDescription, privacy: .public)")
+            throw ProfileUpdateError.underlying(error)
+        }
     }
 
     func saveFCMToken(_ token: String) async throws {
