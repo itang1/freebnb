@@ -279,6 +279,13 @@ struct Home: Identifiable, Hashable, Codable {
     var latitude: Double? = nil
     var longitude: Double? = nil
 
+    // MARK: Geohash
+    // A geohash of the public (blurred) coordinate, kept as an indexable key for
+    // proximity range queries (feature 11). Stamped by the client on save
+    // whenever coordinates resolve; nil for listings saved before this field or
+    // whose address wouldn't geocode.
+    var geohash: String? = nil
+
     // MARK: Visibility
     // Optional on the wire so listings created before this field decode cleanly.
     // Nil is treated as .everyone.
@@ -341,6 +348,7 @@ struct Home: Identifiable, Hashable, Codable {
         case photoURLs
         case blockedDateRanges
         case latitude, longitude
+        case geohash
         case visibility
         case allowedViewerIDs
         case deletedAt
@@ -372,6 +380,7 @@ extension Home {
         blockedDateRanges   = try c.decodeIfPresent([DateRange].self,         forKey: .blockedDateRanges)
         latitude            = try c.decodeIfPresent(Double.self,              forKey: .latitude)
         longitude          = try c.decodeIfPresent(Double.self,               forKey: .longitude)
+        geohash            = try c.decodeIfPresent(String.self,               forKey: .geohash)
         visibility         = try c.decodeIfPresent(ListingVisibility.self,    forKey: .visibility)
         allowedViewerIDs   = try c.decodeIfPresent([String].self,             forKey: .allowedViewerIDs)
         deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)

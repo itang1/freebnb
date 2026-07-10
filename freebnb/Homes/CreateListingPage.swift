@@ -222,6 +222,10 @@ final class CreateListingViewModel {
             location.longitude = coordinate.longitude
             home.latitude  = Home.approximate(coordinate.latitude)
             home.longitude = Home.approximate(coordinate.longitude)
+            // Index the blurred coordinate for proximity queries (feature 11).
+            if let lat = home.latitude, let lon = home.longitude {
+                home.geohash = Geohash.encode(latitude: lat, longitude: lon)
+            }
         } catch {
             // Don't save a listing with no coordinates behind the host's back.
             // Surface the failure so they can fix the address and retry, or

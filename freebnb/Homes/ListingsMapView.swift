@@ -16,8 +16,13 @@ struct ListingsMapView: View {
     // Coordinates resolved at display time; keyed by listing ID.
     @State private var resolvedCoords: [String: CLLocationCoordinate2D] = [:]
     @State private var isGeocoding = false
+    // The region under the camera right now, and the region the user last locked
+    // in with "Search this area". While `appliedRegion` is set, only pins inside
+    // it show, turning the map into a proximity filter (feature 11).
+    @State private var currentRegion: MKCoordinateRegion?
+    @State private var appliedRegion: MKCoordinateRegion?
 
-    private var pins: [(home: Home, coordinate: CLLocationCoordinate2D)] {
+    private var allPins: [(home: Home, coordinate: CLLocationCoordinate2D)] {
         listings.compactMap { home in
             if let lat = home.latitude, let lon = home.longitude {
                 return (home, CLLocationCoordinate2D(latitude: lat, longitude: lon))
@@ -27,6 +32,11 @@ struct ListingsMapView: View {
             }
             return nil
         }
+    }
+
+    private var pins: [(home: Home, coordinate: CLLocationCoordinate2D)] {
+        guard let region = appliedRegion else { return allPins }
+        return allPins.filter { region.contains($0.coordinate) }
     }
 
     var body: some View {
@@ -40,6 +50,11 @@ struct ListingsMapView: View {
                     }
                 }
                 .mapStyle(.standard)
+                .onMapCameraChange(frequency: .onEnd) { context in
+                    currentRegion = context.region
+                }
+
+                searchThisAreaButton
 
                 if let home = selectedHome {
                     selectedCard(home)
@@ -53,10 +68,17 @@ struct ListingsMapView: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 } else if !isGeocoding && pins.isEmpty {
                     ContentUnavailableView {
-                        Label("No map pins", systemImage: "map")
+                        Label(appliedRegion == nil ? "No map pins" : "Nothing in this area",
+                              systemImage: "map")
                             .foregroundStyle(Color.accent)
                     } description: {
-                        Text("None of the visible listings have a geocodable address.")
+                        if appliedRegion == nil {
+                            Text("None of the visible listings have a geocodable address.")
+                        } else {
+                            Text("No listings fall inside the area you searched. Zoom out and search again, or show all.")
+                            Button("Show all areas") { appliedRegion = nil }
+                                .padding(.top, 8)
+                        }
                     }
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                     .padding()
@@ -97,6 +119,42 @@ struct ListingsMapView: View {
         isGeocoding = false
     }
 
+    // Floating top control that turns the current viewport into a proximity
+    // filter, plus a reset once one is applied.
+    private var searchThisAreaButton: some View {
+        VStack(spacing: 8) {
+            Button {
+                appliedRegion = currentRegion
+                selectedHome = nil
+            } label: {
+                Label("Search this area", systemImage: "magnifyingglass")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .foregroundColor(Color.accent)
+                    .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+            }
+            .disabled(currentRegion == nil)
+
+            if appliedRegion != nil {
+                Button {
+                    appliedRegion = nil
+                } label: {
+                    Label("\(pins.count) in this area · Show all", systemImage: "xmark.circle.fill")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .foregroundColor(.primary)
+                }
+            }
+            Spacer()
+        }
+        .padding(.top, 10)
+        .frame(maxWidth: .infinity)
+    }
+
     private func selectedCard(_ home: Home) -> some View {
         Button {
             onSelectHome(home)
@@ -124,5 +182,13 @@ struct ListingsMapView: View {
             .padding(.bottom, 16)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private extension MKCoordinateRegion {
+    /// Whether a coordinate falls within this region's latitude/longitude span.
+    func contains(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        abs(coordinate.latitude - center.latitude) <= span.latitudeDelta / 2
+            && abs(coordinate.longitude - center.longitude) <= span.longitudeDelta / 2
     }
 }
