@@ -284,6 +284,10 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
     }
 
     func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws {}
+
+    func exportUserData() async throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["profile": [:], "listings": []], options: [.prettyPrinted])
+    }
 }
 
 final class InMemoryFriendEdgeRepository: FriendEdgeRepository, @unchecked Sendable {

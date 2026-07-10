@@ -28,6 +28,9 @@ protocol UserProfileRepository: Sendable {
     func updateNotificationPrefs(userID: String, prefs: NotificationPreferences) async throws
     func searchProfiles(query: String) async throws -> [UserProfile]
     func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws
+    /// Invokes the `exportUserData` callable and returns the result as
+    /// pretty-printed JSON, fulfilling the GDPR/CCPA right-to-access (L12).
+    func exportUserData() async throws -> Data
 }
 
 // Sensitive profile fields (email, fcmToken, blockedUserIDs, savedListingIDs)
@@ -96,7 +99,11 @@ private final class CurrentProfileMerger: @unchecked Sendable {
 
 struct FirestoreUserProfileRepository: UserProfileRepository {
     private let db: Firestore
-    init(db: Firestore = .firestore()) { self.db = db }
+    private let functions: Functions
+    init(db: Firestore = .firestore(), functions: Functions = .functions()) {
+        self.db = db
+        self.functions = functions
+    }
 
     private func privateDoc(_ userID: String) -> DocumentReference {
         db.collection(FirestorePaths.users).document(userID)
@@ -220,6 +227,17 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
                     "updatedAt": FieldValue.serverTimestamp()
                 ], merge: true)
         }
+    }
+
+    func exportUserData() async throws -> Data {
+        let result = try await functions.httpsCallable("exportUserData").call()
+        // The callable returns a JSON-compatible object graph (dictionaries,
+        // arrays, numbers, strings, and Timestamp maps). Serialize it stably so
+        // the shared file is human-readable.
+        return try JSONSerialization.data(
+            withJSONObject: result.data,
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        )
     }
 
     func searchProfiles(query: String) async throws -> [UserProfile] {

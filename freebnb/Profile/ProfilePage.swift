@@ -17,6 +17,9 @@ struct ProfilePage: View {
     @State private var showEditName = false
     @State private var showDeleteConfirm = false
     @State private var notifAuthStatus: UNAuthorizationStatus = .notDetermined
+    @State private var isExporting = false
+    @State private var exportFile: ExportFile?
+    @State private var exportError: String?
 
     private static let privacyURL = URL(string: "https://freebnb.app/privacy")!
     private static let termsURL   = URL(string: "https://freebnb.app/terms")!
@@ -111,6 +114,41 @@ struct ProfilePage: View {
                 .sectionCard()
                 .padding(.bottom, 20)
 
+                if authManager.authMethod != .guest {
+                    sectionLabel("Your Data")
+                    VStack(spacing: 0) {
+                        Button {
+                            Task { await exportData() }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .frame(width: 28)
+                                    .foregroundColor(Color.accent)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Export my data")
+                                        .foregroundColor(.primary)
+                                    Text("Download everything we store about you as JSON.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                if isExporting {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary.opacity(0.5))
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
+                        .disabled(isExporting)
+                    }
+                    .sectionCard()
+                    .padding(.bottom, 20)
+                }
+
                 sectionLabel("About")
                 VStack(spacing: 0) {
                     SettingsRow(icon: "number", label: "Version", trailingText: appVersion)
@@ -182,6 +220,17 @@ struct ProfilePage: View {
             EditNameSheet()
                 .environment(userProfileStore)
         }
+        .sheet(item: $exportFile) { file in
+            DataExportShareSheet(url: file.url)
+        }
+        .alert("Couldn't export data", isPresented: Binding(
+            get: { exportError != nil },
+            set: { if !$0 { exportError = nil } }
+        )) {
+            Button("OK", role: .cancel) { exportError = nil }
+        } message: {
+            if let exportError { Text(exportError) }
+        }
         .confirmationDialog(
             "Delete your account?",
             isPresented: $showDeleteConfirm,
@@ -192,6 +241,20 @@ struct ProfilePage: View {
             }
         } message: {
             Text("This permanently removes your account and all saved data. It cannot be undone. Sign in with Apple will prompt again to confirm.")
+        }
+    }
+
+    // MARK: - Data export
+
+    private func exportData() async {
+        isExporting = true
+        exportError = nil
+        defer { isExporting = false }
+        do {
+            let url = try await userProfileStore.exportDataFile()
+            exportFile = ExportFile(url: url)
+        } catch {
+            exportError = error.localizedDescription
         }
     }
 
@@ -342,6 +405,60 @@ struct ProfilePage: View {
         case .apple:  return "apple.logo"
         case .guest:  return "person.slash"
         case .none:   return "questionmark"
+        }
+    }
+}
+
+// MARK: - Data export share sheet
+
+/// Wraps the exported file URL so it can drive a `.sheet(item:)`.
+private struct ExportFile: Identifiable {
+    let url: URL
+    var id: String { url.path }
+}
+
+/// A small sheet presenting the finished export with a ShareLink. Presented
+/// programmatically once the async export completes (ShareLink alone can't be
+/// triggered from code).
+private struct DataExportShareSheet: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(.green)
+                Text("Your data is ready")
+                    .font(.title3.weight(.semibold))
+                Text("A JSON file with your profile, listings, stays, messages, and connections.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                ShareLink(item: url) {
+                    Label("Share or save", systemImage: "square.and.arrow.up")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.accent)
+                        .foregroundColor(.onAccent)
+                        .cornerRadius(12)
+                }
+                Spacer()
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(Color.primaryBackground.ignoresSafeArea())
+            .navigationTitle("Export")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
