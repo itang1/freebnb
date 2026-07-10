@@ -433,6 +433,66 @@ export const exportUserData = functions.https.onCall(async (_data, context) => {
   };
 });
 
+// ---------------------------------------------------------------------------
+// expireCompletedStays (scheduled)
+// Progressive address disclosure is granted by homes/{id}/accepted/{guestUID}
+// and revoked on decline/cancel (client) — but a stay that simply runs its
+// course and ends never revoked it, so a past guest kept the host's street
+// forever (S2). This daily sweep deletes the marker once a stay's checkOut has
+// passed, expiring the guest's access. The stay stays "accepted" as history;
+// only the address grant is withdrawn.
+//
+// Re-booking safe: if the same guest still has another accepted stay at the same
+// listing whose checkout is in the future, the marker is kept. Idempotent: a
+// request already handled carries accessRevokedAt and is skipped, and deleting an
+// absent marker is a no-op.
+// ---------------------------------------------------------------------------
+export const expireCompletedStays = functions.pubsub
+  .schedule("0 4 * * *")
+  .timeZone("UTC")
+  .onRun(async () => {
+    const nowMs = Date.now();
+    // One query on an auto-indexed equality; partition in memory so no composite
+    // index is needed and a guest's still-active stay can veto the revocation.
+    const snap = await db.collection(Collections.stayRequests).where("status", "==", "accepted").get();
+
+    const activeKeys = new Set<string>();
+    const completed: { ref: FirebaseFirestore.DocumentReference; listingID: string; guestUserID: string }[] = [];
+    for (const doc of snap.docs) {
+      const req = doc.data() as {
+        listingID: string;
+        guestUserID: string;
+        checkOut: admin.firestore.Timestamp;
+        accessRevokedAt?: admin.firestore.Timestamp;
+      };
+      const key = `${req.listingID}__${req.guestUserID}`;
+      if (req.checkOut.toMillis() > nowMs) {
+        activeKeys.add(key);
+      } else if (!req.accessRevokedAt) {
+        completed.push({ ref: doc.ref, listingID: req.listingID, guestUserID: req.guestUserID });
+      }
+    }
+
+    // Drop any completed stay whose guest still has a future accepted stay at the
+    // same listing — that later stay keeps the marker alive. 250 revocations per
+    // batch (two writes each) stays under the 500-op cap.
+    const toRevoke = completed.filter((c) => !activeKeys.has(`${c.listingID}__${c.guestUserID}`));
+    let revoked = 0;
+    for (let i = 0; i < toRevoke.length; i += 250) {
+      const batch = db.batch();
+      for (const c of toRevoke.slice(i, i + 250)) {
+        batch.delete(
+          db.collection(Collections.homes).doc(c.listingID).collection(Subcollections.accepted).doc(c.guestUserID)
+        );
+        batch.update(c.ref, { accessRevokedAt: admin.firestore.FieldValue.serverTimestamp() });
+        revoked++;
+      }
+      await batch.commit();
+    }
+    console.log(`expireCompletedStays: revoked ${revoked} completed stay marker(s).`);
+    return null;
+  });
+
 // Message rate limiting is enforced in the write path by firestore.rules: every
 // message create must advance the sender's rateLimits/{uid} counter, which the
 // rules cap at 30 messages per 60s window. The former checkMessageRate callable
