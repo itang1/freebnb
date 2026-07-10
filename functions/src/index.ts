@@ -1,5 +1,13 @@
 import * as admin from "firebase-admin";
-import * as functions from "firebase-functions";
+import * as logger from "firebase-functions/logger";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+// The auth `onDelete` background trigger has no v2 equivalent (v2 offers only the
+// `beforeUserCreated`/`beforeUserSignedIn` blocking triggers, not a post-delete
+// hook), so that one function stays on the v1 API surface. v1 and v2 functions
+// coexist in the same codebase and deploy together (A4).
+import * as functionsV1 from "firebase-functions/v1";
 import {
   Collections,
   Subcollections,
@@ -13,15 +21,23 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
-// Firestore caps a WriteBatch at 500 operations. Deletes every document a
-// query matches, committing in chunks so large result sets don't exceed it.
+// Firestore caps a WriteBatch at 500 operations, and holding an unbounded result
+// set in memory is its own scaling ceiling (A9).
+const PAGE_SIZE = 500;
+
+// Deletes every document a query matches, one bounded page at a time. Because a
+// deleted document no longer matches, each `get()` returns only outstanding work,
+// so a retry after a mid-run failure resumes where it left off instead of
+// rescanning from the top (A9). The caller must pass a query with no `limit`.
 async function deleteQueryInChunks(query: FirebaseFirestore.Query): Promise<void> {
-  const snap = await query.get();
-  const refs = snap.docs.map((d) => d.ref);
-  for (let i = 0; i < refs.length; i += 500) {
+  for (;;) {
+    const snap = await query.limit(PAGE_SIZE).get();
+    if (snap.empty) return;
     const batch = db.batch();
-    for (const ref of refs.slice(i, i + 500)) batch.delete(ref);
+    for (const doc of snap.docs) batch.delete(doc.ref);
     await batch.commit();
+    // A short final page means the matched set is drained.
+    if (snap.size < PAGE_SIZE) return;
   }
 }
 
@@ -47,10 +63,9 @@ async function deleteStoragePrefix(prefix: string): Promise<void> {
 //
 // Exports land in gs://${PROJECT_ID}-backups/firestore/YYYY-MM-DD/
 // ---------------------------------------------------------------------------
-export const scheduledFirestoreBackup = functions.pubsub
-  .schedule("0 3 * * *")
-  .timeZone("UTC")
-  .onRun(async () => {
+export const scheduledFirestoreBackup = onSchedule(
+  { schedule: "0 3 * * *", timeZone: "UTC" },
+  async () => {
     const projectId = process.env.GCLOUD_PROJECT ?? process.env.GOOGLE_CLOUD_PROJECT;
     if (!projectId) throw new Error("GCLOUD_PROJECT env var not set");
 
@@ -80,8 +95,9 @@ export const scheduledFirestoreBackup = functions.pubsub
     }
 
     const op = await res.json() as { name: string };
-    functions.logger.info("Firestore backup started", { operation: op.name, outputUri });
-  });
+    logger.info("Firestore backup started", { operation: op.name, outputUri });
+  }
+);
 
 // ---------------------------------------------------------------------------
 // onMessageCreated
@@ -93,103 +109,115 @@ export const scheduledFirestoreBackup = functions.pubsub
 // ---------------------------------------------------------------------------
 
 // Counts the user's non-muted conversations that still hold unread messages —
-// the value both the app's tab badge and the APNs badge display. A small
-// fan-out over the recipient's conversations (see A9 for the scaling ceiling).
+// the value both the app's tab badge and the APNs badge display. Pages over the
+// recipient's conversations so the fan-out stays bounded no matter how many
+// threads they have (A9).
 async function unreadConversationCount(userID: string): Promise<number> {
-  const snap = await db
+  const base = db
     .collection(Collections.conversations)
     .where("participants", "array-contains", userID)
-    .get();
+    .orderBy(admin.firestore.FieldPath.documentId());
+
   let count = 0;
-  for (const doc of snap.docs) {
-    const data = doc.data();
-    const muted: string[] = data.mutedBy ?? [];
-    if (muted.includes(userID)) continue;
-    const unread: number = data.unreadCounts?.[userID] ?? 0;
-    if (unread > 0) count++;
+  let cursor: string | undefined;
+  for (;;) {
+    let query = base.limit(PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const snap = await query.get();
+    if (snap.empty) break;
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const muted: string[] = data.mutedBy ?? [];
+      if (muted.includes(userID)) continue;
+      const unread: number = data.unreadCounts?.[userID] ?? 0;
+      if (unread > 0) count++;
+    }
+    if (snap.size < PAGE_SIZE) break;
+    cursor = snap.docs[snap.docs.length - 1].id;
   }
   return count;
 }
 
-export const onMessageCreated = functions.firestore
-  .document(messageDocPattern)
-  .onCreate(async (snap) => {
-    const msg = snap.data() as {
-      senderUserID: string;
-      participants: string[];
-      text: string;
-      timestamp: admin.firestore.Timestamp;
-    };
+export const onMessageCreated = onDocumentCreated(messageDocPattern, async (event) => {
+  const snap = event.data;
+  if (!snap) return;
 
-    const senderID = msg.senderUserID;
-    const recipientID = msg.participants.find((uid) => uid !== senderID);
-    if (!recipientID) return;
+  const msg = snap.data() as {
+    senderUserID: string;
+    participants: string[];
+    text: string;
+    timestamp: admin.firestore.Timestamp;
+  };
 
-    // Upsert the conversation summary. The conversationID mirrors the client's
-    // MessageStore.conversationID: sorted participants joined by "_". merge keeps
-    // the other participant's unread count and any mutedBy list intact; the
-    // sender is caught up (0) and the recipient's counter advances — increment()
-    // treats a missing counter as 0, so the first message lands the count at 1.
-    const participants = [...msg.participants].sort();
-    const conversationID = participants.join("_");
-    const convRef = db.collection(Collections.conversations).doc(conversationID);
+  const senderID = msg.senderUserID;
+  const recipientID = msg.participants.find((uid) => uid !== senderID);
+  if (!recipientID) return;
 
-    await convRef.set(
-      {
-        participants,
-        lastMessage: {
-          text: msg.text,
-          senderUserID: senderID,
-          timestamp: msg.timestamp,
-        },
-        updatedAt: msg.timestamp,
-        unreadCounts: {
-          [senderID]: 0,
-          [recipientID]: admin.firestore.FieldValue.increment(1),
-        },
+  // Upsert the conversation summary. The conversationID mirrors the client's
+  // MessageStore.conversationID: sorted participants joined by "_". merge keeps
+  // the other participant's unread count and any mutedBy list intact; the
+  // sender is caught up (0) and the recipient's counter advances — increment()
+  // treats a missing counter as 0, so the first message lands the count at 1.
+  const participants = [...msg.participants].sort();
+  const conversationID = participants.join("_");
+  const convRef = db.collection(Collections.conversations).doc(conversationID);
+
+  await convRef.set(
+    {
+      participants,
+      lastMessage: {
+        text: msg.text,
+        senderUserID: senderID,
+        timestamp: msg.timestamp,
       },
-      { merge: true }
-    );
-
-    // The recipient's token and block list live in their owner-only private
-    // subdocument; the sender's display name is on the public user doc; the
-    // recipient's mute lives on the conversation doc we just wrote.
-    const [recipientPrivate, senderDoc, convSnap] = await Promise.all([
-      db.doc(privateProfilePath(recipientID)).get(),
-      db.collection(Collections.users).doc(senderID).get(),
-      convRef.get(),
-    ]);
-
-    // A muted conversation gets no push and never counts toward the badge.
-    const mutedBy: string[] = convSnap.data()?.mutedBy ?? [];
-    if (mutedBy.includes(recipientID)) return;
-
-    const recipientData = recipientPrivate.data();
-
-    // Never push a notification from someone the recipient has blocked.
-    const blocked: string[] = recipientData?.blockedUserIDs ?? [];
-    if (blocked.includes(senderID)) return;
-
-    const fcmToken: string | undefined = recipientData?.fcmToken;
-    if (!fcmToken) return;
-
-    const senderName: string = senderDoc.data()?.displayName ?? "FreeBNB";
-
-    // Badge the actual number of unread conversations, not a hardcoded 1 (L4).
-    const badge = await unreadConversationCount(recipientID);
-
-    await admin.messaging().send({
-      token: fcmToken,
-      notification: {
-        title: senderName,
-        body: msg.text.length > 120 ? msg.text.slice(0, 120) + "…" : msg.text,
+      updatedAt: msg.timestamp,
+      unreadCounts: {
+        [senderID]: 0,
+        [recipientID]: admin.firestore.FieldValue.increment(1),
       },
-      apns: {
-        payload: { aps: { sound: "default", badge } },
-      },
-      data: { type: "message", senderUserID: senderID },
-    });
+    },
+    { merge: true }
+  );
+
+  // The recipient's token and block list live in their owner-only private
+  // subdocument; the sender's display name is on the public user doc; the
+  // recipient's mute lives on the conversation doc we just wrote.
+  const [recipientPrivate, senderDoc, convSnap] = await Promise.all([
+    db.doc(privateProfilePath(recipientID)).get(),
+    db.collection(Collections.users).doc(senderID).get(),
+    convRef.get(),
+  ]);
+
+  // A muted conversation gets no push and never counts toward the badge.
+  const mutedBy: string[] = convSnap.data()?.mutedBy ?? [];
+  if (mutedBy.includes(recipientID)) return;
+
+  const recipientData = recipientPrivate.data();
+
+  // Never push a notification from someone the recipient has blocked.
+  const blocked: string[] = recipientData?.blockedUserIDs ?? [];
+  if (blocked.includes(senderID)) return;
+
+  const fcmToken: string | undefined = recipientData?.fcmToken;
+  if (!fcmToken) return;
+
+  const senderName: string = senderDoc.data()?.displayName ?? "FreeBNB";
+
+  // Badge the actual number of unread conversations, not a hardcoded 1 (L4).
+  const badge = await unreadConversationCount(recipientID);
+
+  await admin.messaging().send({
+    token: fcmToken,
+    notification: {
+      title: senderName,
+      body: msg.text.length > 120 ? msg.text.slice(0, 120) + "…" : msg.text,
+    },
+    apns: {
+      payload: { aps: { sound: "default", badge } },
+    },
+    data: { type: "message", senderUserID: senderID },
   });
+});
 
 // ---------------------------------------------------------------------------
 // onFriendEdgeWritten
@@ -203,61 +231,74 @@ export const onMessageCreated = functions.firestore
 // ---------------------------------------------------------------------------
 type FriendEdgeData = { userA: string; userB: string; status?: string };
 
-// Adds or removes `viewerID` from every listing hosted by `hostID`.
+// Adds or removes `viewerID` from every listing hosted by `hostID`, one bounded
+// page at a time. The id cursor keeps the fan-out from loading a prolific host's
+// entire catalogue into memory, and because arrayUnion/arrayRemove are
+// idempotent, a retry that re-commits a page is harmless (A9).
 async function setViewerOnListings(
   hostID: string,
   viewerID: string,
   grant: boolean
 ): Promise<void> {
-  const snap = await db.collection(Collections.homes).where("hostUserID", "==", hostID).get();
   const change = grant
     ? admin.firestore.FieldValue.arrayUnion(viewerID)
     : admin.firestore.FieldValue.arrayRemove(viewerID);
-  for (let i = 0; i < snap.docs.length; i += 500) {
+  const base = db
+    .collection(Collections.homes)
+    .where("hostUserID", "==", hostID)
+    .orderBy(admin.firestore.FieldPath.documentId());
+
+  let cursor: string | undefined;
+  for (;;) {
+    let query = base.limit(PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const snap = await query.get();
+    if (snap.empty) return;
     const batch = db.batch();
-    for (const doc of snap.docs.slice(i, i + 500)) {
-      batch.update(doc.ref, { allowedViewerIDs: change });
-    }
+    for (const doc of snap.docs) batch.update(doc.ref, { allowedViewerIDs: change });
     await batch.commit();
+    if (snap.size < PAGE_SIZE) return;
+    cursor = snap.docs[snap.docs.length - 1].id;
   }
 }
 
-export const onFriendEdgeWritten = functions.firestore
-  .document(friendEdgeDocPattern)
-  .onWrite(async (change) => {
-    const before = change.before.exists ? (change.before.data() as FriendEdgeData) : undefined;
-    const after = change.after.exists ? (change.after.data() as FriendEdgeData) : undefined;
+export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async (event) => {
+  const change = event.data;
+  const before = change?.before.exists ? (change.before.data() as FriendEdgeData) : undefined;
+  const after = change?.after.exists ? (change.after.data() as FriendEdgeData) : undefined;
 
-    const wasFriends = before?.status === "accepted";
-    const isFriends = after?.status === "accepted";
-    if (wasFriends === isFriends) return;
+  const wasFriends = before?.status === "accepted";
+  const isFriends = after?.status === "accepted";
+  if (wasFriends === isFriends) return;
 
-    const edge = after ?? before;
-    if (!edge?.userA || !edge?.userB) return;
+  const edge = after ?? before;
+  if (!edge?.userA || !edge?.userB) return;
 
-    // Friendship is symmetric: each user becomes a viewer of the other's homes.
-    await Promise.all([
-      setViewerOnListings(edge.userA, edge.userB, isFriends),
-      setViewerOnListings(edge.userB, edge.userA, isFriends),
-    ]);
-  });
+  // Friendship is symmetric: each user becomes a viewer of the other's homes.
+  await Promise.all([
+    setViewerOnListings(edge.userA, edge.userB, isFriends),
+    setViewerOnListings(edge.userB, edge.userA, isFriends),
+  ]);
+});
 
 // ---------------------------------------------------------------------------
 // onUserDeleted
 // Server-side cascade when a Firebase Auth user is removed.
 // The iOS client soft-deletes listings before calling user.delete(), so this
 // is a safety net for deletions that bypass the client (e.g. console, admin).
+//
+// Stays on the v1 API: v2 has no post-delete auth trigger (see the import note).
 // ---------------------------------------------------------------------------
-export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
+export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
   const uid = user.uid;
 
   // Soft-delete the user's listings (kept for history), chunked under the
   // 500-op batch cap for prolific hosts.
   const listingsSnap = await db.collection(Collections.homes).where("hostUserID", "==", uid).get();
-  for (let i = 0; i < listingsSnap.docs.length; i += 500) {
+  for (let i = 0; i < listingsSnap.docs.length; i += PAGE_SIZE) {
     const batch = db.batch();
     const now = admin.firestore.FieldValue.serverTimestamp();
-    for (const doc of listingsSnap.docs.slice(i, i + 500)) {
+    for (const doc of listingsSnap.docs.slice(i, i + PAGE_SIZE)) {
       batch.update(doc.ref, { deletedAt: now });
     }
     await batch.commit();
@@ -307,17 +348,17 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
 // the address-disclosure marker, so acceptance is atomic end to end.
 // Call from the app: httpsCallable("acceptStayRequest").call(["requestID": id])
 // ---------------------------------------------------------------------------
-export const acceptStayRequest = functions.https.onCall(async (data, context) => {
-  const uid = context.auth?.uid;
-  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+export const acceptStayRequest = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
 
-  const requestID: unknown = data?.requestID;
-  const hostNote: unknown = data?.hostNote;
+  const requestID: unknown = request.data?.requestID;
+  const hostNote: unknown = request.data?.hostNote;
   if (typeof requestID !== "string" || requestID.length === 0) {
-    throw new functions.https.HttpsError("invalid-argument", "requestID is required.");
+    throw new HttpsError("invalid-argument", "requestID is required.");
   }
   if (hostNote !== undefined && typeof hostNote !== "string") {
-    throw new functions.https.HttpsError("invalid-argument", "hostNote must be a string.");
+    throw new HttpsError("invalid-argument", "hostNote must be a string.");
   }
 
   const requestRef = db.collection(Collections.stayRequests).doc(requestID);
@@ -325,7 +366,7 @@ export const acceptStayRequest = functions.https.onCall(async (data, context) =>
   await db.runTransaction(async (t) => {
     const reqSnap = await t.get(requestRef);
     if (!reqSnap.exists) {
-      throw new functions.https.HttpsError("not-found", "Request no longer exists.");
+      throw new HttpsError("not-found", "Request no longer exists.");
     }
     const req = reqSnap.data() as {
       hostUserID: string;
@@ -337,10 +378,10 @@ export const acceptStayRequest = functions.https.onCall(async (data, context) =>
     };
     // Only the host of this request may accept it, and only while it is pending.
     if (req.hostUserID !== uid) {
-      throw new functions.https.HttpsError("permission-denied", "Only the host can accept this request.");
+      throw new HttpsError("permission-denied", "Only the host can accept this request.");
     }
     if (req.status !== "pending") {
-      throw new functions.https.HttpsError("failed-precondition", "Only a pending request can be accepted.");
+      throw new HttpsError("failed-precondition", "Only a pending request can be accepted.");
     }
 
     // All reads must precede all writes in a transaction. Re-read the accepted
@@ -360,7 +401,7 @@ export const acceptStayRequest = functions.https.onCall(async (data, context) =>
       if (other.checkIn.toMillis() < outMs && inMs < other.checkOut.toMillis()) {
         // "aborted" (not "failed-precondition") so the client can distinguish a
         // double-booking from the not-pending case and show the right message.
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
           "aborted",
           "Those dates overlap a stay already accepted for this listing."
         );
@@ -391,9 +432,9 @@ export const acceptStayRequest = functions.https.onCall(async (data, context) =>
 // onUserDeleted removes so the export is complete relative to what is stored.
 // Call from the app: Functions.functions().httpsCallable("exportUserData")
 // ---------------------------------------------------------------------------
-export const exportUserData = functions.https.onCall(async (_data, context) => {
-  const uid = context.auth?.uid;
-  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+export const exportUserData = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const [
     profileSnap,
@@ -447,10 +488,9 @@ export const exportUserData = functions.https.onCall(async (_data, context) => {
 // request already handled carries accessRevokedAt and is skipped, and deleting an
 // absent marker is a no-op.
 // ---------------------------------------------------------------------------
-export const expireCompletedStays = functions.pubsub
-  .schedule("0 4 * * *")
-  .timeZone("UTC")
-  .onRun(async () => {
+export const expireCompletedStays = onSchedule(
+  { schedule: "0 4 * * *", timeZone: "UTC" },
+  async () => {
     const nowMs = Date.now();
     // One query on an auto-indexed equality; partition in memory so no composite
     // index is needed and a guest's still-active stay can veto the revocation.
@@ -489,9 +529,9 @@ export const expireCompletedStays = functions.pubsub
       }
       await batch.commit();
     }
-    console.log(`expireCompletedStays: revoked ${revoked} completed stay marker(s).`);
-    return null;
-  });
+    logger.info(`expireCompletedStays: revoked ${revoked} completed stay marker(s).`);
+  }
+);
 
 // Message rate limiting is enforced in the write path by firestore.rules: every
 // message create must advance the sender's rateLimits/{uid} counter, which the
