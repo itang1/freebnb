@@ -476,14 +476,17 @@ struct InviteSheet: View {
         userProfileStore.displayName ?? "A friend"
     }
 
+    /// Carries the inviter's UID and nothing else. The display name is
+    /// deliberately absent: a query parameter is attacker-controlled, and the
+    /// receiving app resolves the inviter's real name from their profile before
+    /// prompting, so a name here would be a spoofing surface that nothing reads
+    /// (S9). The link is still unsigned — a signed, server-issued token lands
+    /// with universal links.
     private var inviteURL: URL {
         var components = URLComponents()
         components.scheme = "freebnb"
         components.host = "invite"
-        components.queryItems = [
-            URLQueryItem(name: "from", value: authManager.userID),
-            URLQueryItem(name: "name", value: inviterName)
-        ]
+        components.queryItems = [URLQueryItem(name: "from", value: authManager.userID)]
         return components.url ?? URL(string: "freebnb://invite")!
     }
 

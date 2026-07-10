@@ -12,6 +12,8 @@ import {
   Collections,
   Subcollections,
   friendEdgeDocPattern,
+  homeDocPattern,
+  homePhotosPrefix,
   listingPhotosPrefix,
   messageDocPattern,
   privateProfilePath,
@@ -390,6 +392,58 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
   // Finally remove the private subdocument and the public user document.
   await db.doc(privateProfilePath(uid)).delete();
   await db.collection(Collections.users).doc(uid).delete();
+});
+
+// ---------------------------------------------------------------------------
+// onHomeDeleted
+// `onUserDeleted` cascades a whole account's photos, but deleting a single
+// listing reached neither its Storage objects nor its subcollections, so both
+// outlived the listing (S7). Storage photos are the sharper leak of the two:
+// storage.rules lets any signed-in user read `listings/{uid}/{homeID}/**`, so a
+// delisted home kept serving its photos to the whole app, and kept billing for
+// them.
+//
+// A listing goes away two ways, and they are not equivalent:
+//   - Hard delete (the document is removed). firestore.rules permits this, and
+//     Firestore does not delete a document's subcollections with it, so
+//     `private/location` and the `accepted/` markers are stranded. Nothing can
+//     read them once the parent is gone (`isListingHost` fails closed), but the
+//     street address is still sitting there, so drop it along with the photos.
+//   - Soft delete (`deletedAt` goes from unset to set). This is the client's
+//     delete path. Photos go, but `private/location` and `accepted/` stay: a
+//     guest may be mid-stay and still need the address, and `expireCompletedStays`
+//     already owns revoking those markers once the stay is over.
+//
+// Every branch is idempotent, so both the retry on a thrown error and the
+// duplicate fire when `onUserDeleted` soft-deletes a host's listings are safe.
+// ---------------------------------------------------------------------------
+export const onHomeDeleted = onDocumentWritten(homeDocPattern, async (event) => {
+  const change = event.data;
+  const before = change?.before.exists ? change.before.data() : undefined;
+  const after = change?.after.exists ? change.after.data() : undefined;
+  if (!before) return; // a create has nothing to clean up
+
+  const hardDeleted = !after;
+  const softDeleted = !!after && !before.deletedAt && !!after.deletedAt;
+  if (!hardDeleted && !softDeleted) return;
+
+  const homeID = event.params.homeID;
+  const hostUserID: string | undefined = (after ?? before).hostUserID;
+  // A listing with no host has no photo prefix to target; nothing to do.
+  if (!hostUserID) return;
+
+  const homeRef = db.collection(Collections.homes).doc(homeID);
+  await Promise.all([
+    deleteStoragePrefix(homePhotosPrefix(hostUserID, homeID)),
+    ...(hardDeleted
+      ? [
+        deleteQueryInChunks(homeRef.collection(Subcollections.private)),
+        deleteQueryInChunks(homeRef.collection(Subcollections.accepted)),
+      ]
+      : []),
+  ]);
+
+  logger.info("Cleaned up deleted listing", { homeID, hostUserID, hardDeleted });
 });
 
 // ---------------------------------------------------------------------------

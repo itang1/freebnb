@@ -35,7 +35,13 @@ export const privateProfilePath = (uid: string): string =>
 // Storage object prefix for a user's listing photos: listings/{uid}/**.
 export const listingPhotosPrefix = (uid: string): string => `listings/${uid}/`;
 
+// Storage object prefix for one listing's photos: listings/{uid}/{homeID}/**.
+// Mirrors the path storage.rules authorizes the host to write.
+export const homePhotosPrefix = (uid: string, homeID: string): string =>
+  `${listingPhotosPrefix(uid)}${homeID}/`;
+
 // Firestore trigger path patterns.
+export const homeDocPattern = `${Collections.homes}/{homeID}`;
 export const messageDocPattern = `${Collections.messages}/{messageID}`;
 export const friendEdgeDocPattern = `${Collections.friendEdges}/{edgeID}`;
 export const stayRequestDocPattern = `${Collections.stayRequests}/{requestID}`;

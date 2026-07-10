@@ -7,6 +7,11 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 
+# Node. Unanchored on purpose so it covers functions/, rules-tests/, and any
+# package directory added later. Unlike `lib/` below, nothing legitimate is ever
+# named node_modules, so matching at every depth is safe.
+node_modules/
+
 # Python venv. Anchored to the repo root with a leading slash: unanchored,
 # `lib/` and `bin/` match at every depth and would silently swallow real source
 # directories. functions/lib is covered by functions/.gitignore.

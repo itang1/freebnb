@@ -126,6 +126,41 @@ jobs:
       - name: TypeScript build
         run: npm run build
 
+  rules-tests:
+    name: Firestore rules (emulator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The emulator suite is a Java process. firebase-tools requires 21+.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: rules-tests/package-lock.json
+
+      - name: Install firebase-tools
+        run: npm install -g firebase-tools
+
+      - name: Install dependencies
+        run: npm ci --prefix rules-tests
+
+      # These drive the rules engine directly, so unlike the emulator-tests job
+      # below they need neither Xcode nor a simulator. Node is invoked by
+      # absolute path because emulators:exec can shadow it with a bundled build
+      # that cannot load ES modules (see rules-tests/README.md).
+      - name: Run rules tests
+        run: |
+          firebase emulators:exec \
+            --only firestore \
+            --project freebnb-rules-tests \
+            "cd rules-tests && $(command -v node) --test"
+
   emulator-tests:
     name: Firestore rules regression (emulator)
     runs-on: macos-15

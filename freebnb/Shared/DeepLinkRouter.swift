@@ -24,6 +24,12 @@ final class DeepLinkRouter {
 
 struct PendingInvite: Identifiable, Equatable {
     let inviterID: String
+
+    /// The inviter's real display name, read from their profile. Always nil on
+    /// an invite straight off a deep link, because the link is unsigned and so
+    /// anything it claims about the inviter is attacker-controlled (S9). Only
+    /// ContentView sets this, after fetching the profile behind `inviterID`.
     var inviterName: String?
+
     var id: String { inviterID }
 }

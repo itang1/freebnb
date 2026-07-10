@@ -19,14 +19,23 @@ service cloud.firestore {
           && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
-    // True when `recipientID`'s private profile lists `senderID` as blocked.
+    // True when `ownerID`'s private profile lists `otherID` as blocked.
     // get()/exists() run with elevated privilege, so this reads the owner-only
     // private doc that clients cannot. Missing doc or field is treated as "not
     // blocked" via the default on get().
-    function recipientHasBlocked(recipientID, senderID) {
-      return exists(/databases/$(database)/documents/users/$(recipientID)/private/profile)
-          && get(/databases/$(database)/documents/users/$(recipientID)/private/profile)
-               .data.get('blockedUserIDs', []).hasAny([senderID]);
+    function hasBlocked(ownerID, otherID) {
+      return exists(/databases/$(database)/documents/users/$(ownerID)/private/profile)
+          && get(/databases/$(database)/documents/users/$(ownerID)/private/profile)
+               .data.get('blockedUserIDs', []).hasAny([otherID]);
+    }
+
+    // A block severs the thread both ways (S11). Checking only the recipient's
+    // list stopped a blocked sender but still let the blocker write to the
+    // person they blocked: the UI hides that thread, but a direct Firestore
+    // write bypassed the UI. `||` short-circuits, so the common case costs the
+    // same single document read it did before.
+    function blockedEitherWay(userA, userB) {
+      return hasBlocked(userA, userB) || hasBlocked(userB, userA);
     }
 
     // True when the caller hosts the listing. get() runs with elevated privilege,
@@ -432,13 +441,13 @@ service cloud.firestore {
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() < 5000
           && request.resource.data.timestamp == request.time
-          // Reject the message if the recipient has blocked the sender, so a
-          // block can't be bypassed by writing to Firestore directly.
-          && !recipientHasBlocked(
+          // Reject the message if either party has blocked the other, so a
+          // block can't be bypassed by writing to Firestore directly (S11).
+          && !blockedEitherWay(
+               request.auth.uid,
                request.resource.data.participants[0] == request.auth.uid
                  ? request.resource.data.participants[1]
-                 : request.resource.data.participants[0],
-               request.auth.uid
+                 : request.resource.data.participants[0]
              )
           // Enforce the per-user send rate in the write path: the same commit
           // must advance the sender's rateLimits counter, which the rules below
