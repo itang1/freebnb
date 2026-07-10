@@ -5,10 +5,24 @@
 
 import SwiftUI
 
+/// One sheet, three modes. SwiftUI resolves stacked `.sheet` modifiers on a
+/// single view unreliably, so create, edit, and duplicate share one presentation
+/// keyed by this value rather than getting a modifier each.
+private struct ListingSheet: Identifiable, Hashable {
+    let mode: ListingFormMode
+
+    var id: String {
+        switch mode {
+        case .create:                return "create"
+        case .edit(let home):        return "edit-\(home.id)"
+        case .duplicate(let home):   return "duplicate-\(home.id)"
+        }
+    }
+}
+
 struct YourListingsPage: View {
     @Environment(HomeStore.self) private var homeStore
-    @State private var showCreate = false
-    @State private var editing: Home? = nil
+    @State private var sheet: ListingSheet?
     @State private var deleteTarget: Home? = nil
     @State private var isDeleting = false
     @State private var errorMessage: String?
@@ -33,18 +47,15 @@ struct YourListingsPage: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showCreate = true
+                    sheet = ListingSheet(mode: .create)
                 } label: {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Create listing")
             }
         }
-        .sheet(isPresented: $showCreate) {
-            CreateListingPage()
-        }
-        .sheet(item: $editing) { home in
-            CreateListingPage(editing: home)
+        .sheet(item: $sheet) { sheet in
+            CreateListingPage(mode: sheet.mode)
         }
         .confirmationDialog(
             "Delete this listing?",
@@ -97,11 +108,39 @@ struct YourListingsPage: View {
                     }
 
                     Button {
-                        editing = listing
+                        sheet = ListingSheet(mode: .edit(listing))
                     } label: {
                         Label("Edit", systemImage: "pencil")
                     }
                     .tint(.accent)
+                }
+                // A host with a guest room and a couch at the same address
+                // shouldn't retype it (feature 13). Also reachable by long press,
+                // since a swipe hides its actions until you go looking.
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button {
+                        sheet = ListingSheet(mode: .duplicate(listing))
+                    } label: {
+                        Label("Duplicate", systemImage: "plus.square.on.square")
+                    }
+                    .tint(.accent)
+                }
+                .contextMenu {
+                    Button {
+                        sheet = ListingSheet(mode: .edit(listing))
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    Button {
+                        sheet = ListingSheet(mode: .duplicate(listing))
+                    } label: {
+                        Label("Duplicate", systemImage: "plus.square.on.square")
+                    }
+                    Button(role: .destructive) {
+                        deleteTarget = listing
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
         }
@@ -119,7 +158,7 @@ struct YourListingsPage: View {
             Text("Create your first listing so friends can find a place to stay.")
         } actions: {
             Button("Create a Listing") {
-                showCreate = true
+                sheet = ListingSheet(mode: .create)
             }
             .buttonStyle(.borderedProminent)
             .tint(Color.accent)

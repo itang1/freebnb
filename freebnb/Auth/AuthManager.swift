@@ -199,6 +199,8 @@ final class AuthManager {
 
     func deleteAccount() async {
         guard let user = Auth.auth().currentUser else { return }
+        // Captured before the delete, which is the last moment this is readable.
+        let userID = user.uid
         isLoading = true
         defer { isLoading = false }
         do {
@@ -214,6 +216,10 @@ final class AuthManager {
             // its data half-gone (L8). One deletion, one owner.
             try await user.delete()
             UserDefaults.standard.removeObject(forKey: UserDefaultsKey.userName)
+            // `onUserDeleted` cannot reach this device. An unfinished listing draft
+            // holds the host's street address, so the one copy the cascade can't
+            // see has to go here (feature 13).
+            ListingDraftStore().clear(userID: userID)
         } catch AuthError.cancelled {
             return
         } catch {

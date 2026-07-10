@@ -11,8 +11,10 @@ import SwiftUI
 
 @Observable
 final class CreateListingViewModel {
-    // When non-nil, the form edits this listing instead of creating a new one.
-    let editing: Home?
+    // Whether the form creates, edits, or duplicates. `mode.source` seeds the
+    // fields; `mode.target` is the listing a save overwrites, and is nil for both
+    // create and duplicate.
+    let mode: ListingFormMode
 
     // Location
     var street: String
@@ -66,52 +68,160 @@ final class CreateListingViewModel {
     // saveable without a map pin, but the host is told rather than left to
     // wonder why their listing never shows on the map (L6).
     var geocodeFailed = false
+    // True once an unfinished draft has been restored into this form, so the view
+    // can say so and offer a way out of it (feature 13).
+    var restoredDraft = false
 
-    init(editing: Home? = nil) {
-        self.editing = editing
-        // The street is not on the public listing document; when editing it has to
-        // be loaded from the private location subdoc (see `loadStreet`). Until it
-        // arrives `canSave` is false, so an edit can never blank out the address.
+    init(mode: ListingFormMode = .create) {
+        self.mode = mode
+        let source = mode.source
+        // The street is not on the public listing document; when a listing seeds
+        // the form it has to be loaded from the private location subdoc (see
+        // `loadStreet`). Until it arrives `canSave` is false, so an edit can never
+        // blank out the address.
         street = ""
-        city = editing?.address.city ?? ""
-        stateField = editing?.address.state ?? ""
-        zip = editing?.address.zip ?? ""
-        numGuestRooms = editing?.sleeping.numGuestRooms ?? 1
-        maxGuests = editing?.guestPolicy.maxGuests ?? 2
-        maxStayDays = editing?.guestPolicy.maxStayDays ?? 7
-        sleepingCounts = editing?.sleeping.sleepingCounts ?? [:]
-        kidsAllowed = editing?.guestPolicy.kidsAllowed ?? true
-        guestPetsAllowed = editing?.guestPolicy.guestPetsAllowed ?? false
-        hostHasPets = editing?.amenities.hostHasPets ?? false
-        hasAC = editing?.amenities.hasAC ?? false
-        hasHeating = editing?.amenities.hasHeating ?? false
-        hasKitchen = editing?.amenities.hasKitchen ?? false
-        hasFridgeSpace = editing?.amenities.hasFridgeSpace ?? false
-        hasMicrowave = editing?.amenities.hasMicrowave ?? false
-        hasTV = editing?.amenities.hasTV ?? false
-        hasWifi = editing?.amenities.hasWifi ?? false
-        hasPrivateGuestBathroom = editing?.amenities.hasPrivateGuestBathroom ?? false
-        parkingDetails = editing?.amenities.parkingDetails ?? ""
-        hasInUnitLaundry = editing?.amenities.hasInUnitLaundry ?? false
-        hasCoinLaundryNearby = editing?.amenities.hasCoinLaundryNearby ?? false
-        providesPillows = editing?.amenities.providesPillows ?? false
-        providesBlankets = editing?.amenities.providesBlankets ?? false
-        providesTowels = editing?.amenities.providesTowels ?? false
-        providesToiletries = editing?.amenities.providesToiletries ?? false
-        foodProvision = editing?.amenities.foodProvision ?? .none
-        description = editing?.description ?? ""
-        contactPreference = editing?.contactPreference ?? .inApp
-        hostContactInfo = editing?.hostContactInfo ?? ""
-        hostMotivation = editing?.hostMotivation ?? .open
-        cancellationPolicy = editing?.cancellationPolicy ?? .flexible
-        visibility = editing?.visibility ?? .everyone
+        city = source?.address.city ?? ""
+        stateField = source?.address.state ?? ""
+        zip = source?.address.zip ?? ""
+        numGuestRooms = source?.sleeping.numGuestRooms ?? 1
+        maxGuests = source?.guestPolicy.maxGuests ?? 2
+        maxStayDays = source?.guestPolicy.maxStayDays ?? 7
+        sleepingCounts = source?.sleeping.sleepingCounts ?? [:]
+        kidsAllowed = source?.guestPolicy.kidsAllowed ?? true
+        guestPetsAllowed = source?.guestPolicy.guestPetsAllowed ?? false
+        hostHasPets = source?.amenities.hostHasPets ?? false
+        hasAC = source?.amenities.hasAC ?? false
+        hasHeating = source?.amenities.hasHeating ?? false
+        hasKitchen = source?.amenities.hasKitchen ?? false
+        hasFridgeSpace = source?.amenities.hasFridgeSpace ?? false
+        hasMicrowave = source?.amenities.hasMicrowave ?? false
+        hasTV = source?.amenities.hasTV ?? false
+        hasWifi = source?.amenities.hasWifi ?? false
+        hasPrivateGuestBathroom = source?.amenities.hasPrivateGuestBathroom ?? false
+        parkingDetails = source?.amenities.parkingDetails ?? ""
+        hasInUnitLaundry = source?.amenities.hasInUnitLaundry ?? false
+        hasCoinLaundryNearby = source?.amenities.hasCoinLaundryNearby ?? false
+        providesPillows = source?.amenities.providesPillows ?? false
+        providesBlankets = source?.amenities.providesBlankets ?? false
+        providesTowels = source?.amenities.providesTowels ?? false
+        providesToiletries = source?.amenities.providesToiletries ?? false
+        foodProvision = source?.amenities.foodProvision ?? .none
+        description = source?.description ?? ""
+        contactPreference = source?.contactPreference ?? .inApp
+        hostContactInfo = source?.hostContactInfo ?? ""
+        hostMotivation = source?.hostMotivation ?? .open
+        cancellationPolicy = source?.cancellationPolicy ?? .flexible
+        visibility = source?.visibility ?? .everyone
     }
 
-    /// Pulls the street address of the listing being edited out of its private
-    /// location document. A host always has read access to their own.
+    /// Pulls the street address of the listing seeding the form out of its private
+    /// location document. A host always has read access to their own — and both an
+    /// edit and a duplicate are of the host's own listing.
+    ///
+    /// No-ops once `street` is set, which is what lets a restored draft's address
+    /// survive this call.
     func loadStreet(homeStore: HomeStore) async {
-        guard let editing, street.isEmpty else { return }
-        street = await homeStore.location(for: editing.id)?.street ?? ""
+        guard let source = mode.source, street.isEmpty else { return }
+        street = await homeStore.location(for: source.id)?.street ?? ""
+    }
+
+    // MARK: - Drafts (feature 13)
+
+    /// The form as a storable snapshot, and the inverse. Kept adjacent so a field
+    /// added to one is conspicuously missing from the other.
+    var draft: ListingDraft {
+        get {
+            var draft = ListingDraft()
+            draft.street = street
+            draft.city = city
+            draft.state = stateField
+            draft.zip = zip
+            draft.numGuestRooms = numGuestRooms
+            draft.maxGuests = maxGuests
+            draft.maxStayDays = maxStayDays
+            draft.sleepingCounts = sleepingCounts
+            draft.kidsAllowed = kidsAllowed
+            draft.guestPetsAllowed = guestPetsAllowed
+            draft.hostHasPets = hostHasPets
+            draft.hasAC = hasAC
+            draft.hasHeating = hasHeating
+            draft.hasKitchen = hasKitchen
+            draft.hasFridgeSpace = hasFridgeSpace
+            draft.hasMicrowave = hasMicrowave
+            draft.hasTV = hasTV
+            draft.hasWifi = hasWifi
+            draft.hasPrivateGuestBathroom = hasPrivateGuestBathroom
+            draft.parkingDetails = parkingDetails
+            draft.hasInUnitLaundry = hasInUnitLaundry
+            draft.hasCoinLaundryNearby = hasCoinLaundryNearby
+            draft.providesPillows = providesPillows
+            draft.providesBlankets = providesBlankets
+            draft.providesTowels = providesTowels
+            draft.providesToiletries = providesToiletries
+            draft.foodProvision = foodProvision
+            draft.description = description
+            draft.contactPreference = contactPreference
+            draft.hostContactInfo = hostContactInfo
+            draft.hostMotivation = hostMotivation
+            draft.cancellationPolicy = cancellationPolicy
+            draft.visibility = visibility
+            return draft
+        }
+        set {
+            street = newValue.street
+            city = newValue.city
+            stateField = newValue.state
+            zip = newValue.zip
+            numGuestRooms = newValue.numGuestRooms
+            maxGuests = newValue.maxGuests
+            maxStayDays = newValue.maxStayDays
+            sleepingCounts = newValue.sleepingCounts
+            kidsAllowed = newValue.kidsAllowed
+            guestPetsAllowed = newValue.guestPetsAllowed
+            hostHasPets = newValue.hostHasPets
+            hasAC = newValue.hasAC
+            hasHeating = newValue.hasHeating
+            hasKitchen = newValue.hasKitchen
+            hasFridgeSpace = newValue.hasFridgeSpace
+            hasMicrowave = newValue.hasMicrowave
+            hasTV = newValue.hasTV
+            hasWifi = newValue.hasWifi
+            hasPrivateGuestBathroom = newValue.hasPrivateGuestBathroom
+            parkingDetails = newValue.parkingDetails
+            hasInUnitLaundry = newValue.hasInUnitLaundry
+            hasCoinLaundryNearby = newValue.hasCoinLaundryNearby
+            providesPillows = newValue.providesPillows
+            providesBlankets = newValue.providesBlankets
+            providesTowels = newValue.providesTowels
+            providesToiletries = newValue.providesToiletries
+            foodProvision = newValue.foodProvision
+            description = newValue.description
+            contactPreference = newValue.contactPreference
+            hostContactInfo = newValue.hostContactInfo
+            hostMotivation = newValue.hostMotivation
+            cancellationPolicy = newValue.cancellationPolicy
+            visibility = newValue.visibility
+        }
+    }
+
+    /// Restores an unfinished from-scratch listing, if one is stored. Called once,
+    /// before `loadStreet`, so a restored address is not overwritten.
+    func restoreDraft(from store: ListingDraftStore, userID: String) {
+        guard mode.isDraftBacked, let stored = store.load(userID: userID) else { return }
+        draft = stored
+        restoredDraft = true
+    }
+
+    func persistDraft(to store: ListingDraftStore, userID: String) {
+        guard mode.isDraftBacked else { return }
+        store.save(draft, userID: userID)
+    }
+
+    /// Empties the form and forgets the draft behind it.
+    func discardDraft(from store: ListingDraftStore, userID: String) {
+        draft = ListingDraft()
+        restoredDraft = false
+        store.clear(userID: userID)
     }
 
     func canSave(displayName: String) -> Bool {
@@ -203,8 +313,10 @@ final class CreateListingViewModel {
         // `onFriendEdgeWritten` function keeps it current between saves.
         home.allowedViewerIDs = Home.viewerIDs(hostUserID: hostUserID, friendIDs: friendIDs)
         // Preserve identity and creation time when editing so an edit keeps the
-        // listing's feed position instead of jumping to the top (L3).
-        if let existing = editing {
+        // listing's feed position instead of jumping to the top (L3). A duplicate
+        // has no target, so it keeps neither: it is a new listing that happens to
+        // start out looking like an old one, and it belongs at the top of the feed.
+        if let existing = mode.target {
             home.id = existing.id
             home.createdAt = existing.createdAt
         }
@@ -238,7 +350,7 @@ final class CreateListingViewModel {
 
         do {
             try await homeStore.save(home, location: location)
-            Telemetry.log(.createListingCompleted, parameters: ["is_edit": editing != nil])
+            Telemetry.log(.createListingCompleted, parameters: ["is_edit": mode.target != nil])
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -258,8 +370,10 @@ struct CreateListingPage: View {
 
     @State private var vm: CreateListingViewModel
 
-    init(editing: Home? = nil) {
-        _vm = State(initialValue: CreateListingViewModel(editing: editing))
+    private let draftStore = ListingDraftStore()
+
+    init(mode: ListingFormMode = .create) {
+        _vm = State(initialValue: CreateListingViewModel(mode: mode))
     }
 
     var body: some View {
@@ -270,6 +384,17 @@ struct CreateListingPage: View {
                         Label(missingNameMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline)
                             .foregroundColor(.orange)
+                    }
+                }
+
+                if vm.restoredDraft {
+                    Section {
+                        Label("We kept the listing you started. Pick up where you left off.", systemImage: "arrow.uturn.backward.circle")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Button("Start over", role: .destructive) {
+                            vm.discardDraft(from: draftStore, userID: authManager.userID)
+                        }
                     }
                 }
 
@@ -305,7 +430,7 @@ struct CreateListingPage: View {
                     }
                 }
             }
-            .navigationTitle(vm.editing == nil ? "New Listing" : "Edit Listing")
+            .navigationTitle(vm.mode.navigationTitle)
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -322,7 +447,16 @@ struct CreateListingPage: View {
                 }
             }
             .disabled(vm.isSaving)
-            .task { await vm.loadStreet(homeStore: homeStore) }
+            .task {
+                // Before loadStreet, which no-ops on a street the draft restored.
+                vm.restoreDraft(from: draftStore, userID: authManager.userID)
+                await vm.loadStreet(homeStore: homeStore)
+            }
+            // Autosave rather than prompting on Cancel: the sheet can also leave by
+            // a swipe down, which no confirmation dialog gets to intercept.
+            .onChange(of: vm.draft) { _, _ in
+                vm.persistDraft(to: draftStore, userID: authManager.userID)
+            }
         }
     }
 
@@ -330,14 +464,21 @@ struct CreateListingPage: View {
 
     /// Bridges the toolbar and the "save without map location" button to the
     /// view model. Returns `true` when the sheet should dismiss.
+    ///
+    /// The draft is cleared only on a save that actually landed. A geocode failure
+    /// or a rejected write leaves the sheet open with the draft intact behind it.
     private func saveListing(allowMissingCoordinates: Bool = false) async -> Bool {
-        await vm.save(
+        let saved = await vm.save(
             homeStore: homeStore,
             hostUserID: authManager.userID,
             hostName: userProfileStore.displayName ?? "",
             friendIDs: friendStore.friendIDs,
             allowMissingCoordinates: allowMissingCoordinates
         )
+        if saved {
+            draftStore.clear(userID: authManager.userID)
+        }
+        return saved
     }
 
     // MARK: - Sections

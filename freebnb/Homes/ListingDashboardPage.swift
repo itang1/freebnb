@@ -152,7 +152,7 @@ struct ListingDashboardPage: View {
             }
         }
         .sheet(isPresented: $showEdit) {
-            CreateListingPage(editing: listing)
+            CreateListingPage(mode: .edit(listing))
         }
         .sheet(isPresented: $showAvailability) {
             AvailabilityEditorView(listing: listing)
