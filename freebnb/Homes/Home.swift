@@ -10,8 +10,9 @@ import Foundation
 /// listing document and an anonymous account is one tap away.
 ///
 /// Documents written before the split still carry a `street` key; the synthesized
-/// decoder ignores it, and the next host save drops it. `scripts/backfill_address_privacy.js`
-/// moves it out for listings that are never re-saved.
+/// decoder ignores it, and the next host save drops it. Such legacy documents were
+/// cleared by the reset-and-reseed (scripts/seed_test_data.js --reset), so the
+/// decoder's tolerance is now just defensive.
 struct Address: Codable, Hashable {
     var city: String
     var state: String
@@ -288,7 +289,8 @@ struct Home: Identifiable, Hashable, Codable {
     // visibility is enforced by reading this array directly (see firestore.rules)
     // and by querying `allowedViewerIDs contains me`. Written by the client on
     // every listing save and kept in sync by the `onFriendEdgeWritten` function.
-    // Nil only on documents predating the backfill; treat as "host only".
+    // Nil only on legacy documents (since cleared by reset-and-reseed); treat as
+    // "host only".
     var allowedViewerIDs: [String]? = nil
 
     // MARK: Soft delete
@@ -299,10 +301,10 @@ struct Home: Identifiable, Hashable, Codable {
 
     // MARK: Creation time
     // The feed's recency ordering key. Stamped with the server timestamp by the
-    // repository on create and preserved across edits. Nil only on documents
-    // predating this field (backfilled by scripts/backfill_created_at.js); such
-    // a document is excluded from the order-by query until it has one, which is
-    // why the backfill must run before the ordered feed ships.
+    // repository on create and preserved across edits. A document without it is
+    // excluded from the order-by query; legacy listings that lacked it were
+    // cleared by the reset-and-reseed, and the seed stamps every listing, so this
+    // is nil only in defensive theory now.
     var createdAt: Date? = nil
 
     // Identity-based equality and hashing, kept consistent per Hashable contract.
@@ -313,7 +315,7 @@ struct Home: Identifiable, Hashable, Codable {
     var photos: [String] { photoURLs ?? [] }
 
     /// The read ACL a listing should carry: the host, then their accepted friends,
-    /// de-duplicated. Kept here so the client write path and the backfill script
+    /// de-duplicated. Kept here so the client write path and the seed script
     /// agree on one definition.
     static func viewerIDs(hostUserID: String, friendIDs: some Sequence<String>) -> [String] {
         var seen: Set<String> = []
@@ -322,7 +324,7 @@ struct Home: Identifiable, Hashable, Codable {
 
     /// Decimal places kept on the public coordinate. Two places is on the order of
     /// a kilometre, which places a listing in a neighbourhood without pointing at
-    /// a front door. `scripts/backfill_address_privacy.js` applies the same rounding.
+    /// a front door. `scripts/seed_test_data.js` applies the same rounding.
     static let publicCoordinatePrecision = 2.0
 
     /// Blurs an exact coordinate component for the world-readable document.
