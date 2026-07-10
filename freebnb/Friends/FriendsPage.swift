@@ -65,6 +65,16 @@ struct FriendsPage: View {
                 }
             }
 
+            if !friendStore.suggestions.isEmpty {
+                Section("People you may know") {
+                    ForEach(friendStore.suggestions) { suggestion in
+                        SuggestionRow(suggestion: suggestion) {
+                            Task { await addSuggested(suggestion) }
+                        }
+                    }
+                }
+            }
+
             if friendStore.friendEdges.isEmpty && friendStore.pendingIncoming.isEmpty && friendStore.pendingOutgoing.isEmpty {
                 Section {
                     ContentUnavailableView {
@@ -83,6 +93,7 @@ struct FriendsPage: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.primaryBackground.ignoresSafeArea())
+        .task { await friendStore.loadSuggestions() }
         .navigationTitle("Friends")
         .toolbar {
             ToolbarItem(placement: .secondaryAction) {
@@ -129,6 +140,16 @@ struct FriendsPage: View {
         do { try await friendStore.remove(edge) }
         catch { actionError = error.localizedDescription }
     }
+
+    private func addSuggested(_ suggestion: FriendSuggestion) async {
+        actionError = nil
+        do {
+            try await friendStore.sendRequest(to: suggestion.userID)
+            friendStore.dismissSuggestion(suggestion.userID)
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
 }
 
 // MARK: - Row views
@@ -150,6 +171,45 @@ private struct FriendRow: View {
             Text(name)
                 .font(.body)
         }
+    }
+}
+
+private struct SuggestionRow: View {
+    let suggestion: FriendSuggestion
+    let onAdd: () -> Void
+    @State private var didAdd = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.accent.opacity(0.15))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Text(String(suggestion.displayName.prefix(1)).uppercased())
+                        .font(.headline)
+                        .foregroundColor(Color.accent)
+                )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(suggestion.displayName)
+                    .font(.body)
+                Text("\(suggestion.mutualCount) mutual friend\(suggestion.mutualCount == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button {
+                didAdd = true
+                onAdd()
+            } label: {
+                Label("Add", systemImage: "person.badge.plus")
+                    .labelStyle(.iconOnly)
+                    .font(.title3)
+                    .foregroundColor(Color.accent)
+            }
+            .buttonStyle(.plain)
+            .disabled(didAdd)
+        }
+        .padding(.vertical, 2)
     }
 }
 

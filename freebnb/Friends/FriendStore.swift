@@ -33,6 +33,15 @@ struct FriendEdge: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+/// A "people you may know" candidate returned by the `suggestFriends` callable:
+/// a friend-of-a-friend with a count of how many friends they share (feature 31).
+struct FriendSuggestion: Identifiable, Hashable, Sendable {
+    let userID: String
+    let displayName: String
+    let mutualCount: Int
+    var id: String { userID }
+}
+
 // MARK: - Store
 
 @MainActor
@@ -40,6 +49,7 @@ struct FriendEdge: Identifiable, Codable, Hashable, Sendable {
 final class FriendStore {
     private(set) var allEdges: [FriendEdge] = []
     private(set) var listenerError: String?
+    private(set) var suggestions: [FriendSuggestion] = []
 
     @ObservationIgnored private let repository: FriendEdgeRepository
     @ObservationIgnored nonisolated(unsafe) private var listenerA: RepositoryListener?
@@ -136,6 +146,28 @@ final class FriendStore {
     }
 
     // MARK: - Actions
+
+    /// Loads "people you may know" from the callable, dropping anyone a live edge
+    /// already covers (the graph may have changed since the server computed it).
+    func loadSuggestions() async {
+        guard Auth.auth().currentUser?.uid != nil else {
+            suggestions = []
+            return
+        }
+        do {
+            let fetched = try await repository.fetchSuggestions()
+            let connected = Set(allEdges.flatMap { [$0.userA, $0.userB] })
+            suggestions = fetched.filter { !connected.contains($0.userID) }
+        } catch {
+            log.error("friend suggestions error: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Removes a suggestion locally once acted on, so the card disappears without
+    /// waiting for a re-fetch.
+    func dismissSuggestion(_ userID: String) {
+        suggestions.removeAll { $0.userID == userID }
+    }
 
     func sendRequest(to recipientID: String) async throws {
         guard let myID = Auth.auth().currentUser?.uid else { return }

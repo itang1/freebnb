@@ -592,6 +592,83 @@ export const exportUserData = onCall(async (request) => {
 });
 
 // ---------------------------------------------------------------------------
+// suggestFriends (callable)
+// "People you may know": friends-of-friends ranked by how many of the caller's
+// friends they share (feature 31). Runs server-side because friendEdges are
+// readable only by their two participants — a client cannot traverse the graph
+// past its own edges. Excludes anyone the caller already has an edge with
+// (friend or pending), has blocked, or who has blocked the caller.
+// Call from the app: Functions.functions().httpsCallable("suggestFriends")
+// ---------------------------------------------------------------------------
+type FriendSuggestion = { userID: string; displayName: string; mutualCount: number };
+
+export const suggestFriends = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
+
+  // The accepted friends of one user, read from both halves of the edge.
+  const acceptedFriendsOf = async (userID: string): Promise<string[]> => {
+    const [aSnap, bSnap] = await Promise.all([
+      db.collection(Collections.friendEdges).where("userA", "==", userID).where("status", "==", "accepted").get(),
+      db.collection(Collections.friendEdges).where("userB", "==", userID).where("status", "==", "accepted").get(),
+    ]);
+    return [...aSnap.docs.map((d) => d.data().userB), ...bSnap.docs.map((d) => d.data().userA)];
+  };
+
+  // Everyone the caller already has any edge with — friends and pending both —
+  // so a suggestion is never someone they're already connected to or awaiting.
+  const [myA, myB, myPrivateSnap] = await Promise.all([
+    db.collection(Collections.friendEdges).where("userA", "==", uid).get(),
+    db.collection(Collections.friendEdges).where("userB", "==", uid).get(),
+    db.doc(privateProfilePath(uid)).get(),
+  ]);
+  const connected = new Set<string>([uid]);
+  const myAcceptedFriends: string[] = [];
+  for (const doc of myA.docs) {
+    const d = doc.data();
+    connected.add(d.userB);
+    if (d.status === "accepted") myAcceptedFriends.push(d.userB);
+  }
+  for (const doc of myB.docs) {
+    const d = doc.data();
+    connected.add(d.userA);
+    if (d.status === "accepted") myAcceptedFriends.push(d.userA);
+  }
+  for (const blocked of (myPrivateSnap.data()?.blockedUserIDs ?? []) as string[]) connected.add(blocked);
+
+  // Tally how many of my friends each candidate is connected to. Cap the fan-out
+  // so a user with an enormous friend list can't turn one call into thousands of
+  // reads.
+  const FRIEND_CAP = 200;
+  const counts = new Map<string, number>();
+  await Promise.all(
+    myAcceptedFriends.slice(0, FRIEND_CAP).map(async (friendID) => {
+      for (const candidate of await acceptedFriendsOf(friendID)) {
+        if (connected.has(candidate)) continue;
+        counts.set(candidate, (counts.get(candidate) ?? 0) + 1);
+      }
+    })
+  );
+
+  // Most mutual friends first; resolve names and drop anyone who blocked me.
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const resolved = await Promise.all(
+    ranked.map(async ([candidate, mutualCount]): Promise<FriendSuggestion | null> => {
+      const [userSnap, candPrivateSnap] = await Promise.all([
+        db.collection(Collections.users).doc(candidate).get(),
+        db.doc(privateProfilePath(candidate)).get(),
+      ]);
+      if (!userSnap.exists) return null;
+      const candBlocked: string[] = candPrivateSnap.data()?.blockedUserIDs ?? [];
+      if (candBlocked.includes(uid)) return null;
+      return { userID: candidate, displayName: userSnap.data()?.displayName ?? "FreeBNB User", mutualCount };
+    })
+  );
+
+  return { suggestions: resolved.filter((s): s is FriendSuggestion => s !== null) };
+});
+
+// ---------------------------------------------------------------------------
 // expireCompletedStays (scheduled)
 // Progressive address disclosure is granted by homes/{id}/accepted/{guestUID}
 // and revoked on decline/cancel (client) — but a stay that simply runs its
