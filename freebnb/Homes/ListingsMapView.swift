@@ -24,8 +24,8 @@ struct ListingsMapView: View {
 
     private var allPins: [(home: Home, coordinate: CLLocationCoordinate2D)] {
         listings.compactMap { home in
-            if let lat = home.latitude, let lon = home.longitude {
-                return (home, CLLocationCoordinate2D(latitude: lat, longitude: lon))
+            if let stored = home.coordinate {
+                return (home, stored.clCoordinate)
             }
             if let coord = resolvedCoords[home.id] {
                 return (home, coord)

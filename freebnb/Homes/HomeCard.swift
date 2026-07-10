@@ -22,6 +22,9 @@ struct HomeCard: View {
     /// Why this listing reached the viewer. Nil for a public listing from outside
     /// the viewer's network, which needs no explanation.
     var reason: FeedReason?
+    /// Distance from the city the viewer searched for. Nil when they haven't
+    /// searched, or when this listing has no stored coordinate.
+    var distanceMiles: Double?
 
     private let cardImageHeight: CGFloat = 190
 
@@ -32,8 +35,15 @@ struct HomeCard: View {
 
             // Body
             VStack(alignment: .leading, spacing: 10) {
-                if let reason {
-                    FeedReasonChip(reason: reason)
+                if reason != nil || distanceMiles != nil {
+                    HStack(spacing: 6) {
+                        if let reason {
+                            FeedReasonChip(reason: reason)
+                        }
+                        if let distanceMiles {
+                            SummaryPill(icon: "location.fill", text: Geo.distanceText(distanceMiles))
+                        }
+                    }
                 }
 
                 // Summary pills

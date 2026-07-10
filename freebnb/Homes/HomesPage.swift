@@ -113,6 +113,9 @@ extension FilterOption {
 
 enum SortOption: String, CaseIterable, Identifiable {
     case `default`     = "Default"
+    /// Only offered once the city query has geocoded, since without a search
+    /// center there is nothing to be near. See `GeoScope`.
+    case nearest       = "Nearest"
     case mostEager     = "Most Eager to Host"
     case mostFlexible  = "Most Flexible Cancellation"
     case mostRooms     = "Most Rooms"
@@ -152,22 +155,30 @@ struct FeedSearchPaging: Equatable {
 }
 
 /// The visible list: the incoming feed narrowed by the filter chips, the city or
-/// state query, and the saved-only toggle, then reordered by `sort`. `query` is
-/// expected pre-trimmed and lowercased.
+/// state query, the saved-only toggle, and the search radius, then reordered by
+/// `sort`. `query` is expected pre-trimmed and lowercased.
+///
+/// `scope` is the geocoded city query and its radius (feature 11). It is nil
+/// whenever there is no query, or the query names nowhere a geocoder recognises —
+/// in which case the radius filter and the `nearest` sort both no-op rather than
+/// emptying the feed over a typo.
 func filterAndSort(
     _ homes: [Home],
     query: String,
     filters: Set<FilterOption>,
     savedIDs: Set<String>,
     savedOnly: Bool,
-    sort: SortOption
+    sort: SortOption,
+    scope: GeoScope? = nil
 ) -> [Home] {
     let result = homes.filter { home in
         filters.allSatisfy { $0.matches(home) } &&
         (query.isEmpty || home.address.city.lowercased().contains(query) || home.address.state.lowercased().contains(query)) &&
-        (!savedOnly || savedIDs.contains(home.id))
+        (!savedOnly || savedIDs.contains(home.id)) &&
+        (scope?.contains(home) ?? true)
     }
     switch sort {
+    case .nearest:       return scope.map { nearestFirst(result, scope: $0) } ?? result
     case .mostEager:     return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
     case .mostFlexible:  return result.sorted { ($0.cancellationPolicy ?? .flexible).flexibilityRank > ($1.cancellationPolicy ?? .flexible).flexibilityRank }
     case .mostDays:      return result.sorted { $0.guestPolicy.maxStayDays > $1.guestPolicy.maxStayDays }
@@ -178,6 +189,24 @@ func filterAndSort(
     case .cityAZ:        return result.sorted { $0.address.city < $1.address.city }
     default:             return result
     }
+}
+
+/// Closest to the search center first. Listings with no coordinate sort last
+/// rather than being dropped: with no radius set, "we don't know where this is"
+/// is a reason to rank it low, not to hide it.
+///
+/// Distances are computed once per listing instead of inside the comparator,
+/// which would recompute them O(n log n) times. The comparator falls through to
+/// the listing id so equidistant rows hold a stable order across recomputes, for
+/// the same reason `HomeStore.feed` does.
+private func nearestFirst(_ homes: [Home], scope: GeoScope) -> [Home] {
+    homes
+        .map { (home: $0, distance: scope.distance(to: $0) ?? .greatestFiniteMagnitude) }
+        .sorted { a, b in
+            if a.distance != b.distance { return a.distance < b.distance }
+            return a.home.id < b.home.id
+        }
+        .map(\.home)
 }
 
 struct HomesPage: View {
@@ -193,9 +222,18 @@ struct HomesPage: View {
     /// Pages fetched on behalf of the active query, reset whenever the query
     /// changes. Bounds the exhaustion loop below.
     @State private var searchPagesLoaded = 0
+    /// The geocoded city query, and how far from it the user will look
+    /// (feature 11). Nil until a query resolves to somewhere real.
+    @State private var searchCenter: Coordinate?
+    @State private var radiusMiles: Double?
 
     /// A pathological feed shouldn't page forever behind one keystroke.
     private static let maxSearchPages = 20
+
+    /// CLGeocoder is rate-limited to roughly 50 requests a minute, and a city
+    /// name arrives one keystroke at a time. Each keystroke cancels the pending
+    /// task, so only a pause in typing actually reaches the geocoder.
+    private static let geocodeDebounce = Duration.milliseconds(500)
 
     // `listings` arrives already ordered newest-first (with friends' listings
     // grouped ahead) by HomeStore.feed, so the feed no longer shuffles it — a
@@ -233,7 +271,8 @@ struct HomesPage: View {
         } label: {
             HomeCard(
                 listing: listing,
-                reason: FeedSections.reason(for: listing, myID: viewerID, friendIDs: friendIDs)
+                reason: FeedSections.reason(for: listing, myID: viewerID, friendIDs: friendIDs),
+                distanceMiles: geoScope?.distance(to: listing)
             )
         }
         .buttonStyle(.pressableCard)
@@ -255,8 +294,15 @@ struct HomesPage: View {
             filters: selectedFilters,
             savedIDs: userProfileStore.currentProfile?.savedIDs ?? [],
             savedOnly: showSavedOnly,
-            sort: selectedSort
+            sort: selectedSort,
+            scope: geoScope
         )
+    }
+
+    /// The active search center and radius, or nil when the query has not
+    /// geocoded (or there is no query at all).
+    private var geoScope: GeoScope? {
+        searchCenter.map { GeoScope(center: $0, radiusMiles: radiusMiles) }
     }
 
     /// Placeholders stand in only before the first page arrives. Once any listing
@@ -338,11 +384,18 @@ struct HomesPage: View {
                 .padding(.horizontal)
             }
 
-            HStack {
-                filterMenu
-                sortMenu
-                savedButton
-                Spacer()
+            // Scrollable because the controls are wider than a small screen once
+            // the radius menu joins them and the sort label spells out a choice
+            // as long as "Most Flexible Cancellation".
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    filterMenu
+                    sortMenu
+                    if searchCenter != nil {
+                        radiusMenu
+                    }
+                    savedButton
+                }
             }
 
             HStack {
@@ -352,6 +405,7 @@ struct HomesPage: View {
                         selectedSort = .default
                         citySearch = ""
                         showSavedOnly = false
+                        radiusMiles = nil
                     } label: {
                         Label("Reset", systemImage: "arrow.counterclockwise")
                             .font(.subheadline)
@@ -465,6 +519,16 @@ struct HomesPage: View {
             searchPagesLoaded += 1
             onLoadMore()
         }
+        // Resolves the city query to a point to measure from (feature 11).
+        // Restarted — and so cancelled — on every keystroke.
+        .task(id: citySearch) { await resolveSearchCenter() }
+        // Losing the center strands both geo controls: a radius with nothing to
+        // be within, and a sort that would silently stop sorting.
+        .onChange(of: searchCenter) { _, center in
+            guard center == nil else { return }
+            radiusMiles = nil
+            if selectedSort == .nearest { selectedSort = .default }
+        }
         .navigationTitle("Available FreeBNBs")
         .toolbar { friendsToolbarItem; mapToolbarItem }
         .sheet(isPresented: $showFriends) { friendsSheet }
@@ -575,9 +639,32 @@ struct HomesPage: View {
         .menuActionDismissBehavior(.disabled)
     }
 
+    /// Only rendered once `searchCenter` resolves: a radius with nothing at its
+    /// center is a filter the user cannot reason about.
+    private var radiusMenu: some View {
+        Menu {
+            Button(SearchRadius.label(nil)) { radiusMiles = nil }
+            ForEach(SearchRadius.options, id: \.self) { miles in
+                Button(SearchRadius.label(miles)) { radiusMiles = miles }
+            }
+        } label: {
+            Label(SearchRadius.label(radiusMiles), systemImage: "location.circle")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(radiusMiles == nil ? Color.accent.opacity(0.15) : Color.accent.opacity(0.3), in: Capsule())
+                .foregroundColor(Color.accent)
+        }
+        .accessibilityLabel("Search radius, \(SearchRadius.label(radiusMiles))")
+    }
+
     private var sortMenu: some View {
         Menu {
             Button("Default") { selectedSort = .default }
+            if searchCenter != nil {
+                Button("Nearest") { selectedSort = .nearest }
+            }
             Button("Most Eager to Host") { selectedSort = .mostEager }
             Button("Most Flexible Cancellation") { selectedSort = .mostFlexible }
             Button("Most Rooms") { selectedSort = .mostRooms }
@@ -651,6 +738,24 @@ struct HomesPage: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Color.accent)
         }
+    }
+
+    /// Geocodes the trimmed city query after a pause in typing. A query that
+    /// names nowhere leaves `searchCenter` nil, which disables the radius menu and
+    /// the nearest sort rather than emptying the feed.
+    private func resolveSearchCenter() async {
+        let query = citySearch.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else {
+            searchCenter = nil
+            return
+        }
+        try? await Task.sleep(for: Self.geocodeDebounce)
+        guard !Task.isCancelled else { return }
+        let resolved = try? await GeocodingCache.shared.coordinate(for: query)
+        // The query may have moved on while the geocoder was working; the task is
+        // cancelled in that case, and a late answer must not overwrite the new one.
+        guard !Task.isCancelled else { return }
+        searchCenter = resolved.map { Coordinate($0) }
     }
 
     // Selected filters sorted in the same order as the filter menu.
