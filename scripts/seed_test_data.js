@@ -61,7 +61,14 @@ const now = admin.firestore.FieldValue.serverTimestamp();
 // `savedListingIDs` and `blockedUserIDs` are optional per-user overrides written
 // into the private profile; omitted means an empty list. They let the seed mimic
 // a lived-in account (bookmarks, a block) rather than a pristine one.
+//
+// The dev account matches the DEBUG "Sign in as dev@freebnb.test" button
+// (ProfilePage). seedFriendEdges makes it an accepted friend of every other
+// seed user (S1), so it can browse friends-only listings while testing; those
+// listings also name it in allowedViewerIDs so the rules let it through.
+const DEV_UID = "seed-dev-tester";
 const users = [
+  { uid: DEV_UID, email: "dev@freebnb.test", password: "***REDACTED***", displayName: "Dev Tester" },
   { uid: "seed-host-spongebob", email: "spongebob@seed.freebnb.test", password: "***REDACTED***", displayName: "SpongeBob SquarePants" },
   { uid: "seed-host-sandy", email: "sandy@seed.freebnb.test", password: "***REDACTED***", displayName: "Sandy Cheeks", savedListingIDs: ["seed-home-squidward-2"] },
   { uid: "seed-host-squidward", email: "squidward@seed.freebnb.test", password: "***REDACTED***", displayName: "Squidward Tentacles" },
@@ -245,7 +252,7 @@ const homes = [
     amenities: sparseAmenities,
     cancellationPolicy: "strict",
     visibility: "friendsOnly",
-    allowedViewerIDs: ["seed-host-plankton", "seed-guest-patrick"]
+    allowedViewerIDs: ["seed-host-plankton", "seed-guest-patrick", DEV_UID]
   },
   {
     id: "seed-home-spongebob-2",
@@ -279,7 +286,7 @@ const homes = [
     amenities,
     cancellationPolicy: "moderate",
     visibility: "friendsOnly",
-    allowedViewerIDs: ["seed-host-sandy", "seed-guest-patrick"]
+    allowedViewerIDs: ["seed-host-sandy", "seed-guest-patrick", DEV_UID]
   },
   {
     id: "seed-home-squidward-2",
@@ -520,11 +527,14 @@ function friendEdge(a, b, status, initiator) {
   return { id: `${userA}_${userB}`, userA, userB, status, initiator };
 }
 
-// A small friend graph: mostly accepted, plus a couple of pending requests so
-// the Friends tab shows incoming/outgoing states. friendsOnly listings above
-// (Plankton, Sandy's Austin place) name Patrick in allowedViewerIDs, so Patrick
-// is friends with both hosts here to keep visibility consistent.
-const friendEdges = [
+// A friend graph: mostly accepted, plus a couple of pending requests so the
+// Friends tab shows incoming/outgoing states. Two invariants hold here:
+//   1. Every stay request below is between two accepted friends — you connect
+//      before you ask to stay — so each guest/host pair has an accepted edge.
+//   2. friendsOnly listings (Plankton, Sandy's Austin place) name their viewers
+//      in allowedViewerIDs, and those viewers are accepted friends of the host.
+// The dev account is wired to be friends with everyone at the end (S1).
+const explicitFriendEdges = [
     friendEdge("seed-guest-patrick", "seed-host-spongebob", "accepted", "seed-guest-patrick"),
     friendEdge("seed-guest-patrick", "seed-host-sandy", "accepted", "seed-host-sandy"),
     friendEdge("seed-guest-patrick", "seed-host-plankton", "accepted", "seed-guest-patrick"),
@@ -536,12 +546,27 @@ const friendEdges = [
     friendEdge("seed-host-larry", "seed-host-sandy", "accepted", "seed-host-larry"),
     friendEdge("seed-host-plankton", "seed-host-karen", "accepted", "seed-host-plankton"),
     friendEdge("seed-host-mermaidman", "seed-guest-barnacleboy", "accepted", "seed-host-mermaidman"),
+    // Accepted edges that back the stay requests below (guest befriended host first).
+    friendEdge("seed-guest-gary", "seed-host-krabs", "accepted", "seed-guest-gary"),
+    friendEdge("seed-guest-patrick", "seed-host-squidward", "accepted", "seed-guest-patrick"),
+    friendEdge("seed-host-mermaidman", "seed-host-larry", "accepted", "seed-host-mermaidman"),
+    friendEdge("seed-guest-barnacleboy", "seed-host-pearl", "accepted", "seed-guest-barnacleboy"),
+    friendEdge("seed-host-sandy", "seed-host-krabs", "accepted", "seed-host-sandy"),
+    friendEdge("seed-host-neptune", "seed-host-squidward", "accepted", "seed-host-neptune"),
     // Pending: Patrick asked Gary (outgoing for Patrick), Neptune asked Krabs,
     // Pearl asked Patrick (incoming for Patrick).
     friendEdge("seed-guest-patrick", "seed-guest-gary", "pending", "seed-guest-patrick"),
     friendEdge("seed-host-neptune", "seed-host-krabs", "pending", "seed-host-neptune"),
     friendEdge("seed-host-pearl", "seed-guest-patrick", "pending", "seed-host-pearl")
 ];
+
+// S1: the dev account is an accepted friend of every other seed user, so it can
+// see every friends-only listing while testing.
+const devFriendEdges = users
+  .filter((u) => u.uid !== DEV_UID)
+  .map((u) => friendEdge(DEV_UID, u.uid, "accepted", DEV_UID));
+
+const friendEdges = [...explicitFriendEdges, ...devFriendEdges];
 
 async function seedFriendEdges() {
   for (const edge of friendEdges) {
