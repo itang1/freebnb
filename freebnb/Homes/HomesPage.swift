@@ -125,6 +125,61 @@ enum SortOption: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Whether the feed should keep pulling pages on behalf of an active search or
+/// filter. Pure and `Equatable` so the loop's stopping conditions are unit-tested
+/// rather than only observable by scrolling, and so the view can restart its
+/// driving task whenever any input changes.
+struct FeedSearchPaging: Equatable {
+    var isNarrowing: Bool
+    var canLoadMore: Bool
+    var isLoadingMore: Bool
+    var hasError: Bool
+    var pagesLoaded: Int
+    var maxPages: Int
+
+    /// Unfetched pages could still hold matches for the active query. Suppresses
+    /// the empty state, which would otherwise claim there are no results before
+    /// we have looked at all of them.
+    var isSearchingRemainingPages: Bool {
+        isNarrowing && canLoadMore && (isLoadingMore || pagesLoaded < maxPages)
+    }
+
+    /// Stops on `hasError` as well: a failed page leaves `canLoadMore` set, and
+    /// without this the loop would retry the same broken fetch up to the cap.
+    var shouldFetchNextPage: Bool {
+        isSearchingRemainingPages && !isLoadingMore && !hasError
+    }
+}
+
+/// The visible list: the incoming feed narrowed by the filter chips, the city or
+/// state query, and the saved-only toggle, then reordered by `sort`. `query` is
+/// expected pre-trimmed and lowercased.
+func filterAndSort(
+    _ homes: [Home],
+    query: String,
+    filters: Set<FilterOption>,
+    savedIDs: Set<String>,
+    savedOnly: Bool,
+    sort: SortOption
+) -> [Home] {
+    let result = homes.filter { home in
+        filters.allSatisfy { $0.matches(home) } &&
+        (query.isEmpty || home.address.city.lowercased().contains(query) || home.address.state.lowercased().contains(query)) &&
+        (!savedOnly || savedIDs.contains(home.id))
+    }
+    switch sort {
+    case .mostEager:     return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
+    case .mostFlexible:  return result.sorted { ($0.cancellationPolicy ?? .flexible).flexibilityRank > ($1.cancellationPolicy ?? .flexible).flexibilityRank }
+    case .mostDays:      return result.sorted { $0.guestPolicy.maxStayDays > $1.guestPolicy.maxStayDays }
+    case .mostGuests:    return result.sorted { $0.guestPolicy.maxGuests > $1.guestPolicy.maxGuests }
+    case .mostRooms:     return result.sorted { $0.sleeping.numGuestRooms > $1.sleeping.numGuestRooms }
+    case .fewestGuests:  return result.sorted { $0.guestPolicy.maxGuests < $1.guestPolicy.maxGuests }
+    case .mostAmenities: return result.sorted { $0.amenities.count > $1.amenities.count }
+    case .cityAZ:        return result.sorted { $0.address.city < $1.address.city }
+    default:             return result
+    }
+}
+
 struct HomesPage: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(FriendStore.self) private var friendStore
@@ -135,6 +190,12 @@ struct HomesPage: View {
     @State private var showSavedOnly: Bool = false
     @State private var showFriends: Bool = false
     @State private var showMap: Bool = false
+    /// Pages fetched on behalf of the active query, reset whenever the query
+    /// changes. Bounds the exhaustion loop below.
+    @State private var searchPagesLoaded = 0
+
+    /// A pathological feed shouldn't page forever behind one keystroke.
+    private static let maxSearchPages = 20
 
     // `listings` arrives already ordered newest-first (with friends' listings
     // grouped ahead) by HomeStore.feed, so the feed no longer shuffles it — a
@@ -179,32 +240,48 @@ struct HomesPage: View {
     // can never go stale from a missing onChange trigger. This is what makes the
     // "Saved" filter update the instant a listing is bookmarked or unbookmarked.
     private var filteredListings: [Home] {
-        recomputeFiltered(from: listings)
+        filterAndSort(
+            listings,
+            query: citySearch.trimmingCharacters(in: .whitespaces).lowercased(),
+            filters: selectedFilters,
+            savedIDs: userProfileStore.currentProfile?.savedIDs ?? [],
+            savedOnly: showSavedOnly,
+            sort: selectedSort
+        )
     }
 
     /// Placeholders stand in only before the first page arrives. Once any listing
     /// is on screen, a filter that matches nothing is a result, not a load.
     private var showingSkeletons: Bool { isLoading && filteredListings.isEmpty }
 
-    private func recomputeFiltered(from shuffled: [Home]) -> [Home] {
-        let query = citySearch.trimmingCharacters(in: .whitespaces).lowercased()
-        let savedIDs = userProfileStore.currentProfile?.savedIDs ?? []
-        let result = shuffled.filter { home in
-            selectedFilters.allSatisfy { $0.matches(home) } &&
-            (query.isEmpty || home.address.city.lowercased().contains(query) || home.address.state.lowercased().contains(query)) &&
-            (!showSavedOnly || savedIDs.contains(home.id))
-        }
-        switch selectedSort {
-        case .mostEager:     return result.sorted { $0.hostMotivation.rank > $1.hostMotivation.rank }
-        case .mostFlexible:  return result.sorted { ($0.cancellationPolicy ?? .flexible).flexibilityRank > ($1.cancellationPolicy ?? .flexible).flexibilityRank }
-        case .mostDays:      return result.sorted { $0.guestPolicy.maxStayDays > $1.guestPolicy.maxStayDays }
-        case .mostGuests:    return result.sorted { $0.guestPolicy.maxGuests > $1.guestPolicy.maxGuests }
-        case .mostRooms:     return result.sorted { $0.sleeping.numGuestRooms > $1.sleeping.numGuestRooms }
-        case .fewestGuests:  return result.sorted { $0.guestPolicy.maxGuests < $1.guestPolicy.maxGuests }
-        case .mostAmenities: return result.sorted { $0.amenities.count > $1.amenities.count }
-        case .cityAZ:        return result.sorted { $0.address.city < $1.address.city }
-        default:             return result
-        }
+    // Search, filters, and the saved-only toggle all narrow `listings`, which
+    // holds only the pages fetched so far. So a query matching nothing on page
+    // one used to render "No homes found" while its matches sat unfetched on
+    // page two, and the load-more sentinel — which only appears beneath a
+    // non-empty list — never fired to go get them (L3).
+    //
+    // Firestore can't answer a substring query, and the feed's ordering and
+    // visibility partitions leave no room for a prefix range. So while a
+    // narrowing control is active we simply pull the remaining pages and let
+    // the client-side predicate see the whole feed.
+    private var isNarrowingFeed: Bool {
+        !citySearch.trimmingCharacters(in: .whitespaces).isEmpty
+            || !selectedFilters.isEmpty
+            || showSavedOnly
+    }
+
+    /// Doubles as the id the exhaustion loop restarts on: each fetch flips
+    /// `isLoadingMore` and bumps `searchPagesLoaded`, so the task re-runs and
+    /// pulls the next page until one of `FeedSearchPaging`'s stops trips.
+    private var paging: FeedSearchPaging {
+        FeedSearchPaging(
+            isNarrowing: isNarrowingFeed,
+            canLoadMore: canLoadMore,
+            isLoadingMore: isLoadingMore,
+            hasError: error != nil,
+            pagesLoaded: searchPagesLoaded,
+            maxPages: Self.maxSearchPages
+        )
     }
 
     var body: some View {
@@ -317,12 +394,20 @@ struct HomesPage: View {
                                     .onAppear { onLoadMore() }
                             }
 
-                            if isLoadingMore {
+                            if paging.isSearchingRemainingPages && filteredListings.isEmpty {
+                                VStack(spacing: 10) {
+                                    ProgressView()
+                                    Text("Searching all listings…")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 24)
+                            } else if isLoadingMore {
                                 ProgressView()
                                     .padding(.vertical, 16)
                             }
 
-                            if !isLoading && filteredListings.isEmpty {
+                            if !isLoading && !paging.isSearchingRemainingPages && filteredListings.isEmpty {
                                 emptyStateView
                             }
                         }
@@ -340,6 +425,16 @@ struct HomesPage: View {
         }
         .padding(30)
         .background(.primaryBackground)
+        // A new query gets a fresh page budget; the pages themselves stay in the
+        // store, so this only re-arms how far the next search may reach.
+        .onChange(of: citySearch) { _, _ in searchPagesLoaded = 0 }
+        .onChange(of: selectedFilters) { _, _ in searchPagesLoaded = 0 }
+        .onChange(of: showSavedOnly) { _, _ in searchPagesLoaded = 0 }
+        .task(id: paging) {
+            guard paging.shouldFetchNextPage else { return }
+            searchPagesLoaded += 1
+            onLoadMore()
+        }
         .navigationTitle("Available FreeBNBs")
         .toolbar { friendsToolbarItem; mapToolbarItem }
         .sheet(isPresented: $showFriends) { friendsSheet }

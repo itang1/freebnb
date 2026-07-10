@@ -162,3 +162,68 @@ struct FeedOrderingTests {
         #expect(feed.map(\.id) == ["a"])
     }
 }
+
+/// Covers `FeedSearchPaging`, the rule that decides whether a search or filter
+/// keeps pulling pages. Search runs client-side over fetched pages, so without
+/// this the feed reports "no homes found" for matches sitting on a page it never
+/// requested (L3).
+struct FeedSearchPagingTests {
+    private func paging(
+        isNarrowing: Bool = true,
+        canLoadMore: Bool = true,
+        isLoadingMore: Bool = false,
+        hasError: Bool = false,
+        pagesLoaded: Int = 0,
+        maxPages: Int = 20
+    ) -> FeedSearchPaging {
+        FeedSearchPaging(
+            isNarrowing: isNarrowing,
+            canLoadMore: canLoadMore,
+            isLoadingMore: isLoadingMore,
+            hasError: hasError,
+            pagesLoaded: pagesLoaded,
+            maxPages: maxPages
+        )
+    }
+
+    @Test func anActiveQueryWithUnfetchedPagesKeepsPaging() {
+        #expect(paging().shouldFetchNextPage)
+        #expect(paging().isSearchingRemainingPages)
+    }
+
+    /// The whole point: browsing the unfiltered feed must still page lazily off
+    /// the scroll sentinel, not eagerly download everything.
+    @Test func anIdleFeedDoesNotPage() {
+        #expect(!paging(isNarrowing: false).shouldFetchNextPage)
+        #expect(!paging(isNarrowing: false).isSearchingRemainingPages)
+    }
+
+    @Test func anExhaustedFeedStopsAndReleasesTheEmptyState() {
+        let exhausted = paging(canLoadMore: false)
+        #expect(!exhausted.shouldFetchNextPage)
+        // No pages left to search, so "no homes found" is now the truth.
+        #expect(!exhausted.isSearchingRemainingPages)
+    }
+
+    @Test func aFetchInFlightIsNotDoubleRequested() {
+        let inFlight = paging(isLoadingMore: true)
+        #expect(!inFlight.shouldFetchNextPage)
+        // Still searching, though — the empty state stays suppressed.
+        #expect(inFlight.isSearchingRemainingPages)
+    }
+
+    /// A failed page leaves `canLoadMore` set; retrying it up to the cap would
+    /// hammer a broken query.
+    @Test func aFailedPageStopsTheLoop() {
+        #expect(!paging(hasError: true).shouldFetchNextPage)
+    }
+
+    @Test func thePageBudgetBoundsTheLoop() {
+        #expect(paging(pagesLoaded: 19, maxPages: 20).shouldFetchNextPage)
+        let capped = paging(pagesLoaded: 20, maxPages: 20)
+        #expect(!capped.shouldFetchNextPage)
+        // Cap reached with pages still unread: stop paging, and let the empty
+        // state say so rather than spinning forever.
+        #expect(!capped.isSearchingRemainingPages)
+    }
+}
