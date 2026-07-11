@@ -42,6 +42,7 @@ struct FreeBNBApp: App {
     @State private var stayRequestStore: StayRequestStore
     @State private var friendStore: FriendStore
     @State private var reviewStore: ReviewStore
+    @State private var networkMonitor = NetworkMonitor()
 
     init() {
         // App Check must be registered before FirebaseApp.configure() so the
@@ -85,6 +86,7 @@ struct FreeBNBApp: App {
                 .environment(stayRequestStore)
                 .environment(friendStore)
                 .environment(reviewStore)
+                .environment(networkMonitor)
                 .environment(router)
                 .onAppear {
                     // Wire the store and router into the delegate.

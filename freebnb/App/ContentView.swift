@@ -13,6 +13,7 @@ struct ContentView: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(FriendStore.self) private var friendStore
     @Environment(DeepLinkRouter.self) private var router
+    @Environment(NetworkMonitor.self) private var networkMonitor
     @AppStorage(UserDefaultsKey.hasSeenOnboarding) private var hasSeenOnboarding = false
     @AppStorage(UserDefaultsKey.ageGateAccepted) private var ageGateAccepted = false
     @AppStorage(UserDefaultsKey.lastSeenWhatsNewVersion) private var lastSeenWhatsNewVersion = ""
@@ -181,6 +182,7 @@ struct ContentView: View {
                 }
             }
         }
+        .offlineBanner(isOnline: networkMonitor.isOnline)
         .appliesStoredAppearance()
     }
 }
@@ -194,4 +196,5 @@ struct ContentView: View {
         .environment(StayRequestStore())
         .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
         .environment(DeepLinkRouter())
+        .environment(NetworkMonitor(start: false))
 }

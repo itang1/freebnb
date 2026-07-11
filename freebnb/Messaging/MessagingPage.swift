@@ -21,6 +21,7 @@ struct MessagingPage: View {
     @Environment(StayRequestStore.self) private var requestStore
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(NetworkMonitor.self) private var networkMonitor
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft = ""
@@ -87,7 +88,7 @@ struct MessagingPage: View {
             )
 
             Divider()
-            MessageInputBar(otherName: otherName, draft: $draft, isFocused: $inputFocused, onSend: sendMessage)
+            MessageInputBar(otherName: otherName, draft: $draft, isFocused: $inputFocused, onSend: sendMessage, isOffline: !networkMonitor.isOnline)
         }
         .background(Color.primaryBackground.ignoresSafeArea())
         .navigationTitle(otherName)
