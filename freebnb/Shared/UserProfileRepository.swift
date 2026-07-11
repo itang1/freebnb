@@ -207,15 +207,18 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
     }
 
     func submitFeedback(userID: String, category: String, message: String, appVersion: String?) async throws {
-        var payload: [String: Any] = [
-            "userID": userID,
-            "category": category,
-            "message": message,
-            // A fresh note enters the moderator queue as `new`, mirroring reports.
-            "status": "new",
-            "createdAt": FieldValue.serverTimestamp()
-        ]
-        if let appVersion { payload["appVersion"] = appVersion }
+        let payload: [String: Any] = {
+            var payload: [String: Any] = [
+                "userID": userID,
+                "category": category,
+                "message": message,
+                // A fresh note enters the moderator queue as `new`, mirroring reports.
+                "status": "new",
+                "createdAt": FieldValue.serverTimestamp()
+            ]
+            if let appVersion { payload["appVersion"] = appVersion }
+            return payload
+        }()
         try await withRetry { [db] in
             _ = try await db.collection(FirestorePaths.feedback).addDocument(data: payload)
         }

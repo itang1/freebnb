@@ -125,7 +125,7 @@ struct FreeBNBApp: App {
         let settings = Firestore.firestore().settings
         settings.host = "\(host):8080"
         settings.isSSLEnabled = false
-        settings.isPersistenceEnabled = false
+        settings.cacheSettings = MemoryCacheSettings()
         Firestore.firestore().settings = settings
         Functions.functions().useEmulator(withHost: host, port: 5001)
     }

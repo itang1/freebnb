@@ -113,12 +113,16 @@ private final class AddressCompleter: NSObject, MKLocalSearchCompleterDelegate {
         }
     }
 
-    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
-        suggestions = Array(completer.results.prefix(5))
+    nonisolated func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        MainActor.assumeIsolated {
+            suggestions = Array(completer.results.prefix(5))
+        }
     }
 
-    func completer(_ completer: MKLocalSearchCompleter, didFailWithError _: Error) {
-        suggestions = []
+    nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError _: Error) {
+        MainActor.assumeIsolated {
+            suggestions = []
+        }
     }
 }
 

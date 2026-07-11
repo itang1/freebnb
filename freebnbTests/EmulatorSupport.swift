@@ -77,7 +77,7 @@ enum EmulatorSupport {
         let settings = db.settings
         settings.host = "\(host):\(firestorePort)"
         settings.isSSLEnabled = false
-        settings.isPersistenceEnabled = false
+        settings.cacheSettings = MemoryCacheSettings()
         db.settings = settings
         return db
     }()

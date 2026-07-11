@@ -272,7 +272,7 @@ struct FirestoreHomesRepository: HomesRepository {
 
     func fetchVisibleListings(viewerID: String, after cursor: ListingCursor?, limit: Int) async throws -> [Home] {
         try await withRetry {
-            func page(_ query: Query) async throws -> [Home] {
+            @Sendable func page(_ query: Query) async throws -> [Home] {
                 var query = query.limit(to: limit)
                 // Cursor values must line up with the order-by fields:
                 // createdAt (as a Timestamp) then the document id.
