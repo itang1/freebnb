@@ -222,6 +222,11 @@ struct MonthGridTests {
     }
 }
 
+// Serialized: icsFile writes to fixed paths in the shared temporary directory
+// (deliberately — a stable filename is what the share sheet presents), so two
+// tests running in parallel can overwrite each other's file between the write
+// and the read-back.
+@Suite(.serialized)
 struct CalendarInviteTests {
     private func contents(_ url: URL) throws -> String {
         try String(contentsOf: url, encoding: .utf8)
