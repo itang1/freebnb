@@ -59,13 +59,17 @@ enum EmulatorSupport {
     nonisolated(unsafe) private static let app: FirebaseApp = {
         let name = "emulator-tests"
         if let existing = FirebaseApp.app(name: name) { return existing }
+        // FirebaseCore validates the app ID's shape at configure time: the last
+        // segment must parse as hex, and the API key must be 39 chars starting
+        // with "AIza" or FirebaseInstallations aborts. Neither value reaches a
+        // real backend — everything is pointed at the emulator.
         let options = FirebaseOptions(
-            googleAppID: "1:1234567890:ios:emulatortestapp",
+            googleAppID: "1:1234567890:ios:00e701a700757000",
             gcmSenderID: "1234567890"
         )
         options.projectID = projectID
-        // The Auth emulator requires a non-empty API key but validates nothing.
-        options.apiKey = "emulator-fake-api-key"
+        // The Auth emulator requires a well-formed API key but validates nothing.
+        options.apiKey = "AIzaSyEmulatorFakeKey000000000000000000"
         FirebaseApp.configure(name: name, options: options)
         return FirebaseApp.app(name: name)!
     }()
