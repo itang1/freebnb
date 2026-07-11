@@ -107,7 +107,7 @@ enum PreviewData {
         listingID: home.id,
         authorUserID: friendID,
         subjectUserID: viewerID,
-        role: .guest,
+        role: .guestReviewingHost,
         rating: 5,
         publicComment: "Tidy, communicative, and great company. Anytime."
     )
