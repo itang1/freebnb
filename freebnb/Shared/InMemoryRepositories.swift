@@ -305,6 +305,12 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
 
     func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws {}
 
+    /// Records the last submitted feedback so tests can assert the store forwarded it.
+    private(set) var lastFeedback: (userID: String, category: String, message: String, appVersion: String?)?
+    func submitFeedback(userID: String, category: String, message: String, appVersion: String?) async throws {
+        lastFeedback = (userID, category, message, appVersion)
+    }
+
     func exportUserData() async throws -> Data {
         try JSONSerialization.data(withJSONObject: ["profile": [:], "listings": []], options: [.prettyPrinted])
     }

@@ -6,6 +6,8 @@
 import SwiftUI
 
 struct InfoPage: View {
+    @State private var showFeedback = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -13,6 +15,14 @@ struct InfoPage: View {
                     .font(.subheadline)
                     .multilineTextAlignment(.leading)
                     .padding(.bottom, 4)
+
+                NavigationLink(destination: WhatsNewPage()) {
+                    InfoCard(
+                        icon: "sparkles",
+                        title: "What's New",
+                        subtitle: "The latest features and fixes"
+                    )
+                }
 
                 NavigationLink(destination: AboutPage()) {
                     InfoCard(
@@ -61,6 +71,16 @@ struct InfoPage: View {
                         subtitle: "Stay safe and set boundaries"
                     )
                 }
+
+                Button {
+                    showFeedback = true
+                } label: {
+                    InfoCard(
+                        icon: "bubble.left.and.text.bubble.right.fill",
+                        title: "Send Feedback",
+                        subtitle: "Ideas, problems, or praise"
+                    )
+                }
             }
             .frame(maxWidth: 600)
             .padding(30)
@@ -69,6 +89,9 @@ struct InfoPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primaryBackground)
         .navigationTitle("FreeBNB Information")
+        .sheet(isPresented: $showFeedback) {
+            FeedbackComposerView()
+        }
     }
 }
 

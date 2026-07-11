@@ -15,7 +15,9 @@ struct ContentView: View {
     @Environment(DeepLinkRouter.self) private var router
     @AppStorage(UserDefaultsKey.hasSeenOnboarding) private var hasSeenOnboarding = false
     @AppStorage(UserDefaultsKey.ageGateAccepted) private var ageGateAccepted = false
+    @AppStorage(UserDefaultsKey.lastSeenWhatsNewVersion) private var lastSeenWhatsNewVersion = ""
     @State private var showOnboarding = false
+    @State private var showWhatsNew = false
     @State private var listingsPath = NavigationPath()
     @AppStorage(UserDefaultsKey.selectedTab) private var selectedTab = 0
     @State private var messagesDeepLinkUserID: String? = nil
@@ -114,11 +116,29 @@ struct ContentView: View {
                         blockedIDs: context.blockedIDs
                     )
                 }
-                .sheet(isPresented: $showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
+                .sheet(isPresented: $showOnboarding, onDismiss: {
+                    hasSeenOnboarding = true
+                    // A brand-new user has just seen every feature in onboarding;
+                    // stamp the current version so the changelog only ever
+                    // auto-presents on a later *update*, never right after install.
+                    lastSeenWhatsNewVersion = Bundle.main.appVersionString
+                }) {
                     OnboardingPage(isPresented: $showOnboarding)
                 }
+                .sheet(isPresented: $showWhatsNew, onDismiss: {
+                    lastSeenWhatsNewVersion = Bundle.main.appVersionString
+                }) {
+                    WhatsNewSheet { showWhatsNew = false }
+                }
                 .onAppear {
-                    if !hasSeenOnboarding { showOnboarding = true }
+                    if !hasSeenOnboarding {
+                        showOnboarding = true
+                    } else if WhatsNew.shouldPresent(
+                        currentVersion: Bundle.main.appVersionString,
+                        lastSeenVersion: lastSeenWhatsNewVersion.isEmpty ? nil : lastSeenWhatsNewVersion
+                    ) {
+                        showWhatsNew = true
+                    }
                 }
                 .onChange(of: router.pendingConversationUserID) { _, userID in
                     guard let userID else { return }

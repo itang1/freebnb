@@ -198,6 +198,26 @@ final class UserProfileStore {
         try await repository.submitReport(reporterUserID: myID, targetType: targetType, targetID: targetID, reason: reason)
     }
 
+    /// Sends an in-app feedback note (feature 43). The message is trimmed to match
+    /// what the composer validated and what the rules enforce. `appVersion`
+    /// defaults to the running build so a bug report identifies itself; tests
+    /// override it. Full members only — the rules reject anonymous guests, so the
+    /// composer gates the button before we get here.
+    func submitFeedback(
+        category: FeedbackCategory,
+        message: String,
+        appVersion: String? = Bundle.main.appVersionString
+    ) async throws {
+        guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await repository.submitFeedback(
+            userID: myID,
+            category: category.rawValue,
+            message: trimmed,
+            appVersion: appVersion
+        )
+    }
+
     /// Persists per-category push preferences to the private profile. Updates the
     /// local copy optimistically so the toggle reflects the change without waiting
     /// for the listener round-trip; reverts on failure.

@@ -19,6 +19,8 @@ enum FirestorePaths {
     static let messages = "messages"
     static let reports = "reports"
     static let rateLimits = "rateLimits"
+    /// In-app feedback notes (feature 43). Moderator-readable only; users create.
+    static let feedback = "feedback"
     /// Post-stay two-way reviews, one per (stay request, author).
     static let reviews = "reviews"
     /// Friend-written character references on a profile, one per (subject, author).

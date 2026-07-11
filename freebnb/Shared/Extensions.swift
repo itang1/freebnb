@@ -41,6 +41,19 @@ enum UserDefaultsKey {
     static let appearance              = "appearance"
     static let ageGateAccepted         = "ageGateAccepted"
     static let selectedTab             = "selectedTab"
+    /// The `WhatsNew` release version the user has already seen, so a fresh
+    /// install or an update auto-presents the changelog exactly once (feature 43).
+    static let lastSeenWhatsNewVersion = "lastSeenWhatsNewVersion"
+}
+
+// MARK: - Bundle
+
+extension Bundle {
+    /// The marketing version ("1.0"), used for the About row and stamped onto
+    /// feedback notes so a report carries the build it came from.
+    var appVersionString: String {
+        (infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
+    }
 }
 
 extension View {
