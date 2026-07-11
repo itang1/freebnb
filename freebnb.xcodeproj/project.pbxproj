@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FC1853193002A15D006C621E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FC1853183002A15D006C621E /* GoogleService-Info.plist */; };
 		FC38E38B2E382811000906CA /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = FC38E3892E382803000906CA /* .gitignore */; };
 		FCA1F5762F94741C00045A12 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F5752F94741C00045A12 /* FirebaseCore */; };
 		FCA1F5782F94742D00045A12 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F5772F94742D00045A12 /* FirebaseAuth */; };
@@ -36,6 +37,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		FC1853183002A15D006C621E /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		FC38E3892E382803000906CA /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		FC3EE6B62E3360ED004B2E1B /* freebnb.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = freebnb.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC3EE6C42E3360EE004B2E1B /* freebnbTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = freebnbTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -106,6 +108,7 @@
 				FCBB00012FA000000000BB01 /* Config/Config.Debug.xcconfig */,
 				FCBB00022FA000000000BB01 /* Config/Config.Release.xcconfig */,
 				FCA1F5742F94741C00045A12 /* Frameworks */,
+				FC1853183002A15D006C621E /* GoogleService-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -240,6 +243,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				FC18531730029EFF006C621E /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FC3EE6B72E3360ED004B2E1B /* Products */;
@@ -259,6 +263,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FC38E38B2E382811000906CA /* .gitignore in Resources */,
+				FC1853193002A15D006C621E /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -470,6 +475,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = freebnb/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FreeBNB;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -508,6 +514,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = freebnb/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FreeBNB;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -657,6 +664,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		FC18531730029EFF006C621E /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.2.0;
+			};
+		};
 		FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
