@@ -1,9 +1,9 @@
 // Listings are friends-only: readable by the host, the co-hosts, and the users
 // named in `allowedViewerIDs` (the host's accepted friends), and nobody else.
-// The legacy `visibility` field is accepted on writes for old-client
-// compatibility but must never widen the audience — a document stamped
-// 'everyone' or 'friendsOfFriends' is exactly as private as any other. These
-// tests pin that: if a rules change ever honors `visibility` again, they fail.
+// The legacy `visibility` tier field is dead: any write carrying it is
+// rejected by the key allowlist, and a pre-migration document that still has
+// one is exactly as private as any other. These tests pin both ends: if a
+// rules change ever accepts or honors `visibility` again, they fail.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -13,7 +13,18 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 
 const rulesPath = fileURLToPath(new URL("../firestore.rules", import.meta.url));
 
@@ -84,22 +95,58 @@ describe("homes/{id} — friends-only reads", () => {
     await assertFails(getDoc(listingDoc(asStranger())));
   });
 
-  // The legacy tiers. Documents stamped by old clients or predating the
-  // migration must not be world-readable.
-  it("ignores legacy visibility 'everyone': a stranger still cannot read", async () => {
-    await seedListing({ visibility: "everyone" });
-    await assertFails(getDoc(listingDoc(asStranger())));
-  });
-
-  it("ignores legacy visibility 'friendsOfFriends': outside the ACL means no read", async () => {
-    await seedListing({ visibility: "friendsOfFriends" });
-    await assertFails(getDoc(listingDoc(asStranger())));
-  });
-
-  it("hides a legacy document with no ACL at all from a stranger", async () => {
+  // A pre-migration document (no ACL, possibly a stale tier stamp) must not be
+  // world-readable while it waits for scripts/migrate_friends_only.js.
+  it("hides a pre-migration document with no ACL at all from a stranger", async () => {
     const body = listingBody({ visibility: "everyone" });
     delete body.allowedViewerIDs;
     await seed((db) => setDoc(doc(db, "homes", LISTING), body));
     await assertFails(getDoc(listingDoc(asStranger())));
+  });
+});
+
+describe("homes/{id} — the legacy visibility field is rejected on writes", () => {
+  // `createdAt` must be serverTimestamp() on a create, so the passing sibling
+  // below is what proves the rejection here is about `visibility` and not some
+  // unrelated validation failure.
+  it("rejects a create that still carries the field", async () => {
+    await assertFails(
+      setDoc(
+        doc(asHost(), "homes", "listing-2"),
+        listingBody({ id: "listing-2", visibility: "friendsOnly", createdAt: serverTimestamp() })
+      )
+    );
+  });
+
+  it("allows the otherwise-identical create without it", async () => {
+    await assertSucceeds(
+      setDoc(
+        doc(asHost(), "homes", "listing-2"),
+        listingBody({ id: "listing-2", createdAt: serverTimestamp() })
+      )
+    );
+  });
+
+  it("rejects the host stamping it back onto an existing listing", async () => {
+    await seedListing();
+    await assertFails(updateDoc(listingDoc(asHost()), { visibility: "everyone" }));
+  });
+});
+
+describe("homes — list queries", () => {
+  // The feed's one query. Rules reject a query wholesale unless every possible
+  // match provably passes the read gate, so this pins that the ACL filter is
+  // still provably safe…
+  it("allows the feed query: allowedViewerIDs contains me", async () => {
+    await seedListing();
+    const feed = query(collection(asFriend(), "homes"), where("allowedViewerIDs", "array-contains", FRIEND));
+    await assertSucceeds(getDocs(feed));
+  });
+
+  // …and that nothing broader is. An unfiltered list would leak every listing
+  // on the platform to any signed-in account.
+  it("rejects an unfiltered list of all homes", async () => {
+    await seedListing();
+    await assertFails(getDocs(collection(asStranger(), "homes")));
   });
 });

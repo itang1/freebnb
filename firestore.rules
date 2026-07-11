@@ -229,11 +229,12 @@ service cloud.firestore {
     // one provably-safe query — `allowedViewerIDs contains me` — which also
     // covers the host's own listings, since the ACL always names the host.
     //
-    // A legacy `visibility` field ('everyone' / 'friendsOnly' /
-    // 'friendsOfFriends') may still appear on old documents and in writes from
-    // old clients. It is accepted but ignored: the read gate below never
-    // consults it, and scripts/migrate_friends_only.js strips it while
-    // rebuilding every ACL to host + accepted friends.
+    // The legacy `visibility` field ('everyone' / 'friendsOnly' /
+    // 'friendsOfFriends') is gone: writes carrying it are rejected outright by
+    // the key allowlist below, and scripts/migrate_friends_only.js strips it
+    // from pre-migration documents while rebuilding every ACL to host +
+    // accepted friends. A pre-migration document remains readable under the
+    // ACL gate but cannot be updated until migrated.
     //
     // Only the host may write their own listings.
     // -------------------------------------------------------------------------
@@ -247,7 +248,7 @@ service cloud.firestore {
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
                  'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
-                 'geohash', 'visibility', 'allowedViewerIDs', 'coHostUserIDs',
+                 'geohash', 'allowedViewerIDs', 'coHostUserIDs',
                  'deletedAt', 'createdAt'
                ])
             && data.keys().hasAll([
@@ -284,11 +285,6 @@ service cloud.firestore {
                 || data.hostMotivation in ['eager', 'open', 'selective'])
             && (isUnset(data, 'cancellationPolicy')
                 || data.cancellationPolicy in ['flexible', 'moderate', 'strict'])
-            // Legacy field. Listings are friends-only now; the read rule ignores
-            // this entirely. Old clients still stamp it, so it stays writable
-            // until they age out; the migration script strips it from old docs.
-            && (isUnset(data, 'visibility')
-                || data.visibility in ['everyone', 'friendsOnly', 'friendsOfFriends'])
             // The read ACL. A host may grant whoever they like access to their own
             // listing, so the only constraints are a size cap (this array is
             // downloaded with every feed document) and that the host cannot lock

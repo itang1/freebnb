@@ -409,7 +409,7 @@ struct Home: Identifiable, Hashable, Codable {
     // the host's accepted friends, and to nobody else. A friend-of-a-friend is
     // shown the host as a friend *suggestion* instead, and sees the listing
     // only after the host accepts them. (A legacy `visibility` tier field used
-    // to widen this; it is gone from the model and ignored by the rules.)
+    // to widen this; it is gone from the model and rejected by the rules.)
     //
     // Denormalized read ACL: the host plus every accepted friend of the host.
     // Firestore rules cannot join to `friendEdges` at query time, so friends-only

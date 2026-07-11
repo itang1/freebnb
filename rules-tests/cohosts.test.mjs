@@ -8,7 +8,7 @@
 //   - only the host changes the roster, and only to an accepted friend;
 //   - a co-host cannot promote themselves to host, nor add further co-hosts;
 //   - a co-host cannot rewrite `allowedViewerIDs` (which would republish a
-//     friends-only listing to their own social graph) or `visibility`;
+//     friends-only listing to their own social graph);
 //   - a co-host cannot delete the listing, by the delete rule or by smuggling
 //     `deletedAt` through the update rule;
 //   - a co-host *can* read and write the private location and house manual,
@@ -62,7 +62,6 @@ function listingBody(extra = {}) {
     sleeping: { numGuestRooms: 1, arrangements: { bed: 1 } },
     guestPolicy: { maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false },
     amenities: { hasWifi: true },
-    visibility: "friendsOnly",
     allowedViewerIDs: [HOST, COHOST],
     coHostUserIDs: [],
     createdAt: Timestamp.now(),
@@ -230,11 +229,6 @@ describe("homes/{id} — what a co-host may write", () => {
     );
   });
 
-  it("refuses a co-host changing who can see the listing", async () => {
-    await seedCoHostedListing();
-    await assertFails(updateDoc(listingDoc(asCoHost()), { visibility: "everyone" }));
-  });
-
   it("refuses a co-host rewriting the host's name or contact details", async () => {
     await seedCoHostedListing();
     await assertFails(updateDoc(listingDoc(asCoHost()), { hostName: "Impostor" }));
@@ -255,7 +249,9 @@ describe("homes/{id} — what a co-host may write", () => {
 
   it("still lets the host do all of it", async () => {
     await seedCoHostedListing();
-    await assertSucceeds(updateDoc(listingDoc(asHost()), { visibility: "everyone" }));
+    await assertSucceeds(
+      updateDoc(listingDoc(asHost()), { allowedViewerIDs: [HOST, COHOST, FRIEND] })
+    );
     await assertSucceeds(updateDoc(listingDoc(asHost()), { hostName: "Host Renamed" }));
     await assertSucceeds(deleteDoc(listingDoc(asHost())));
   });

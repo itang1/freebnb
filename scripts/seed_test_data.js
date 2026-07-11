@@ -123,13 +123,11 @@ const sparseAmenities = {
   hasElevator: true
 };
 
-// `address` is the city-level part only, and `allowedViewerIDs` is the read
-// ACL the rules enforce friends-only visibility with. Listings are friends-only
-// now, so any `visibility` / `allowedViewerIDs` written below are legacy noise:
-// seedHomes() strips the former and recomputes the latter from the seeded
-// friend graph (host + accepted friends), exactly as rebuildListingACLs does in
-// production. Each listing's street and exact coordinates are seeded separately
-// into homes/{id}/private/location.
+// `address` is the city-level part only. The read ACL (`allowedViewerIDs`) is
+// not written here: seedHomes() computes it from the seeded friend graph (host
+// + accepted friends), exactly as rebuildListingACLs does in production. Each
+// listing's street and exact coordinates are seeded separately into
+// homes/{id}/private/location.
 //
 // The street + latitude/longitude below are REAL, geocoded addresses (mostly
 // well-known public places), so the map pin and the "Open in Apple Maps" button
@@ -152,8 +150,6 @@ const homes = [
     guestPolicy: { maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "flexible",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-spongebob"]
   },
   {
     id: "seed-home-sandy-1",
@@ -169,8 +165,6 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 3, kidsAllowed: false, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "moderate",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-sandy"],
     // SpongeBob co-hosts this one (feature 14): he and Sandy are accepted
     // friends, which the rules require. Sign in as sandy to manage the roster, or
     // as spongebob to see it under "Listings you co-host" and edit its details.
@@ -190,8 +184,6 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 4, kidsAllowed: false, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "strict",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-squidward"]
   },
   {
     id: "seed-home-krabs-1",
@@ -207,8 +199,6 @@ const homes = [
     guestPolicy: { maxGuests: 3, maxStayDays: 5, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "strict",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-krabs"]
   },
   {
     id: "seed-home-pearl-1",
@@ -224,8 +214,6 @@ const homes = [
     guestPolicy: { maxGuests: 4, maxStayDays: 3, kidsAllowed: true, guestPetsAllowed: true },
     amenities: cozyAmenities,
     cancellationPolicy: "flexible",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-pearl"]
   },
   {
     id: "seed-home-larry-1",
@@ -241,8 +229,6 @@ const homes = [
     guestPolicy: { maxGuests: 2, maxStayDays: 6, kidsAllowed: false, guestPetsAllowed: true },
     amenities,
     cancellationPolicy: "moderate",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-larry"]
   },
   {
     id: "seed-home-puff-1",
@@ -258,8 +244,6 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 10, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "flexible",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-puff"]
   },
   {
     id: "seed-home-plankton-1",
@@ -275,8 +259,6 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 2, kidsAllowed: false, guestPetsAllowed: false },
     amenities: sparseAmenities,
     cancellationPolicy: "strict",
-    visibility: "friendsOnly",
-    allowedViewerIDs: ["seed-host-plankton", "seed-guest-patrick", ...TEST_ACCOUNT_UIDS]
   },
   {
     id: "seed-home-spongebob-2",
@@ -292,8 +274,6 @@ const homes = [
     guestPolicy: { maxGuests: 3, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: true },
     amenities: cozyAmenities,
     cancellationPolicy: "flexible",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-spongebob"]
   },
   {
     id: "seed-home-sandy-2",
@@ -313,8 +293,6 @@ const homes = [
     // is all a client could ever compute; `rebuildListingACLs` widens it to the
     // second degree once the functions run. Until then it behaves as friendsOnly,
     // which is the safe direction to be wrong in.
-    visibility: "friendsOfFriends",
-    allowedViewerIDs: ["seed-host-sandy", "seed-guest-patrick", ...TEST_ACCOUNT_UIDS]
   },
   {
     id: "seed-home-squidward-2",
@@ -330,8 +308,6 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 4, kidsAllowed: false, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "strict",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-squidward"]
   },
   {
     id: "seed-home-krabs-2",
@@ -347,8 +323,6 @@ const homes = [
     guestPolicy: { maxGuests: 4, maxStayDays: 6, kidsAllowed: true, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "moderate",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-krabs"]
   },
   {
     id: "seed-home-karen-1",
@@ -364,8 +338,6 @@ const homes = [
     guestPolicy: { maxGuests: 2, maxStayDays: 5, kidsAllowed: false, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "moderate",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-karen"]
   },
   {
     id: "seed-home-neptune-1",
@@ -381,8 +353,6 @@ const homes = [
     guestPolicy: { maxGuests: 6, maxStayDays: 4, kidsAllowed: true, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "strict",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-neptune"]
   },
   {
     id: "seed-home-mermaidman-1",
@@ -398,8 +368,6 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 14, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "flexible",
-    visibility: "everyone",
-    allowedViewerIDs: ["seed-host-mermaidman"]
   }
 ];
 
@@ -514,7 +482,7 @@ function seededFriendsOf(userID) {
 
 async function seedHomes() {
   for (const home of homes) {
-    const { location, visibility: _legacy, ...publicListing } = home;
+    const { location, ...publicListing } = home;
     // Friends-only: the ACL is always host + accepted friends, same as
     // rebuildListingACLs writes in production.
     publicListing.allowedViewerIDs = [...new Set([home.hostUserID, ...seededFriendsOf(home.hostUserID)])];
