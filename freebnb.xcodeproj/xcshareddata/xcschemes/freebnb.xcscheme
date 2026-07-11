@@ -80,7 +80,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "-UseFirebaseEmulator YES"
+            argument = "-UseFirebaseEmulator"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
