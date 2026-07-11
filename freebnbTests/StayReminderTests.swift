@@ -52,18 +52,18 @@ private func stay(
         #expect(Set(reminders.map(\.kind)) == [.checkIn, .checkOut])
     }
 
-    @Test func checkInFiresEveningBeforeAndCheckoutFiresMorningOf() {
+    @Test func checkInFiresEveningBeforeAndCheckoutFiresMorningOf() throws {
         let now = Date()
         let s = stay(checkInOffset: 5, checkOutOffset: 8, from: now)
         let reminders = StayReminder.reminders(for: [s], viewerID: guest, now: now)
 
-        let checkIn = try! #require(reminders.first { $0.kind == .checkIn })
+        let checkIn = try #require(reminders.first { $0.kind == .checkIn })
         let checkInComps = cal.dateComponents([.day, .hour], from: checkIn.fireDate)
         #expect(checkInComps.hour == StayReminder.checkInHour)
         // The evening before, i.e. the day before check-in.
         #expect(cal.isDate(checkIn.fireDate, inSameDayAs: day(4, from: now)))
 
-        let checkOut = try! #require(reminders.first { $0.kind == .checkOut })
+        let checkOut = try #require(reminders.first { $0.kind == .checkOut })
         #expect(cal.component(.hour, from: checkOut.fireDate) == StayReminder.checkOutHour)
         #expect(cal.isDate(checkOut.fireDate, inSameDayAs: day(8, from: now)))
     }
@@ -86,15 +86,15 @@ private func stay(
         }
     }
 
-    @Test func copyTakesTheViewersSide() {
+    @Test func copyTakesTheViewersSide() throws {
         let now = Date()
         let s = stay(checkInOffset: 5, checkOutOffset: 8, from: now)
 
         let asGuest = StayReminder.reminders(for: [s], viewerID: guest, now: now)
         let asHost = StayReminder.reminders(for: [s], viewerID: host, now: now)
 
-        let guestCheckIn = try! #require(asGuest.first { $0.kind == .checkIn })
-        let hostCheckIn = try! #require(asHost.first { $0.kind == .checkIn })
+        let guestCheckIn = try #require(asGuest.first { $0.kind == .checkIn })
+        let hostCheckIn = try #require(asHost.first { $0.kind == .checkIn })
         #expect(guestCheckIn.title == "Check-in is tomorrow")
         #expect(hostCheckIn.title == "A guest arrives tomorrow")
         #expect(guestCheckIn.body != hostCheckIn.body)

@@ -72,6 +72,9 @@ struct MutualFriends: Codable, Hashable, Sendable {
 
     /// "Priya and Sam", "Priya, Sam and 3 others", or nil when there are none.
     var summary: String? {
+        // `count` is the callable's total, not a collection length: it can
+        // exceed `names.count`, so `names.isEmpty` is not an equivalent check.
+        // swiftlint:disable:next empty_count
         guard count > 0 else { return nil }
         let shown = names.prefix(2)
         let remainder = count - shown.count

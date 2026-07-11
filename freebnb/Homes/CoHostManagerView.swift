@@ -43,7 +43,8 @@ struct CoHostManagerView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Co-hosts can edit this listing's details and see its address and house manual. They can't change who can see it, manage co-hosts, delete it, or respond to stay requests — those stay with you.")
+                    Text("Co-hosts can edit this listing's details and see its address and house manual. "
+                        + "They can't change who can see it, manage co-hosts, delete it, or respond to stay requests — those stay with you.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }

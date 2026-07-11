@@ -393,7 +393,29 @@ struct HomesPage: View {
         }
     }
 
-    private var emptyStateView: some View {
+    /// Geocodes the trimmed city query after a pause in typing. A query that
+    /// names nowhere leaves `searchCenter` nil, which disables the radius menu and
+    /// the nearest sort rather than emptying the feed.
+    private func resolveSearchCenter() async {
+        let query = citySearch.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else {
+            searchCenter = nil
+            return
+        }
+        try? await Task.sleep(for: Self.geocodeDebounce)
+        guard !Task.isCancelled else { return }
+        let resolved = try? await GeocodingCache.shared.coordinate(for: query)
+        // The query may have moved on while the geocoder was working; the task is
+        // cancelled in that case, and a late answer must not overwrite the new one.
+        guard !Task.isCancelled else { return }
+        searchCenter = resolved.map { Coordinate($0) }
+    }
+}
+
+// The filter chips and empty state live in an extension so the struct body —
+// state, feed derivation, and `body` — stays within lint's type-length limit.
+private extension HomesPage {
+    var emptyStateView: some View {
         VStack(spacing: 16) {
             Spacer().frame(height: 40)
             Image(systemName: "house.lodge.fill")
@@ -415,7 +437,7 @@ struct HomesPage: View {
         .padding()
     }
 
-    private var filterMenu: some View {
+    var filterMenu: some View {
         Menu {
             ForEach(FilterCategory.allCases, id: \.self) { category in
                 Section(category.rawValue) {
@@ -435,7 +457,7 @@ struct HomesPage: View {
 
     /// Only rendered once `searchCenter` resolves: a radius with nothing at its
     /// center is a filter the user cannot reason about.
-    private var radiusMenu: some View {
+    var radiusMenu: some View {
         Menu {
             Button(SearchRadius.label(nil)) { radiusMiles = nil }
             ForEach(SearchRadius.options, id: \.self) { miles in
@@ -448,7 +470,7 @@ struct HomesPage: View {
         .accessibilityLabel("Search radius, \(SearchRadius.label(radiusMiles))")
     }
 
-    private var sortMenu: some View {
+    var sortMenu: some View {
         Menu {
             Button("Default") { selectedSort = .default }
             if searchCenter != nil {
@@ -470,7 +492,7 @@ struct HomesPage: View {
         .transaction { t in t.animation = nil }
     }
 
-    private var savedButton: some View {
+    var savedButton: some View {
         Button {
             showSavedOnly.toggle()
         } label: {
@@ -480,7 +502,7 @@ struct HomesPage: View {
     }
 
     @ViewBuilder
-    private var emptyStateMessage: some View {
+    var emptyStateMessage: some View {
         if showSavedOnly {
             Text("You haven't saved any listings yet. Open a listing and tap \"Save listing\" to bookmark it for later.")
                 .font(.subheadline)
@@ -511,34 +533,16 @@ struct HomesPage: View {
         }
     }
 
-    /// Geocodes the trimmed city query after a pause in typing. A query that
-    /// names nowhere leaves `searchCenter` nil, which disables the radius menu and
-    /// the nearest sort rather than emptying the feed.
-    private func resolveSearchCenter() async {
-        let query = citySearch.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else {
-            searchCenter = nil
-            return
-        }
-        try? await Task.sleep(for: Self.geocodeDebounce)
-        guard !Task.isCancelled else { return }
-        let resolved = try? await GeocodingCache.shared.coordinate(for: query)
-        // The query may have moved on while the geocoder was working; the task is
-        // cancelled in that case, and a late answer must not overwrite the new one.
-        guard !Task.isCancelled else { return }
-        searchCenter = resolved.map { Coordinate($0) }
-    }
-
     // Selected filters sorted in the same order as the filter menu.
-    private var sortedSelectedFilters: [FilterOption] {
+    var sortedSelectedFilters: [FilterOption] {
         FilterOption.all.filter { selectedFilters.contains($0) }
     }
 
-    private var filterLabel: String {
+    var filterLabel: String {
         selectedFilters.isEmpty ? "Filter" : "Filter (\(selectedFilters.count))"
     }
 
-    private func accessibilitySummary(for listing: Home) -> String {
+    func accessibilitySummary(for listing: Home) -> String {
         let rooms = "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")"
         let guests = "\(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s")"
         let nights = "up to \(listing.guestPolicy.maxStayDays) night\(listing.guestPolicy.maxStayDays == 1 ? "" : "s")"

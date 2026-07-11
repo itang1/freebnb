@@ -54,7 +54,7 @@ extension StayReminder {
             .filter { $0.status == .accepted }
             .flatMap { stay -> [StayReminder] in
                 let isHost = stay.role(of: viewerID) == .host
-                let where_ = stay.listingCity
+                let city = stay.listingCity
                 var out: [StayReminder] = []
 
                 if let dayBefore = calendar.date(byAdding: .day, value: -1, to: stay.checkIn),
@@ -66,8 +66,8 @@ extension StayReminder {
                         fireDate: fire,
                         title: isHost ? "A guest arrives tomorrow" : "Check-in is tomorrow",
                         body: isHost
-                            ? "Your guest checks in tomorrow at \(where_). Have the key handoff ready."
-                            : "You check in tomorrow at \(where_). Pack up and confirm your arrival time."
+                            ? "Your guest checks in tomorrow at \(city). Have the key handoff ready."
+                            : "You check in tomorrow at \(city). Pack up and confirm your arrival time."
                     ))
                 }
 
@@ -79,8 +79,8 @@ extension StayReminder {
                         fireDate: fire,
                         title: isHost ? "A stay ends today" : "Checkout is today",
                         body: isHost
-                            ? "Your guest checks out of \(where_) today."
-                            : "Your stay at \(where_) ends today. Tidy up and leave a review once you're out."
+                            ? "Your guest checks out of \(city) today."
+                            : "Your stay at \(city) ends today. Tidy up and leave a review once you're out."
                     ))
                 }
 

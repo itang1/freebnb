@@ -281,68 +281,8 @@ final class CreateListingViewModel {
         geocodeFailed = false
         defer { isSaving = false }
 
-        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedContactInfo = hostContactInfo.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedStreet = street.trimmingCharacters(in: .whitespaces)
-        let sleepingRaw = sleepingCounts.reduce(into: [String: Int]()) { acc, pair in
-            acc[pair.key.rawValue] = pair.value
-        }
-        // Bed sizes describe the beds in `sleepingRaw`, so they are dropped along
-        // with the beds. Leaving "1 queen" on a listing whose last bed just became
-        // a couch would be a claim the arrangements contradict (feature 17).
-        let bedSizesRaw = (sleepingCounts[.bed] ?? 0) > 0
-            ? bedSizeCounts.reduce(into: [String: Int]()) { acc, pair in acc[pair.key.rawValue] = pair.value }
-            : [:]
-
-        var home = Home(
-            hostUserID: hostUserID,
-            hostName: hostName,
-            // Street deliberately absent: it goes to the private location doc below.
-            address: Address(
-                city: city.trimmingCharacters(in: .whitespaces),
-                state: stateField.trimmingCharacters(in: .whitespaces),
-                zip: zip.trimmingCharacters(in: .whitespaces)
-            ),
-            description: trimmedDescription.isEmpty ? nil : trimmedDescription,
-            contactPreference: contactPreference,
-            hostContactInfo: contactPreference == .contactInfo && !trimmedContactInfo.isEmpty ? trimmedContactInfo : nil,
-            hostMotivation: hostMotivation,
-            sleeping: Sleeping(
-                numGuestRooms: numGuestRooms,
-                arrangements: sleepingRaw,
-                numBathrooms: numBathrooms,
-                bedSizes: bedSizesRaw
-            ),
-            guestPolicy: GuestPolicy(
-                maxGuests: maxGuests,
-                maxStayDays: maxStayDays,
-                kidsAllowed: kidsAllowed,
-                guestPetsAllowed: guestPetsAllowed
-            ),
-            amenities: Amenities(
-                hasAC: hasAC,
-                hasHeating: hasHeating,
-                hasKitchen: hasKitchen,
-                hasFridgeSpace: hasFridgeSpace,
-                hasMicrowave: hasMicrowave,
-                hasTV: hasTV,
-                hasWifi: hasWifi,
-                hasPrivateGuestBathroom: hasPrivateGuestBathroom,
-                hostHasPets: hostHasPets,
-                parkingDetails: parkingDetails.trimmingCharacters(in: .whitespacesAndNewlines),
-                hasInUnitLaundry: hasInUnitLaundry,
-                hasCoinLaundryNearby: hasCoinLaundryNearby,
-                providesPillows: providesPillows,
-                providesBlankets: providesBlankets,
-                providesTowels: providesTowels,
-                providesToiletries: providesToiletries,
-                foodProvision: foodProvision,
-                hasStepFreeEntry: hasStepFreeEntry,
-                hasElevator: hasElevator,
-                hasAccessibleBathroom: hasAccessibleBathroom
-            ),
-            cancellationPolicy: cancellationPolicy
-        )
+        var home = makeHome(hostUserID: hostUserID, hostName: hostName)
         home.visibility = visibility
         // Recomputed on every save rather than carried over from `editing`, so an
         // edit picks up friends added since the listing was created. The
@@ -414,5 +354,71 @@ final class CreateListingViewModel {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    /// Builds the `Home` document from the form fields. Split out of `save`
+    /// purely so each stays within lint's function-length limit.
+    private func makeHome(hostUserID: String, hostName: String) -> Home {
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedContactInfo = hostContactInfo.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sleepingRaw = sleepingCounts.reduce(into: [String: Int]()) { acc, pair in
+            acc[pair.key.rawValue] = pair.value
+        }
+        // Bed sizes describe the beds in `sleepingRaw`, so they are dropped along
+        // with the beds. Leaving "1 queen" on a listing whose last bed just became
+        // a couch would be a claim the arrangements contradict (feature 17).
+        let bedSizesRaw = (sleepingCounts[.bed] ?? 0) > 0
+            ? bedSizeCounts.reduce(into: [String: Int]()) { acc, pair in acc[pair.key.rawValue] = pair.value }
+            : [:]
+
+        return Home(
+            hostUserID: hostUserID,
+            hostName: hostName,
+            // Street deliberately absent: it goes to the private location doc below.
+            address: Address(
+                city: city.trimmingCharacters(in: .whitespaces),
+                state: stateField.trimmingCharacters(in: .whitespaces),
+                zip: zip.trimmingCharacters(in: .whitespaces)
+            ),
+            description: trimmedDescription.isEmpty ? nil : trimmedDescription,
+            contactPreference: contactPreference,
+            hostContactInfo: contactPreference == .contactInfo && !trimmedContactInfo.isEmpty ? trimmedContactInfo : nil,
+            hostMotivation: hostMotivation,
+            sleeping: Sleeping(
+                numGuestRooms: numGuestRooms,
+                arrangements: sleepingRaw,
+                numBathrooms: numBathrooms,
+                bedSizes: bedSizesRaw
+            ),
+            guestPolicy: GuestPolicy(
+                maxGuests: maxGuests,
+                maxStayDays: maxStayDays,
+                kidsAllowed: kidsAllowed,
+                guestPetsAllowed: guestPetsAllowed
+            ),
+            amenities: Amenities(
+                hasAC: hasAC,
+                hasHeating: hasHeating,
+                hasKitchen: hasKitchen,
+                hasFridgeSpace: hasFridgeSpace,
+                hasMicrowave: hasMicrowave,
+                hasTV: hasTV,
+                hasWifi: hasWifi,
+                hasPrivateGuestBathroom: hasPrivateGuestBathroom,
+                hostHasPets: hostHasPets,
+                parkingDetails: parkingDetails.trimmingCharacters(in: .whitespacesAndNewlines),
+                hasInUnitLaundry: hasInUnitLaundry,
+                hasCoinLaundryNearby: hasCoinLaundryNearby,
+                providesPillows: providesPillows,
+                providesBlankets: providesBlankets,
+                providesTowels: providesTowels,
+                providesToiletries: providesToiletries,
+                foodProvision: foodProvision,
+                hasStepFreeEntry: hasStepFreeEntry,
+                hasElevator: hasElevator,
+                hasAccessibleBathroom: hasAccessibleBathroom
+            ),
+            cancellationPolicy: cancellationPolicy
+        )
     }
 }
