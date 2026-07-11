@@ -45,6 +45,14 @@ struct StaysTab: View {
     private var acceptedIn: [StayRequest] { requestStore.incomingRequests.filter { $0.status == .accepted } }
     private var pastIn:     [StayRequest] { requestStore.incomingRequests.filter { !$0.status.isActive   } }
 
+    // The trip timeline splits accepted stays into the one under way right now
+    // and the ones still ahead (feature 21), so a stay you're in the middle of
+    // rises to the top instead of sitting in a flat "confirmed" list.
+    private var inProgressOut: [StayRequest] { acceptedOut.filter { $0.isUnderway() } }
+    private var upcomingOut:   [StayRequest] { acceptedOut.filter { !$0.isUnderway() } }
+    private var inProgressIn:  [StayRequest] { acceptedIn.filter { $0.isUnderway() } }
+    private var upcomingIn:    [StayRequest] { acceptedIn.filter { !$0.isUnderway() } }
+
     /// Finished stays this user hasn't reviewed yet (features 1 and 4). Empty
     /// until `ReviewStore` knows what they've already written, so nobody is asked
     /// twice for a review they already left.
@@ -215,9 +223,20 @@ struct StaysTab: View {
                 }
             }
         }
-        if !acceptedOut.isEmpty {
-            Section("Confirmed trips") {
-                ForEach(acceptedOut, id: \.id) { req in
+        if !inProgressOut.isEmpty {
+            Section("Happening now") {
+                ForEach(inProgressOut, id: \.id) { req in
+                    outgoingRow(
+                        req,
+                        onShare: { sharingStay = req },
+                        onComplete: req.canBeMarkedComplete() ? { completing = req } : nil
+                    )
+                }
+            }
+        }
+        if !upcomingOut.isEmpty {
+            Section("Upcoming trips") {
+                ForEach(upcomingOut, id: \.id) { req in
                     outgoingRow(
                         req,
                         onShare: { sharingStay = req },
@@ -242,9 +261,19 @@ struct StaysTab: View {
                 }
             }
         }
-        if !acceptedIn.isEmpty {
+        if !inProgressIn.isEmpty {
+            Section("Hosting now") {
+                ForEach(inProgressIn, id: \.id) { req in
+                    incomingRow(
+                        req,
+                        onComplete: req.canBeMarkedComplete() ? { completing = req } : nil
+                    )
+                }
+            }
+        }
+        if !upcomingIn.isEmpty {
             Section("Upcoming hosting") {
-                ForEach(acceptedIn, id: \.id) { req in
+                ForEach(upcomingIn, id: \.id) { req in
                     incomingRow(
                         req,
                         onComplete: req.canBeMarkedComplete() ? { completing = req } : nil

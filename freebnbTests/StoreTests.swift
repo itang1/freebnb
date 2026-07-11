@@ -138,6 +138,33 @@ struct StayRequestStoreTests {
     }
 }
 
+struct StayTimelineTests {
+    private func stay(offsetIn: Int, offsetOut: Int, status: StayRequestStatus = .accepted) -> StayRequest {
+        let cal = Calendar.current
+        let now = Date()
+        return StayRequest(
+            listingID: "L", listingCity: "C", listingHostName: "H",
+            hostUserID: "h", guestUserID: "g",
+            checkIn: cal.date(byAdding: .day, value: offsetIn, to: now)!,
+            checkOut: cal.date(byAdding: .day, value: offsetOut, to: now)!,
+            status: status
+        )
+    }
+
+    @Test func underwayOnlyWhileTheStayIsHappening() {
+        let now = Date()
+        #expect(stay(offsetIn: 3, offsetOut: 6).isUnderway(now: now) == false)   // future
+        #expect(stay(offsetIn: -1, offsetOut: 2).isUnderway(now: now) == true)   // in progress
+        #expect(stay(offsetIn: -5, offsetOut: -2).isUnderway(now: now) == false) // past
+    }
+
+    @Test func underwayRequiresAnAcceptedStay() {
+        let now = Date()
+        #expect(stay(offsetIn: -1, offsetOut: 2, status: .pending).isUnderway(now: now) == false)
+        #expect(stay(offsetIn: -1, offsetOut: 2, status: .completed).isUnderway(now: now) == false)
+    }
+}
+
 @MainActor
 struct FriendStoreTests {
     // sendRequest reads Auth.auth().currentUser for the initiator, which this

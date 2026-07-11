@@ -195,6 +195,17 @@ extension StayRequest {
         status == .accepted && now >= checkIn
     }
 
+    /// True while an accepted stay is actually happening — from the start of the
+    /// check-in day through the end of the checkout day — so the trip timeline can
+    /// surface it as "happening now" (feature 21). `checkOut` is a local
+    /// start-of-day, so the +1 day keeps the stay live for all of checkout day
+    /// rather than flipping it to "past" at midnight while the guest is still there.
+    func isUnderway(now: Date = Date()) -> Bool {
+        guard status == .accepted, now >= checkIn else { return false }
+        let dayAfterCheckout = Calendar.current.date(byAdding: .day, value: 1, to: checkOut) ?? checkOut
+        return now < dayAfterCheckout
+    }
+
     /// The review `userID` would write about the other party, if the stay is over.
     func reviewRole(for userID: String) -> ReviewRole? {
         guard status == .completed else { return nil }
