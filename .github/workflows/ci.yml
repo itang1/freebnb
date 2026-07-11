@@ -29,44 +29,11 @@ jobs:
 
       # The real GoogleService-Info.plist is a secret and never committed. Firebase
       # only reads it at FirebaseApp.configure() time, and the test target boots the
-      # app (it runs in the app host), so a well-formed placeholder is enough for the
-      # suite to launch. It never talks to a real project.
-      - name: Write placeholder GoogleService-Info.plist
-        run: |
-          cat > freebnb/GoogleService-Info.plist <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>API_KEY</key>
-            <string>AIzaSyDUMMYCIPLACEHOLDERKEY000000000000</string>
-            <key>GCM_SENDER_ID</key>
-            <string>000000000000</string>
-            <key>PLIST_VERSION</key>
-            <string>1</string>
-            <key>BUNDLE_ID</key>
-            <string>com.freebnb.app</string>
-            <key>PROJECT_ID</key>
-            <string>freebnb-ci</string>
-            <key>STORAGE_BUCKET</key>
-            <string>freebnb-ci.appspot.com</string>
-            <key>IS_ADS_ENABLED</key>
-            <false/>
-            <key>IS_ANALYTICS_ENABLED</key>
-            <false/>
-            <key>IS_APPINVITE_ENABLED</key>
-            <true/>
-            <key>IS_GCM_ENABLED</key>
-            <true/>
-            <key>IS_SIGNIN_ENABLED</key>
-            <true/>
-            <key>GOOGLE_APP_ID</key>
-            <string>1:000000000000:ios:0000000000000000000000</string>
-            <key>DATABASE_URL</key>
-            <string>https://freebnb-ci.firebaseio.com</string>
-          </dict>
-          </plist>
-          PLIST
+      # app (it runs in the app host), so the well-formed placeholder checked in at
+      # .github/ci/ is enough for the suite to launch. It never talks to a real
+      # project.
+      - name: Install placeholder GoogleService-Info.plist
+        run: cp .github/ci/GoogleService-Info.ci.plist freebnb/GoogleService-Info.plist
 
       - name: Resolve simulator destination
         id: sim
@@ -125,6 +92,9 @@ jobs:
 
       - name: TypeScript build
         run: npm run build
+
+      - name: Lint
+        run: npm run lint
 
   rules-tests:
     name: Firestore rules (emulator)
@@ -190,42 +160,8 @@ jobs:
 
       # Same placeholder as the build job: FirebaseApp.configure() reads it at
       # launch even though these tests drive a separate emulator-pointed app.
-      - name: Write placeholder GoogleService-Info.plist
-        run: |
-          cat > freebnb/GoogleService-Info.plist <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>API_KEY</key>
-            <string>AIzaSyDUMMYCIPLACEHOLDERKEY000000000000</string>
-            <key>GCM_SENDER_ID</key>
-            <string>000000000000</string>
-            <key>PLIST_VERSION</key>
-            <string>1</string>
-            <key>BUNDLE_ID</key>
-            <string>com.freebnb.app</string>
-            <key>PROJECT_ID</key>
-            <string>freebnb-ci</string>
-            <key>STORAGE_BUCKET</key>
-            <string>freebnb-ci.appspot.com</string>
-            <key>IS_ADS_ENABLED</key>
-            <false/>
-            <key>IS_ANALYTICS_ENABLED</key>
-            <false/>
-            <key>IS_APPINVITE_ENABLED</key>
-            <true/>
-            <key>IS_GCM_ENABLED</key>
-            <true/>
-            <key>IS_SIGNIN_ENABLED</key>
-            <true/>
-            <key>GOOGLE_APP_ID</key>
-            <string>1:000000000000:ios:0000000000000000000000</string>
-            <key>DATABASE_URL</key>
-            <string>https://freebnb-ci.firebaseio.com</string>
-          </dict>
-          </plist>
-          PLIST
+      - name: Install placeholder GoogleService-Info.plist
+        run: cp .github/ci/GoogleService-Info.ci.plist freebnb/GoogleService-Info.plist
 
       - name: Resolve simulator destination
         id: sim
@@ -247,8 +183,8 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       # emulators:exec boots Firestore + Auth, runs the command, then tears them
-      # down. Only the emulator-backed suite runs; EmulatorSupport's reachability
-      # gate lets that suite execute here (and skip everywhere the emulator is
+      # down. Only the emulator-backed suites run; EmulatorSupport's reachability
+      # gate lets them execute here (and skip everywhere the emulator is
       # absent). The simulator reaches the emulator via the host's localhost.
       #
       # Unlike the main test job, this one must NOT disable code signing:
@@ -265,4 +201,5 @@ jobs:
               -scheme \"$SCHEME\" \
               -destination \"id=${{ steps.sim.outputs.udid }}\" \
               -only-testing:freebnbTests/FirestoreHomesRepositoryEmulatorTests \
+              -only-testing:freebnbTests/AuthEmulatorTests \
               CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO"
