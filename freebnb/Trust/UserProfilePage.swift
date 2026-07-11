@@ -120,16 +120,7 @@ struct UserProfilePage: View {
 
     private var header: some View {
         HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(Color.accent.opacity(0.15))
-                    .frame(width: 72, height: 72)
-                Image(systemName: "person.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
-                    .foregroundColor(Color.accent)
-            }
+            PersonAvatar()
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayName)
                     .font(.title2.weight(.semibold))

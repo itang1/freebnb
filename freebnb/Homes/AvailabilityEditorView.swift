@@ -57,9 +57,7 @@ struct AvailabilityEditorView: View {
                     summary
 
                     if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline)
-                            .foregroundColor(.red)
+                        InlineErrorLabel(message: errorMessage)
                     }
                 }
                 .padding()

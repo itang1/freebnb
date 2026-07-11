@@ -330,16 +330,10 @@ struct ProfilePage: View {
 
     private var profileHeader: some View {
         VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(Color.accent.opacity(0.15))
-                    .frame(width: 100, height: 100)
-                Image(systemName: authManager.authMethod == .guest ? "person.slash" : "person.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 44, height: 44)
-                    .foregroundColor(Color.accent)
-            }
+            PersonAvatar(
+                systemImage: authManager.authMethod == .guest ? "person.slash" : "person.fill",
+                size: 100
+            )
             .padding(.top, 16)
 
             VStack(spacing: 4) {

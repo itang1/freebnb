@@ -142,11 +142,7 @@ struct ListingDashboardPage: View {
             }
 
             if let actionError {
-                Section {
-                    Label(actionError, systemImage: "exclamationmark.triangle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(.red)
-                }
+                Section { InlineErrorLabel(message: actionError) }
             }
         }
         .scrollContentBackground(.hidden)
@@ -277,15 +273,7 @@ struct ListingDashboardPage: View {
 
     private func conversationRow(name: String, summary: ConversationSummary) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.accent.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                Text(String(name.prefix(1)))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.accent)
-            }
-            .accessibilityHidden(true)
+            InitialsAvatar(name: name, size: 36, font: .subheadline.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)

@@ -97,11 +97,7 @@ struct YourListingsPage: View {
     private var listView: some View {
         List {
             if let errorMessage {
-                Section {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(.red)
-                }
+                Section { InlineErrorLabel(message: errorMessage) }
             }
 
             // A plain list until there is something to co-host; the header would

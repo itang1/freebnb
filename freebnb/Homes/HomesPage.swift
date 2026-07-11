@@ -641,12 +641,7 @@ struct HomesPage: View {
             Button("Clear Filters") { selectedFilters.removeAll() }
         } label: {
             Label(filterLabel, systemImage: "line.3.horizontal.decrease")
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.accent.opacity(0.15), in: Capsule())
-                .foregroundColor(Color.accent)
+                .capsuleChip()
         }
         .menuActionDismissBehavior(.disabled)
     }
@@ -661,12 +656,7 @@ struct HomesPage: View {
             }
         } label: {
             Label(SearchRadius.label(radiusMiles), systemImage: "location.circle")
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(radiusMiles == nil ? Color.accent.opacity(0.15) : Color.accent.opacity(0.3), in: Capsule())
-                .foregroundColor(Color.accent)
+                .capsuleChip(prominent: radiusMiles != nil)
         }
         .accessibilityLabel("Search radius, \(SearchRadius.label(radiusMiles))")
     }
@@ -688,12 +678,7 @@ struct HomesPage: View {
         } label: {
             let label = selectedSort == .default ? "Sort" : "Sort: \(selectedSort.rawValue)"
             Label(label, systemImage: "arrow.up.arrow.down")
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.accent.opacity(0.15), in: Capsule())
-                .foregroundColor(Color.accent)
+                .capsuleChip(prominent: selectedSort != .default)
         }
         .transaction { t in t.animation = nil }
     }
@@ -703,12 +688,7 @@ struct HomesPage: View {
             showSavedOnly.toggle()
         } label: {
             Label("Saved", systemImage: showSavedOnly ? "bookmark.fill" : "bookmark")
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(showSavedOnly ? Color.accent.opacity(0.3) : Color.accent.opacity(0.15), in: Capsule())
-                .foregroundColor(Color.accent)
+                .capsuleChip(prominent: showSavedOnly)
         }
     }
 
@@ -720,11 +700,7 @@ struct HomesPage: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             Button("Show all listings") { showSavedOnly = false }
-                .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.accent.opacity(0.15), in: Capsule())
-                .foregroundColor(Color.accent)
+                .capsuleChip()
         } else if selectedFilters.isEmpty && citySearch.isEmpty {
             Text("FreeBNB only shows homes from people in your network. Invite a friend who hosts, or ask someone to add you.")
                 .font(.subheadline)
@@ -735,11 +711,7 @@ struct HomesPage: View {
                 subject: Text("FreeBNB Invite")
             ) {
                 Label("Invite a Friend", systemImage: "person.badge.plus")
-                    .font(.subheadline.weight(.medium))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.accent.opacity(0.15), in: Capsule())
-                    .foregroundColor(Color.accent)
+                    .capsuleChip()
             }
         } else {
             Text("Try removing some filters to see more results.")

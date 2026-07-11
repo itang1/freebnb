@@ -17,15 +17,7 @@ struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.accent.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Text(String(otherName.prefix(1)))
-                    .font(.headline)
-                    .foregroundColor(.accent)
-            }
-            .accessibilityHidden(true)
+            InitialsAvatar(name: otherName, size: 44)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {

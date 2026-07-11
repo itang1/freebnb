@@ -436,11 +436,7 @@ struct CreateListingPage: View {
         NavigationStack {
             Form {
                 if let missingNameMessage {
-                    Section {
-                        Label(missingNameMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline)
-                            .foregroundColor(.orange)
-                    }
+                    Section { InlineErrorLabel(message: missingNameMessage, tint: .orange) }
                 }
 
                 if vm.restoredDraft {
@@ -481,11 +477,7 @@ struct CreateListingPage: View {
                 }
 
                 if let errorMessage = vm.errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline)
-                            .foregroundColor(.red)
-                    }
+                    Section { InlineErrorLabel(message: errorMessage) }
                 }
             }
             .navigationTitle(vm.mode.navigationTitle)
@@ -685,75 +677,33 @@ struct CreateListingPage: View {
     }
 
     private var motivationSection: some View {
-        Section("How eager are you to host?") {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(HostMotivation.allCases, id: \.self) { motivation in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Image(systemName: vm.hostMotivation == motivation ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(vm.hostMotivation == motivation ? .accent : .secondary.opacity(0.5))
-                            Text(motivation.displayName)
-                                .font(.body)
-                        }
-                        Text(motivation.description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.leading, 28)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.hostMotivation = motivation }
-                }
-            }
-            .padding(.vertical, 8)
-        }
+        ChoiceSection(
+            title: "How eager are you to host?",
+            options: HostMotivation.allCases,
+            selection: $vm.hostMotivation,
+            name: { $0.displayName },
+            detail: { $0.description }
+        )
     }
 
     private var cancellationPolicySection: some View {
-        Section("Cancellation policy") {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(CancellationPolicy.allCases, id: \.self) { policy in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Image(systemName: vm.cancellationPolicy == policy ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(vm.cancellationPolicy == policy ? .accent : .secondary.opacity(0.5))
-                            Text(policy.displayName)
-                                .font(.body)
-                        }
-                        Text(policy.description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.leading, 28)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.cancellationPolicy = policy }
-                }
-            }
-            .padding(.vertical, 8)
-        }
+        ChoiceSection(
+            title: "Cancellation policy",
+            options: CancellationPolicy.allCases,
+            selection: $vm.cancellationPolicy,
+            name: { $0.displayName },
+            detail: { $0.description }
+        )
     }
 
     private var visibilitySection: some View {
-        Section("Who can see this listing") {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(ListingVisibility.allCases, id: \.self) { option in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Image(systemName: vm.visibility == option ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(vm.visibility == option ? .accent : .secondary.opacity(0.5))
-                            Text(option.displayName)
-                                .font(.body)
-                        }
-                        Text(option.description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.leading, 28)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.visibility = option }
-                }
-            }
-            .padding(.vertical, 8)
-        }
+        ChoiceSection(
+            title: "Who can see this listing",
+            options: ListingVisibility.allCases,
+            selection: $vm.visibility,
+            name: { $0.displayName },
+            detail: { $0.description }
+        )
     }
 
     private var descriptionSection: some View {

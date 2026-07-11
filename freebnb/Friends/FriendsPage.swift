@@ -18,11 +18,7 @@ struct FriendsPage: View {
     var body: some View {
         List {
             if let error = actionError {
-                Section {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(.red)
-                }
+                Section { InlineErrorLabel(message: error) }
             }
 
             if !friendStore.pendingIncoming.isEmpty {
@@ -177,14 +173,7 @@ private struct FriendRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color.accent.opacity(0.15))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(String(name.prefix(1)).uppercased())
-                        .font(.headline)
-                        .foregroundColor(Color.accent)
-                )
+            InitialsAvatar(name: name)
             Text(name)
                 .font(.body)
         }
@@ -198,14 +187,7 @@ private struct SuggestionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color.accent.opacity(0.15))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(String(suggestion.displayName.prefix(1)).uppercased())
-                        .font(.headline)
-                        .foregroundColor(Color.accent)
-                )
+            InitialsAvatar(name: suggestion.displayName)
             VStack(alignment: .leading, spacing: 2) {
                 Text(suggestion.displayName)
                     .font(.body)
@@ -242,14 +224,7 @@ private struct FriendRequestRow: View {
         let name = userProfileStore.displayName(for: otherID) ?? "FreeBNB User"
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Circle()
-                    .fill(Color.orange.opacity(0.15))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(String(name.prefix(1)).uppercased())
-                            .font(.headline)
-                            .foregroundColor(.orange)
-                    )
+                InitialsAvatar(name: name, tint: .orange)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
                         .font(.body)
@@ -293,14 +268,7 @@ private struct PendingOutgoingRow: View {
         let otherID = edge.otherUserID(relativeTo: authManager.userID)
         let name = userProfileStore.displayName(for: otherID) ?? "FreeBNB User"
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color.accent.opacity(0.10))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(String(name.prefix(1)).uppercased())
-                        .font(.headline)
-                        .foregroundColor(Color.accent)
-                )
+            InitialsAvatar(name: name)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .font(.body)
@@ -354,11 +322,7 @@ struct AddFriendSheet: View {
                         }
                     }
                 } else if let error = searchError {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .font(.subheadline)
-                            .foregroundColor(.red)
-                    }
+                    Section { InlineErrorLabel(message: error) }
                 } else if !results.isEmpty {
                     Section("People") {
                         ForEach(results) { profile in
@@ -445,14 +409,7 @@ private struct SearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color.accent.opacity(0.12))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(String(profile.displayName.prefix(1)).uppercased())
-                        .font(.headline)
-                        .foregroundColor(Color.accent)
-                )
+            InitialsAvatar(name: profile.displayName)
             Text(profile.displayName)
                 .font(.body)
             Spacer()

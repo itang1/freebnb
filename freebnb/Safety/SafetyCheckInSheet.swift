@@ -96,11 +96,7 @@ struct SafetyCheckInSheet: View {
                 }
 
                 if let errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline)
-                            .foregroundColor(.red)
-                    }
+                    Section { InlineErrorLabel(message: errorMessage) }
                 }
             }
             .navigationTitle("Safety check-in")

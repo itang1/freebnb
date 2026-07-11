@@ -61,14 +61,7 @@ private struct NetworkReachRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color.accent.opacity(0.15))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(String(host.displayName.prefix(1)).uppercased())
-                        .font(.headline)
-                        .foregroundColor(Color.accent)
-                )
+            InitialsAvatar(name: host.displayName)
             Text(host.displayName)
                 .font(.body)
             Spacer()
