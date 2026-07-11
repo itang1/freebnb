@@ -17,7 +17,10 @@ final class HomeStore {
     /// Derived here (A1) so the filter-and-sort runs once when its inputs change,
     /// not on every view render as it did when this lived in `ContentView`.
     private(set) var visibleListings: [Home] = []
-    private(set) var ownListings: [Home] = []
+    /// Listings the signed-in user may manage: the ones they host, and the ones a
+    /// friend has made them a co-host of (feature 14). Ask `Home.isHostedBy(_:)`
+    /// before offering anything only a host may do.
+    private(set) var managedListings: [Home] = []
     /// Street addresses and exact coordinates the current user is allowed to see,
     /// keyed by listing id. Populated eagerly for the user's own listings and on
     /// demand elsewhere; a listing absent from this map is one whose address the
@@ -39,7 +42,7 @@ final class HomeStore {
     // and `RepositoryListener.cancel()` is thread-safe per Firebase's docs
     // for `ListenerRegistration.remove()`.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
-    @ObservationIgnored nonisolated(unsafe) private var ownListingsListener: RepositoryListener?
+    @ObservationIgnored nonisolated(unsafe) private var managedListingsListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("homes")
     @ObservationIgnored private let pageSize = 25
@@ -53,7 +56,7 @@ final class HomeStore {
     @ObservationIgnored private var viewerID: String = ""
     // Listings whose private location has already been fetched, successfully or
     // not. A legacy listing has no location document, so caching only the hits
-    // would refetch it on every own-listings snapshot.
+    // would refetch it on every managed-listings snapshot.
     @ObservationIgnored private var attemptedLocationIDs: Set<String> = []
     // Feed derivation context supplied by the surrounding stores (auth, friends,
     // blocks). Held here so `visibleListings` recomputes only when it or the raw
@@ -73,7 +76,7 @@ final class HomeStore {
 
     deinit {
         activeListener?.cancel()
-        ownListingsListener?.cancel()
+        managedListingsListener?.cancel()
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
@@ -82,15 +85,15 @@ final class HomeStore {
     private func restartListener(signedIn: Bool? = nil) {
         activeListener?.cancel()
         activeListener = nil
-        ownListingsListener?.cancel()
-        ownListingsListener = nil
+        managedListingsListener?.cancel()
+        managedListingsListener = nil
         let uid = Auth.auth().currentUser?.uid
         guard signedIn ?? (uid != nil) else {
             livePage = []
             pagedListings = []
             listings = []
             visibleListings = []
-            ownListings = []
+            managedListings = []
             // Addresses are entitlements of the signed-in user, not of the device.
             listingLocations = [:]
             listingManuals = [:]
@@ -115,9 +118,9 @@ final class HomeStore {
             }
         }
         if let uid {
-            ownListingsListener = repository.listenToOwnListings(hostUserID: uid) { [weak self] result in
+            managedListingsListener = repository.listenToManagedListings(userID: uid) { [weak self] result in
                 Task { @MainActor [weak self] in
-                    self?.applyOwnListings(result: result)
+                    self?.applyManagedListings(result: result)
                 }
             }
         }
@@ -130,16 +133,18 @@ final class HomeStore {
         return user.uid
     }
 
-    private func applyOwnListings(result: Result<[Home], Error>) {
+    private func applyManagedListings(result: Result<[Home], Error>) {
         switch result {
         case .failure(let error):
-            log.error("own listings snapshot error: \(error.localizedDescription, privacy: .public)")
+            log.error("managed listings snapshot error: \(error.localizedDescription, privacy: .public)")
         case .success(let homes):
-            ownListings = homes.filter { $0.deletedAt == nil }
-            // A host can always read their own listings' addresses, and every host
-            // surface (the listing rows, the dashboard, the edit form, the incoming
-            // request rows) wants them. Bounded by ownListingsListenerLimit.
-            let missing = ownListings.map(\.id).filter { !attemptedLocationIDs.contains($0) }
+            managedListings = homes.filter { $0.deletedAt == nil }
+            // A manager can always read the addresses of the listings they manage,
+            // and every management surface (the listing rows, the dashboard, the
+            // edit form, the incoming request rows) wants them. A co-host is a
+            // manager, so this prefetch now covers their listings too — the rules
+            // admit it (`isListingManager`). Bounded by ownListingsListenerLimit.
+            let missing = managedListings.map(\.id).filter { !attemptedLocationIDs.contains($0) }
             guard !missing.isEmpty else { return }
             attemptedLocationIDs.formUnion(missing)
             Task { @MainActor in
@@ -387,6 +392,47 @@ final class HomeStore {
         }
     }
 
+    // MARK: - Co-hosts (feature 14)
+
+    /// Adds one friend to the listing's co-host roster.
+    ///
+    /// One at a time, deliberately: `firestore.rules` can check an addition
+    /// against the friend graph only by inspecting a single added id, because the
+    /// rules language cannot loop. A batch of two would be rejected outright, so
+    /// the client must not offer one. `CoHostError` covers the cases the UI can
+    /// see coming; the rules refuse the rest regardless.
+    func addCoHost(_ userID: String, to home: Home, hostUserID: String) async throws {
+        guard home.isHostedBy(hostUserID) else { throw CoHostError.notTheHost }
+        guard userID != home.hostUserID else { throw CoHostError.hostCannotCoHost }
+        guard !home.coHosts.contains(userID) else { return }
+        guard home.coHosts.count < Home.maxCoHosts else { throw CoHostError.rosterFull }
+
+        var updated = home
+        updated.coHostUserIDs = home.coHosts + [userID]
+        try await saveRoster(updated)
+    }
+
+    /// Removes a co-host. Needs no friend edge: taking a capability back is
+    /// always safe, and unfriending someone is exactly when a host would do it.
+    func removeCoHost(_ userID: String, from home: Home, hostUserID: String) async throws {
+        guard home.isHostedBy(hostUserID) else { throw CoHostError.notTheHost }
+        var updated = home
+        updated.coHostUserIDs = home.coHosts.filter { $0 != userID }
+        try await saveRoster(updated)
+    }
+
+    /// Writes a roster change and nothing else. Goes through `repository.save`
+    /// rather than `save(_:location:)` so it can never carry a stale street
+    /// address from whatever copy of the listing the caller was holding.
+    private func saveRoster(_ home: Home) async throws {
+        do {
+            try await repository.save(home)
+        } catch {
+            log.error("co-host save error: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
     func delete(_ home: Home) async throws {
         do {
             try await repository.delete(homeID: home.id)
@@ -402,6 +448,26 @@ final class HomeStore {
         } catch {
             log.error("update host name error: \(error.localizedDescription, privacy: .public)")
             throw error
+        }
+    }
+}
+
+/// Co-host roster failures the UI can anticipate. Everything else — a co-host who
+/// isn't an accepted friend, a co-host trying to add another — is refused by
+/// `firestore.rules`, which is the boundary that actually matters.
+enum CoHostError: LocalizedError {
+    case notTheHost
+    case hostCannotCoHost
+    case rosterFull
+
+    var errorDescription: String? {
+        switch self {
+        case .notTheHost:
+            return "Only the host can change who co-hosts this listing."
+        case .hostCannotCoHost:
+            return "You already host this listing."
+        case .rosterFull:
+            return "A listing can have at most \(Home.maxCoHosts) co-hosts."
         }
     }
 }

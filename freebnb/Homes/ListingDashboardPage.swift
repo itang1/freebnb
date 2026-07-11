@@ -9,7 +9,13 @@
 import SwiftUI
 
 struct ListingDashboardPage: View {
-    let listing: Home
+    // The snapshot the caller navigated with. `listing` below prefers the live
+    // copy from the store so a co-host add/remove is reflected immediately.
+    private let passedListing: Home
+
+    init(listing: Home) {
+        self.passedListing = listing
+    }
 
     @Environment(StayRequestStore.self) private var requestStore
     @Environment(MessageStore.self) private var messageStore
@@ -21,9 +27,18 @@ struct ListingDashboardPage: View {
     @State private var actionError: String?
     @State private var showEdit = false
     @State private var showAvailability = false
+    @State private var showCoHosts = false
     @State private var showPast = false
 
     // MARK: - Derived data
+
+    /// The live listing from the store, so a roster change reflects here without
+    /// reopening the dashboard. Falls back to the snapshot the caller passed.
+    private var listing: Home {
+        homeStore.managedListings.first { $0.id == passedListing.id } ?? passedListing
+    }
+
+    private var isHost: Bool { listing.isHostedBy(authManager.userID) }
 
     private var listingRequests: [StayRequest] {
         requestStore.incomingRequests
@@ -51,6 +66,10 @@ struct ListingDashboardPage: View {
     var body: some View {
         List {
             listingSummarySection
+
+            if isHost {
+                coHostSection
+            }
 
             if !hasContent {
                 Section {
@@ -145,6 +164,15 @@ struct ListingDashboardPage: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(Color.accent)
             }
+            // The roster is the host's alone (feature 14); a co-host manages the
+            // listing but does not decide who else does.
+            if isHost {
+                ToolbarItem(placement: .secondaryAction) {
+                    Button("Co-hosts") { showCoHosts = true }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(Color.accent)
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit Listing") { showEdit = true }
                     .font(.subheadline.weight(.medium))
@@ -156,6 +184,9 @@ struct ListingDashboardPage: View {
         }
         .sheet(isPresented: $showAvailability) {
             AvailabilityEditorView(listing: listing)
+        }
+        .sheet(isPresented: $showCoHosts) {
+            CoHostManagerView(listing: listing)
         }
         .sheet(item: $respondingTo) { req in
             AcceptSheet(request: req) { hostNote in
@@ -207,6 +238,38 @@ struct ListingDashboardPage: View {
                 .labelStyle(.titleAndIcon)
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    // MARK: - Co-hosts (feature 14)
+
+    @ViewBuilder
+    private var coHostSection: some View {
+        Section("Co-hosts") {
+            if listing.coHosts.isEmpty {
+                Button {
+                    showCoHosts = true
+                } label: {
+                    Label("Add a co-host", systemImage: "person.badge.plus")
+                        .font(.subheadline)
+                        .foregroundColor(Color.accent)
+                }
+            } else {
+                ForEach(listing.coHosts, id: \.self) { userID in
+                    Label(
+                        userProfileStore.displayName(for: userID) ?? "FreeBNB User",
+                        systemImage: "person.fill"
+                    )
+                    .font(.subheadline)
+                }
+                Button {
+                    showCoHosts = true
+                } label: {
+                    Label("Manage co-hosts", systemImage: "person.2.badge.gearshape")
+                        .font(.subheadline)
+                        .foregroundColor(Color.accent)
+                }
+            }
         }
     }
 

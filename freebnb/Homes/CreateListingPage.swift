@@ -352,6 +352,28 @@ final class CreateListingViewModel {
         if let existing = mode.target {
             home.id = existing.id
             home.createdAt = existing.createdAt
+            // The roster is never rewritten by an edit. Only `HomeStore.addCoHost`
+            // and `removeCoHost` touch it, one addition per write, because that is
+            // all a loop-free rule can check against the friend graph.
+            home.coHostUserIDs = existing.coHostUserIDs
+
+            // A co-host is editing (feature 14). Every field `firestore.rules`
+            // pins to the host is carried over from the stored listing rather than
+            // rebuilt from this session. Two of these would otherwise be actively
+            // wrong, not merely rejected: `hostName` would become the co-host's own
+            // name, and `allowedViewerIDs` — recomputed above from the *saving*
+            // user's friends — would republish a friends-only listing to the
+            // co-host's social graph. The rules reject the write either way; this
+            // is what stops it from being attempted.
+            if !existing.isHostedBy(hostUserID) {
+                home.hostUserID = existing.hostUserID
+                home.hostName = existing.hostName
+                home.address = existing.address
+                home.contactPreference = existing.contactPreference
+                home.hostContactInfo = existing.hostContactInfo
+                home.visibility = existing.visibility
+                home.allowedViewerIDs = existing.allowedViewerIDs
+            }
         }
 
         // Geocode so the map view can place a pin. The exact coordinate is private

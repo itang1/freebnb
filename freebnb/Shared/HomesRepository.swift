@@ -26,8 +26,10 @@ protocol HomesRepository: Sendable {
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener
 
-    func listenToOwnListings(
-        hostUserID: String,
+    /// Listings the user may manage: the ones they host, and the ones they
+    /// co-host (feature 14).
+    func listenToManagedListings(
+        userID: String,
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener
 
@@ -122,6 +124,38 @@ private final class VisibleListingsMerger: @unchecked Sendable {
     }
 }
 
+/// Joins the hosted and co-hosted halves of the managed-listings query into one
+/// de-duplicated list (feature 14). Firestore delivers snapshot callbacks on the
+/// main queue by default, so the mutable state is accessed serially.
+///
+/// Emits only once both halves have arrived. A user with no co-hosted listings
+/// still gets an (empty) snapshot for that half promptly, so this costs nothing;
+/// emitting early would flash "Your Listings" without its co-hosted rows and then
+/// insert them under the reader's thumb.
+private final class ManagedListingsMerger: @unchecked Sendable {
+    private let handler: @Sendable (Result<[Home], Error>) -> Void
+    private var hosted: [Home]?
+    private var coHosted: [Home]?
+
+    init(handler: @escaping @Sendable (Result<[Home], Error>) -> Void) {
+        self.handler = handler
+    }
+
+    func setHosted(_ homes: [Home]) { hosted = homes; emit() }
+    func setCoHosted(_ homes: [Home]) { coHosted = homes; emit() }
+    func fail(_ error: Error) { handler(.failure(error)) }
+
+    /// A listing cannot be in both halves — the rules refuse a host who is their
+    /// own co-host — but de-duplicating by id costs nothing and means a future
+    /// relaxation of that rule can't produce a duplicated row.
+    private func emit() {
+        guard let hosted, let coHosted else { return }
+        var seen = Set<String>()
+        let merged = (hosted + coHosted).filter { seen.insert($0.id).inserted }
+        handler(.success(merged))
+    }
+}
+
 struct FirestoreHomesRepository: HomesRepository {
     private let db: Firestore
     init(db: Firestore = .firestore()) { self.db = db }
@@ -202,20 +236,38 @@ struct FirestoreHomesRepository: HomesRepository {
         ])
     }
 
-    func listenToOwnListings(
-        hostUserID: String,
+    /// Firestore has no OR across two fields, so this is two queries merged
+    /// client-side — the same partition trick the feed uses. Both are
+    /// single-field (an equality, then an array-contains), so neither needs a
+    /// composite index.
+    func listenToManagedListings(
+        userID: String,
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener {
-        let reg = db.collection(FirestorePaths.homes)
-            .whereField("hostUserID", isEqualTo: hostUserID)
-            // Bound the listener so a prolific host doesn't stream every
-            // listing they've ever created on each launch.
+        let merger = ManagedListingsMerger(handler: handler)
+
+        // Bound both listeners so a prolific host doesn't download an
+        // ever-growing collection on every launch.
+        let hostedReg = db.collection(FirestorePaths.homes)
+            .whereField("hostUserID", isEqualTo: userID)
             .limit(to: ownListingsListenerLimit)
             .addSnapshotListener { snapshot, error in
-                if let error { handler(.failure(error)); return }
-                handler(.success(decode(snapshot?.documents ?? [], context: "own")))
+                if let error { merger.fail(error); return }
+                merger.setHosted(decode(snapshot?.documents ?? [], context: "own"))
             }
-        return FirestoreListenerBox(reg)
+
+        let coHostedReg = db.collection(FirestorePaths.homes)
+            .whereField("coHostUserIDs", arrayContains: userID)
+            .limit(to: ownListingsListenerLimit)
+            .addSnapshotListener { snapshot, error in
+                if let error { merger.fail(error); return }
+                merger.setCoHosted(decode(snapshot?.documents ?? [], context: "cohosted"))
+            }
+
+        return CompositeListener(listeners: [
+            FirestoreListenerBox(hostedReg),
+            FirestoreListenerBox(coHostedReg)
+        ])
     }
 
     func fetchVisibleListings(viewerID: String, after cursor: ListingCursor?, limit: Int) async throws -> [Home] {

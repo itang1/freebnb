@@ -205,13 +205,13 @@ struct ApproximateCoordinateTests {
 // MARK: - Homes
 
 struct HomesRepositoryTests {
-    @Test func ownListingsExcludeSoftDeleted() async throws {
+    @Test func managedListingsExcludeSoftDeleted() async throws {
         let live = makeHome(id: "a", hostUserID: "me")
         let gone = makeHome(id: "b", hostUserID: "me", deletedAt: Date())
         let repo = InMemoryHomesRepository(homes: [live, gone])
 
         let box = Box<[Home]>([])
-        _ = repo.listenToOwnListings(hostUserID: "me") { result in
+        _ = repo.listenToManagedListings(userID: "me") { result in
             if case .success(let homes) = result { box.value = homes }
         }
         #expect(box.value.map(\.id) == ["a"])
@@ -225,7 +225,7 @@ struct HomesRepositoryTests {
         try await repo.updateHostName(userID: "me", newName: "New")
 
         let box = Box<[Home]>([])
-        _ = repo.listenToOwnListings(hostUserID: "me") { result in
+        _ = repo.listenToManagedListings(userID: "me") { result in
             if case .success(let homes) = result { box.value = homes }
         }
         #expect(box.value.allSatisfy { $0.hostName == "New" })

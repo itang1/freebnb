@@ -22,13 +22,23 @@ private struct ListingSheet: Identifiable, Hashable {
 
 struct YourListingsPage: View {
     @Environment(HomeStore.self) private var homeStore
+    @Environment(AuthManager.self) private var authManager
     @State private var sheet: ListingSheet?
     @State private var deleteTarget: Home? = nil
     @State private var isDeleting = false
     @State private var errorMessage: String?
 
-    private var yourListings: [Home] {
-        homeStore.ownListings
+    private var myID: String { authManager.userID }
+
+    /// Listings this user hosts, and separately the ones a friend made them a
+    /// co-host of (feature 14). Split because the two rows differ in what they
+    /// let you do: only the host may delete, duplicate, or manage the roster.
+    private var hostedListings: [Home] {
+        homeStore.managedListings.filter { $0.isHostedBy(myID) }
+    }
+
+    private var coHostedListings: [Home] {
+        homeStore.managedListings.filter { !$0.isHostedBy(myID) }
     }
 
     var body: some View {
@@ -37,7 +47,7 @@ struct YourListingsPage: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.primaryBackground.ignoresSafeArea())
-            } else if yourListings.isEmpty {
+            } else if homeStore.managedListings.isEmpty {
                 emptyState
             } else {
                 listView
@@ -94,58 +104,105 @@ struct YourListingsPage: View {
                 }
             }
 
-            ForEach(yourListings) { listing in
-                NavigationLink {
-                    ListingDashboardPage(listing: listing)
-                } label: {
-                    ListingRow(listing: listing, street: homeStore.listingLocations[listing.id]?.street)
+            // A plain list until there is something to co-host; the header would
+            // otherwise label a section that has no counterpart.
+            if coHostedListings.isEmpty {
+                ForEach(hostedListings) { listing in
+                    hostedRow(listing)
                 }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        deleteTarget = listing
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+            } else {
+                Section("Listings you host") {
+                    ForEach(hostedListings) { listing in
+                        hostedRow(listing)
                     }
-
-                    Button {
-                        sheet = ListingSheet(mode: .edit(listing))
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
-                    }
-                    .tint(.accent)
                 }
-                // A host with a guest room and a couch at the same address
-                // shouldn't retype it (feature 13). Also reachable by long press,
-                // since a swipe hides its actions until you go looking.
-                .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                    Button {
-                        sheet = ListingSheet(mode: .duplicate(listing))
-                    } label: {
-                        Label("Duplicate", systemImage: "plus.square.on.square")
-                    }
-                    .tint(.accent)
-                }
-                .contextMenu {
-                    Button {
-                        sheet = ListingSheet(mode: .edit(listing))
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
-                    }
-                    Button {
-                        sheet = ListingSheet(mode: .duplicate(listing))
-                    } label: {
-                        Label("Duplicate", systemImage: "plus.square.on.square")
-                    }
-                    Button(role: .destructive) {
-                        deleteTarget = listing
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+                Section("Listings you co-host") {
+                    ForEach(coHostedListings) { listing in
+                        coHostedRow(listing)
                     }
                 }
             }
         }
         .scrollContentBackground(.hidden)
         .background(Color.primaryBackground.ignoresSafeArea())
+    }
+
+    /// A listing this user hosts: the full set of actions.
+    private func hostedRow(_ listing: Home) -> some View {
+        NavigationLink {
+            ListingDashboardPage(listing: listing)
+        } label: {
+            ListingRow(listing: listing, street: homeStore.listingLocations[listing.id]?.street)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                deleteTarget = listing
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+
+            Button {
+                sheet = ListingSheet(mode: .edit(listing))
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(.accent)
+        }
+        // A host with a guest room and a couch at the same address shouldn't
+        // retype it (feature 13). Also reachable by long press, since a swipe
+        // hides its actions until you go looking.
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                sheet = ListingSheet(mode: .duplicate(listing))
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+            .tint(.accent)
+        }
+        .contextMenu {
+            Button {
+                sheet = ListingSheet(mode: .edit(listing))
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Button {
+                sheet = ListingSheet(mode: .duplicate(listing))
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+            Button(role: .destructive) {
+                deleteTarget = listing
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    /// A listing this user co-hosts: they may open and edit it, but deleting,
+    /// duplicating, and roster changes belong to the host alone (feature 14).
+    /// Duplicate is withheld too — it copies someone else's home to a new listing
+    /// the co-host would own, which is not what "co-host" invites.
+    private func coHostedRow(_ listing: Home) -> some View {
+        NavigationLink {
+            ListingDashboardPage(listing: listing)
+        } label: {
+            ListingRow(listing: listing, street: homeStore.listingLocations[listing.id]?.street, isCoHost: true)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                sheet = ListingSheet(mode: .edit(listing))
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(.accent)
+        }
+        .contextMenu {
+            Button {
+                sheet = ListingSheet(mode: .edit(listing))
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+        }
     }
 
     // MARK: - Empty state
@@ -184,15 +241,27 @@ struct YourListingsPage: View {
 
 private struct ListingRow: View {
     let listing: Home
-    /// From the host's own private location doc; nil until it loads.
+    /// From the private location doc; nil until it loads.
     let street: String?
+    /// Marks a listing the viewer co-hosts rather than owns (feature 14).
+    var isCoHost: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(listing.address.city), \(listing.address.state)")
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                HStack(spacing: 6) {
+                    Text("\(listing.address.city), \(listing.address.state)")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    if isCoHost {
+                        Text("Co-host")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(Color.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accent.opacity(0.15), in: Capsule())
+                    }
+                }
                 Text(street ?? listing.address.zip)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -218,5 +287,6 @@ private struct ListingRow: View {
         YourListingsPage()
             .environment(HomeStore())
             .environment(StayRequestStore())
+            .environment(AuthManager())
     }
 }

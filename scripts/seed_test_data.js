@@ -166,7 +166,11 @@ const homes = [
     amenities,
     cancellationPolicy: "moderate",
     visibility: "everyone",
-    allowedViewerIDs: ["seed-host-sandy"]
+    allowedViewerIDs: ["seed-host-sandy"],
+    // SpongeBob co-hosts this one (feature 14): he and Sandy are accepted
+    // friends, which the rules require. Sign in as sandy to manage the roster, or
+    // as spongebob to see it under "Listings you co-host" and edit its details.
+    coHostUserIDs: ["seed-host-spongebob"]
   },
   {
     id: "seed-home-squidward-1",

@@ -455,6 +455,15 @@ struct Home: Identifiable, Hashable, Codable {
     // "host only".
     var allowedViewerIDs: [String]? = nil
 
+    // MARK: Co-hosts
+    // Friends the host has deputized to keep this listing accurate (feature 14):
+    // a partner, a roommate. They may edit the listing's description of the home
+    // and read and write its private location and house manual. They may not
+    // change who hosts it, who can see it, who else co-hosts it, or delete it —
+    // and stay requests still go to the host alone. `firestore.rules` is where
+    // that boundary actually lives; this array is only its input.
+    var coHostUserIDs: [String]? = nil
+
     // MARK: Soft delete
     // Nil means active. Set by the repository to the server timestamp on delete;
     // the HomeStore filters out non-nil entries so deleted listings never appear
@@ -475,6 +484,27 @@ struct Home: Identifiable, Hashable, Codable {
 
     // Non-optional view of photo URLs for view code.
     var photos: [String] { photoURLs ?? [] }
+
+    /// Non-optional view of the co-host roster.
+    var coHosts: [String] { coHostUserIDs ?? [] }
+
+    /// The most a co-host roster may hold. Mirrored by `isOptionalList(data,
+    /// 'coHostUserIDs', 5)` in `firestore.rules`, which is what enforces it.
+    static let maxCoHosts = 5
+
+    /// Whether `userID` may edit this listing's description of the home, and read
+    /// its street address and house manual. The host, or one of their co-hosts.
+    func isManagedBy(_ userID: String) -> Bool {
+        guard !userID.isEmpty else { return false }
+        return hostUserID == userID || coHosts.contains(userID)
+    }
+
+    /// Whether `userID` owns the listing. Distinct from `isManagedBy`: only the
+    /// host may delete the listing, change its visibility, manage the co-host
+    /// roster, or accept a guest into the home.
+    func isHostedBy(_ userID: String) -> Bool {
+        !userID.isEmpty && hostUserID == userID
+    }
 
     /// The read ACL a listing starts with: the host, then their accepted friends,
     /// de-duplicated. Kept here so the client write path and the seed script agree
@@ -508,6 +538,7 @@ struct Home: Identifiable, Hashable, Codable {
         case geohash
         case visibility
         case allowedViewerIDs
+        case coHostUserIDs
         case deletedAt
         case createdAt
     }
@@ -540,6 +571,7 @@ extension Home {
         geohash            = try c.decodeIfPresent(String.self,               forKey: .geohash)
         visibility         = try c.decodeIfPresent(ListingVisibility.self,    forKey: .visibility)
         allowedViewerIDs   = try c.decodeIfPresent([String].self,             forKey: .allowedViewerIDs)
+        coHostUserIDs      = try c.decodeIfPresent([String].self,             forKey: .coHostUserIDs)
         deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)
         createdAt          = try c.decodeIfPresent(Date.self,                 forKey: .createdAt)
     }

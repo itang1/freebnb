@@ -38,11 +38,11 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         return NoopListener()
     }
 
-    func listenToOwnListings(
-        hostUserID: String,
+    func listenToManagedListings(
+        userID: String,
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener {
-        handler(.success(homes.filter { $0.hostUserID == hostUserID && $0.deletedAt == nil }))
+        handler(.success(homes.filter { $0.isManagedBy(userID) && $0.deletedAt == nil }))
         return NoopListener()
     }
 
