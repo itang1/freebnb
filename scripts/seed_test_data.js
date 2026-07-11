@@ -123,9 +123,13 @@ const sparseAmenities = {
   hasElevator: true
 };
 
-// `address` is the world-readable part only, and `allowedViewerIDs` is the read
-// ACL the rules enforce friends-only visibility with. Each listing's street and
-// exact coordinates are seeded separately into homes/{id}/private/location.
+// `address` is the city-level part only, and `allowedViewerIDs` is the read
+// ACL the rules enforce friends-only visibility with. Listings are friends-only
+// now, so any `visibility` / `allowedViewerIDs` written below are legacy noise:
+// seedHomes() strips the former and recomputes the latter from the seeded
+// friend graph (host + accepted friends), exactly as rebuildListingACLs does in
+// production. Each listing's street and exact coordinates are seeded separately
+// into homes/{id}/private/location.
 //
 // The street + latitude/longitude below are REAL, geocoded addresses (mostly
 // well-known public places), so the map pin and the "Open in Apple Maps" button
@@ -500,9 +504,20 @@ async function resetDemoData() {
   }
 }
 
+// The accepted friends of one user, read from the `friendEdges` array below —
+// the seed-side twin of the Cloud Function's acceptedFriendsOf().
+function seededFriendsOf(userID) {
+  return friendEdges
+    .filter((e) => e.status === "accepted" && (e.userA === userID || e.userB === userID))
+    .map((e) => (e.userA === userID ? e.userB : e.userA));
+}
+
 async function seedHomes() {
   for (const home of homes) {
-    const { location, ...publicListing } = home;
+    const { location, visibility: _legacy, ...publicListing } = home;
+    // Friends-only: the ACL is always host + accepted friends, same as
+    // rebuildListingACLs writes in production.
+    publicListing.allowedViewerIDs = [...new Set([home.hostUserID, ...seededFriendsOf(home.hostUserID)])];
     publicListing.latitude = approximate(location.latitude);
     publicListing.longitude = approximate(location.longitude);
     publicListing.geohash = geohashEncode(publicListing.latitude, publicListing.longitude);
@@ -638,9 +653,9 @@ function friendEdge(a, b, status, initiator) {
 // Friends tab shows incoming/outgoing states. Two invariants hold here:
 //   1. Every stay request below is between two accepted friends — you connect
 //      before you ask to stay — so each guest/host pair has an accepted edge.
-//   2. Restricted listings (Plankton's friendsOnly place, Sandy's Austin place
-//      on the friendsOfFriends tier) name their viewers in allowedViewerIDs, and
-//      those viewers are accepted friends of the host.
+//   2. Every listing's allowedViewerIDs is derived from this graph (see
+//      seedHomes), so a listing is visible to exactly its host's accepted
+//      friends here.
 // The dev account is wired to be friends with everyone at the end (S1).
 const explicitFriendEdges = [
     friendEdge("seed-guest-patrick", "seed-host-spongebob", "accepted", "seed-guest-patrick"),
