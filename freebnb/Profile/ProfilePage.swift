@@ -21,6 +21,7 @@ struct ProfilePage: View {
     @State private var exportFile: ExportFile?
     @State private var exportError: String?
 
+    // Force-unwraps are safe: compile-time constant URLs.
     private static let privacyURL = URL(string: "https://freebnb.app/privacy")!
     private static let termsURL   = URL(string: "https://freebnb.app/terms")!
 

@@ -93,7 +93,6 @@ struct FreeBNBApp: App {
                 .environment(networkMonitor)
                 .environment(router)
                 .onAppear {
-                    // Wire the store and router into the delegate.
                     appDelegate.userProfileStore = userProfileStore
                     appDelegate.router = router
 #if canImport(FirebaseMessaging)

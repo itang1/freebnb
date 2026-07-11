@@ -461,6 +461,7 @@ struct InviteSheet: View {
         components.scheme = "freebnb"
         components.host = "invite"
         components.queryItems = [URLQueryItem(name: "from", value: authManager.userID)]
+        // Force-unwrap is safe: compile-time constant URL.
         return components.url ?? URL(string: "freebnb://invite")!
     }
 

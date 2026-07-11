@@ -231,7 +231,9 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
 
     func deleteProfile(userID: String) async throws {
         try await withRetry { [db] in
-            // Remove the private subdocument first, then the public doc.
+            // Private subdoc before the public doc: Firestore does not delete
+            // subcollections with their parent, so deleting the parent first
+            // would orphan the private doc with no top-level marker to find it.
             try await db.collection(FirestorePaths.users).document(userID)
                 .collection(FirestorePaths.privateCollection).document(privateProfileDocID).delete()
             try await db.collection(FirestorePaths.users).document(userID).delete()
