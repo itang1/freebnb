@@ -58,7 +58,7 @@ async function seed(writer) {
 describe("feedback/{id} — the feedback drop box", () => {
   before(async () => {
     testEnv = await initializeTestEnvironment({
-      projectId: "freebnb-rules-tests",
+      projectId: "freebnb-feedback-rules-tests",
       firestore: { rules: readFileSync(rulesPath, "utf8") },
     });
   });
