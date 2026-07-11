@@ -217,21 +217,23 @@ service cloud.firestore {
 
     // -------------------------------------------------------------------------
     // Homes / Listings
-    // A listing is readable by anyone signed in if its visibility is 'everyone',
-    // and otherwise only by its host and the users named in `allowedViewerIDs`
-    // (the host's accepted friends — and, for a 'friendsOfFriends' listing, those
-    // friends' friends too — denormalized onto the document because rules cannot
-    // join to `friendEdges`). Clients therefore cannot query `homes`
-    // unfiltered: a query is rejected outright if any matched document fails the
-    // read rule. The feed issues two provably-safe queries instead —
-    // `visibility == 'everyone'` and `allowedViewerIDs contains me` — and merges
-    // them (see FirestoreHomesRepository).
+    // A listing is readable only by its host, its co-hosts, and the users named
+    // in `allowedViewerIDs` — the host's accepted friends, denormalized onto the
+    // document because rules cannot join to `friendEdges`. There are no wider
+    // tiers: no public listings and no friends-of-friends reach. Someone two
+    // hops out is surfaced as a friend *suggestion* instead, and sees the
+    // listing only after the host accepts them as a friend.
     //
-    // A document lacking `visibility`/`allowedViewerIDs` reads as 'everyone', and
-    // one still carrying `address.street` would fail the listing validator below.
-    // Pre-migration legacy listings were cleared and re-seeded in the current
-    // schema (scripts/seed_test_data.js --reset), so no such documents remain;
-    // there is no in-place backfill step to run before relying on this rule.
+    // Clients therefore cannot query `homes` unfiltered: a query is rejected
+    // outright if any matched document fails the read rule. The feed issues the
+    // one provably-safe query — `allowedViewerIDs contains me` — which also
+    // covers the host's own listings, since the ACL always names the host.
+    //
+    // A legacy `visibility` field ('everyone' / 'friendsOnly' /
+    // 'friendsOfFriends') may still appear on old documents and in writes from
+    // old clients. It is accepted but ignored: the read gate below never
+    // consults it, and scripts/migrate_friends_only.js strips it while
+    // rebuilding every ACL to host + accepted friends.
     //
     // Only the host may write their own listings.
     // -------------------------------------------------------------------------
@@ -282,9 +284,9 @@ service cloud.firestore {
                 || data.hostMotivation in ['eager', 'open', 'selective'])
             && (isUnset(data, 'cancellationPolicy')
                 || data.cancellationPolicy in ['flexible', 'moderate', 'strict'])
-            // The three graduated visibility tiers (feature 7). Both restricted
-            // tiers are read-gated by `allowedViewerIDs` below; the difference is
-            // only how wide the server builds that array.
+            // Legacy field. Listings are friends-only now; the read rule ignores
+            // this entirely. Old clients still stamp it, so it stays writable
+            // until they age out; the migration script strips it from old docs.
             && (isUnset(data, 'visibility')
                 || data.visibility in ['everyone', 'friendsOnly', 'friendsOfFriends'])
             // The read ACL. A host may grant whoever they like access to their own
@@ -306,9 +308,10 @@ service cloud.firestore {
             && (isUnset(data, 'createdAt') || data.createdAt is timestamp);
       }
 
-      // Each clause corresponds to one of the feed's partitioned queries, plus
-      // the host's own-listings query. Keep them in sync: a query that isn't
-      // provably covered by one clause is rejected wholesale, not filtered.
+      // Each read clause corresponds to one client query: the feed's
+      // `allowedViewerIDs contains me`, the host's own-listings query, and the
+      // co-host's `coHostUserIDs contains me`. Keep them in sync: a query that
+      // isn't provably covered by one clause is rejected wholesale, not filtered.
       // The keys a co-host may rewrite: the description of the home itself.
       // Everything absent from this list — who hosts the listing, how to reach
       // them, who can see it, who else may manage it, and whether it still
@@ -333,8 +336,7 @@ service cloud.firestore {
       // the grant; removing someone from it is how you take it back. This clause
       // is what makes the client's `coHostUserIDs contains me` query legal.
       allow read: if isSignedIn()
-          && (resource.data.get('visibility', 'everyone') == 'everyone'
-              || resource.data.hostUserID == request.auth.uid
+          && (resource.data.hostUserID == request.auth.uid
               || request.auth.uid in resource.data.get('allowedViewerIDs', [])
               || request.auth.uid in resource.data.get('coHostUserIDs', []));
 

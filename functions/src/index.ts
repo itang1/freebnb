@@ -282,31 +282,28 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
 // Listing read ACLs and the friend graph
 //
 // `homes.allowedViewerIDs` is the denormalized read ACL that firestore.rules
-// enforces restricted visibility with, because rules cannot join to
-// `friendEdges` at query time. Two tiers share it (feature 7):
+// enforces listing visibility with, because rules cannot join to `friendEdges`
+// at query time. Every listing gets the same audience:
 //
-//   friendsOnly       → host + accepted friends
-//   friendsOfFriends  → host + accepted friends + those friends' friends
+//   host + accepted friends
 //
-// Only the server can build the second one: a client may read only its own
-// friend edges, so it cannot see two hops out. The client still stamps the
-// first-degree array on save (so a friends-only listing is correct the instant
-// it is written), and `onHomeWrittenACL` widens it immediately afterwards.
+// There are no wider tiers. Friends-of-friends never see a listing; they see
+// its host as a friend *suggestion* (see suggestFriends below), and gain access
+// only once the host accepts them. The client stamps the same first-degree
+// array on save (so a listing is correct the instant it is written), and
+// `onHomeWrittenACL` repairs any drift immediately afterwards.
 //
 // Everything below rebuilds the array from the graph rather than applying a
-// delta. A delta is unsound for friends-of-friends — removing one edge may or
-// may not revoke a viewer, depending on whether another path still reaches them
-// — and a full rebuild is idempotent, which is what makes the retries safe.
+// delta: a full rebuild is idempotent, which is what makes the retries safe.
+// A legacy `visibility` field may still sit on old documents; it is ignored
+// here and stripped by scripts/migrate_friends_only.js.
 // ---------------------------------------------------------------------------
 type FriendEdgeData = { userA: string; userB: string; status?: string };
 
 // The rules cap `allowedViewerIDs` at 1000 entries, and the whole array is
 // downloaded with every feed document, so a very well-connected host's
-// friends-of-friends set is truncated rather than allowed to bloat the feed.
+// friend list is truncated rather than allowed to bloat the feed.
 const ACL_CAP = 1000;
-// Bounds the second hop: a user with an enormous friend list must not turn one
-// edge write into thousands of reads.
-const FRIEND_FANOUT_CAP = 200;
 
 /** Accepted friends of one user, read from both halves of the edge. */
 async function acceptedFriendsOf(userID: string): Promise<string[]> {
@@ -315,20 +312,6 @@ async function acceptedFriendsOf(userID: string): Promise<string[]> {
     db.collection(Collections.friendEdges).where("userB", "==", userID).where("status", "==", "accepted").get(),
   ]);
   return [...aSnap.docs.map((d) => d.data().userB as string), ...bSnap.docs.map((d) => d.data().userA as string)];
-}
-
-/**
- * Everyone within two hops of `userID`, excluding `userID` themselves. First-
- * degree friends are included: they can see a friends-of-friends listing too.
- */
-async function withinTwoHopsOf(userID: string, friends: string[]): Promise<string[]> {
-  const reachable = new Set<string>(friends);
-  const secondHops = await Promise.all(
-    friends.slice(0, FRIEND_FANOUT_CAP).map((friendID) => acceptedFriendsOf(friendID))
-  );
-  for (const hop of secondHops) for (const candidate of hop) reachable.add(candidate);
-  reachable.delete(userID);
-  return [...reachable];
 }
 
 /** Order-insensitive set equality, so a rebuild that changes nothing writes nothing. */
@@ -349,18 +332,10 @@ function sameMembers(a: string[], b: string[]): boolean {
  */
 async function rebuildListingACLs(hostID: string, onlyHomeID?: string): Promise<void> {
   const friends = await acceptedFriendsOf(hostID);
-  // The second hop is only paid for when a listing actually needs it.
-  let twoHops: string[] | undefined;
 
-  // The ACL a listing should carry, given its tier. The host is always in it:
-  // the rules refuse a listing that locks its own host out.
-  const desiredFor = async (data: FirebaseFirestore.DocumentData): Promise<string[]> => {
-    if ((data.visibility ?? "everyone") === "friendsOfFriends") {
-      if (!twoHops) twoHops = await withinTwoHopsOf(hostID, friends);
-      return [...new Set([hostID, ...twoHops])].slice(0, ACL_CAP);
-    }
-    return [...new Set([hostID, ...friends])].slice(0, ACL_CAP);
-  };
+  // Every listing carries the same ACL. The host is always in it: the rules
+  // refuse a listing that locks its own host out.
+  const desired = [...new Set([hostID, ...friends])].slice(0, ACL_CAP);
 
   // Updating one listing reads one document, not the host's whole catalogue.
   if (onlyHomeID) {
@@ -368,7 +343,6 @@ async function rebuildListingACLs(hostID: string, onlyHomeID?: string): Promise<
     const snap = await ref.get();
     if (!snap.exists) return;
     const data = snap.data() as FirebaseFirestore.DocumentData;
-    const desired = await desiredFor(data);
     if (sameMembers(data.allowedViewerIDs ?? [], desired)) return;
     await ref.update({ allowedViewerIDs: desired });
     return;
@@ -390,7 +364,6 @@ async function rebuildListingACLs(hostID: string, onlyHomeID?: string): Promise<
     let writes = 0;
     for (const doc of snap.docs) {
       const data = doc.data();
-      const desired = await desiredFor(data);
       if (sameMembers(data.allowedViewerIDs ?? [], desired)) continue;
       batch.update(doc.ref, { allowedViewerIDs: desired });
       writes++;
@@ -404,11 +377,11 @@ async function rebuildListingACLs(hostID: string, onlyHomeID?: string): Promise<
 
 // ---------------------------------------------------------------------------
 // onFriendEdgeWritten
-// An edge changing accepted-ness moves more ACLs than the two users' own.
-// If A befriends B, then for every friend F of A, B is now within two hops of F,
-// so F's friends-of-friends listings must admit them. Rebuilding A, B, and both
-// of their friend sets covers exactly that blast radius — and no further, since
-// a third-hop user's two-hop set is unchanged.
+// A listing's audience is exactly its host's accepted friends, so an edge
+// changing accepted-ness moves only the two endpoints' own ACLs: accepting
+// admits each user to the other's listings, unfriending revokes both. This is
+// the write that makes "accepting a friend request shares your listings with
+// them" true.
 // ---------------------------------------------------------------------------
 export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async (event) => {
   const change = event.data;
@@ -422,25 +395,13 @@ export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async
   const edge = after ?? before;
   if (!edge?.userA || !edge?.userB) return;
 
-  const [friendsOfA, friendsOfB] = await Promise.all([
-    acceptedFriendsOf(edge.userA),
-    acceptedFriendsOf(edge.userB),
-  ]);
-  const affected = new Set<string>([
-    edge.userA,
-    edge.userB,
-    ...friendsOfA.slice(0, FRIEND_FANOUT_CAP),
-    ...friendsOfB.slice(0, FRIEND_FANOUT_CAP),
-  ]);
-
-  await Promise.all([...affected].map((hostID) => rebuildListingACLs(hostID)));
+  await Promise.all([edge.userA, edge.userB].map((hostID) => rebuildListingACLs(hostID)));
 });
 
 // ---------------------------------------------------------------------------
 // onHomeWrittenACL
-// The client stamps a first-degree ACL on save because it cannot compute more
-// than that. This widens a friends-of-friends listing to its true audience the
-// moment it is written, and repairs any listing whose ACL drifted. It is a
+// The client stamps the host's accepted friends on save; this repairs any
+// listing whose ACL drifted (a stale client, a partial write). It is a
 // separate trigger from onHomeDeleted so each stays about one thing.
 // ---------------------------------------------------------------------------
 export const onHomeWrittenACL = onDocumentWritten(homeDocPattern, async (event) => {
@@ -1015,7 +976,15 @@ export const exportUserData = onCall(async (request) => {
 // (friend or pending), has blocked, or who has blocked the caller.
 // Call from the app: Functions.functions().httpsCallable("suggestFriends")
 // ---------------------------------------------------------------------------
-type FriendSuggestion = { userID: string; displayName: string; mutualCount: number };
+type FriendSuggestion = {
+  userID: string;
+  displayName: string;
+  mutualCount: number;
+  // Up to two of the caller's own friends who connect them to this candidate,
+  // e.g. ["Alice", "Bob"]. Only the caller's existing friends are named — never
+  // the candidate's — so nothing is disclosed the caller couldn't already see.
+  mutualNames: string[];
+};
 
 export const suggestFriends = onCall(async (request) => {
   const uid = request.auth?.uid;
@@ -1042,24 +1011,42 @@ export const suggestFriends = onCall(async (request) => {
   }
   for (const blocked of (myPrivateSnap.data()?.blockedUserIDs ?? []) as string[]) connected.add(blocked);
 
-  // Tally how many of my friends each candidate is connected to. Cap the fan-out
+  // Tally which of my friends each candidate is connected to. Cap the fan-out
   // so a user with an enormous friend list can't turn one call into thousands of
   // reads.
   const FRIEND_CAP = 200;
-  const counts = new Map<string, number>();
+  const connectors = new Map<string, string[]>();
   await Promise.all(
     myAcceptedFriends.slice(0, FRIEND_CAP).map(async (friendID) => {
       for (const candidate of await acceptedFriendsOf(friendID)) {
         if (connected.has(candidate)) continue;
-        counts.set(candidate, (counts.get(candidate) ?? 0) + 1);
+        const existing = connectors.get(candidate);
+        if (existing) existing.push(friendID);
+        else connectors.set(candidate, [friendID]);
       }
     })
   );
 
-  // Most mutual friends first; resolve names and drop anyone who blocked me.
-  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  // Most mutual friends first.
+  const ranked = [...connectors.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 10);
+
+  // The cards say "Friends with Alice and Bob", so resolve display names for
+  // the first two connectors of each candidate. These are the caller's own
+  // friends, deduplicated across candidates so each name is fetched once.
+  const NAMED_CONNECTORS = 2;
+  const connectorIDs = [...new Set(ranked.flatMap(([, ids]) => ids.slice(0, NAMED_CONNECTORS)))];
+  const connectorNames = new Map<string, string>();
+  await Promise.all(
+    connectorIDs.map(async (id) => {
+      const snap = await db.collection(Collections.users).doc(id).get();
+      const name = snap.data()?.displayName;
+      if (typeof name === "string" && name.length > 0) connectorNames.set(id, name);
+    })
+  );
+
+  // Resolve candidate names and drop anyone who blocked me.
   const resolved = await Promise.all(
-    ranked.map(async ([candidate, mutualCount]): Promise<FriendSuggestion | null> => {
+    ranked.map(async ([candidate, mutualIDs]): Promise<FriendSuggestion | null> => {
       const [userSnap, candPrivateSnap] = await Promise.all([
         db.collection(Collections.users).doc(candidate).get(),
         db.doc(privateProfilePath(candidate)).get(),
@@ -1067,7 +1054,15 @@ export const suggestFriends = onCall(async (request) => {
       if (!userSnap.exists) return null;
       const candBlocked: string[] = candPrivateSnap.data()?.blockedUserIDs ?? [];
       if (candBlocked.includes(uid)) return null;
-      return { userID: candidate, displayName: userSnap.data()?.displayName ?? "FreeBNB User", mutualCount };
+      return {
+        userID: candidate,
+        displayName: userSnap.data()?.displayName ?? "FreeBNB User",
+        mutualCount: mutualIDs.length,
+        mutualNames: mutualIDs
+          .slice(0, NAMED_CONNECTORS)
+          .map((id) => connectorNames.get(id))
+          .filter((name): name is string => name !== undefined),
+      };
     })
   );
 
