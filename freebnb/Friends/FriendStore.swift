@@ -34,12 +34,25 @@ struct FriendEdge: Identifiable, Codable, Hashable, Sendable {
 }
 
 /// A "people you may know" candidate returned by the `suggestFriends` callable:
-/// a friend-of-a-friend with a count of how many friends they share (feature 31).
+/// a friend-of-a-friend with the friends they share (feature 31). This is the
+/// only place a friend-of-a-friend surfaces at all — their listings stay hidden
+/// unless a friend request is sent and accepted.
 struct FriendSuggestion: Identifiable, Hashable, Sendable {
     let userID: String
     let displayName: String
     let mutualCount: Int
+    /// Up to two of *your own* friends who connect you to this person, resolved
+    /// server-side. Never the candidate's other friends: nothing is shown here
+    /// that you couldn't already see.
+    let mutualNames: [String]
     var id: String { userID }
+
+    /// "Friends with Priya and Sam", "Friends with Priya, Sam and 3 others", or
+    /// a bare count when no names resolved.
+    var mutualText: String? {
+        guard let summary = MutualFriends(count: mutualCount, names: mutualNames).summary else { return nil }
+        return mutualNames.isEmpty ? summary : "Friends with \(summary)"
+    }
 }
 
 // MARK: - Store

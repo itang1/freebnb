@@ -68,12 +68,16 @@ struct FriendsPage: View {
             }
 
             if !friendStore.suggestions.isEmpty {
-                Section("People you may know") {
+                Section {
                     ForEach(friendStore.suggestions) { suggestion in
                         SuggestionRow(suggestion: suggestion) {
                             Task { await addSuggested(suggestion) }
                         }
                     }
+                } header: {
+                    Text("People you may know")
+                } footer: {
+                    Text("Friends of your friends. You'll see each other's places only if they accept your request.")
                 }
             }
 
@@ -191,9 +195,11 @@ private struct SuggestionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(suggestion.displayName)
                     .font(.body)
-                Text("\(suggestion.mutualCount) mutual friend\(suggestion.mutualCount == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if let mutualText = suggestion.mutualText {
+                    Text(mutualText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             Spacer()
             Button {
@@ -228,7 +234,8 @@ private struct FriendRequestRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
                         .font(.body)
-                    Text("Wants to connect")
+                    // Accepting is the grant: spell out what it shares.
+                    Text("Accepting lets you see each other's places and request stays")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

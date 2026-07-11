@@ -36,7 +36,7 @@ struct HowItWorksPage: View {
         ),
         (
             "Approve Guests",
-            "Your listing is only visible to people you've approved. You control who can see and request stays."
+            "Your listing is visible only to your FreeBNB friends, and only they can request stays. Accepting a friend request is what shares your listing; removing a friend hides it again."
         ),
         (
             "Review Requests",

@@ -90,7 +90,8 @@ struct FirestoreFriendEdgeRepository: FriendEdgeRepository {
             guard let userID = dict["userID"] as? String,
                   let displayName = dict["displayName"] as? String else { return nil }
             let mutual = (dict["mutualCount"] as? NSNumber)?.intValue ?? 0
-            return FriendSuggestion(userID: userID, displayName: displayName, mutualCount: mutual)
+            let names = (dict["mutualNames"] as? [String]) ?? []
+            return FriendSuggestion(userID: userID, displayName: displayName, mutualCount: mutual, mutualNames: names)
         }
     }
 }

@@ -19,12 +19,23 @@ struct FAQPage: View {
         ),
         FAQItem(
             question: "Who can see my listing?",
-            answer: "Only people you've approved. Your listing is never visible to the general public or to strangers."
+            // swiftlint:disable:next line_length
+            answer: "Only your FreeBNB friends: people whose friend request you accepted, or who accepted yours. Your listing is never public, and friends of your friends cannot see it either; they can only find you under \"People you may know\" and send a request. Removing a friend hides your listing from them again."
+        ),
+        FAQItem(
+            question: "Who can request to stay at my place?",
+            // swiftlint:disable:next line_length
+            answer: "The same people who can see it: your accepted friends, and no one else. A request is only a request; nothing is confirmed until you accept it, and your exact address is shared only after you accept a stay. Until then, guests see the neighborhood."
+        ),
+        FAQItem(
+            question: "What happens when I accept a friend request?",
+            // swiftlint:disable:next line_length
+            answer: "You each see the other's listings and can request to stay with each other. That is the whole grant: no payment and no obligation, and you can remove a friend at any time from the Friends page, which hides your listings from them again."
         ),
         FAQItem(
             question: "How is FreeBNB different from Couchsurfing or other home-sharing platforms?",
             // swiftlint:disable:next line_length
-            answer: "FreeBNB is built around trust, not strangers. Unlike Couchsurfing or similar platforms where you open your home to the public, FreeBNB is invite-only: you only see listings from people already in your network of trusted contacts. There's no public marketplace, no reviews from strangers, and no algorithm matching you with random people. Your guests are people you already know or are at most a step removed from, not strangers you met online."
+            answer: "FreeBNB is built around trust, not strangers. Unlike Couchsurfing or similar platforms where you open your home to the public, FreeBNB is invite-only: you only see listings from your own friends. There's no public marketplace, no reviews from strangers, and no algorithm matching you with random people. Your guests are people you know and chose to connect with, not strangers you met online."
         ),
         FAQItem(
             question: "Does FreeBNB track my location?",

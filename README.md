@@ -15,7 +15,7 @@ This README covers technical details for engineers. User-facing documentation li
 - **Listings**: Hosts create, edit, and manage listings with amenities, capacity, availability, and house preferences. Guests browse a paginated feed, an interactive map with pin clustering, or a city search, and can save listings and filter across every listing attribute. Photo upload is scaffolded but not shipped: the model, Storage rules, and a `PhotoUploader` seam exist, but the default implementation is a no-op, and there is no picker or gallery yet.
 - **Stays**: Guests request stays for specific dates; hosts review, confirm, or decline from a per-listing dashboard.
 - **Messaging**: Real-time in-app chat between guests and hosts, scoped per listing, with new-message push notifications.
-- **Friends**: Friend connections drive the feed (friends' listings sort first) and the network-based visibility model.
+- **Friends**: Friend connections are the visibility model: every listing is visible to the host's accepted friends only, and friends of friends surface solely as friend suggestions.
 - **Accounts**: Sign in with Apple or anonymous guest browsing, profile management, and full account deletion with server-side data cascade.
 - **Safety**: Age gate, user reporting, blocking enforced at the security-rules level, and message rate limiting.
 

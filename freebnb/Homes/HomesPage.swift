@@ -429,7 +429,7 @@ private extension HomesPage {
                         endPoint: .bottom
                     )
                 )
-            Text("No homes found")
+            Text(emptyStateTitle)
                 .font(.title3)
                 .fontWeight(.semibold)
             emptyStateMessage
@@ -501,6 +501,19 @@ private extension HomesPage {
         }
     }
 
+    /// True when nothing is narrowing the feed and it is still empty: the
+    /// emptiness is about the viewer's network, not their query.
+    var isUnfilteredEmptyFeed: Bool {
+        !showSavedOnly && selectedFilters.isEmpty && citySearch.isEmpty
+    }
+
+    var emptyStateTitle: String {
+        if isUnfilteredEmptyFeed && friendStore.friendEdges.isEmpty {
+            return "Homes come from friends"
+        }
+        return "No homes found"
+    }
+
     @ViewBuilder
     var emptyStateMessage: some View {
         if showSavedOnly {
@@ -510,13 +523,26 @@ private extension HomesPage {
                 .multilineTextAlignment(.center)
             Button("Show all listings") { showSavedOnly = false }
                 .capsuleChip()
-        } else if selectedFilters.isEmpty && citySearch.isEmpty {
-            Text("FreeBNB only shows homes from people in your network. Invite a friend who hosts, or ask someone to add you.")
+        } else if isUnfilteredEmptyFeed && friendStore.friendEdges.isEmpty {
+            // The feed is empty because the friend list is: every listing on
+            // FreeBNB is friends-only, so the fix lives on the Friends page.
+            Text("Your feed shows your friends' places, and only they can see yours. Add your first friend to get started.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button {
+                showFriends = true
+            } label: {
+                Label("Find Friends", systemImage: "person.badge.plus")
+                    .capsuleChip()
+            }
+        } else if isUnfilteredEmptyFeed {
+            Text("None of your friends have listed a home yet. Invite someone who hosts, or ask friends to list their place.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             ShareLink(
-                item: "Join me on FreeBNB — free stays with people you trust. Download the app and we can connect!",
+                item: "Join me on FreeBNB: free stays with people you trust. Download the app and we can connect!",
                 subject: Text("FreeBNB Invite")
             ) {
                 Label("Invite a Friend", systemImage: "person.badge.plus")
