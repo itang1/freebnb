@@ -174,43 +174,6 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
     }
 }
 
-/// Who can see a listing, ordered most private to most open — which is also the
-/// order the picker offers them in (feature 7).
-///
-/// Both restricted tiers are enforced through the same denormalized
-/// `allowedViewerIDs` array, because Firestore rules cannot join to `friendEdges`
-/// at query time. What differs is who the server puts in that array: the host's
-/// friends for `friendsOnly`, and those friends' friends as well for
-/// `friendsOfFriends`. The `rebuildListingACLs` Cloud Function owns it.
-enum ListingVisibility: String, Codable, CaseIterable, Hashable, Sendable {
-    case friendsOnly      = "friendsOnly"
-    case friendsOfFriends = "friendsOfFriends"
-    case everyone         = "everyone"
-
-    var displayName: String {
-        switch self {
-        case .friendsOnly:      return "Friends only"
-        case .friendsOfFriends: return "Friends of friends"
-        case .everyone:         return "Everyone"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .friendsOnly:
-            return "Only people you are connected with can see this listing."
-        case .friendsOfFriends:
-            return "Your friends, and anyone they are connected with, can see this listing."
-        case .everyone:
-            return "Anyone on FreeBNB can see this listing."
-        }
-    }
-
-    /// True when the listing is gated by `allowedViewerIDs` rather than open to
-    /// every signed-in user.
-    var isRestricted: Bool { self != .everyone }
-}
-
 struct DateRange: Codable, Hashable, Identifiable, Sendable {
     var start: Date
     var end: Date
@@ -442,10 +405,12 @@ struct Home: Identifiable, Hashable, Codable {
     var geohash: String? = nil
 
     // MARK: Visibility
-    // Optional on the wire so listings created before this field decode cleanly.
-    // Nil is treated as .everyone.
-    var visibility: ListingVisibility? = nil
-
+    // Every listing is friends-only: visible to the host, their co-hosts, and
+    // the host's accepted friends, and to nobody else. A friend-of-a-friend is
+    // shown the host as a friend *suggestion* instead, and sees the listing
+    // only after the host accepts them. (A legacy `visibility` tier field used
+    // to widen this; it is gone from the model and ignored by the rules.)
+    //
     // Denormalized read ACL: the host plus every accepted friend of the host.
     // Firestore rules cannot join to `friendEdges` at query time, so friends-only
     // visibility is enforced by reading this array directly (see firestore.rules)
@@ -500,17 +465,16 @@ struct Home: Identifiable, Hashable, Codable {
     }
 
     /// Whether `userID` owns the listing. Distinct from `isManagedBy`: only the
-    /// host may delete the listing, change its visibility, manage the co-host
-    /// roster, or accept a guest into the home.
+    /// host may delete the listing, manage the co-host roster, or accept a
+    /// guest into the home.
     func isHostedBy(_ userID: String) -> Bool {
         !userID.isEmpty && hostUserID == userID
     }
 
-    /// The read ACL a listing starts with: the host, then their accepted friends,
+    /// The read ACL every listing carries: the host, then their accepted friends,
     /// de-duplicated. Kept here so the client write path and the seed script agree
-    /// on one definition. A `friendsOfFriends` listing needs a wider ACL than the
-    /// client can compute (it can only read its own friend edges), so
-    /// `rebuildListingACLs` widens it server-side right after the save.
+    /// on one definition. `rebuildListingACLs` recomputes the same set server-side
+    /// after every save and friend change, repairing any drift.
     static func viewerIDs(hostUserID: String, friendIDs: some Sequence<String>) -> [String] {
         var seen: Set<String> = []
         return ([hostUserID] + friendIDs).filter { seen.insert($0).inserted }
@@ -536,7 +500,6 @@ struct Home: Identifiable, Hashable, Codable {
         case blockedDateRanges
         case latitude, longitude
         case geohash
-        case visibility
         case allowedViewerIDs
         case coHostUserIDs
         case deletedAt
@@ -569,7 +532,6 @@ extension Home {
         latitude            = try c.decodeIfPresent(Double.self,              forKey: .latitude)
         longitude          = try c.decodeIfPresent(Double.self,               forKey: .longitude)
         geohash            = try c.decodeIfPresent(String.self,               forKey: .geohash)
-        visibility         = try c.decodeIfPresent(ListingVisibility.self,    forKey: .visibility)
         allowedViewerIDs   = try c.decodeIfPresent([String].self,             forKey: .allowedViewerIDs)
         coHostUserIDs      = try c.decodeIfPresent([String].self,             forKey: .coHostUserIDs)
         deletedAt          = try c.decodeIfPresent(Date.self,                 forKey: .deletedAt)

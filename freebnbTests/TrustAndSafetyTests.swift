@@ -27,7 +27,6 @@ private func makeAmenities() -> Amenities {
 private func makeHome(
     id: String,
     hostUserID: String,
-    visibility: ListingVisibility?,
     allowedViewerIDs: [String]? = nil
 ) -> Home {
     var home = Home(
@@ -43,7 +42,6 @@ private func makeHome(
         amenities: makeAmenities()
     )
     home.id = id
-    home.visibility = visibility
     home.allowedViewerIDs = allowedViewerIDs
     home.createdAt = Date(timeIntervalSince1970: 1_000)
     return home
@@ -182,43 +180,25 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
     #expect(MutualFriends(count: 3, names: []).summary == "3 mutual friends")
 }
 
-// MARK: - Graduated visibility (feature 7)
+// MARK: - Friends-only visibility (feature 7)
 
-@Test func friendsOfFriendsListingIsVisibleThroughTheACL() {
-    // The viewer is two hops from the host, which the client cannot verify: it
-    // may only read its own friend edges. The server-built ACL is the evidence.
-    let home = makeHome(id: "h", hostUserID: "host", visibility: .friendsOfFriends, allowedViewerIDs: ["host", "me"])
-    let feed = HomeStore.feed(from: [home], myID: "me", friendIDs: [], blockedIDs: [])
-    #expect(feed.map(\.id) == ["h"])
-}
-
-@Test func friendsOfFriendsListingIsHiddenWhenTheACLOmitsYou() {
-    let home = makeHome(id: "h", hostUserID: "host", visibility: .friendsOfFriends, allowedViewerIDs: ["host"])
-    let feed = HomeStore.feed(from: [home], myID: "me", friendIDs: [], blockedIDs: [])
-    #expect(feed.isEmpty)
-}
-
-@Test func friendsOnlyListingIgnoresTheACLAndChecksTheFriendship() {
+@Test func feedChecksTheFriendshipNotJustTheACL() {
     // A stale ACL — a friend removed since the listing was last written — must
-    // not keep showing the listing. Here the client *can* check the claim.
-    let home = makeHome(id: "h", hostUserID: "host", visibility: .friendsOnly, allowedViewerIDs: ["host", "me"])
+    // not keep showing the listing. The repository query is ACL-gated, so this
+    // client-side friendship check is the second line of defence.
+    let home = makeHome(id: "h", hostUserID: "host", allowedViewerIDs: ["host", "me"])
     #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: [], blockedIDs: []).isEmpty)
     #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: ["host"], blockedIDs: []).count == 1)
 }
 
-@Test func yourOwnRestrictedListingIsAlwaysVisibleToYou() {
-    let home = makeHome(id: "h", hostUserID: "me", visibility: .friendsOfFriends, allowedViewerIDs: nil)
+@Test func yourOwnListingIsAlwaysVisibleToYou() {
+    let home = makeHome(id: "h", hostUserID: "me", allowedViewerIDs: nil)
     #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: [], blockedIDs: []).count == 1)
 }
 
-@Test func blockedHostsWinOverEveryVisibilityTier() {
-    let home = makeHome(id: "h", hostUserID: "host", visibility: .everyone)
+@Test func blockedHostsWinOverFriendship() {
+    let home = makeHome(id: "h", hostUserID: "host", allowedViewerIDs: ["host", "me"])
     #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: ["host"], blockedIDs: ["host"]).isEmpty)
-}
-
-@Test func listingWithNoVisibilityReadsAsPublic() {
-    let home = makeHome(id: "h", hostUserID: "host", visibility: nil)
-    #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: [], blockedIDs: []).count == 1)
 }
 
 // MARK: - Safety check-in (feature 5)

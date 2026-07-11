@@ -124,7 +124,7 @@ struct HomesPage: View {
     // non-empty list — never fired to go get them (L3).
     //
     // Firestore can't answer a substring query, and the feed's ordering and
-    // visibility partitions leave no room for a prefix range. So while a
+    // ACL gating leave no room for a prefix range. So while a
     // narrowing control is active we simply pull the remaining pages and let
     // the client-side predicate see the whole feed.
     private var isNarrowingFeed: Bool {

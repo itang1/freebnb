@@ -10,8 +10,16 @@ import Observation
 import SwiftUI
 import os
 
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
 enum AuthMethod {
-    case apple, guest, none
+    case apple, google, email, guest, none
 }
 
 enum AuthError: LocalizedError, Equatable {
@@ -21,6 +29,11 @@ enum AuthError: LocalizedError, Equatable {
     case deleteFailed
     case reauthRequired
     case nonceGenerationFailed
+    case emailInUse
+    case invalidEmail
+    case weakPassword
+    case wrongPassword
+    case userNotFound
 
     var errorDescription: String? {
         switch self {
@@ -30,6 +43,11 @@ enum AuthError: LocalizedError, Equatable {
         case .deleteFailed:          return "Could not delete account. Please try again."
         case .reauthRequired:        return "Please sign in again to delete your account."
         case .nonceGenerationFailed: return "Could not prepare sign in. Please try again."
+        case .emailInUse:            return "That email is already registered. Try signing in instead."
+        case .invalidEmail:          return "Enter a valid email address."
+        case .weakPassword:          return "Password must be at least 6 characters."
+        case .wrongPassword:         return "Incorrect email or password."
+        case .userNotFound:          return "No account found for that email."
         }
     }
 }
@@ -76,7 +94,7 @@ final class AuthManager {
         if let user {
             userID     = user.uid
             userEmail  = user.email ?? ""
-            authMethod = (user.isAnonymous || user.uid == Self.guestTesterUID) ? .guest : .apple
+            authMethod = Self.method(for: user)
             isSignedIn = true
         } else {
             userID     = ""
@@ -86,6 +104,19 @@ final class AuthManager {
         }
         // Attribute crash reports and analytics to the current user (A6).
         Telemetry.setUserID(user?.uid)
+    }
+
+    // Derives the sign-in method from Firebase's provider data rather than
+    // assuming Apple, so Google, email/password, and the seeded guest tester
+    // each surface correctly in the UI. The guest tester keeps its special case
+    // (see `guestTesterUID`); everything else is read from `providerData`.
+    private static func method(for user: User) -> AuthMethod {
+        if user.isAnonymous || user.uid == Self.guestTesterUID { return .guest }
+        let providers = Set(user.providerData.map(\.providerID))
+        if providers.contains("apple.com")  { return .apple }
+        if providers.contains("google.com") { return .google }
+        if providers.contains("password")   { return .email }
+        return .apple
     }
 
     // MARK: - Sign in with Apple
@@ -160,6 +191,108 @@ final class AuthManager {
         }
     }
 
+    // MARK: - Sign in with Google
+
+#if canImport(GoogleSignIn)
+    /// Presents Google's sign-in sheet, then exchanges the returned tokens for a
+    /// Firebase credential. Requires the GoogleSignIn SDK and the reversed client
+    /// ID URL scheme (see the manual setup notes); guarded by `canImport` so the
+    /// project still builds before the package is added.
+    func signInWithGoogle() {
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            log.error("google sign in: missing Firebase clientID (GoogleService-Info.plist)")
+            authError = .signInFailed
+            return
+        }
+        guard let presenter = Self.topViewController() else {
+            log.error("google sign in: no presenting view controller")
+            authError = .signInFailed
+            return
+        }
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+
+        Task { @MainActor in
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter)
+                guard let idToken = result.user.idToken?.tokenString else {
+                    authError = .invalidToken
+                    return
+                }
+                let credential = GoogleAuthProvider.credential(
+                    withIDToken: idToken,
+                    accessToken: result.user.accessToken.tokenString
+                )
+                _ = try await Auth.auth().signIn(with: credential)
+                Telemetry.log(.signInCompleted, parameters: ["method": "google"])
+            } catch let error as NSError where error.code == GIDSignInError.canceled.rawValue {
+                return
+            } catch {
+                log.error("google sign in failed: \(error.localizedDescription, privacy: .public)")
+                Telemetry.log(.signInFailed, parameters: ["method": "google"])
+                authError = .signInFailed
+            }
+        }
+    }
+#endif
+
+    // MARK: - Email / password
+
+    /// Signs an existing user in with an email and password.
+    func signIn(withEmail email: String, password: String) {
+        let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task { @MainActor in
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                _ = try await Auth.auth().signIn(withEmail: email, password: password)
+                Telemetry.log(.signInCompleted, parameters: ["method": "email"])
+            } catch {
+                authError = Self.emailAuthError(from: error)
+                Telemetry.log(.signInFailed, parameters: ["method": "email"])
+                log.error("email sign in failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Creates a new email/password account, optionally stamping a display name.
+    func register(withEmail email: String, password: String, displayName: String) {
+        let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task { @MainActor in
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                let result = try await Auth.auth().createUser(withEmail: email, password: password)
+                if !name.isEmpty {
+                    let change = result.user.createProfileChangeRequest()
+                    change.displayName = name
+                    try? await change.commitChanges()
+                    UserDefaults.standard.set(name, forKey: UserDefaultsKey.userName)
+                }
+                Telemetry.log(.signInCompleted, parameters: ["method": "email"])
+            } catch {
+                authError = Self.emailAuthError(from: error)
+                Telemetry.log(.signInFailed, parameters: ["method": "email"])
+                log.error("email registration failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    // Maps a FirebaseAuth error into a user-facing `AuthError`, so the email form
+    // can show "that email is already registered" instead of a raw SDK message.
+    private static func emailAuthError(from error: Error) -> AuthError {
+        switch AuthErrorCode(rawValue: (error as NSError).code) {
+        case .emailAlreadyInUse:                 return .emailInUse
+        case .invalidEmail:                      return .invalidEmail
+        case .weakPassword:                      return .weakPassword
+        case .wrongPassword, .invalidCredential: return .wrongPassword
+        case .userNotFound:                      return .userNotFound
+        default:                                 return .signInFailed
+        }
+    }
+
     // MARK: - Debug sign-in (emulator only)
 
     #if DEBUG
@@ -222,6 +355,10 @@ final class AuthManager {
             ListingDraftStore().clear(userID: userID)
         } catch AuthError.cancelled {
             return
+        } catch let error as NSError where error.code == AuthErrorCode.requiresRecentLogin.rawValue {
+            // Google/email deletes can require a fresh login (Apple is reauthed
+            // above). Ask the user to sign in again rather than failing opaquely.
+            authError = .reauthRequired
         } catch {
             log.error("delete account failed: \(error.localizedDescription, privacy: .public)")
             authError = .deleteFailed
@@ -275,4 +412,22 @@ final class AuthManager {
         let hashed = SHA256.hash(data: inputData)
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
     }
+
+    // MARK: - Presentation helper
+
+    // The frontmost view controller, used as the presenter for Google's sign-in
+    // sheet. Apple's flow supplies its own anchor via the coordinator, so this is
+    // only needed on platforms with UIKit.
+#if canImport(UIKit)
+    private static func topViewController() -> UIViewController? {
+        let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first
+        var top = keyWindow?.rootViewController
+        while let presented = top?.presentedViewController {
+            top = presented
+        }
+        return top
+    }
+#endif
 }

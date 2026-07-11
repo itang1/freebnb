@@ -67,7 +67,6 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var hostContactInfo = ""
     var hostMotivation: HostMotivation = .open
     var cancellationPolicy: CancellationPolicy = .flexible
-    var visibility: ListingVisibility = .everyone
 
     /// True when the host has typed nothing. Such a draft is not worth storing,
     /// and restoring one would announce a "draft" that says nothing.

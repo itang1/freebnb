@@ -4,8 +4,7 @@
 //
 //  Covers the pure derivation behind the "Your network" section (feature 34). The
 //  cases that matter are the ones where it must not over-claim: your own listings
-//  and public strangers don't count, and a friend-of-a-friend home is counted but
-//  never pinned to a name it can't actually know.
+//  don't count, and neither does a host the client can't verify as a friend.
 //
 
 import Foundation
@@ -49,31 +48,16 @@ struct NetworkReachTests {
         #expect(reach.hosts.map(\.friendID) == ["priya", "sam"])
     }
 
-    @Test func excludesYourOwnAndStrangers() {
+    @Test func excludesYourOwnAndUnverifiableHosts() {
         let reach = compute([
             HomeFixture.make(id: "mine", hostUserID: me),
-            HomeFixture.make(id: "stranger", hostUserID: "nobody", visibility: .everyone),
+            // A stale ACL entry from an ended friendship: reachable, but not a
+            // connection the client can attribute.
+            HomeFixture.make(id: "stranger", hostUserID: "nobody", allowedViewerIDs: [me]),
             HomeFixture.make(id: "friend", hostUserID: "priya"),
         ])
         #expect(reach.totalHomes == 1)
         #expect(reach.hosts.map(\.friendID) == ["priya"])
-        #expect(reach.extendedCount == 0)
-    }
-
-    /// A friend-of-a-friend listing counts toward reach but is never attributed to
-    /// a friend by name — that link is unknowable client-side.
-    @Test func friendOfFriendCountsButIsNotNamed() {
-        let reach = compute([
-            HomeFixture.make(
-                id: "fof",
-                hostUserID: "stranger",
-                visibility: .friendsOfFriends,
-                allowedViewerIDs: [me]
-            ),
-        ])
-        #expect(reach.hosts.isEmpty)
-        #expect(reach.extendedCount == 1)
-        #expect(reach.totalHomes == 1)
     }
 
     @Test func fallsBackWhenNameUnresolved() {

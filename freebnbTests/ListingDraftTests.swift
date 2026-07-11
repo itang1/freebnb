@@ -38,7 +38,6 @@ private func makeHome(id: String = "home-1") -> Home {
         cancellationPolicy: .strict
     )
     home.id = id
-    home.visibility = .friendsOnly
     home.createdAt = Date(timeIntervalSince1970: 1_000_000)
     return home
 }
@@ -110,7 +109,6 @@ struct DuplicationTests {
         #expect(vm.hostContactInfo == "host@example.com")
         #expect(vm.hostMotivation == .eager)
         #expect(vm.cancellationPolicy == .strict)
-        #expect(vm.visibility == .friendsOnly)
     }
 
     /// The street is not on the public listing document, so it arrives later from
@@ -140,7 +138,6 @@ struct ListingDraftPersistenceTests {
         vm.sleepingCounts = [.couch: 1, .futon: 2]
         vm.hasWifi = true
         vm.foodProvision = .bareMinimum
-        vm.visibility = .friendsOfFriends
         vm.description = "Spare couch."
 
         let store = ListingDraftStore(defaults: makeDefaults())
@@ -157,7 +154,6 @@ struct ListingDraftPersistenceTests {
         #expect(restored.sleepingCounts == [.couch: 1, .futon: 2])
         #expect(restored.hasWifi)
         #expect(restored.foodProvision == .bareMinimum)
-        #expect(restored.visibility == .friendsOfFriends)
         #expect(restored.description == "Spare couch.")
     }
 

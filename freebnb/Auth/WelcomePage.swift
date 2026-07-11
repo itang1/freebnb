@@ -8,6 +8,7 @@ import AuthenticationServices
 
 struct WelcomePage: View {
     @Environment(AuthManager.self) private var authManager
+    @State private var showEmailAuth = false
 
     var body: some View {
         ZStack {
@@ -70,6 +71,47 @@ struct WelcomePage: View {
                     .padding(.horizontal)
                     .disabled(authManager.isLoading)
 
+                    #if canImport(GoogleSignIn)
+                    Button {
+                        authManager.signInWithGoogle()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("G")
+                                .font(.system(size: 20, weight: .bold, design: .serif))
+                                .foregroundColor(Color(red: 0.26, green: 0.52, blue: 0.96))
+                            Text("Sign in with Google")
+                                .fontWeight(.medium)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color.white)
+                        .foregroundColor(.black)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Color.black.opacity(0.15), lineWidth: 1)
+                        )
+                    }
+                    .padding(.horizontal)
+                    .disabled(authManager.isLoading)
+                    .accessibilityIdentifier("welcome.googleSignInButton")
+                    #endif
+
+                    Button {
+                        showEmailAuth = true
+                    } label: {
+                        Label("Continue with email", systemImage: "envelope.fill")
+                            .fontWeight(.medium)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.accent.opacity(0.12))
+                            .foregroundColor(Color.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .padding(.horizontal)
+                    .disabled(authManager.isLoading)
+                    .accessibilityIdentifier("welcome.emailAuthButton")
+
                     if authManager.isLoading {
                         ProgressView()
                             .tint(Color.accent)
@@ -89,6 +131,10 @@ struct WelcomePage: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showEmailAuth) {
+            EmailAuthView()
+                .environment(authManager)
+        }
     }
 
     #if DEBUG

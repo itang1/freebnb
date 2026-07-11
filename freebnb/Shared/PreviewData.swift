@@ -122,7 +122,6 @@ enum PreviewData {
         hosts: [
             NetworkReach.HostReach(friendID: friendID, displayName: "Maya", homeCount: 2),
             NetworkReach.HostReach(friendID: "preview-friend-2", displayName: "Sam", homeCount: 1),
-        ],
-        extendedCount: 4
+        ]
     )
 }

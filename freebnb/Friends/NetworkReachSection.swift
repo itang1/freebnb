@@ -23,18 +23,6 @@ struct NetworkReachSection: View {
             ForEach(reach.hosts.prefix(hostLimit)) { host in
                 NetworkReachRow(host: host)
             }
-
-            if reach.extendedCount > 0 {
-                HStack(spacing: 12) {
-                    Image(systemName: "person.3.fill")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                        .frame(width: 40)
-                    Text("\(reach.extendedCount) more through friends of friends")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-            }
         }
     }
 
@@ -47,7 +35,7 @@ struct NetworkReachSection: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(reach.totalHomes) home\(reach.totalHomes == 1 ? "" : "s") within reach")
                     .font(.headline)
-                Text("through your friends and theirs")
+                Text("through your friends")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

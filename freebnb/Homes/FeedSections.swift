@@ -12,53 +12,42 @@ import Foundation
 
 /// The connection that put a listing in front of you, rendered as a chip on the
 /// feed card so the graph is legible instead of implicit.
-///
-/// There is deliberately no `everyone` case: "a stranger made this public" is not
-/// a reason worth a chip, and a chip on every card would say nothing.
 enum FeedReason: String, Equatable, Hashable, Sendable {
     case yourListing
     case friend
-    case friendOfFriend
 
     var label: String {
         switch self {
-        case .yourListing:    return "Your listing"
-        case .friend:         return "From a friend"
-        case .friendOfFriend: return "Friend of a friend"
+        case .yourListing: return "Your listing"
+        case .friend:      return "From a friend"
         }
     }
 
     var iconName: String {
         switch self {
-        case .yourListing:    return "house.fill"
-        case .friend:         return "person.fill.checkmark"
-        case .friendOfFriend: return "person.2.fill"
+        case .yourListing: return "house.fill"
+        case .friend:      return "person.fill.checkmark"
         }
     }
 }
 
 enum FeedSections {
-    /// Why `home` reached this viewer, or nil when nothing but its public
-    /// visibility explains it.
+    /// Why `home` reached this viewer, or nil when the connection cannot be
+    /// verified client-side.
     ///
-    /// A `friendsOfFriends` listing is the only second-degree connection knowable
-    /// client-side, and only because `rebuildListingACLs` wrote the viewer into
-    /// `allowedViewerIDs`. A listing set to `everyone` that *happens* to belong to
-    /// a friend of a friend carries no such marker — a user may read only their
-    /// own friend edges — so it gets no chip. Under-claiming is the right failure
-    /// here: a missing chip is a missed flourish, a wrong one is a false statement
-    /// about who knows whom.
+    /// Every listing is friends-only, so in practice everything in the feed is
+    /// yours or a friend's. The nil case covers a listing whose ACL still names
+    /// the viewer after the friendship ended (the server rebuild is eventually
+    /// consistent): under-claiming is the right failure here — a missing chip is
+    /// a missed flourish, a wrong one is a false statement about who knows whom.
     ///
-    /// An empty `myID` is a signed-out or anonymous viewer, who has no network and
-    /// therefore never earns a chip.
+    /// An empty `myID` is a signed-out viewer, who has no network and therefore
+    /// never earns a chip.
     static func reason(for home: Home, myID: String, friendIDs: Set<String>) -> FeedReason? {
         guard !myID.isEmpty else { return nil }
         if home.hostUserID == myID { return .yourListing }
         if friendIDs.contains(home.hostUserID) { return .friend }
-        guard home.visibility == .friendsOfFriends,
-              (home.allowedViewerIDs ?? []).contains(myID)
-        else { return nil }
-        return .friendOfFriend
+        return nil
     }
 
     /// How recently a listing must have been created to lead the feed.
@@ -93,8 +82,8 @@ enum FeedSections {
                   now.timeIntervalSince(createdAt) <= window
             else { return false }
             switch reason(for: home, myID: myID, friendIDs: friendIDs) {
-            case .friend, .friendOfFriend: return true
-            case .yourListing, nil:        return false
+            case .friend:           return true
+            case .yourListing, nil: return false
             }
         }
         let ordered = recent.sorted { a, b in

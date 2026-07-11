@@ -2,10 +2,10 @@
 //  FeedOrderingTests.swift
 //  freebnbTests
 //
-//  Covers HomeStore's feed derivation: block filtering, friends-only
-//  visibility, and — the reason this file exists — that the ordering is a total
-//  order. Swift's sort is not stable, so a comparator that reports "equal" for
-//  distinct rows lets them reshuffle between recomputes (L9).
+//  Covers HomeStore's feed derivation: block filtering, the friends-only
+//  visibility check, and — the reason this file exists — that the ordering is a
+//  total order. Swift's sort is not stable, so a comparator that reports
+//  "equal" for distinct rows lets them reshuffle between recomputes (L9).
 //
 
 import Foundation
@@ -16,7 +16,7 @@ import Testing
 struct FeedOrderingTests {
     private let me = "me"
 
-    @Test func friendsSortBeforeOwnListingsAndStrangers() {
+    @Test func friendsSortBeforeOwnListingsAndStrangersAreDropped() {
         let listings = [
             HomeFixture.make(id: "c", hostUserID: "stranger"),
             HomeFixture.make(id: "b", hostUserID: me),
@@ -27,62 +27,65 @@ struct FeedOrderingTests {
             from: listings, myID: me, friendIDs: ["friend"], blockedIDs: []
         )
 
-        #expect(feed.map(\.id) == ["a", "b", "c"])
+        // The friend leads, then my own listing; the stranger's listing is not
+        // mine to see at all.
+        #expect(feed.map(\.id) == ["a", "b"])
     }
 
     /// The bug: equal-ranked rows must break ties on a stable key, or an
     /// unstable sort reorders them on every recompute.
     @Test func orderingIsATotalOrderAcrossPermutations() {
-        // Six same-rank strangers: nothing but the id tiebreak separates them.
+        // Six same-rank friends: nothing but the id tiebreak separates them.
         let ids = ["f", "d", "a", "e", "b", "c"]
-        let listings = ids.map { HomeFixture.make(id: $0, hostUserID: "stranger-\($0)") }
+        let listings = ids.map { HomeFixture.make(id: $0, hostUserID: "friend-\($0)") }
+        let friendIDs = Set(ids.map { "friend-\($0)" })
 
         let expected = ["a", "b", "c", "d", "e", "f"]
         for _ in 0..<200 {
             let feed = HomeStore.feed(
-                from: listings.shuffled(), myID: me, friendIDs: [], blockedIDs: []
+                from: listings.shuffled(), myID: me, friendIDs: friendIDs, blockedIDs: []
             )
             #expect(feed.map(\.id) == expected)
         }
     }
 
-    @Test func tiesWithinTheFriendBucketAlsoBreakDeterministically() {
+    @Test func tiesWithinTheFriendBucketBreakDeterministically() {
         let listings = [
             HomeFixture.make(id: "z", hostUserID: "friend1"),
-            HomeFixture.make(id: "y", hostUserID: "friend2"),
-            HomeFixture.make(id: "x", hostUserID: "stranger")
+            HomeFixture.make(id: "y", hostUserID: "friend2")
         ]
 
         let feed = HomeStore.feed(
             from: listings.shuffled(), myID: me, friendIDs: ["friend1", "friend2"], blockedIDs: []
         )
 
-        // Both friends outrank the stranger; ids break the tie between them.
-        #expect(feed.map(\.id) == ["y", "z", "x"])
+        // Same rank and no timestamps: ids break the tie.
+        #expect(feed.map(\.id) == ["y", "z"])
     }
 
     /// Within a rank bucket, newer listings sort ahead of older ones (L3).
     @Test func newerListingsSortFirstWithinARank() {
-        let older = HomeFixture.make(id: "a", hostUserID: "s1", createdAt: Date(timeIntervalSince1970: 1_000))
-        let newer = HomeFixture.make(id: "b", hostUserID: "s2", createdAt: Date(timeIntervalSince1970: 2_000))
+        let older = HomeFixture.make(id: "a", hostUserID: "friend1", createdAt: Date(timeIntervalSince1970: 1_000))
+        let newer = HomeFixture.make(id: "b", hostUserID: "friend2", createdAt: Date(timeIntervalSince1970: 2_000))
 
         let feed = HomeStore.feed(
-            from: [older, newer], myID: me, friendIDs: [], blockedIDs: []
+            from: [older, newer], myID: me, friendIDs: ["friend1", "friend2"], blockedIDs: []
         )
 
-        // Both are same-rank strangers; recency puts the newer one first even
+        // Both are same-rank friends; recency puts the newer one first even
         // though its id ("b") sorts after the older one's ("a").
         #expect(feed.map(\.id) == ["b", "a"])
     }
 
     /// Recency wins over the friend-first grouping only within a bucket, never
-    /// across buckets: a newer stranger still sorts below an older friend.
+    /// across buckets: your own newer listing still sorts below an older
+    /// friend's.
     @Test func recencyDoesNotOutrankFriendGrouping() {
-        let newerStranger = HomeFixture.make(id: "a", hostUserID: "stranger", createdAt: Date(timeIntervalSince1970: 2_000))
+        let newerMine = HomeFixture.make(id: "a", hostUserID: me, createdAt: Date(timeIntervalSince1970: 2_000))
         let olderFriend = HomeFixture.make(id: "b", hostUserID: "friend", createdAt: Date(timeIntervalSince1970: 1_000))
 
         let feed = HomeStore.feed(
-            from: [newerStranger, olderFriend], myID: me, friendIDs: ["friend"], blockedIDs: []
+            from: [newerMine, olderFriend], myID: me, friendIDs: ["friend"], blockedIDs: []
         )
 
         #expect(feed.map(\.id) == ["b", "a"])
@@ -91,41 +94,29 @@ struct FeedOrderingTests {
     @Test func blockedHostsAreRemoved() {
         let listings = [
             HomeFixture.make(id: "a", hostUserID: "blocked"),
-            HomeFixture.make(id: "b", hostUserID: "stranger")
+            HomeFixture.make(id: "b", hostUserID: "friend")
         ]
 
         let feed = HomeStore.feed(
-            from: listings, myID: me, friendIDs: [], blockedIDs: ["blocked"]
+            from: listings, myID: me, friendIDs: ["blocked", "friend"], blockedIDs: ["blocked"]
         )
 
         #expect(feed.map(\.id) == ["b"])
     }
 
-    @Test func friendsOnlyListingsAreHiddenFromNonFriends() {
+    @Test func listingsAreHiddenFromNonFriends() {
         let listings = [
-            HomeFixture.make(id: "a", hostUserID: "stranger", visibility: .friendsOnly),
-            HomeFixture.make(id: "b", hostUserID: "friend", visibility: .friendsOnly),
-            HomeFixture.make(id: "c", hostUserID: me, visibility: .friendsOnly),
-            HomeFixture.make(id: "d", hostUserID: "stranger", visibility: .everyone)
+            HomeFixture.make(id: "a", hostUserID: "stranger"),
+            HomeFixture.make(id: "b", hostUserID: "friend"),
+            HomeFixture.make(id: "c", hostUserID: me)
         ]
 
         let feed = HomeStore.feed(
             from: listings, myID: me, friendIDs: ["friend"], blockedIDs: []
         )
 
-        // "a" is a stranger's friends-only listing; the rest are visible.
-        #expect(feed.map(\.id) == ["b", "c", "d"])
-    }
-
-    /// Nil visibility is legacy data and must be treated as `.everyone`.
-    @Test func listingsWithNoVisibilityFieldAreVisibleToEveryone() {
-        let listings = [HomeFixture.make(id: "a", hostUserID: "stranger", visibility: nil)]
-
-        let feed = HomeStore.feed(
-            from: listings, myID: me, friendIDs: [], blockedIDs: []
-        )
-
-        #expect(feed.map(\.id) == ["a"])
+        // "a" is a stranger's listing; the rest are visible.
+        #expect(feed.map(\.id) == ["b", "c"])
     }
 }
 

@@ -25,7 +25,7 @@ struct FirestoreHomesRepositoryEmulatorTests {
     }
 
     // A full member (email/password) may create a listing, and it comes back in
-    // their feed — the create rule and the visibility read rule both pass.
+    // their feed — the create rule and the ACL read rule both pass.
     @Test func fullMemberCreatesAndReadsOwnListing() async throws {
         let uid = try await EmulatorSupport.signInFullMember()
         let home = makeHome(hostUserID: uid)
@@ -98,9 +98,8 @@ struct FirestoreHomesRepositoryEmulatorTests {
             amenities: makeAmenities()
         )
         home.id = id
-        home.visibility = .everyone
         // Mirrors what the app stamps on save so the read rule's allowedViewerIDs
-        // clause is satisfied for the host as well as the public-visibility one.
+        // clause is satisfied for the host.
         home.allowedViewerIDs = [hostUserID]
         return home
     }

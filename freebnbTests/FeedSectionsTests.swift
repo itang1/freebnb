@@ -27,45 +27,21 @@ struct FeedReasonTests {
         #expect(FeedSections.reason(for: home, myID: me, friendIDs: friends) == .friend)
     }
 
-    /// The friend edge outranks the ACL: a direct friend whose listing is set to
-    /// friends-of-friends is still, plainly, a friend.
-    @Test func directFriendOutranksFriendOfFriendACL() {
-        let home = HomeFixture.make(
-            id: "a",
-            hostUserID: "friend",
-            visibility: .friendsOfFriends,
-            allowedViewerIDs: [me]
-        )
-        #expect(FeedSections.reason(for: home, myID: me, friendIDs: friends) == .friend)
-    }
+    /// A host who isn't a verified friend gets no chip, even when the ACL still
+    /// names the viewer (a friendship that ended since the listing was written):
+    /// a wrong chip is a false statement about who knows whom.
+    @Test func unverifiableConnectionStaysSilent() {
+        let staleACL = HomeFixture.make(id: "a", hostUserID: "stranger", allowedViewerIDs: [me])
+        #expect(FeedSections.reason(for: staleACL, myID: me, friendIDs: friends) == nil)
 
-    /// The only second-degree connection the client can prove: the server wrote
-    /// the viewer into the listing's ACL.
-    @Test func friendOfFriendRequiresBothTheVisibilityAndTheACL() {
-        let inACL = HomeFixture.make(id: "a", hostUserID: "stranger", visibility: .friendsOfFriends, allowedViewerIDs: [me])
-        #expect(FeedSections.reason(for: inACL, myID: me, friendIDs: friends) == .friendOfFriend)
-
-        let notInACL = HomeFixture.make(id: "b", hostUserID: "stranger", visibility: .friendsOfFriends, allowedViewerIDs: ["someone"])
-        #expect(FeedSections.reason(for: notInACL, myID: me, friendIDs: friends) == nil)
-
-        let noACL = HomeFixture.make(id: "c", hostUserID: "stranger", visibility: .friendsOfFriends)
+        let noACL = HomeFixture.make(id: "b", hostUserID: "stranger")
         #expect(FeedSections.reason(for: noACL, myID: me, friendIDs: friends) == nil)
     }
 
-    /// A public listing carries no second-degree marker even when its host really
-    /// is a friend of a friend, so it must not claim one.
-    @Test func publicListingFromAStrangerGetsNoChip() {
-        let everyone = HomeFixture.make(id: "a", hostUserID: "stranger", visibility: .everyone, allowedViewerIDs: [me])
-        #expect(FeedSections.reason(for: everyone, myID: me, friendIDs: friends) == nil)
-
-        let legacy = HomeFixture.make(id: "b", hostUserID: "stranger")
-        #expect(FeedSections.reason(for: legacy, myID: me, friendIDs: friends) == nil)
-    }
-
-    /// An anonymous browser has no network, so nothing about the graph is true of
+    /// A signed-out browser has no network, so nothing about the graph is true of
     /// them — including, importantly, that an ACL entry for "" means anything.
     @Test func signedOutViewerNeverEarnsAChip() {
-        let ownedByEmptyString = HomeFixture.make(id: "a", hostUserID: "", visibility: .friendsOfFriends, allowedViewerIDs: [""])
+        let ownedByEmptyString = HomeFixture.make(id: "a", hostUserID: "", allowedViewerIDs: [""])
         #expect(FeedSections.reason(for: ownedByEmptyString, myID: "", friendIDs: []) == nil)
     }
 }
@@ -83,19 +59,18 @@ struct NetworkRailTests {
         FeedSections.newFromYourNetwork(homes, myID: me, friendIDs: friends, now: now, limit: limit).map(\.id)
     }
 
-    @Test func includesRecentFriendAndFriendOfFriendListings() {
+    @Test func includesRecentFriendListings() {
         let homes = [
             HomeFixture.make(id: "friendNew", hostUserID: "friend", createdAt: daysAgo(1)),
-            HomeFixture.make(id: "fofNew", hostUserID: "stranger", visibility: .friendsOfFriends,
-                     allowedViewerIDs: [me], createdAt: daysAgo(2))
+            HomeFixture.make(id: "friendNewer", hostUserID: "friend", createdAt: daysAgo(0.5))
         ]
-        #expect(rail(homes) == ["friendNew", "fofNew"])
+        #expect(rail(homes) == ["friendNewer", "friendNew"])
     }
 
     @Test func excludesYourOwnListingsStrangersAndStaleOnes() {
         let homes = [
             HomeFixture.make(id: "mine", hostUserID: me, createdAt: daysAgo(1)),
-            HomeFixture.make(id: "stranger", hostUserID: "stranger", visibility: .everyone, createdAt: daysAgo(1)),
+            HomeFixture.make(id: "stranger", hostUserID: "stranger", allowedViewerIDs: [me], createdAt: daysAgo(1)),
             HomeFixture.make(id: "stale", hostUserID: "friend", createdAt: daysAgo(15))
         ]
         #expect(rail(homes).isEmpty)

@@ -69,7 +69,6 @@ final class CreateListingViewModel {
     var hostContactInfo: String
     var hostMotivation: HostMotivation
     var cancellationPolicy: CancellationPolicy
-    var visibility: ListingVisibility
 
     // Save state
     var isSaving = false
@@ -126,7 +125,6 @@ final class CreateListingViewModel {
         hostContactInfo = source?.hostContactInfo ?? ""
         hostMotivation = source?.hostMotivation ?? .open
         cancellationPolicy = source?.cancellationPolicy ?? .flexible
-        visibility = source?.visibility ?? .everyone
     }
 
     /// Pulls the street address of the listing seeding the form out of its private
@@ -184,7 +182,6 @@ final class CreateListingViewModel {
             draft.hostContactInfo = hostContactInfo
             draft.hostMotivation = hostMotivation
             draft.cancellationPolicy = cancellationPolicy
-            draft.visibility = visibility
             return draft
         }
         set {
@@ -225,7 +222,6 @@ final class CreateListingViewModel {
             hostContactInfo = newValue.hostContactInfo
             hostMotivation = newValue.hostMotivation
             cancellationPolicy = newValue.cancellationPolicy
-            visibility = newValue.visibility
         }
     }
 
@@ -283,7 +279,6 @@ final class CreateListingViewModel {
 
         let trimmedStreet = street.trimmingCharacters(in: .whitespaces)
         var home = makeHome(hostUserID: hostUserID, hostName: hostName)
-        home.visibility = visibility
         // Recomputed on every save rather than carried over from `editing`, so an
         // edit picks up friends added since the listing was created. The
         // `onFriendEdgeWritten` function keeps it current between saves.
@@ -314,7 +309,6 @@ final class CreateListingViewModel {
                 home.address = existing.address
                 home.contactPreference = existing.contactPreference
                 home.hostContactInfo = existing.hostContactInfo
-                home.visibility = existing.visibility
                 home.allowedViewerIDs = existing.allowedViewerIDs
             }
         }

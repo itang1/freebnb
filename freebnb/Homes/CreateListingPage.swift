@@ -286,14 +286,19 @@ struct CreateListingPage: View {
         )
     }
 
+    // Not a setting: every listing is friends-only by design. Stated here so a
+    // host never has to wonder who is about to see their home.
     private var visibilitySection: some View {
-        ChoiceSection(
-            title: "Who can see this listing",
-            options: ListingVisibility.allCases,
-            selection: $vm.visibility,
-            name: { $0.displayName },
-            detail: { $0.description }
-        )
+        Section("Who can see this listing") {
+            Label {
+                Text("Only your FreeBNB friends can see and request to book this listing. It is never public.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } icon: {
+                Image(systemName: "lock.fill")
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 
     private var descriptionSection: some View {

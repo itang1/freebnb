@@ -252,19 +252,15 @@ final class HomeStore {
         )
     }
 
-    /// Filters out blocked hosts and restricted listings you can't see, then
-    /// orders friends' listings first, then your own, then everyone else.
+    /// Filters out blocked hosts and listings you can't see, then orders
+    /// friends' listings first, then your own, then everyone else.
     ///
-    /// Firestore rules and the partitioned feed queries are what actually keep a
-    /// restricted listing out of a stranger's hands; the visibility check here
-    /// is a second line of defence for a stale `allowedViewerIDs` (a friend
-    /// removed since the listing was last written). Block filtering, by contrast,
-    /// is client-only by design — the block list is private to the blocker.
-    ///
-    /// A `friendsOfFriends` listing can only be judged by the ACL: the viewer's
-    /// second-degree connections are not knowable client-side, since a user may
-    /// read only their own friend edges. `friendsOnly` gets the stricter check
-    /// because there the client *can* verify the claim.
+    /// Every listing is friends-only. Firestore rules and the ACL-gated feed
+    /// query are what actually keep a listing out of a stranger's hands; the
+    /// friendship check here is a second line of defence for a stale
+    /// `allowedViewerIDs` (a friend removed since the listing was last written).
+    /// Block filtering, by contrast, is client-only by design — the block list
+    /// is private to the blocker.
     ///
     /// Within a rank bucket, newest listings come first (L3). Swift's sort is not
     /// stable, so the comparator falls through to the listing id: without a total
@@ -279,17 +275,7 @@ final class HomeStore {
             .filter { home in
                 guard !blockedIDs.contains(home.hostUserID) else { return false }
                 guard home.hostUserID != myID else { return true }
-                // A listing with no stored visibility predates the field and reads
-                // as public, the same default the rules apply.
-                switch home.visibility ?? .everyone {
-                case .friendsOnly:
-                    return friendIDs.contains(home.hostUserID)
-                case .friendsOfFriends:
-                    return friendIDs.contains(home.hostUserID)
-                        || (home.allowedViewerIDs ?? []).contains(myID)
-                case .everyone:
-                    return true
-                }
+                return friendIDs.contains(home.hostUserID)
             }
             .sorted { a, b in
                 let aRank = feedRank(a, myID: myID, friendIDs: friendIDs)

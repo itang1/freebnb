@@ -40,7 +40,6 @@ enum HomeFixture {
         city: String = "Town",
         coordinate: Coordinate? = nil,
         coHosts: [String]? = nil,
-        visibility: ListingVisibility? = nil,
         allowedViewerIDs: [String]? = nil,
         deletedAt: Date? = nil,
         createdAt: Date? = nil
@@ -59,7 +58,6 @@ enum HomeFixture {
         )
         home.id = id
         home.coHostUserIDs = coHosts
-        home.visibility = visibility
         home.allowedViewerIDs = allowedViewerIDs
         home.deletedAt = deletedAt
         home.createdAt = createdAt

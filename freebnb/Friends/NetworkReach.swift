@@ -23,20 +23,12 @@ struct NetworkReach: Equatable {
     /// Friends who host at least one listing you can see, most homes first.
     let hosts: [HostReach]
 
-    /// Listings that reached you only as a friend-of-a-friend. Counted but never
-    /// attributed to a name: a user may read only their own friend edges, so which
-    /// friend introduced them is unknowable client-side (the same limit
-    /// `FeedSections.reason` works within). Guessing a name here would be a lie
-    /// about the graph, which is exactly what this view exists to tell the truth
-    /// about.
-    let extendedCount: Int
-
     /// Every home the network puts within reach.
-    var totalHomes: Int { hosts.reduce(0) { $0 + $1.homeCount } + extendedCount }
+    var totalHomes: Int { hosts.reduce(0) { $0 + $1.homeCount } }
 
-    var isEmpty: Bool { hosts.isEmpty && extendedCount == 0 }
+    var isEmpty: Bool { hosts.isEmpty }
 
-    static let empty = NetworkReach(hosts: [], extendedCount: 0)
+    static let empty = NetworkReach(hosts: [])
 
     /// Tallies `homes` by the connection that put each one in front of `myID`.
     ///
@@ -53,13 +45,10 @@ struct NetworkReach: Equatable {
         guard !myID.isEmpty else { return .empty }
 
         var countsByHost: [String: Int] = [:]
-        var extended = 0
         for home in homes {
             switch FeedSections.reason(for: home, myID: myID, friendIDs: friendIDs) {
             case .friend:
                 countsByHost[home.hostUserID, default: 0] += 1
-            case .friendOfFriend:
-                extended += 1
             case .yourListing, .none:
                 continue
             }
@@ -81,6 +70,6 @@ struct NetworkReach: Equatable {
                 return a.friendID < b.friendID
             }
 
-        return NetworkReach(hosts: hosts, extendedCount: extended)
+        return NetworkReach(hosts: hosts)
     }
 }

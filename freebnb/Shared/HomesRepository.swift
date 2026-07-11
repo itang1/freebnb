@@ -79,51 +79,6 @@ struct ListingCursor: Sendable {
     let id: String
 }
 
-/// De-duplicates and orders the results of the visibility-partitioned queries,
-/// truncating to the caller's page size. Because both underlying queries return
-/// results already in `recencyOrdered` order, taking the first `limit` of the
-/// merged set yields exactly the globally-first `limit` visible listings.
-func mergeVisibleListings(_ homes: [Home], limit: Int) -> [Home] {
-    var seen = Set<String>()
-    var merged: [Home] = []
-    for home in recencyOrdered(homes) where seen.insert(home.id).inserted {
-        merged.append(home)
-        if merged.count == limit { break }
-    }
-    return merged
-}
-
-/// Combines the two visibility-partitioned snapshot listeners into a single
-/// page callback. Firestore delivers snapshot callbacks on the main queue by
-/// default, so the mutable state below is accessed serially without locking.
-private final class VisibleListingsMerger: @unchecked Sendable {
-    private let limit: Int
-    private let handler: @Sendable (Result<[Home], Error>) -> Void
-    private var everyoneHomes: [Home]?
-    private var allowedHomes: [Home]?
-
-    /// `awaitsAllowed: false` when no friends-only query is issued for this
-    /// viewer, so `emit()` doesn't wait forever on a half that never arrives.
-    init(
-        limit: Int,
-        awaitsAllowed: Bool,
-        handler: @escaping @Sendable (Result<[Home], Error>) -> Void
-    ) {
-        self.limit = limit
-        self.handler = handler
-        self.allowedHomes = awaitsAllowed ? nil : []
-    }
-
-    func setEveryone(_ homes: [Home]) { everyoneHomes = homes; emit() }
-    func setAllowed(_ homes: [Home]) { allowedHomes = homes; emit() }
-    func fail(_ error: Error) { handler(.failure(error)) }
-
-    private func emit() {
-        guard let everyoneHomes, let allowedHomes else { return }
-        handler(.success(mergeVisibleListings(everyoneHomes + allowedHomes, limit: limit)))
-    }
-}
-
 /// Joins the hosted and co-hosted halves of the managed-listings query into one
 /// de-duplicated list (feature 14). Firestore delivers snapshot callbacks on the
 /// main queue by default, so the mutable state is accessed serially.
@@ -174,22 +129,13 @@ struct FirestoreHomesRepository: HomesRepository {
     }
 
     // Firestore rejects an entire query if any matched document fails the read
-    // rule, so the feed cannot be one unfiltered `homes` query once friends-only
-    // listings are unreadable. Instead it is split along the two clauses the read
-    // rule allows: publicly-visible listings, and listings whose denormalized
-    // `allowedViewerIDs` names this viewer. Both are provably safe to the rules
-    // engine. Their union (minus the overlap on the viewer's own public listings)
-    // is exactly what the old client-side filter produced.
+    // rule, so the feed cannot be an unfiltered `homes` query. Listings are
+    // friends-only, and `allowedViewerIDs arrayContains me` is the one clause of
+    // the read rule that is provably safe to the rules engine — it also covers
+    // the viewer's own listings, since the ACL always names the host.
     // Recency order (createdAt DESC), with documentID DESC as a same-direction
     // tiebreak so a single composite index (its implicit __name__ DESC) serves
     // the whole order and cursor pagination has a total order to page against.
-    private func everyoneQuery() -> Query {
-        db.collection(FirestorePaths.homes)
-            .whereField("visibility", isEqualTo: ListingVisibility.everyone.rawValue)
-            .order(by: "createdAt", descending: true)
-            .order(by: FieldPath.documentID(), descending: true)
-    }
-
     private func allowedQuery(viewerID: String) -> Query {
         db.collection(FirestorePaths.homes)
             .whereField("allowedViewerIDs", arrayContains: viewerID)
@@ -202,38 +148,24 @@ struct FirestoreHomesRepository: HomesRepository {
         limit: Int,
         handler: @escaping @Sendable (Result<[Home], Error>) -> Void
     ) -> RepositoryListener {
-        // An anonymous guest is in nobody's viewer list; skip the friends-only
-        // query rather than issuing one that can only ever return nothing.
-        let hasViewer = !viewerID.isEmpty
-        let merger = VisibleListingsMerger(limit: limit, awaitsAllowed: hasViewer, handler: handler)
+        // A signed-out viewer is in nobody's ACL; report the empty feed rather
+        // than issuing a query that can only ever return nothing.
+        guard !viewerID.isEmpty else {
+            handler(.success([]))
+            return NoopListener()
+        }
 
-        let everyoneReg = everyoneQuery()
-            .limit(to: limit)
-            .addSnapshotListener(includeMetadataChanges: true) { snapshot, error in
-                if let error { merger.fail(error); return }
-                guard let snapshot else { return }
-                // Skip an empty cached snapshot — wait for the server confirmation
-                // so the UI doesn't flash "no listings" before real data arrives.
-                // Only this half is gated: the friends-only half is legitimately
-                // empty for a viewer with no friends, and waiting on a server
-                // snapshot for it would hang the feed offline.
-                if snapshot.metadata.isFromCache && snapshot.isEmpty { return }
-                merger.setEveryone(decode(snapshot.documents, context: "feed"))
-            }
-
-        guard hasViewer else { return FirestoreListenerBox(everyoneReg) }
-
+        // No cached-empty-snapshot gating here: an empty feed is legitimate for
+        // a viewer with no friends, and waiting on a server snapshot for it
+        // would hang the feed offline.
         let allowedReg = allowedQuery(viewerID: viewerID)
             .limit(to: limit)
             .addSnapshotListener { snapshot, error in
-                if let error { merger.fail(error); return }
-                merger.setAllowed(decode(snapshot?.documents ?? [], context: "feed-allowed"))
+                if let error { handler(.failure(error)); return }
+                handler(.success(decode(snapshot?.documents ?? [], context: "feed")))
             }
 
-        return CompositeListener(listeners: [
-            FirestoreListenerBox(everyoneReg),
-            FirestoreListenerBox(allowedReg)
-        ])
+        return FirestoreListenerBox(allowedReg)
     }
 
     /// Firestore has no OR across two fields, so this is two queries merged
@@ -271,24 +203,15 @@ struct FirestoreHomesRepository: HomesRepository {
     }
 
     func fetchVisibleListings(viewerID: String, after cursor: ListingCursor?, limit: Int) async throws -> [Home] {
-        try await withRetry {
-            @Sendable func page(_ query: Query) async throws -> [Home] {
-                var query = query.limit(to: limit)
-                // Cursor values must line up with the order-by fields:
-                // createdAt (as a Timestamp) then the document id.
-                if let cursor {
-                    query = query.start(after: [Timestamp(date: cursor.createdAt), cursor.id])
-                }
-                return decode(try await query.getDocuments().documents, context: "page")
+        guard !viewerID.isEmpty else { return [] }
+        return try await withRetry {
+            var query = allowedQuery(viewerID: viewerID).limit(to: limit)
+            // Cursor values must line up with the order-by fields:
+            // createdAt (as a Timestamp) then the document id.
+            if let cursor {
+                query = query.start(after: [Timestamp(date: cursor.createdAt), cursor.id])
             }
-            // Both suffixes are already recency-ordered, so the first `limit`
-            // of their merge is the true next page of the union.
-            async let everyone = page(everyoneQuery())
-            guard !viewerID.isEmpty else {
-                return mergeVisibleListings(try await everyone, limit: limit)
-            }
-            async let allowed = page(allowedQuery(viewerID: viewerID))
-            return mergeVisibleListings(try await everyone + allowed, limit: limit)
+            return decode(try await query.getDocuments().documents, context: "page")
         }
     }
 

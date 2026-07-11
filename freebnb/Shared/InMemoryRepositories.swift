@@ -14,17 +14,13 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     private var manuals: [String: HouseManual] = [:]
     init(homes: [Home] = []) { self.homes = homes }
 
-    /// Mirrors what Firestore's rules would return for `viewerID`: publicly
-    /// visible listings, plus any listing naming the viewer in `allowedViewerIDs`.
-    /// A listing that is neither is simply not readable, exactly as server-side.
-    /// Both restricted tiers are gated by the same ACL, so this needs no notion
-    /// of how far away in the friend graph the viewer is.
+    /// Mirrors what Firestore's rules would return for `viewerID`: only listings
+    /// naming the viewer in `allowedViewerIDs`. Every listing is friends-only,
+    /// so a listing not naming the viewer is simply not readable, exactly as
+    /// server-side.
     private func visible(to viewerID: String) -> [Home] {
         homes.filter { home in
-            if home.visibility?.isRestricted == true {
-                return !viewerID.isEmpty && (home.allowedViewerIDs ?? []).contains(viewerID)
-            }
-            return true
+            !viewerID.isEmpty && (home.allowedViewerIDs ?? []).contains(viewerID)
         }
     }
 

@@ -4,8 +4,7 @@
 //
 //  A radio-style form section: each option shows a checkmark, its name, and a
 //  caption explaining the tradeoff. The create-listing form uses it for host
-//  motivation, cancellation policy, and visibility, which were three copies of
-//  the same layout.
+//  motivation and cancellation policy, which were copies of the same layout.
 //
 
 import SwiftUI

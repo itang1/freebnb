@@ -179,31 +179,32 @@ struct HomesRepositoryTests {
         #expect(box.value.allSatisfy { $0.hostName == "New" })
     }
 
-    // The repository — not the view layer — is now the visibility boundary, so
-    // these assert on what a viewer can even fetch. They mirror the two clauses
-    // of the `homes` read rule in firestore.rules; if one drifts, so must the other.
+    // The repository — not the view layer — is the visibility boundary, so these
+    // assert on what a viewer can even fetch. Listings are friends-only: they
+    // mirror the ACL clause of the `homes` read rule in firestore.rules; if one
+    // drifts, so must the other.
 
     // createdAt = t(id) so the recency order (newest first) is a, b, c, d, e —
     // i.e. the visibility and paging assertions below read in id order.
     private static let friendsOnlyFeed = [
-        HomeFixture.make(id: "a", hostUserID: "stranger", visibility: .friendsOnly, allowedViewerIDs: ["stranger"], createdAt: t("a")),
-        HomeFixture.make(id: "b", hostUserID: "friend", visibility: .friendsOnly, allowedViewerIDs: ["friend", "me"], createdAt: t("b")),
-        HomeFixture.make(id: "c", hostUserID: "me", visibility: .friendsOnly, allowedViewerIDs: ["me"], createdAt: t("c")),
-        HomeFixture.make(id: "d", hostUserID: "stranger", visibility: .everyone, allowedViewerIDs: ["stranger"], createdAt: t("d")),
-        HomeFixture.make(id: "e", hostUserID: "stranger", visibility: nil, allowedViewerIDs: nil, createdAt: t("e"))
+        HomeFixture.make(id: "a", hostUserID: "stranger", allowedViewerIDs: ["stranger"], createdAt: t("a")),
+        HomeFixture.make(id: "b", hostUserID: "friend", allowedViewerIDs: ["friend", "me"], createdAt: t("b")),
+        HomeFixture.make(id: "c", hostUserID: "me", allowedViewerIDs: ["me"], createdAt: t("c")),
+        HomeFixture.make(id: "d", hostUserID: "stranger", allowedViewerIDs: ["stranger", "me"], createdAt: t("d")),
+        HomeFixture.make(id: "e", hostUserID: "stranger", allowedViewerIDs: nil, createdAt: t("e"))
     ]
 
-    @Test func feedHidesFriendsOnlyListingsFromNonViewers() async throws {
+    @Test func feedShowsOnlyListingsNamingTheViewer() async throws {
         let repo = InMemoryHomesRepository(homes: Self.friendsOnlyFeed)
         let visible = try await repo.fetchVisibleListings(viewerID: "me", after: nil, limit: 10)
-        // "a" is friends-only and doesn't name "me"; "e" is legacy, so it reads as everyone.
-        #expect(visible.map(\.id) == ["b", "c", "d", "e"])
+        // "a" doesn't name "me"; "e" has no ACL at all, which reads as host-only.
+        #expect(visible.map(\.id) == ["b", "c", "d"])
     }
 
-    @Test func anonymousViewerSeesOnlyPublicListings() async throws {
+    @Test func signedOutViewerSeesNothing() async throws {
         let repo = InMemoryHomesRepository(homes: Self.friendsOnlyFeed)
         let visible = try await repo.fetchVisibleListings(viewerID: "", after: nil, limit: 10)
-        #expect(visible.map(\.id) == ["d", "e"])
+        #expect(visible.isEmpty)
     }
 
     @Test func pagingSkipsListingsTheViewerCannotSee() async throws {
@@ -211,39 +212,6 @@ struct HomesRepositoryTests {
         let cursor = ListingCursor(createdAt: t("b"), id: "b")
         let page = try await repo.fetchVisibleListings(viewerID: "me", after: cursor, limit: 2)
         #expect(page.map(\.id) == ["c", "d"])
-    }
-}
-
-// MARK: - Feed page merging
-
-struct MergeVisibleListingsTests {
-    /// The two partitioned queries overlap on nothing in principle, but a listing
-    /// that is both `everyone` and names the viewer arrives twice. Recency order
-    /// (newest first) makes the merge deterministic and the de-duplication stable.
-    @Test func mergeDeduplicatesAndOrdersByRecency() {
-        let overlap = HomeFixture.make(id: "b", hostUserID: "friend", visibility: .everyone, allowedViewerIDs: ["friend", "me"], createdAt: t("b"))
-        let merged = mergeVisibleListings([
-            HomeFixture.make(id: "c", hostUserID: "x", visibility: .everyone, createdAt: t("c")),
-            overlap,
-            HomeFixture.make(id: "a", hostUserID: "y", visibility: .everyone, createdAt: t("a")),
-            overlap
-        ], limit: 10)
-        // t("a") is newest, so a sorts first, then b, then c.
-        #expect(merged.map(\.id) == ["a", "b", "c"])
-    }
-
-    /// Each half is fetched with the caller's page size, so the merge holds up to
-    /// twice that. Truncating after the sort is what makes the result the true
-    /// globally-first page rather than the first page of one partition.
-    @Test func mergeTruncatesToLimitAfterOrdering() {
-        let merged = mergeVisibleListings([
-            HomeFixture.make(id: "d", hostUserID: "x", createdAt: t("d")),
-            HomeFixture.make(id: "a", hostUserID: "x", createdAt: t("a")),
-            HomeFixture.make(id: "c", hostUserID: "x", createdAt: t("c")),
-            HomeFixture.make(id: "b", hostUserID: "x", createdAt: t("b"))
-        ], limit: 2)
-        // Newest two: a then b.
-        #expect(merged.map(\.id) == ["a", "b"])
     }
 }
 
