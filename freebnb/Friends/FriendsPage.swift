@@ -9,6 +9,7 @@ struct FriendsPage: View {
     @Environment(FriendStore.self) private var friendStore
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(AuthManager.self) private var authManager
+    @Environment(HomeStore.self) private var homeStore
 
     @State private var showAddFriend = false
     @State private var showInvite = false
@@ -44,6 +45,11 @@ struct FriendsPage: View {
                         }
                     }
                 }
+            }
+
+            let reach = networkReach
+            if !reach.isEmpty {
+                NetworkReachSection(reach: reach)
             }
 
             if !friendStore.friendEdges.isEmpty {
@@ -119,6 +125,17 @@ struct FriendsPage: View {
         .sheet(isPresented: $showInvite) {
             InviteSheet()
         }
+    }
+
+    /// Homes your friend graph puts within reach, recomputed from the live feed
+    /// and friend list. Pure and cheap, so deriving it in the body is fine.
+    private var networkReach: NetworkReach {
+        NetworkReach.compute(
+            homes: homeStore.visibleListings,
+            myID: authManager.userID,
+            friendIDs: Set(friendStore.friendIDs),
+            displayName: { userProfileStore.displayName(for: $0) }
+        )
     }
 
     // MARK: - Actions
@@ -496,7 +513,8 @@ struct InviteSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            ScrollView {
+                VStack(spacing: 24) {
                 Image(systemName: "house.fill")
                     .font(.system(size: 48))
                     .foregroundColor(Color.accent)
@@ -521,6 +539,24 @@ struct InviteSheet: View {
                         .background(Color.accent, in: Capsule())
                 }
 
+                if let qr = QRCode.image(for: inviteURL.absoluteString) {
+                    VStack(spacing: 8) {
+                        Image(uiImage: qr)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 160, height: 160)
+                            .padding(12)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                            .accessibilityLabel("QR code that adds you as a friend")
+                        Text("Or have a friend scan this with their Camera app.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Your invite link")
                         .font(.caption)
@@ -532,8 +568,9 @@ struct InviteSheet: View {
                         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                 }
                 .padding(.horizontal, 24)
-
-                Spacer()
+                }
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity)
             }
             .navigationTitle("Invite")
             .navigationBarTitleDisplayMode(.inline)
@@ -552,5 +589,6 @@ struct InviteSheet: View {
             .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
             .environment(UserProfileStore())
             .environment(AuthManager())
+            .environment(HomeStore())
     }
 }
