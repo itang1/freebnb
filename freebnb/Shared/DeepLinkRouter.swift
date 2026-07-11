@@ -15,6 +15,11 @@ final class DeepLinkRouter {
     /// only navigates — it never mutates data — so acting on it directly is safe.
     var pendingStayEvent: Bool = false
 
+    /// A saved listing the user opened from Spotlight search (feature 40).
+    /// Consumed by ContentView, which switches to the Listings tab and pushes the
+    /// listing if it's loaded. Navigation-only, so acting on it directly is safe.
+    var pendingListingID: String?
+
     /// An incoming `freebnb://invite` deep link awaiting the user's explicit
     /// confirmation. Set from the URL handler; consumed by ContentView once the
     /// user is signed in and the inviter has been validated. A deep link must

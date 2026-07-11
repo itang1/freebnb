@@ -36,6 +36,21 @@ struct ContentView: View {
         )
     }
 
+    // The loaded listings the user has saved — the set mirrored into Spotlight.
+    // A saved id that isn't in the current feed can't be described, so it's
+    // skipped; it re-indexes the next time it loads.
+    private var savedHomesForSpotlight: [Home] {
+        let saved = Set(userProfileStore.currentProfile?.savedListingIDs ?? [])
+        guard !saved.isEmpty else { return [] }
+        return homeStore.listings.filter { saved.contains($0.id) }
+    }
+
+    // Cheap change key for the Spotlight sync: the saved-and-loaded listing ids.
+    // Re-indexes when the saved set changes or a saved listing loads in.
+    private var spotlightIndexKey: [String] {
+        savedHomesForSpotlight.map(\.id)
+    }
+
     // Validates an incoming invite deep link and, if the inviter is a real user,
     // stages a confirmation prompt. Guests and self-invites are ignored, and an
     // unknown inviter ID is dropped silently rather than prompting.
@@ -151,6 +166,24 @@ struct ContentView: View {
                     guard pending else { return }
                     selectedTab = 1
                     router.pendingStayEvent = false
+                }
+                // Keep the Spotlight index in step with the saved set (feature 40).
+                // Fires on appear and whenever a listing is saved/unsaved or the
+                // loaded feed changes what we can describe.
+                .onChange(of: spotlightIndexKey, initial: true) { _, _ in
+                    #if canImport(CoreSpotlight)
+                    SpotlightIndexer.sync(savedHomes: savedHomesForSpotlight)
+                    #endif
+                }
+                // A saved listing opened from Spotlight: switch to Listings and
+                // push it if it's currently loaded (drop silently otherwise).
+                .onChange(of: router.pendingListingID) { _, listingID in
+                    guard let listingID else { return }
+                    selectedTab = 0
+                    if let home = homeStore.listings.first(where: { $0.id == listingID }) {
+                        listingsPath.append(home)
+                    }
+                    router.pendingListingID = nil
                 }
                 // Runs on appear and whenever a new invite link arrives, so an
                 // invite that was opened before sign-in is still handled once the

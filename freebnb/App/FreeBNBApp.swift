@@ -10,6 +10,10 @@ import FirebaseFunctions
 import SwiftUI
 import UserNotifications
 
+#if canImport(CoreSpotlight)
+import CoreSpotlight
+#endif
+
 #if canImport(FirebaseMessaging)
 import FirebaseMessaging
 #endif
@@ -98,6 +102,15 @@ struct FreeBNBApp: App {
                     requestPushPermission()
                 }
                 .onOpenURL { url in handleIncomingURL(url) }
+#if canImport(CoreSpotlight)
+                // A saved listing tapped in Spotlight hands back its identifier;
+                // route it into the app, which pushes the listing (feature 40).
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    if let listingID = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                        router.pendingListingID = listingID
+                    }
+                }
+#endif
         }
     }
 
