@@ -14,38 +14,9 @@ import Foundation
 import Testing
 @testable import freebnb
 
-private func makeAmenities() -> Amenities {
-    Amenities(
-        hasAC: false, hasHeating: false, hasKitchen: false, hasFridgeSpace: false,
-        hasMicrowave: false, hasTV: false, hasWifi: false,
-        hasPrivateGuestBathroom: false, hostHasPets: false, parkingDetails: "",
-        hasInUnitLaundry: false, hasCoinLaundryNearby: false,
-        providesPillows: false, providesBlankets: false, providesTowels: false,
-        providesToiletries: false, foodProvision: .none
-    )
-}
-
-private func makeHome(id: String = "home-1", hostUserID: String = "host", coHosts: [String]? = nil) -> Home {
-    var home = Home(
-        hostUserID: hostUserID,
-        hostName: "Host",
-        address: Address(city: "Town", state: "CA", zip: "00000"),
-        description: nil,
-        contactPreference: .inApp,
-        hostContactInfo: nil,
-        hostMotivation: .open,
-        sleeping: Sleeping(numGuestRooms: 1, arrangements: ["bed": 1]),
-        guestPolicy: GuestPolicy(maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false),
-        amenities: makeAmenities()
-    )
-    home.id = id
-    home.coHostUserIDs = coHosts
-    return home
-}
-
 struct CoHostModelTests {
     @Test func hostManagesAndHostsTheirListing() {
-        let home = makeHome(hostUserID: "host")
+        let home = HomeFixture.make(hostUserID: "host")
         #expect(home.isHostedBy("host"))
         #expect(home.isManagedBy("host"))
     }
@@ -53,13 +24,13 @@ struct CoHostModelTests {
     /// The load-bearing distinction: a co-host manages the listing but does not
     /// host it. Everything host-only keys off `isHostedBy`.
     @Test func coHostManagesButDoesNotHost() {
-        let home = makeHome(hostUserID: "host", coHosts: ["cohost"])
+        let home = HomeFixture.make(hostUserID: "host", coHosts: ["cohost"])
         #expect(home.isManagedBy("cohost"))
         #expect(!home.isHostedBy("cohost"))
     }
 
     @Test func strangerNeitherHostsNorManages() {
-        let home = makeHome(hostUserID: "host", coHosts: ["cohost"])
+        let home = HomeFixture.make(hostUserID: "host", coHosts: ["cohost"])
         #expect(!home.isManagedBy("stranger"))
         #expect(!home.isHostedBy("stranger"))
     }
@@ -67,14 +38,14 @@ struct CoHostModelTests {
     /// An empty user id is a signed-out viewer, who manages nothing — even a
     /// listing that somehow carried "" in its roster.
     @Test func emptyUserIDManagesNothing() {
-        let home = makeHome(hostUserID: "", coHosts: [""])
+        let home = HomeFixture.make(hostUserID: "", coHosts: [""])
         #expect(!home.isManagedBy(""))
         #expect(!home.isHostedBy(""))
     }
 
     @Test func coHostsViewIsEmptyWhenAbsent() {
-        #expect(makeHome().coHosts.isEmpty)
-        #expect(makeHome(coHosts: ["a", "b"]).coHosts == ["a", "b"])
+        #expect(HomeFixture.make().coHosts.isEmpty)
+        #expect(HomeFixture.make(coHosts: ["a", "b"]).coHosts == ["a", "b"])
     }
 
     /// A listing written before feature 14 has no `coHostUserIDs`; it must still
@@ -102,7 +73,7 @@ struct CoHostModelTests {
     }
 
     @Test func rosterSurvivesAnEncodeDecodeRoundTrip() throws {
-        var home = makeHome(coHosts: ["a", "b"])
+        var home = HomeFixture.make(coHosts: ["a", "b"])
         home.id = "home-x"
         let restored = try JSONDecoder().decode(Home.self, from: JSONEncoder().encode(home))
         #expect(restored.coHostUserIDs == ["a", "b"])
@@ -122,14 +93,14 @@ struct CoHostStoreTests {
     }
 
     @Test func addCoHostAppendsOneToTheRoster() async throws {
-        let home = makeHome()
+        let home = HomeFixture.make()
         let (store, repo) = store([home])
         try await store.addCoHost("friend", to: home, hostUserID: "host")
         #expect(try await fetch(repo, id: home.id).coHosts == ["friend"])
     }
 
     @Test func addingAnExistingCoHostIsANoOp() async throws {
-        let home = makeHome(coHosts: ["friend"])
+        let home = HomeFixture.make(coHosts: ["friend"])
         let (store, repo) = store([home])
         try await store.addCoHost("friend", to: home, hostUserID: "host")
         #expect(try await fetch(repo, id: home.id).coHosts == ["friend"])
@@ -138,7 +109,7 @@ struct CoHostStoreTests {
     /// A non-host must not even attempt a roster write; the rules would reject it,
     /// but the app should not offer it.
     @Test func onlyTheHostMayAddCoHosts() async throws {
-        let home = makeHome(coHosts: ["cohost"])
+        let home = HomeFixture.make(coHosts: ["cohost"])
         let (store, _) = store([home])
         await #expect(throws: CoHostError.self) {
             try await store.addCoHost("stranger", to: home, hostUserID: "cohost")
@@ -146,7 +117,7 @@ struct CoHostStoreTests {
     }
 
     @Test func theHostCannotCoHostTheirOwnListing() async throws {
-        let home = makeHome()
+        let home = HomeFixture.make()
         let (store, _) = store([home])
         await #expect(throws: CoHostError.self) {
             try await store.addCoHost("host", to: home, hostUserID: "host")
@@ -155,7 +126,7 @@ struct CoHostStoreTests {
 
     @Test func theRosterCannotExceedTheCap() async throws {
         let full = Array(0..<Home.maxCoHosts).map { "c\($0)" }
-        let home = makeHome(coHosts: full)
+        let home = HomeFixture.make(coHosts: full)
         let (store, _) = store([home])
         await #expect(throws: CoHostError.self) {
             try await store.addCoHost("oneMore", to: home, hostUserID: "host")
@@ -163,14 +134,14 @@ struct CoHostStoreTests {
     }
 
     @Test func removeCoHostDropsThemFromTheRoster() async throws {
-        let home = makeHome(coHosts: ["a", "b"])
+        let home = HomeFixture.make(coHosts: ["a", "b"])
         let (store, repo) = store([home])
         try await store.removeCoHost("a", from: home, hostUserID: "host")
         #expect(try await fetch(repo, id: home.id).coHosts == ["b"])
     }
 
     @Test func onlyTheHostMayRemoveCoHosts() async throws {
-        let home = makeHome(coHosts: ["a", "b"])
+        let home = HomeFixture.make(coHosts: ["a", "b"])
         let (store, _) = store([home])
         await #expect(throws: CoHostError.self) {
             try await store.removeCoHost("a", from: home, hostUserID: "a")

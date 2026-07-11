@@ -25,40 +25,13 @@ private final class Box<T>: @unchecked Sendable {
 
 private func day(_ n: Int) -> Date { Date(timeIntervalSince1970: 86_400 * Double(n)) }
 
-private func makeAmenities() -> Amenities {
-    Amenities(
-        hasAC: false, hasHeating: false, hasKitchen: false, hasFridgeSpace: false,
-        hasMicrowave: false, hasTV: false, hasWifi: false,
-        hasPrivateGuestBathroom: false, hostHasPets: false, parkingDetails: "",
-        hasInUnitLaundry: false, hasCoinLaundryNearby: false,
-        providesPillows: false, providesBlankets: false, providesTowels: false,
-        providesToiletries: false, foodProvision: .none
-    )
-}
-
-private func makeHome(id: String = UUID().uuidString, hostUserID: String) -> Home {
-    var home = Home(
-        hostUserID: hostUserID,
-        hostName: "Host",
-        address: Address(city: "Town", state: "CA", zip: "00000"),
-        description: nil,
-        contactPreference: .inApp,
-        hostContactInfo: nil,
-        hostMotivation: .open,
-        sleeping: Sleeping(numGuestRooms: 1, arrangements: ["bed": 1]),
-        guestPolicy: GuestPolicy(maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false),
-        amenities: makeAmenities()
-    )
-    home.id = id
-    return home
-}
 
 @MainActor
 struct HomeStoreTests {
     @Test func saveAddsListingToRepository() async throws {
         let repo = InMemoryHomesRepository()
         let store = HomeStore(repository: repo)
-        let home = makeHome(hostUserID: "host1")
+        let home = HomeFixture.make(hostUserID: "host1")
 
         try await store.save(home)
 
@@ -72,7 +45,7 @@ struct StayRequestStoreTests {
     @Test func sendCreatesPendingRequest() async throws {
         let repo = InMemoryStayRequestsRepository()
         let store = StayRequestStore(repository: repo)
-        let listing = makeHome(id: "L1", hostUserID: "host1")
+        let listing = HomeFixture.make(id: "L1", hostUserID: "host1")
 
         try await store.send(listing: listing, guestUserID: "guest1", checkIn: day(1), checkOut: day(3), guestNote: "hi")
 
@@ -87,7 +60,7 @@ struct StayRequestStoreTests {
     @Test func acceptThenDeclineUpdatesStatus() async throws {
         let repo = InMemoryStayRequestsRepository()
         let store = StayRequestStore(repository: repo)
-        let listing = makeHome(id: "L1", hostUserID: "host1")
+        let listing = HomeFixture.make(id: "L1", hostUserID: "host1")
         try await store.send(listing: listing, guestUserID: "guest1", checkIn: day(1), checkOut: day(3), guestNote: nil)
 
         let box = Box<[StayRequest]>([])
@@ -114,7 +87,7 @@ struct StayRequestStoreTests {
     @Test func modifyDatesRewritesTheStayInPlace() async throws {
         let repo = InMemoryStayRequestsRepository()
         let store = StayRequestStore(repository: repo)
-        let listing = makeHome(id: "L1", hostUserID: "host1")
+        let listing = HomeFixture.make(id: "L1", hostUserID: "host1")
         try await store.send(listing: listing, guestUserID: "guest1", checkIn: day(1), checkOut: day(3), guestNote: nil)
 
         let box = Box<[StayRequest]>([])

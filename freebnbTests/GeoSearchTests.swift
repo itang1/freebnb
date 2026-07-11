@@ -13,35 +13,6 @@ import Foundation
 import Testing
 @testable import freebnb
 
-private func makeAmenities() -> Amenities {
-    Amenities(
-        hasAC: false, hasHeating: false, hasKitchen: false, hasFridgeSpace: false,
-        hasMicrowave: false, hasTV: false, hasWifi: false,
-        hasPrivateGuestBathroom: false, hostHasPets: false, parkingDetails: "",
-        hasInUnitLaundry: false, hasCoinLaundryNearby: false,
-        providesPillows: false, providesBlankets: false, providesTowels: false,
-        providesToiletries: false, foodProvision: .none
-    )
-}
-
-private func makeHome(id: String, city: String = "Town", coordinate: Coordinate? = nil) -> Home {
-    var home = Home(
-        hostUserID: "host",
-        hostName: "Host",
-        address: Address(city: city, state: "CA", zip: "00000"),
-        description: nil,
-        contactPreference: .inApp,
-        hostContactInfo: nil,
-        hostMotivation: .open,
-        sleeping: Sleeping(numGuestRooms: 1, arrangements: ["bed": 1]),
-        guestPolicy: GuestPolicy(maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false),
-        amenities: makeAmenities()
-    )
-    home.id = id
-    home.latitude = coordinate?.latitude
-    home.longitude = coordinate?.longitude
-    return home
-}
 
 // Real places, so the asserted distances are checkable against a map.
 private let sanFrancisco = Coordinate(latitude: 37.7749, longitude: -122.4194)
@@ -78,27 +49,27 @@ struct GeoDistanceTests {
 struct GeoScopeTests {
     @Test func noRadiusAdmitsEverythingIncludingTheUnlocatable() {
         let scope = GeoScope(center: sanFrancisco, radiusMiles: nil)
-        #expect(scope.contains(makeHome(id: "far", coordinate: portland)))
-        #expect(scope.contains(makeHome(id: "nowhere")))
+        #expect(scope.contains(HomeFixture.make(id: "far", coordinate: portland)))
+        #expect(scope.contains(HomeFixture.make(id: "nowhere")))
     }
 
     @Test func radiusAdmitsOnlyListingsInsideIt() {
         let scope = GeoScope(center: sanFrancisco, radiusMiles: 25)
-        #expect(scope.contains(makeHome(id: "oakland", coordinate: oakland)))
-        #expect(!scope.contains(makeHome(id: "sanJose", coordinate: sanJose)))
+        #expect(scope.contains(HomeFixture.make(id: "oakland", coordinate: oakland)))
+        #expect(!scope.contains(HomeFixture.make(id: "sanJose", coordinate: sanJose)))
     }
 
     /// A listing with no coordinate cannot prove it is nearby, so a radius filter
     /// must drop it rather than quietly admit the one listing the user can't check.
     @Test func radiusExcludesListingsWithNoCoordinate() {
         let scope = GeoScope(center: sanFrancisco, radiusMiles: 25)
-        #expect(!scope.contains(makeHome(id: "nowhere")))
+        #expect(!scope.contains(HomeFixture.make(id: "nowhere")))
     }
 
     @Test func distanceIsNilForListingsWithNoCoordinate() {
         let scope = GeoScope(center: sanFrancisco, radiusMiles: nil)
-        #expect(scope.distance(to: makeHome(id: "nowhere")) == nil)
-        #expect(scope.distance(to: makeHome(id: "oakland", coordinate: oakland)) != nil)
+        #expect(scope.distance(to: HomeFixture.make(id: "nowhere")) == nil)
+        #expect(scope.distance(to: HomeFixture.make(id: "oakland", coordinate: oakland)) != nil)
     }
 }
 
@@ -122,9 +93,9 @@ struct FilterAndSortGeoTests {
 
     private var homes: [Home] {
         [
-            makeHome(id: "portland", city: "Portland", coordinate: portland),
-            makeHome(id: "sanJose", city: "San Jose", coordinate: sanJose),
-            makeHome(id: "oakland", city: "Oakland", coordinate: oakland)
+            HomeFixture.make(id: "portland", city: "Portland", coordinate: portland),
+            HomeFixture.make(id: "sanJose", city: "San Jose", coordinate: sanJose),
+            HomeFixture.make(id: "oakland", city: "Oakland", coordinate: oakland)
         ]
     }
 
@@ -142,7 +113,7 @@ struct FilterAndSortGeoTests {
     /// Unlocatable listings rank last but survive, since no radius was promised.
     @Test func nearestRanksListingsWithNoCoordinateLast() {
         let scope = GeoScope(center: sanFrancisco, radiusMiles: nil)
-        let withUnlocatable = homes + [makeHome(id: "nowhere")]
+        let withUnlocatable = homes + [HomeFixture.make(id: "nowhere")]
         #expect(ids(withUnlocatable, sort: .nearest, scope: scope).last == "nowhere")
     }
 
@@ -151,9 +122,9 @@ struct FilterAndSortGeoTests {
     @Test func equidistantListingsAreOrderedByIDForATotalOrder() {
         let scope = GeoScope(center: sanFrancisco, radiusMiles: nil)
         let tied = [
-            makeHome(id: "b", coordinate: oakland),
-            makeHome(id: "a", coordinate: oakland),
-            makeHome(id: "c", coordinate: oakland)
+            HomeFixture.make(id: "b", coordinate: oakland),
+            HomeFixture.make(id: "a", coordinate: oakland),
+            HomeFixture.make(id: "c", coordinate: oakland)
         ]
         #expect(ids(tied, sort: .nearest, scope: scope) == ["a", "b", "c"])
     }
