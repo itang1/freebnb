@@ -67,11 +67,13 @@ struct AddressSearchField: View {
     private func apply(_ completion: MKLocalSearchCompletion) {
         showSuggestions = false
         focused = false
-        // Resolve the completion to a full placemark to get city/state/zip.
-        let request = MKLocalSearch.Request(completion: completion)
-        MKLocalSearch(request: request).start { response, _ in
+        Task {
+            let request = MKLocalSearch.Request(completion: completion)
+            let response = try? await MKLocalSearch(request: request).start()
             guard let placemark = response?.mapItems.first?.placemark else {
-                // Fallback: parse what we can from the completion strings.
+                // The completion may name a place the search can no longer
+                // resolve; keep at least the title so the host isn't left with
+                // an empty field after tapping a suggestion.
                 street = completion.title
                 return
             }
@@ -86,6 +88,10 @@ struct AddressSearchField: View {
 
 // MARK: - Completer
 
+// MKLocalSearchCompleter delivers delegate callbacks on the main queue, and the
+// only caller is a view. Pinning to @MainActor makes that contract explicit,
+// matching AppleSignInCoordinator.
+@MainActor
 @Observable
 private final class AddressCompleter: NSObject, MKLocalSearchCompleterDelegate {
     private let completer: MKLocalSearchCompleter

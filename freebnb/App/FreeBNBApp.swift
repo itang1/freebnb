@@ -147,11 +147,11 @@ struct FreeBNBApp: App {
 #endif
 
     private func requestPushPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
+        Task {
+            let granted = (try? await UNUserNotificationCenter.current()
+                .requestAuthorization(options: [.alert, .badge, .sound])) ?? false
             guard granted else { return }
-            DispatchQueue.main.async {
-                UIApplication.shared.registerForRemoteNotifications()
-            }
+            UIApplication.shared.registerForRemoteNotifications()
         }
     }
 

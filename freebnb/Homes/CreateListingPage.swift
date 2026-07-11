@@ -9,6 +9,7 @@ import SwiftUI
 
 // MARK: - View model
 
+@MainActor
 @Observable
 final class CreateListingViewModel {
     // Whether the form creates, edits, or duplicates. `mode.source` seeds the
