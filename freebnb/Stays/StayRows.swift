@@ -108,10 +108,14 @@ struct StayActionButton: View {
 // MARK: - Review prompt row
 
 /// A finished stay waiting on the signed-in user's review (features 1 and 4).
+/// When `onThank` is set (the viewer was the guest) the primary action is the
+/// thank-you flow (feature 24), which sends a gratitude note and then leads into
+/// the same review; otherwise it's a plain "Leave a review".
 struct ReviewPromptRow: View {
     let request: StayRequest
     let subjectName: String
     let onReview: () -> Void
+    var onThank: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -121,8 +125,9 @@ struct ReviewPromptRow: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            Button(action: onReview) {
-                Label("Leave a review", systemImage: "star")
+            Button(action: onThank ?? onReview) {
+                Label(onThank == nil ? "Leave a review" : "Say thanks",
+                      systemImage: onThank == nil ? "star" : "heart")
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
@@ -134,6 +139,73 @@ struct ReviewPromptRow: View {
             .padding(.top, 4)
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Thank-you sheet (guest gratitude after checkout, feature 24)
+
+/// A lightweight gratitude note the guest sends the host after checkout, which
+/// then leads straight into leaving a review. The note is optional — a guest who
+/// only wants to review can skip it — so both paths hand back to the same review
+/// prompt via `onContinue`.
+struct ThankYouSheet: View {
+    let hostName: String
+    /// `note` is nil when the guest skipped sending. Either way the caller then
+    /// opens the review, so the thank-you doubles as the review prompt.
+    let onContinue: (_ note: String?) async -> Void
+
+    @State private var note: String
+    @State private var isSending = false
+    @Environment(\.dismiss) private var dismiss
+
+    init(hostName: String, onContinue: @escaping (String?) async -> Void) {
+        self.hostName = hostName
+        self.onContinue = onContinue
+        _note = State(initialValue: "Thank you so much for hosting me — I had a wonderful stay!")
+    }
+
+    private var trimmedNote: String {
+        note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Send \(hostName) a thank-you") {
+                    TextField("Say thanks...", text: $note, axis: .vertical)
+                        .lineLimit(3...8)
+                }
+
+                Section {
+                    Button {
+                        send(trimmedNote.isEmpty ? nil : trimmedNote)
+                    } label: {
+                        Label("Send thanks & leave a review", systemImage: "heart.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .disabled(isSending || trimmedNote.isEmpty)
+
+                    Button("Skip and just review") { send(nil) }
+                        .disabled(isSending)
+                }
+            }
+            .navigationTitle("Thank your host")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(isSending)
+                }
+            }
+            .disabled(isSending)
+        }
+    }
+
+    private func send(_ note: String?) {
+        isSending = true
+        Task {
+            await onContinue(note)
+            isSending = false
+        }
     }
 }
 

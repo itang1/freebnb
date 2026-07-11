@@ -16,6 +16,7 @@ struct StaysTab: View {
     @Environment(ReviewStore.self) private var reviewStore
     @State private var respondingTo: StayRequest?
     @State private var reviewing: ReviewTarget?
+    @State private var thanking: StayRequest?
     @State private var sharingStay: StayRequest?
     @State private var modifying: StayRequest?
     @State private var completing: StayRequest?
@@ -86,6 +87,11 @@ struct StaysTab: View {
             WriteReviewSheet(stay: target.stay, role: target.role, subjectName: target.subjectName)
                 .environment(reviewStore)
                 .environment(authManager)
+        }
+        .sheet(item: $thanking) { req in
+            ThankYouSheet(hostName: req.listingHostName) { note in
+                await sendThanks(req, note: note)
+            }
         }
         .sheet(item: $modifying) { req in
             ModifyStaySheet(request: req, listing: listing(for: req)) { checkIn, checkOut in
@@ -185,7 +191,11 @@ struct StaysTab: View {
                     ReviewPromptRow(
                         request: req,
                         subjectName: subjectName(for: req),
-                        onReview: { startReview(req) }
+                        onReview: { startReview(req) },
+                        // Guests thank the host first (feature 24); the note is
+                        // optional and the flow leads into the same review. Hosts
+                        // just review.
+                        onThank: req.guestUserID == authManager.userID ? { thanking = req } : nil
                     )
                 }
             }
@@ -356,6 +366,22 @@ extension StaysTab {
     private func startReview(_ request: StayRequest) {
         guard let role = request.reviewRole(for: authManager.userID) else { return }
         reviewing = ReviewTarget(stay: request, role: role, subjectName: subjectName(for: request))
+    }
+
+    /// Sends the optional thank-you note to the host, then hands off to the review
+    /// prompt (feature 24). The brief wait lets the thank-you sheet finish
+    /// dismissing before the review sheet is presented in its place.
+    private func sendThanks(_ request: StayRequest, note: String?) async {
+        if let note, !note.isEmpty {
+            messageStore.send(
+                text: note,
+                senderUserID: authManager.userID,
+                recipientUserID: request.hostUserID
+            )
+        }
+        thanking = nil
+        try? await Task.sleep(for: .milliseconds(350))
+        startReview(request)
     }
 
     private func guestName(for request: StayRequest) -> String {
