@@ -38,3 +38,6 @@ FEATURES.md
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# Local Firebase emulator runtime logs/pids (dev_emulator.sh)
+.emulator/
