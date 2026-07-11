@@ -6,6 +6,9 @@
 import AuthenticationServices
 import CryptoKit
 import FirebaseAuth
+// FirebaseCore for FirebaseApp.options.clientID in the Google sign-in path —
+// FirebaseAuth does not re-export it under SPM.
+import FirebaseCore
 import Observation
 import SwiftUI
 import os
