@@ -75,9 +75,10 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             if let senderID = info["senderUserID"] as? String {
                 router?.pendingConversationUserID = senderID
             }
-        case "stay_request", "stay_update":
-            // Both stay-event kinds land the user on the Stays tab, where the
-            // relevant request is already visible in its section.
+        case "stay_request", "stay_update", "stay_reminder":
+            // Stay pushes and the local check-in / checkout reminders (feature 22)
+            // all land the user on the Stays tab, where the relevant stay is
+            // already visible in its section.
             router?.pendingStayEvent = true
         default:
             break

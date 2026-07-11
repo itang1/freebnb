@@ -18,6 +18,10 @@ final class StayRequestStore {
     private(set) var listenerError: String?
 
     @ObservationIgnored private let repository: StayRequestsRepository
+    /// Schedules the on-device check-in / checkout reminders (feature 22) from the
+    /// accepted stays below. Kept in sync on every snapshot so a cancellation or a
+    /// date change withdraws or moves its reminders without any extra plumbing.
+    @ObservationIgnored private let reminderScheduler = StayReminderScheduler()
     @ObservationIgnored nonisolated(unsafe) private var incomingListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var outgoingListener: RepositoryListener?
     // `nonisolated(unsafe)` for the same reason as other stores: deinit is
@@ -55,6 +59,7 @@ final class StayRequestStore {
                 case .success(let requests):
                     self?.listenerError = nil
                     self?.incomingRequests = requests.sortedByDate()
+                    self?.syncReminders(viewerID: userID)
                 }
             }
         }
@@ -68,9 +73,18 @@ final class StayRequestStore {
                 case .success(let requests):
                     self?.listenerError = nil
                     self?.outgoingRequests = requests.sortedByDate()
+                    self?.syncReminders(viewerID: userID)
                 }
             }
         }
+    }
+
+    /// Re-reconciles the local reminder schedule with the currently-accepted
+    /// stays across both directions. Cheap and idempotent, so calling it on every
+    /// snapshot (from either listener) is fine.
+    private func syncReminders(viewerID: String) {
+        let accepted = (incomingRequests + outgoingRequests).filter { $0.status == .accepted }
+        Task { await reminderScheduler.sync(acceptedStays: accepted, viewerID: viewerID) }
     }
 
     // MARK: - Reload
