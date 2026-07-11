@@ -86,7 +86,7 @@ enum EmulatorSupport {
         return db
     }()
 
-    nonisolated(unsafe) private static let auth: Auth = {
+    nonisolated(unsafe) static let auth: Auth = {
         let auth = Auth.auth(app: app)
         auth.useEmulator(withHost: host, port: authPort)
         return auth

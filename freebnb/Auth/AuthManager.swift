@@ -110,7 +110,9 @@ final class AuthManager {
     // assuming Apple, so Google, email/password, and the seeded guest tester
     // each surface correctly in the UI. The guest tester keeps its special case
     // (see `guestTesterUID`); everything else is read from `providerData`.
-    private static func method(for user: User) -> AuthMethod {
+    // `nonisolated` (with `emailAuthError` below): a pure function of its
+    // argument, so tests can call it without hopping onto the main actor.
+    nonisolated static func method(for user: User) -> AuthMethod {
         if user.isAnonymous || user.uid == Self.guestTesterUID { return .guest }
         let providers = Set(user.providerData.map(\.providerID))
         if providers.contains("apple.com")  { return .apple }
@@ -282,7 +284,7 @@ final class AuthManager {
 
     // Maps a FirebaseAuth error into a user-facing `AuthError`, so the email form
     // can show "that email is already registered" instead of a raw SDK message.
-    private static func emailAuthError(from error: Error) -> AuthError {
+    nonisolated static func emailAuthError(from error: Error) -> AuthError {
         switch (error as NSError).code {
         case AuthErrorCode.emailAlreadyInUse.rawValue: return .emailInUse
         case AuthErrorCode.invalidEmail.rawValue:      return .invalidEmail
