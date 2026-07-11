@@ -333,10 +333,9 @@ struct ListingDashboardPage: View {
         actionError = nil
         do {
             try await requestStore.accept(request, hostNote: hostNote)
-            var text = "✅ Stay accepted · \(dateRangeText(request))"
-            if let note = hostNote, !note.isEmpty { text += "\n\(note)" }
-            messageStore.send(
-                text: text,
+            let note = (hostNote?.isEmpty ?? true) ? nil : hostNote
+            messageStore.sendStayEvent(
+                StayEvent(kind: .accepted, dateRange: dateRangeText(request), note: note),
                 senderUserID: authManager.userID,
                 recipientUserID: request.guestUserID
             )
@@ -350,8 +349,8 @@ struct ListingDashboardPage: View {
         actionError = nil
         do {
             try await requestStore.decline(request)
-            messageStore.send(
-                text: "Stay request declined · \(dateRangeText(request))",
+            messageStore.sendStayEvent(
+                StayEvent(kind: .declined, dateRange: dateRangeText(request)),
                 senderUserID: authManager.userID,
                 recipientUserID: request.guestUserID
             )

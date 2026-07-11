@@ -273,8 +273,8 @@ extension StaysTab {
         actionError = nil
         do {
             try await requestStore.cancel(request)
-            messageStore.send(
-                text: "Request cancelled · \(request.dateRangeText)",
+            messageStore.sendStayEvent(
+                StayEvent(kind: .cancelled, dateRange: request.dateRangeText),
                 senderUserID: authManager.userID,
                 recipientUserID: request.hostUserID
             )
@@ -287,10 +287,9 @@ extension StaysTab {
         actionError = nil
         do {
             try await requestStore.accept(request, hostNote: hostNote)
-            var text = "✅ Stay accepted · \(request.dateRangeText)"
-            if let note = hostNote, !note.isEmpty { text += "\n\(note)" }
-            messageStore.send(
-                text: text,
+            let note = (hostNote?.isEmpty ?? true) ? nil : hostNote
+            messageStore.sendStayEvent(
+                StayEvent(kind: .accepted, dateRange: request.dateRangeText, note: note),
                 senderUserID: authManager.userID,
                 recipientUserID: request.guestUserID
             )
@@ -304,8 +303,8 @@ extension StaysTab {
         actionError = nil
         do {
             try await requestStore.decline(request)
-            messageStore.send(
-                text: "Stay request declined · \(request.dateRangeText)",
+            messageStore.sendStayEvent(
+                StayEvent(kind: .declined, dateRange: request.dateRangeText),
                 senderUserID: authManager.userID,
                 recipientUserID: request.guestUserID
             )

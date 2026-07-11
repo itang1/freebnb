@@ -144,6 +144,22 @@ service cloud.firestore {
               && data.get(field, []).size() <= maxCount);
     }
 
+    // A message may carry an optional structured stay event (item 29). Absent is
+    // fine (an ordinary chat message); when present it must be a well-formed map
+    // with a known kind, so a modified client cannot smuggle arbitrary data onto
+    // a message the recipient's UI will render as a trusted system card.
+    function validMessageEvent(data) {
+      return isUnset(data, 'event')
+          || (data.event is map
+              && data.event.keys().hasOnly(['kind', 'dateRange', 'note'])
+              && data.event.kind is string
+              && data.event.kind in ['requested', 'accepted', 'declined', 'cancelled']
+              && data.event.dateRange is string
+              && data.event.dateRange.size() > 0
+              && data.event.dateRange.size() < 200
+              && isOptionalString(data.event, 'note', 2000));
+    }
+
     // -------------------------------------------------------------------------
     // Users
     // The user document is a PUBLIC projection (displayName + timestamps +
@@ -563,8 +579,9 @@ service cloud.firestore {
 
       allow create: if isFullMember()
           && request.resource.data.keys().hasOnly(
-               ['id', 'senderUserID', 'text', 'timestamp', 'participants']
+               ['id', 'senderUserID', 'text', 'timestamp', 'participants', 'event']
              )
+          && validMessageEvent(request.resource.data)
           && request.resource.data.senderUserID == request.auth.uid
           && request.resource.data.participants is list
           && request.resource.data.participants.size() == 2

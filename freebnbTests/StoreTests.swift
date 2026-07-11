@@ -183,6 +183,32 @@ struct MessageStoreTests {
         #expect(!sent)
     }
 
+    @Test func sendStayEventCarriesEventAndFallbackText() throws {
+        let repo = InMemoryMessagesRepository()
+        let store = MessageStore(repository: repo)
+
+        let event = StayEvent(kind: .accepted, dateRange: "Mar 3 – Mar 6 · 3 nights", note: "Door code 1988")
+        let sent = store.sendStayEvent(event, senderUserID: "alice", recipientUserID: "bob")
+        #expect(sent)
+
+        let box = Box<[(messages: [Message], hasMore: Bool)]>([])
+        _ = repo.listenToConversation(participants: ["alice", "bob"], limit: 10) { result in
+            if case .success(let page) = result { box.value.append(page) }
+        }
+        let stored = box.value.first?.messages.first
+        #expect(stored?.event == event)
+        // text stays populated so the list preview / push / older clients still read.
+        #expect(stored?.text == "Stay accepted · Mar 3 – Mar 6 · 3 nights\nDoor code 1988")
+    }
+
+    @Test func stayEventFallbackTextOmitsEmptyNote() {
+        let requested = StayEvent(kind: .requested, dateRange: "Mar 3 – Mar 6 · 3 nights")
+        #expect(requested.fallbackText == "Requested to stay · Mar 3 – Mar 6 · 3 nights")
+        // An accepted event with no note must not leave a dangling newline.
+        let accepted = StayEvent(kind: .accepted, dateRange: "Mar 3 – Mar 6 · 3 nights")
+        #expect(accepted.fallbackText == "Stay accepted · Mar 3 – Mar 6 · 3 nights")
+    }
+
     @Test func conversationParsesDocumentWithDefaults() {
         // A summary written before anyone reads or mutes carries no unreadCounts
         // or mutedBy; parsing must still succeed with sensible defaults.

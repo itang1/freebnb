@@ -150,8 +150,8 @@ struct RequestStaySheet: View {
                 guestCount: guestCount,
                 arrivalWindow: arrivalWindow
             )
-            messageStore.send(
-                text: "📅 Requested to stay · \(dateRangeText(from: checkIn, to: checkOut, nights: nights))",
+            messageStore.sendStayEvent(
+                StayEvent(kind: .requested, dateRange: dateRangeText(from: checkIn, to: checkOut, nights: nights)),
                 senderUserID: authManager.userID,
                 recipientUserID: listing.hostUserID
             )

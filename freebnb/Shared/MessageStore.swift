@@ -15,19 +15,57 @@ struct Message: Identifiable, Codable, Hashable, Sendable {
     let text: String
     @ServerTimestamp var timestamp: Date?
     let participants: [String]  // always sorted [userA, userB]
+    /// Present on system messages (stay requested / accepted / declined /
+    /// cancelled). When set, the thread renders a structured card instead of the
+    /// plain-text bubble (item 29). `text` stays populated with `event.fallbackText`
+    /// so the conversation preview, the push body, and clients that predate the
+    /// field still read correctly. The Firestore encoder omits it when nil, so an
+    /// ordinary chat message never carries the key.
+    var event: StayEvent?
 
     init(
         id: String = UUID().uuidString,
         senderUserID: String,
         text: String,
         timestamp: Date? = nil,
-        participants: [String]
+        participants: [String],
+        event: StayEvent? = nil
     ) {
         self.id = id
         self.senderUserID = senderUserID
         self.text = text
         self.timestamp = timestamp
         self.participants = participants
+        self.event = event
+    }
+}
+
+/// A structured stay-lifecycle event carried on a system message so the thread
+/// can render it as a card rather than an emoji-prefixed string (item 29).
+struct StayEvent: Codable, Hashable, Sendable {
+    enum Kind: String, Codable, Sendable {
+        case requested, accepted, declined, cancelled
+    }
+
+    let kind: Kind
+    /// Human-readable dates for the stay, e.g. "Mar 3 – Mar 6 · 3 nights".
+    let dateRange: String
+    /// The host's optional note, set only on `accepted`.
+    var note: String?
+
+    /// The plain string stored in the message's `text`: the conversation-list
+    /// preview, the push body, and what a client that doesn't understand `event`
+    /// falls back to. Kept in sync with the card by construction.
+    var fallbackText: String {
+        var base: String
+        switch kind {
+        case .requested: base = "Requested to stay · \(dateRange)"
+        case .accepted:  base = "Stay accepted · \(dateRange)"
+        case .declined:  base = "Stay request declined · \(dateRange)"
+        case .cancelled: base = "Request cancelled · \(dateRange)"
+        }
+        if let note, !note.isEmpty { base += "\n\(note)" }
+        return base
     }
 }
 
@@ -447,8 +485,16 @@ final class MessageStore {
         m.timestamp ?? .distantFuture
     }
 
+    /// Send a structured stay event (item 29). The card the thread renders and the
+    /// `text` the list/push fall back to are produced from the one `StayEvent`, so
+    /// they can never drift.
     @discardableResult
-    func send(text: String, senderUserID: String, recipientUserID: String) -> Bool {
+    func sendStayEvent(_ event: StayEvent, senderUserID: String, recipientUserID: String) -> Bool {
+        send(text: event.fallbackText, senderUserID: senderUserID, recipientUserID: recipientUserID, event: event)
+    }
+
+    @discardableResult
+    func send(text: String, senderUserID: String, recipientUserID: String, event: StayEvent? = nil) -> Bool {
         guard senderUserID != recipientUserID,
               !senderUserID.isEmpty, !recipientUserID.isEmpty
         else { return false }
@@ -468,7 +514,8 @@ final class MessageStore {
             senderUserID: senderUserID,
             text: text,
             timestamp: nil,
-            participants: participants
+            participants: participants,
+            event: event
         )
         pendingIDs.insert(msg.id)
         // Show the message immediately. The stored timestamp is a client stamp so
@@ -500,7 +547,7 @@ final class MessageStore {
         guard let failed = failedMessages.removeValue(forKey: messageID) else { return }
         failedIDs.remove(messageID)
         let recipient = failed.participants.first { $0 != failed.senderUserID } ?? ""
-        _ = send(text: failed.text, senderUserID: failed.senderUserID, recipientUserID: recipient)
+        _ = send(text: failed.text, senderUserID: failed.senderUserID, recipientUserID: recipient, event: failed.event)
     }
 
     func discardFailed(_ messageID: String) {

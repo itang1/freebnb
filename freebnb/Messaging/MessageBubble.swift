@@ -20,6 +20,16 @@ struct MessageBubble: View {
     private var isFailed: Bool { state == .failed }
 
     var body: some View {
+        if let event = message.event {
+            // Structured stay events render as a centered system card, not a
+            // left/right chat bubble (item 29).
+            StayEventCard(event: event, timestamp: message.timestamp, state: state)
+        } else {
+            textBubble
+        }
+    }
+
+    private var textBubble: some View {
         HStack {
             if isFromMe { Spacer(minLength: 60) }
 

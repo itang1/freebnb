@@ -19,25 +19,24 @@ struct MessagingRequestActions {
     @MainActor
     func cancel(_ request: StayRequest) async throws {
         try await requestStore.cancel(request)
-        post("Request cancelled · \(request.dateRangeText)", to: request.hostUserID)
+        post(StayEvent(kind: .cancelled, dateRange: request.dateRangeText), to: request.hostUserID)
     }
 
     @MainActor
     func accept(_ request: StayRequest, hostNote: String?) async throws {
         try await requestStore.accept(request, hostNote: hostNote)
-        var text = "✅ Stay accepted · \(request.dateRangeText)"
-        if let hostNote, !hostNote.isEmpty { text += "\n\(hostNote)" }
-        post(text, to: request.guestUserID)
+        let note = (hostNote?.isEmpty ?? true) ? nil : hostNote
+        post(StayEvent(kind: .accepted, dateRange: request.dateRangeText, note: note), to: request.guestUserID)
     }
 
     @MainActor
     func decline(_ request: StayRequest) async throws {
         try await requestStore.decline(request)
-        post("Stay request declined · \(request.dateRangeText)", to: request.guestUserID)
+        post(StayEvent(kind: .declined, dateRange: request.dateRangeText), to: request.guestUserID)
     }
 
     @MainActor
-    private func post(_ text: String, to recipientUserID: String) {
-        messageStore.send(text: text, senderUserID: currentUserID, recipientUserID: recipientUserID)
+    private func post(_ event: StayEvent, to recipientUserID: String) {
+        messageStore.sendStayEvent(event, senderUserID: currentUserID, recipientUserID: recipientUserID)
     }
 }
