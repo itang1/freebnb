@@ -149,9 +149,15 @@ struct ContentView: View {
                 .onAppear {
                     if !hasSeenOnboarding {
                         showOnboarding = true
+                    } else if lastSeenWhatsNewVersion.isEmpty {
+                        // An existing user who predates this feature: catch them up
+                        // silently so the changelog auto-presents on the *next*
+                        // update, not this one (and isn't suppressed forever for
+                        // want of a stamped version).
+                        lastSeenWhatsNewVersion = Bundle.main.appVersionString
                     } else if WhatsNew.shouldPresent(
                         currentVersion: Bundle.main.appVersionString,
-                        lastSeenVersion: lastSeenWhatsNewVersion.isEmpty ? nil : lastSeenWhatsNewVersion
+                        lastSeenVersion: lastSeenWhatsNewVersion
                     ) {
                         showWhatsNew = true
                     }
