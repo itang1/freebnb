@@ -43,6 +43,16 @@ struct StayLogisticsCard: View {
                     .foregroundColor(.secondary)
             }
 
+            if let arrival = stay.arrivalWindow {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .foregroundColor(Color.accent)
+                    Text("Arrival: \(arrival.displayName)")
+                        .font(.subheadline)
+                    Spacer()
+                }
+            }
+
             if let calendarFile {
                 ShareLink(item: calendarFile) {
                     Label("Add to Calendar", systemImage: "calendar.badge.plus")
