@@ -75,3 +75,21 @@ struct ConversationRow: View {
         return parts.joined(separator: ", ")
     }
 }
+
+#Preview {
+    List {
+        ConversationRow(
+            otherName: "Maya",
+            lastMessage: PreviewData.message,
+            currentUserID: PreviewData.viewerID,
+            isUnread: true
+        )
+        ConversationRow(
+            otherName: "Sam",
+            lastMessage: PreviewData.message,
+            currentUserID: PreviewData.friendID,
+            isMuted: true
+        )
+    }
+    .listStyle(.plain)
+}

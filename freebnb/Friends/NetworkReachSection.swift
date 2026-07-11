@@ -74,3 +74,9 @@ private struct NetworkReachRow: View {
         .accessibilityLabel("\(host.displayName), \(host.homeCount) home\(host.homeCount == 1 ? "" : "s") reachable")
     }
 }
+
+#Preview {
+    List {
+        NetworkReachSection(reach: PreviewData.reach)
+    }
+}

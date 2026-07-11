@@ -94,3 +94,13 @@ struct WriteReferenceSheet: View {
         }
     }
 }
+
+#Preview {
+    WriteReferenceSheet(
+        subjectUserID: PreviewData.friendID,
+        subjectName: "Maya",
+        existing: nil
+    )
+    .environment(ReviewStore(repository: InMemoryReviewsRepository()))
+    .environment(AuthManager())
+}

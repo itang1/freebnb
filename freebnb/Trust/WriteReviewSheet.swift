@@ -167,3 +167,9 @@ struct StarRatingView: View {
         .accessibilityLabel("\(rating) out of 5 stars")
     }
 }
+
+#Preview {
+    WriteReviewSheet(stay: PreviewData.stay, role: .host, subjectName: "Maya")
+        .environment(ReviewStore(repository: InMemoryReviewsRepository()))
+        .environment(AuthManager())
+}

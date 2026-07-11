@@ -166,3 +166,10 @@ struct RequestStaySheet: View {
         return "\(f.string(from: start)) – \(f.string(from: end)) · \(nights) night\(nights == 1 ? "" : "s")"
     }
 }
+
+#Preview {
+    RequestStaySheet(listing: PreviewData.home)
+        .environment(StayRequestStore(repository: InMemoryStayRequestsRepository()))
+        .environment(MessageStore(repository: InMemoryMessagesRepository()))
+        .environment(AuthManager())
+}

@@ -132,3 +132,15 @@ struct SkeletonMapBlock: View {
             .accessibilityLabel("Loading map")
     }
 }
+
+#Preview {
+    ScrollView {
+        VStack(spacing: 16) {
+            SkeletonHomeCard()
+            SkeletonConversationRow()
+            SkeletonMessageThread()
+            SkeletonMapBlock()
+        }
+        .padding()
+    }
+}

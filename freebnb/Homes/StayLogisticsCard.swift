@@ -179,3 +179,20 @@ struct HouseManualHostCard: View {
         .cornerRadius(12)
     }
 }
+
+#Preview("Guest logistics") {
+    ScrollView {
+        StayLogisticsCard(
+            stay: PreviewData.stay,
+            home: PreviewData.home,
+            manual: PreviewData.manual,
+            location: PreviewData.location
+        )
+        .padding()
+    }
+}
+
+#Preview("Host manual card") {
+    HouseManualHostCard(manual: PreviewData.manual, onEdit: {})
+        .padding()
+}

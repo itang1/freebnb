@@ -240,3 +240,13 @@ struct ReferenceRow: View {
         }
     }
 }
+
+#Preview {
+    List {
+        ReviewsSection(subjectUserID: PreviewData.viewerID, subjectName: "Maya")
+        ReviewRow(review: PreviewData.review, authorName: "Maya")
+    }
+    .environment(ReviewStore(repository: InMemoryReviewsRepository()))
+    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
+    .environment(AuthManager())
+}

@@ -116,3 +116,11 @@ struct AvailabilityLegend: View {
         }
     }
 }
+
+#Preview {
+    VStack(spacing: 16) {
+        AvailabilityLegend()
+        AvailabilityMonthGrid(month: .now, blockedDays: []) { _ in }
+    }
+    .padding()
+}

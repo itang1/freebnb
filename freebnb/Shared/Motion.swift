@@ -89,3 +89,19 @@ private struct ListChangeAnimation<V: Equatable>: ViewModifier {
         content.animation(reduceMotion ? nil : AppAnimation.listChange, value: value)
     }
 }
+
+#Preview {
+    VStack(spacing: 20) {
+        Button("Pressable control") {}
+            .buttonStyle(.pressable)
+        Button {
+        } label: {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.accent.opacity(0.2))
+                .frame(height: 80)
+                .overlay(Text("Pressable card"))
+        }
+        .buttonStyle(.pressableCard)
+    }
+    .padding()
+}

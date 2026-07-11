@@ -461,3 +461,36 @@ struct ModifyStaySheet: View {
         }
     }
 }
+
+#Preview("Trip rows") {
+    List {
+        OutgoingRequestRow(request: PreviewData.pendingStay, onCancel: {}, onModify: {})
+        OutgoingRequestRow(request: PreviewData.stay, onShare: {})
+        IncomingRequestRow(
+            request: PreviewData.pendingStay,
+            guestName: "Sam",
+            showActions: true,
+            onAccept: {},
+            onDecline: {}
+        )
+        ReviewPromptRow(request: PreviewData.stay, subjectName: "Maya", onReview: {}, onThank: {})
+        HStack {
+            StatusBadge(status: .pending)
+            StatusBadge(status: .accepted)
+            StatusBadge(status: .declined)
+        }
+    }
+    .listStyle(.plain)
+}
+
+#Preview("Accept sheet") {
+    AcceptSheet(request: PreviewData.pendingStay) { _ in }
+}
+
+#Preview("Modify sheet") {
+    ModifyStaySheet(request: PreviewData.pendingStay, listing: PreviewData.home) { _, _ in }
+}
+
+#Preview("Thank-you sheet") {
+    ThankYouSheet(hostName: "Maya") { _ in }
+}

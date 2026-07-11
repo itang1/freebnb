@@ -115,3 +115,15 @@ struct NetworkRail: View {
             )
     }
 }
+
+#Preview {
+    ScrollView {
+        NetworkRail(
+            listings: PreviewData.homes,
+            viewerID: PreviewData.viewerID,
+            friendIDs: [PreviewData.friendID],
+            onSelectHome: { _ in }
+        )
+    }
+    .background(Color.primaryBackground)
+}

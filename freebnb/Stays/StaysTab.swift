@@ -487,3 +487,15 @@ extension StaysTab {
         homeStore.listings.first { $0.id == request.listingID }
     }
 }
+
+#Preview {
+    NavigationStack {
+        StaysTab()
+    }
+    .environment(StayRequestStore(repository: InMemoryStayRequestsRepository()))
+    .environment(MessageStore(repository: InMemoryMessagesRepository()))
+    .environment(AuthManager())
+    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
+    .environment(HomeStore(repository: InMemoryHomesRepository()))
+    .environment(ReviewStore(repository: InMemoryReviewsRepository()))
+}

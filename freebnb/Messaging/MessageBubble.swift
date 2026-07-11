@@ -95,3 +95,23 @@ struct MessageBubble: View {
         }
     }
 }
+
+#Preview {
+    VStack(spacing: 12) {
+        MessageBubble(
+            message: PreviewData.message,
+            currentUserID: PreviewData.viewerID,
+            state: .sent,
+            onRetry: {},
+            onDiscard: {}
+        )
+        MessageBubble(
+            message: PreviewData.message,
+            currentUserID: PreviewData.friendID,
+            state: .failed,
+            onRetry: {},
+            onDiscard: {}
+        )
+    }
+    .padding()
+}

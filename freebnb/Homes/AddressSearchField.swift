@@ -121,3 +121,13 @@ private final class AddressCompleter: NSObject, MKLocalSearchCompleterDelegate {
         suggestions = []
     }
 }
+
+#Preview {
+    @Previewable @State var street = ""
+    @Previewable @State var city = ""
+    @Previewable @State var state = ""
+    @Previewable @State var zip = ""
+    Form {
+        AddressSearchField(street: $street, city: $city, state: $state, zip: $zip)
+    }
+}

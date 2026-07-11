@@ -192,3 +192,7 @@ private extension MKCoordinateRegion {
             && abs(coordinate.longitude - center.longitude) <= span.longitudeDelta / 2
     }
 }
+
+#Preview {
+    ListingsMapView(listings: PreviewData.homes) { _ in }
+}

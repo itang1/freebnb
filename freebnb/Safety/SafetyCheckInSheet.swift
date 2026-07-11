@@ -128,3 +128,12 @@ struct SafetyCheckInSheet: View {
         }
     }
 }
+
+#Preview {
+    SafetyCheckInSheet(
+        stay: PreviewData.stay,
+        location: PreviewData.location,
+        manual: PreviewData.manual
+    )
+    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
+}

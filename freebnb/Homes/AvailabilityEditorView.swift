@@ -175,3 +175,8 @@ struct AvailabilityEditorView: View {
         return "\(days) day\(days == 1 ? "" : "s") blocked"
     }
 }
+
+#Preview {
+    AvailabilityEditorView(listing: PreviewData.home)
+        .environment(HomeStore(repository: InMemoryHomesRepository()))
+}
