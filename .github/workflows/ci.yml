@@ -250,6 +250,11 @@ jobs:
       # down. Only the emulator-backed suite runs; EmulatorSupport's reachability
       # gate lets that suite execute here (and skip everywhere the emulator is
       # absent). The simulator reaches the emulator via the host's localhost.
+      #
+      # Unlike the main test job, this one must NOT disable code signing:
+      # FirebaseAuth stores its session in the keychain, and SecItemAdd fails
+      # with -34018 ("required entitlement isn't present") in an unsigned app.
+      # Ad-hoc signing ("-") embeds the entitlements and needs no certificate.
       - name: Run emulator-backed rules tests
         run: |
           firebase emulators:exec \
@@ -260,4 +265,4 @@ jobs:
               -scheme \"$SCHEME\" \
               -destination \"id=${{ steps.sim.outputs.udid }}\" \
               -only-testing:freebnbTests/FirestoreHomesRepositoryEmulatorTests \
-              CODE_SIGNING_ALLOWED=NO"
+              CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO"
