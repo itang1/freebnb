@@ -217,6 +217,78 @@ describe("stayRequests/{id} — completion", () => {
   });
 });
 
+describe("stayRequests/{id} — date change (feature 23)", () => {
+  const inDays = (n) => Timestamp.fromMillis(Date.now() + n * 86_400_000);
+
+  async function seedPendingFuture(status = "pending") {
+    await seed((db) =>
+      setDoc(doc(db, "stayRequests", STAY), {
+        id: STAY,
+        listingID: LISTING,
+        listingCity: "Town",
+        listingHostName: "Host",
+        hostUserID: HOST,
+        guestUserID: GUEST,
+        checkIn: inDays(3),
+        checkOut: inDays(5),
+        status,
+      })
+    );
+  }
+
+  const newDates = (checkIn, checkOut) => ({
+    checkIn,
+    checkOut,
+    updatedAt: serverTimestamp(),
+  });
+
+  it("allows the guest to move dates on a pending request", async () => {
+    await seedPendingFuture();
+    await assertSucceeds(
+      updateDoc(doc(asGuest(), "stayRequests", STAY), newDates(inDays(4), inDays(7)))
+    );
+  });
+
+  it("denies the host moving the dates", async () => {
+    await seedPendingFuture();
+    await assertFails(
+      updateDoc(doc(asHost(), "stayRequests", STAY), newDates(inDays(4), inDays(7)))
+    );
+  });
+
+  it("denies moving dates once the request is accepted", async () => {
+    await seedPendingFuture("accepted");
+    await assertFails(
+      updateDoc(doc(asGuest(), "stayRequests", STAY), newDates(inDays(4), inDays(7)))
+    );
+  });
+
+  it("denies a date change that also flips the status", async () => {
+    // changedKeys().hasOnly pins status, so this can never double as a self-accept.
+    await seedPendingFuture();
+    await assertFails(
+      updateDoc(doc(asGuest(), "stayRequests", STAY), {
+        ...newDates(inDays(4), inDays(7)),
+        status: "accepted",
+      })
+    );
+  });
+
+  it("denies check-out on or before check-in", async () => {
+    await seedPendingFuture();
+    await assertFails(
+      updateDoc(doc(asGuest(), "stayRequests", STAY), newDates(inDays(5), inDays(4)))
+    );
+  });
+
+  it("denies moving check-in into the past", async () => {
+    await seedPendingFuture();
+    await assertFails(
+      updateDoc(doc(asGuest(), "stayRequests", STAY), newDates(inDays(-5), inDays(2)))
+    );
+  });
+});
+
 describe("reviews/{id}", () => {
   it("allows each party to review the other after completion", async () => {
     await seedStay("completed");

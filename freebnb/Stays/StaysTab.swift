@@ -17,6 +17,7 @@ struct StaysTab: View {
     @State private var respondingTo: StayRequest?
     @State private var reviewing: ReviewTarget?
     @State private var sharingStay: StayRequest?
+    @State private var modifying: StayRequest?
     @State private var completing: StayRequest?
     @State private var actionError: String?
     @State private var selectedTab: StaysTabSelection = .trips
@@ -85,6 +86,11 @@ struct StaysTab: View {
             WriteReviewSheet(stay: target.stay, role: target.role, subjectName: target.subjectName)
                 .environment(reviewStore)
                 .environment(authManager)
+        }
+        .sheet(item: $modifying) { req in
+            ModifyStaySheet(request: req, listing: listing(for: req)) { checkIn, checkOut in
+                await modify(req, checkIn: checkIn, checkOut: checkOut)
+            }
         }
         .sheet(item: $sharingStay) { stay in
             SafetyCheckInSheet(
@@ -191,7 +197,11 @@ struct StaysTab: View {
         if !pendingOut.isEmpty {
             Section("Waiting to hear back") {
                 ForEach(pendingOut, id: \.id) { req in
-                    outgoingRow(req, onCancel: { Task { await cancel(req) } })
+                    outgoingRow(
+                        req,
+                        onCancel: { Task { await cancel(req) } },
+                        onModify: { modifying = req }
+                    )
                 }
             }
         }
@@ -283,6 +293,26 @@ extension StaysTab {
         }
     }
 
+    /// Change the dates on a pending request, then let the host know in chat with
+    /// the same structured event the other lifecycle actions send (feature 23).
+    private func modify(_ request: StayRequest, checkIn: Date, checkOut: Date) async {
+        actionError = nil
+        do {
+            try await requestStore.modifyDates(request, checkIn: checkIn, checkOut: checkOut)
+            let nights = max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
+            let f = AppDateFormatters.shortDay
+            let range = "\(f.string(from: checkIn)) – \(f.string(from: checkOut)) · \(nights) night\(nights == 1 ? "" : "s")"
+            messageStore.sendStayEvent(
+                StayEvent(kind: .modified, dateRange: range),
+                senderUserID: authManager.userID,
+                recipientUserID: request.hostUserID
+            )
+            modifying = nil
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
     private func accept(_ request: StayRequest, hostNote: String?) async {
         actionError = nil
         do {
@@ -348,15 +378,16 @@ extension StaysTab {
     private func outgoingRow(
         _ request: StayRequest,
         onCancel: (() -> Void)? = nil,
+        onModify: (() -> Void)? = nil,
         onShare: (() -> Void)? = nil,
         onComplete: (() -> Void)? = nil
     ) -> some View {
         if let home = listing(for: request) {
             NavigationLink { HomeDetailPage(home: home) } label: {
-                OutgoingRequestRow(request: request, onCancel: onCancel, onShare: onShare, onComplete: onComplete)
+                OutgoingRequestRow(request: request, onCancel: onCancel, onModify: onModify, onShare: onShare, onComplete: onComplete)
             }
         } else {
-            OutgoingRequestRow(request: request, onCancel: onCancel, onShare: onShare, onComplete: onComplete)
+            OutgoingRequestRow(request: request, onCancel: onCancel, onModify: onModify, onShare: onShare, onComplete: onComplete)
         }
     }
 

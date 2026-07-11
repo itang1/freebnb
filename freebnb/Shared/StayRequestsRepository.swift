@@ -30,6 +30,11 @@ protocol StayRequestsRepository: Sendable {
     /// Moves a request to a new status. Any terminal status also revokes the
     /// guest's access to the listing's exact address.
     func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws
+    /// Changes the dates on a *pending* request in place (feature 23), instead of
+    /// forcing the guest to cancel and re-send. Only the guest may call it, only
+    /// while pending, and `firestore.rules` pins every other field so the dates
+    /// (and `updatedAt`) are the only things that can move.
+    func updateDates(_ request: StayRequest, checkIn: Date, checkOut: Date) async throws
     /// Closes out an accepted stay that has begun, which is what unlocks both
     /// parties' reviews (feature 4). Either party may call it.
     ///
@@ -129,6 +134,17 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
                 )
             }
             try await batch.commit()
+        }
+    }
+
+    func updateDates(_ request: StayRequest, checkIn: Date, checkOut: Date) async throws {
+        let requestID = request.id
+        try await withRetry { [db] in
+            try await db.collection(FirestorePaths.stayRequests).document(requestID).updateData([
+                "checkIn": Timestamp(date: checkIn),
+                "checkOut": Timestamp(date: checkOut),
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
         }
     }
 

@@ -84,6 +84,7 @@ struct StayEventCard: View {
         case .accepted:  return "Stay accepted"
         case .declined:  return "Stay request declined"
         case .cancelled: return "Request cancelled"
+        case .modified:  return "Dates changed"
         }
     }
 
@@ -93,12 +94,13 @@ struct StayEventCard: View {
         case .accepted:  return "checkmark.circle.fill"
         case .declined:  return "xmark.circle"
         case .cancelled: return "slash.circle"
+        case .modified:  return "calendar.badge.clock"
         }
     }
 
     private var tint: Color {
         switch event.kind {
-        case .requested: return .accent
+        case .requested, .modified: return .accent
         case .accepted:  return .green
         case .declined, .cancelled: return .secondary
         }

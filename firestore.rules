@@ -531,6 +531,21 @@ service cloud.firestore {
                 && request.resource.data.listingHostName.size() > 0
                 && request.resource.data.listingHostName.size() < 200)
             ||
+            // Date change on a still-pending request (feature 23): the guest may
+            // move checkIn/checkOut in place rather than cancel and re-send. Only
+            // the guest, only while pending, and changedKeys() pins everything
+            // else — status included — so this can never double as an accept or a
+            // rewrite of the participant IDs. The date validity rules mirror
+            // create: end after start, and start not already in the past.
+            (isOwner(resource.data.guestUserID)
+                && resource.data.status == "pending"
+                && changedKeys().hasOnly(['checkIn', 'checkOut', 'updatedAt'])
+                && request.resource.data.updatedAt == request.time
+                && request.resource.data.checkIn is timestamp
+                && request.resource.data.checkOut is timestamp
+                && request.resource.data.checkOut > request.resource.data.checkIn
+                && request.resource.data.checkIn > request.time - duration.value(1, 'd'))
+            ||
             // Status transitions: no edits once the request is terminal.
             (resource.data.status in ["pending", "accepted"]
                 && request.resource.data.updatedAt == request.time

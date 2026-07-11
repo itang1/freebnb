@@ -135,6 +135,18 @@ final class StayRequestStore {
         try await update(request, status: .cancelled, hostNote: nil)
     }
 
+    /// Changes the dates on a still-pending request (feature 23). Only the guest
+    /// who created it may call this, and only while it is pending — the same
+    /// bounds `firestore.rules` enforces.
+    func modifyDates(_ request: StayRequest, checkIn: Date, checkOut: Date) async throws {
+        do {
+            try await repository.updateDates(request, checkIn: checkIn, checkOut: checkOut)
+        } catch {
+            log.error("modify dates error: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
     /// Propagates a host's display-name change to `listingHostName` on every
     /// request they host, so trip rows don't keep showing the old name (L7).
     func updateHostName(for hostUserID: String, newName: String) async throws {

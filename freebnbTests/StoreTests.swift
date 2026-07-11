@@ -110,6 +110,32 @@ struct StayRequestStoreTests {
         }
         #expect(boxAfterDecline.value.first?.status == .declined)
     }
+
+    @Test func modifyDatesRewritesTheStayInPlace() async throws {
+        let repo = InMemoryStayRequestsRepository()
+        let store = StayRequestStore(repository: repo)
+        let listing = makeHome(id: "L1", hostUserID: "host1")
+        try await store.send(listing: listing, guestUserID: "guest1", checkIn: day(1), checkOut: day(3), guestNote: nil)
+
+        let box = Box<[StayRequest]>([])
+        _ = repo.listenToRequests(userID: "guest1", role: .guest) { result in
+            if case .success(let requests) = result { box.value = requests }
+        }
+        let request = try #require(box.value.first)
+
+        try await store.modifyDates(request, checkIn: day(5), checkOut: day(9))
+
+        let after = Box<[StayRequest]>([])
+        _ = repo.listenToRequests(userID: "guest1", role: .guest) { result in
+            if case .success(let requests) = result { after.value = requests }
+        }
+        let updated = try #require(after.value.first)
+        #expect(updated.checkIn == day(5))
+        #expect(updated.checkOut == day(9))
+        // Still the same pending request, not a cancel-and-resend.
+        #expect(updated.id == request.id)
+        #expect(updated.status == .pending)
+    }
 }
 
 @MainActor

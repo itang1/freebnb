@@ -13,6 +13,9 @@ import SwiftUI
 struct OutgoingRequestRow: View {
     let request: StayRequest
     var onCancel: (() -> Void)? = nil
+    /// Change dates without cancel-and-resend (feature 23). Offered only while
+    /// the request is still pending.
+    var onModify: (() -> Void)? = nil
     /// Tell someone where you'll be (feature 5). Offered on any confirmed trip.
     var onShare: (() -> Void)? = nil
     /// Close the stay out (feature 4). Nil until the stay has begun.
@@ -50,8 +53,11 @@ struct OutgoingRequestRow: View {
                     .font(.caption).foregroundColor(.secondary).lineLimit(2)
             }
 
-            if onShare != nil || onComplete != nil {
+            if onModify != nil || onShare != nil || onComplete != nil {
                 HStack(spacing: 12) {
+                    if let onModify {
+                        StayActionButton(title: "Change dates", systemImage: "calendar.badge.clock", action: onModify)
+                    }
                     if let onShare {
                         StayActionButton(title: "Share my stay", systemImage: "shield.lefthalf.filled", action: onShare)
                     }
@@ -284,6 +290,102 @@ struct AcceptSheet: View {
                 }
             }
             .disabled(isConfirming)
+        }
+    }
+}
+
+// MARK: - Modify sheet (guest changes dates on a pending request, feature 23)
+
+struct ModifyStaySheet: View {
+    let request: StayRequest
+    /// The listing, when it's cached, so the same max-stay and blocked-date
+    /// guards the request sheet enforces apply here too. Nil-safe: an uncached
+    /// listing still allows a date change, just without the policy checks.
+    let listing: Home?
+    let onSave: (_ checkIn: Date, _ checkOut: Date) async -> Void
+
+    @State private var checkIn: Date
+    @State private var checkOut: Date
+    @State private var isSaving = false
+    @Environment(\.dismiss) private var dismiss
+
+    init(request: StayRequest, listing: Home?, onSave: @escaping (Date, Date) async -> Void) {
+        self.request = request
+        self.listing = listing
+        self.onSave = onSave
+        _checkIn = State(initialValue: request.checkIn)
+        _checkOut = State(initialValue: request.checkOut)
+    }
+
+    private var nights: Int {
+        max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
+    }
+
+    private var maxStay: Int? { listing?.guestPolicy.maxStayDays }
+
+    private var blockedConflict: DateRange? {
+        listing?.blockedDateRanges?.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
+    }
+
+    private var hasChanges: Bool {
+        checkIn != request.checkIn || checkOut != request.checkOut
+    }
+
+    private var canSave: Bool {
+        !isSaving && hasChanges && checkOut > checkIn
+            && (maxStay == nil || nights <= maxStay!)
+            && blockedConflict == nil
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("New dates") {
+                    DatePicker("Check in", selection: $checkIn, in: Date()..., displayedComponents: .date)
+                    DatePicker("Check out", selection: $checkOut, in: (Calendar.current.date(byAdding: .day, value: 1, to: checkIn) ?? checkIn)..., displayedComponents: .date)
+
+                    if nights > 0 {
+                        HStack {
+                            Text("Duration")
+                            Spacer()
+                            Text("\(nights) night\(nights == 1 ? "" : "s")")
+                                .foregroundColor(maxStay.map { nights > $0 } == true ? .red : .secondary)
+                        }
+                    }
+                    if let maxStay, nights > maxStay {
+                        Label("Max stay is \(maxStay) nights", systemImage: "exclamationmark.circle")
+                            .font(.caption).foregroundColor(.red)
+                    }
+                    if let conflict = blockedConflict {
+                        let f = AppDateFormatters.shortDay
+                        Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
+                            .font(.caption).foregroundColor(.red)
+                    }
+                }
+
+                Section {
+                    Text("Your host will see the updated dates in your chat. The request stays pending until they respond.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Change Dates")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        isSaving = true
+                        Task {
+                            await onSave(checkIn, checkOut)
+                            isSaving = false
+                        }
+                    }
+                    .disabled(!canSave)
+                }
+            }
+            .disabled(isSaving)
         }
     }
 }

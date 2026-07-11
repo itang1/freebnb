@@ -223,6 +223,12 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         if let hostNote { requests[i].hostNote = hostNote }
     }
 
+    func updateDates(_ request: StayRequest, checkIn: Date, checkOut: Date) async throws {
+        guard let i = requests.firstIndex(where: { $0.id == request.id }) else { return }
+        requests[i].checkIn = checkIn
+        requests[i].checkOut = checkOut
+    }
+
     func markCompleted(_ request: StayRequest) async throws {
         guard let i = requests.firstIndex(where: { $0.id == request.id }) else { return }
         requests[i].status = .completed

@@ -44,7 +44,7 @@ struct Message: Identifiable, Codable, Hashable, Sendable {
 /// can render it as a card rather than an emoji-prefixed string (item 29).
 struct StayEvent: Codable, Hashable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case requested, accepted, declined, cancelled
+        case requested, accepted, declined, cancelled, modified
     }
 
     let kind: Kind
@@ -63,6 +63,7 @@ struct StayEvent: Codable, Hashable, Sendable {
         case .accepted:  base = "Stay accepted · \(dateRange)"
         case .declined:  base = "Stay request declined · \(dateRange)"
         case .cancelled: base = "Request cancelled · \(dateRange)"
+        case .modified:  base = "Dates changed · \(dateRange)"
         }
         if let note, !note.isEmpty { base += "\n\(note)" }
         return base
