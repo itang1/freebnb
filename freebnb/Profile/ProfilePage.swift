@@ -419,6 +419,8 @@ struct ProfilePage: View {
     private var authMethodLabel: String {
         switch authManager.authMethod {
         case .apple:  return "Signed in with Apple"
+        case .google: return "Signed in with Google"
+        case .email:  return "Signed in with email"
         case .guest:  return "Guest"
         case .none:   return ""
         }
@@ -427,6 +429,8 @@ struct ProfilePage: View {
     private var authMethodIcon: String {
         switch authManager.authMethod {
         case .apple:  return "apple.logo"
+        case .google: return "g.circle.fill"
+        case .email:  return "envelope.fill"
         case .guest:  return "person.slash"
         case .none:   return "questionmark"
         }

@@ -18,6 +18,10 @@ import CoreSpotlight
 import FirebaseMessaging
 #endif
 
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
+
 #if canImport(FirebaseAppCheck)
 import FirebaseAppCheck
 
@@ -158,6 +162,12 @@ struct FreeBNBApp: App {
     // The URL scheme "freebnb" must be registered in the project's Info.plist
     // under CFBundleURLTypes before this fires (Xcode -> Info -> URL Types).
     private func handleIncomingURL(_ url: URL) {
+#if canImport(GoogleSignIn)
+        // Google's sign-in flow returns to the app through the reversed client ID
+        // URL scheme; let the SDK claim its own callback before we look for our
+        // invite links.
+        if GIDSignIn.sharedInstance.handle(url) { return }
+#endif
         guard url.scheme == "freebnb",
               url.host == "invite" else { return }
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)

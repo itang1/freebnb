@@ -283,13 +283,14 @@ final class AuthManager {
     // Maps a FirebaseAuth error into a user-facing `AuthError`, so the email form
     // can show "that email is already registered" instead of a raw SDK message.
     private static func emailAuthError(from error: Error) -> AuthError {
-        switch AuthErrorCode(rawValue: (error as NSError).code) {
-        case .emailAlreadyInUse:                 return .emailInUse
-        case .invalidEmail:                      return .invalidEmail
-        case .weakPassword:                      return .weakPassword
-        case .wrongPassword, .invalidCredential: return .wrongPassword
-        case .userNotFound:                      return .userNotFound
-        default:                                 return .signInFailed
+        switch (error as NSError).code {
+        case AuthErrorCode.emailAlreadyInUse.rawValue: return .emailInUse
+        case AuthErrorCode.invalidEmail.rawValue:      return .invalidEmail
+        case AuthErrorCode.weakPassword.rawValue:      return .weakPassword
+        case AuthErrorCode.wrongPassword.rawValue,
+             AuthErrorCode.invalidCredential.rawValue: return .wrongPassword
+        case AuthErrorCode.userNotFound.rawValue:      return .userNotFound
+        default:                                       return .signInFailed
         }
     }
 
