@@ -10,7 +10,7 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Start Firebase emulator + seed dev accounts"
-               scriptText = "&quot;${SRCROOT}/scripts/dev_emulator.sh&quot; &gt; /tmp/freebnb_emulator.log 2&gt;&amp;1 || true&#10;">
+               scriptText = "&quot;${SRCROOT}/scripts/dev_emulator.sh&quot; &gt; /tmp/freebnb_emulator.log 2&gt;&amp;1 || osascript -e 'display dialog &quot;Firebase emulator failed to start; sign-ins will not work. See /tmp/freebnb_emulator.log for details.&quot; buttons {&quot;OK&quot;} with title &quot;FreeBNB dev&quot; with icon caution'&#10;">
                <EnvironmentBuildable>
                   <BuildableReference
                      BuildableIdentifier = "primary"
