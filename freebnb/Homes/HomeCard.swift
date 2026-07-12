@@ -224,6 +224,10 @@ struct FeedReasonChip: View {
     }
 }
 
+/// A neutral spec pill: room / bath / guest counts and distance. These are plain
+/// facts, so they stay quiet grey — spending brand teal on every one of them would
+/// leave nothing for the card's actual signals (the "Friend" reason chip and the
+/// availability warning) to stand out against.
 struct SummaryPill: View {
     let icon: String
     let text: String
@@ -237,10 +241,10 @@ struct SummaryPill: View {
                 .font(.caption)
                 .fontWeight(.medium)
         }
+        .foregroundColor(.secondary)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.accent.opacity(0.15))
-        .clipShape(Capsule())
+        .background(Color.secondary.opacity(0.10), in: Capsule())
     }
 }
 
