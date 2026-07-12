@@ -105,27 +105,6 @@ struct HomeDetailPage: View {
                     .accessibilityLabel("Host motivation: \(home.hostMotivation.displayName)")
 
                     hostTrustSignals
-
-                    if !isHost {
-                        NavigationLink {
-                            UserProfilePage(userID: home.hostUserID, fallbackName: home.hostName)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "person.crop.circle")
-                                Text("View \(home.hostName)'s profile")
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2.weight(.semibold))
-                                    .opacity(0.7)
-                            }
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(Color.accent)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Color.accent.opacity(0.12), in: Capsule())
-                        }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel("View \(home.hostName)'s profile")
-                    }
                 }
 
                 stayLogisticsSection
@@ -361,7 +340,36 @@ struct HomeDetailPage: View {
             isListingSaved = userProfileStore.isSaved(home.id)
         }
         .navigationTitle(home.hostName)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // A long name (e.g. "Spongebob Squarepants") has no room to breathe
+            // next to the save/share buttons in the nav bar; shrink rather than
+            // truncate so it's always fully readable. Tapping it is now the only
+            // way to the host's profile, since the redundant pill in the body is gone.
+            ToolbarItem(placement: .principal) {
+                if isHost {
+                    Text(home.hostName)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                } else {
+                    NavigationLink {
+                        UserProfilePage(userID: home.hostUserID, fallbackName: home.hostName)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(home.hostName)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .opacity(0.7)
+                        }
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    }
+                    .accessibilityLabel("View \(home.hostName)'s profile")
+                }
+            }
             if authManager.authMethod != .guest {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -566,8 +574,11 @@ extension HomeDetailPage {
                             listing: home
                         )
                     } label: {
+                        // Requesting a stay isn't a separate button; it happens
+                        // inside the conversation. The label carries that so nobody
+                        // has to hunt for a request action or read fine print.
                         Label(
-                            existing == nil ? "Message \(home.hostName)" : "Open conversation",
+                            existing == nil ? "Message \(home.hostName) to request a stay" : "Open conversation",
                             systemImage: "message.fill"
                         )
                         .font(.headline)
@@ -578,17 +589,6 @@ extension HomeDetailPage {
                         .cornerRadius(10)
                     }
                     .accessibilityIdentifier("homeDetail.messageHostButton")
-
-                    // Requesting a stay isn't a separate button; it happens inside
-                    // the conversation. Spell that out before the first message,
-                    // then drop it once a request exists and the banner explains state.
-                    if existing == nil {
-                        Text("Requesting a stay happens right in the chat.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                    }
                 }
             }
         case .contactInfo:

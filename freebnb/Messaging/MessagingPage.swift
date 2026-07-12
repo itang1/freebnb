@@ -113,6 +113,8 @@ struct MessagingPage: View {
                     HStack(spacing: 3) {
                         Text(otherName)
                             .font(.headline)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                             .foregroundColor(.primary)
                         Image(systemName: "chevron.right")
                             .font(.caption2.weight(.semibold))
