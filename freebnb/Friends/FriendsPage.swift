@@ -130,17 +130,13 @@ struct FriendsPage: View {
                 ForEach(friendStore.friendEdges) { edge in
                     let otherID = edge.otherUserID(relativeTo: authManager.userID)
                     let name = userProfileStore.displayName(for: otherID) ?? "FreeBNB User"
+                    // Tapping through to the profile is the only way to unfriend:
+                    // ending a friendship (and the home access it grants) is a
+                    // deliberate act on their profile, not a stray swipe here.
                     NavigationLink {
                         UserProfilePage(userID: otherID, fallbackName: name)
                     } label: {
                         FriendRow(name: name, homeCount: counts[otherID] ?? 0)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            Task { await remove(edge) }
-                        } label: {
-                            Label("Remove", systemImage: "person.badge.minus")
-                        }
                     }
                 }
             }

@@ -57,6 +57,10 @@ struct UserProfilePage: View {
                     isSelf: isSelf
                 )
 
+                if !isSelf && authManager.authMethod != .guest {
+                    FriendshipControl(userID: userID, displayName: displayName)
+                }
+
                 if canWriteReference {
                     Button {
                         showWriteReference = true

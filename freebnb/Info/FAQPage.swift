@@ -30,7 +30,7 @@ struct FAQPage: View {
         FAQItem(
             question: "What happens when I accept a friend request?",
             // swiftlint:disable:next line_length
-            answer: "You each see the other's listings and can request to stay with each other. That is the whole grant: no payment and no obligation, and you can remove a friend at any time from the Friends page, which hides your listings from them again."
+            answer: "You each see the other's listings and can request to stay with each other. That is the whole grant: no payment and no obligation, and you can unfriend someone at any time from their profile, which hides your listings from them again."
         ),
         FAQItem(
             question: "How is FreeBNB different from Couchsurfing or other home-sharing platforms?",
