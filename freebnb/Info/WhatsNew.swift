@@ -40,7 +40,7 @@ enum WhatsNew {
         Release(
             version: "1.0",
             date: "July 2026",
-            intro: "Welcome to FreeBNB, this is our very first release. FreeBNB is a place to stay with people you actually know: browse rooms and homes opened up by your friends, ask to stay, and host them back. No fees, no payments, ever. Here's everything the app can do on day one.",
+            intro: "Welcome to FreeBNB. This is our very first release. FreeBNB is a place to stay with people you actually know: browse rooms and homes opened up by your friends, ask to stay, and host them back. No fees, no payments, ever. Here's everything the app can do on day one.",
             highlights: [
                 ReleaseHighlight(
                     icon: "house.fill",
