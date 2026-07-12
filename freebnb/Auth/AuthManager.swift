@@ -89,7 +89,9 @@ final class AuthManager {
     // session used to, without the app ever creating disposable, unconnected
     // Firebase Auth users. No real Sign in with Apple uid can ever equal this
     // fixed string, so the check is harmless outside DEBUG.
-    static let guestTesterUID = "seed-guest-tester"
+    // nonisolated so the nonisolated `method(for:)` can compare against it under
+    // the Swift 6 actor-isolation checker; it is an immutable Sendable constant.
+    nonisolated static let guestTesterUID = "seed-guest-tester"
 
     // MARK: - Single source of truth
 
@@ -109,12 +111,7 @@ final class AuthManager {
         Telemetry.setUserID(user?.uid)
     }
 
-    // Derives the sign-in method from Firebase's provider data rather than
-    // assuming Apple, so Google, email/password, and the seeded guest tester
-    // each surface correctly in the UI. The guest tester keeps its special case
-    // (see `guestTesterUID`); everything else is read from `providerData`.
-    // `nonisolated` (with `emailAuthError` below): a pure function of its
-    // argument, so tests can call it without hopping onto the main actor.
+    // Derives the sign-in method from Firebase's provider data
     nonisolated static func method(for user: User) -> AuthMethod {
         if user.isAnonymous || user.uid == Self.guestTesterUID { return .guest }
         let providers = Set(user.providerData.map(\.providerID))
