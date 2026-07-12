@@ -233,14 +233,26 @@ struct UserProfileRepositoryTests {
         #expect(fetched?.savedIDs == ["L1", "L2"])
     }
 
-    @Test func searchMatchesDisplayNamePrefix() async throws {
+    @Test func searchIsCaseInsensitiveAndMatchesAnywhereInName() async throws {
         let repo = InMemoryUserProfileRepository()
-        try await repo.createInitialProfile(userID: "u1", displayName: "Ada", email: nil)
-        try await repo.createInitialProfile(userID: "u2", displayName: "Alan", email: nil)
-        try await repo.createInitialProfile(userID: "u3", displayName: "Grace", email: nil)
+        try await repo.createInitialProfile(userID: "u1", displayName: "SpongeBob SquarePants", email: nil)
+        try await repo.createInitialProfile(userID: "u2", displayName: "Sandy Cheeks", email: nil)
+        try await repo.createInitialProfile(userID: "u3", displayName: "Eugene Krabs", email: nil)
 
-        let results = try await repo.searchProfiles(query: "A")
-        #expect(Set(results.map(\.displayName)) == ["Ada", "Alan"])
+        // The reported bug: a lowercase query must find a mixed-case name.
+        #expect(try await repo.searchProfiles(query: "spongebob").map(\.displayName)
+            == ["SpongeBob SquarePants"])
+        // You should not have to type from the start of the name: a last-name /
+        // mid-name fragment matches too.
+        #expect(try await repo.searchProfiles(query: "square").map(\.displayName)
+            == ["SpongeBob SquarePants"])
+        #expect(try await repo.searchProfiles(query: "cheeks").map(\.displayName)
+            == ["Sandy Cheeks"])
+        // Results are sorted by name for a stable list.
+        #expect(try await repo.searchProfiles(query: "s").map(\.displayName)
+            == ["Eugene Krabs", "Sandy Cheeks", "SpongeBob SquarePants"])
+        // Blank query returns nothing.
+        #expect(try await repo.searchProfiles(query: "   ").isEmpty)
     }
 }
 

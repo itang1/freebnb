@@ -295,8 +295,11 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
     }
 
     func searchProfiles(query: String) async throws -> [UserProfile] {
-        let q = query.lowercased()
-        return profiles.values.filter { $0.displayName.lowercased().hasPrefix(q) }
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return [] }
+        return profiles.values
+            .filter { $0.displayName.lowercased().contains(needle) }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
     func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws {}

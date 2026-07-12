@@ -289,14 +289,28 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
     }
 
     func searchProfiles(query: String) async throws -> [UserProfile] {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return [] }
-        let end = trimmed + "\u{f8ff}"
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return [] }
+        // Firestore has no case-insensitive or substring operator: a range query
+        // on displayName only matches an exact-case *prefix*, so "spongebob" would
+        // miss "SpongeBob SquarePants" and "Square" could never match at all. The
+        // users collection is a small, signed-in-readable public projection
+        // (displayName + timestamps), so we fetch a bounded page and match the
+        // fragment locally, case-insensitively, anywhere in the name. Revisit with
+        // a dedicated search index (searchTerms array or Algolia) if the directory
+        // ever outgrows `searchScanLimit`.
         let snap = try await db.collection(FirestorePaths.users)
-            .whereField("displayName", isGreaterThanOrEqualTo: trimmed)
-            .whereField("displayName", isLessThan: end)
-            .limit(to: 10)
+            .limit(to: Self.searchScanLimit)
             .getDocuments()
-        return snap.documents.compactMap { try? $0.data(as: UserProfile.self) }
+        return snap.documents
+            .compactMap { try? $0.data(as: UserProfile.self) }
+            .filter { $0.displayName.lowercased().contains(needle) }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
+
+    /// Upper bound on user docs pulled per name search. Comfortably above the
+    /// current directory size; substring matching happens client-side over this
+    /// page, so this caps the read cost, not the usefulness, until there is a
+    /// real search index.
+    private static let searchScanLimit = 200
 }
