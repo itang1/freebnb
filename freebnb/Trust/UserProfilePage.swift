@@ -62,6 +62,19 @@ struct UserProfilePage: View {
 
                 if !isSelf && authManager.authMethod != .guest {
                     FriendshipControl(userID: userID, displayName: displayName)
+
+                    NavigationLink {
+                        MessagingPage(otherUserID: userID, otherName: displayName)
+                    } label: {
+                        Label("Message \(displayName)", systemImage: "message")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.accent.opacity(0.12))
+                            .foregroundColor(Color.accent)
+                            .cornerRadius(10)
+                    }
+                    .buttonStyle(.pressable)
                 }
 
                 if canWriteReference {
@@ -102,7 +115,15 @@ struct UserProfilePage: View {
 
                 if !isSelf && authManager.authMethod != .guest {
                     Divider()
+                    // Manage section: the rare, deliberate ways to step back from
+                    // someone. Colour signals severity rather than category, so red
+                    // is spent on exactly one action. Unfriending (reversible) and
+                    // reporting (routes to us, costs the other person nothing yet)
+                    // stay neutral; blocking, the one hostile, self-protective cut,
+                    // is the only thing in red.
                     VStack(alignment: .leading, spacing: 16) {
+                        UnfriendButton(userID: userID, displayName: displayName)
+
                         Button {
                             showReport = true
                         } label: {
