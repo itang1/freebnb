@@ -110,10 +110,21 @@ struct HomeDetailPage: View {
                         NavigationLink {
                             UserProfilePage(userID: home.hostUserID, fallbackName: home.hostName)
                         } label: {
-                            Label("View \(home.hostName)'s profile", systemImage: "person.crop.circle")
-                                .font(.subheadline)
-                                .foregroundColor(Color.accent)
+                            HStack(spacing: 6) {
+                                Image(systemName: "person.crop.circle")
+                                Text("View \(home.hostName)'s profile")
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.weight(.semibold))
+                                    .opacity(0.7)
+                            }
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(Color.accent)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.accent.opacity(0.12), in: Capsule())
                         }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("View \(home.hostName)'s profile")
                     }
                 }
 
