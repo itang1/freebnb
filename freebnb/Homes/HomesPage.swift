@@ -108,15 +108,6 @@ struct HomesPage: View {
     /// is on screen, a filter that matches nothing is a result, not a load.
     private var showingSkeletons: Bool { isLoading && filteredListings.isEmpty }
 
-    /// The rail's members (feature 10), drawn from the whole loaded feed rather
-    /// than `filteredListings`. It is suppressed while a narrowing control is
-    /// active: someone who has typed a city is answering their own question, and
-    /// a rail of listings that ignore the query would be noise on top of it.
-    private var networkRailListings: [Home] {
-        guard !isNarrowingFeed else { return [] }
-        return FeedSections.newFromYourNetwork(listings, myID: viewerID, friendIDs: friendIDs)
-    }
-
     // Search, filters, and the saved-only toggle all narrow `listings`, which
     // holds only the pages fetched so far. So a query matching nothing on page
     // one used to render "No homes found" while its matches sat unfetched on
@@ -148,7 +139,7 @@ struct HomesPage: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
@@ -246,19 +237,7 @@ struct HomesPage: View {
             }
 
             ScrollView {
-                LazyVStack(spacing: 15) {
-                    let rail = networkRailListings
-                    if !showingSkeletons && !rail.isEmpty {
-                        NetworkRail(
-                            listings: rail,
-                            viewerID: viewerID,
-                            friendIDs: friendIDs,
-                            onSelectHome: onSelectHome
-                        )
-                        .padding(.bottom, 4)
-                        .transition(.opacity)
-                    }
-
+                LazyVStack(spacing: 12) {
                     Group {
                         if showingSkeletons {
                             ForEach(0..<4, id: \.self) { _ in
@@ -306,7 +285,8 @@ struct HomesPage: View {
             .refreshable { await onRefresh() }
             .scrollDismissesKeyboard(.interactively)
         }
-        .padding(30)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
         .background(.primaryBackground)
         // A new query gets a fresh page budget; the pages themselves stay in the
         // store, so this only re-arms how far the next search may reach.

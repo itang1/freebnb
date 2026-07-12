@@ -5,18 +5,6 @@
 
 import SwiftUI
 
-@ViewBuilder
-// swiftlint:disable:next identifier_name
-private func AmenityRow<Content: View>(
-    isVisible: Bool,
-    @ViewBuilder content: () -> Content
-) -> some View {
-    if isVisible {
-        HStack(spacing: 8) { content() }
-    }
-}
-
-
 struct HomeCard: View {
     let listing: Home
     /// Why this listing reached the viewer. Nil for a public listing from outside
@@ -26,15 +14,17 @@ struct HomeCard: View {
     /// searched, or when this listing has no stored coordinate.
     var distanceMiles: Double?
 
-    private let cardImageHeight: CGFloat = 190
+    private let cardImageHeight: CGFloat = 150
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header — photo if available, teal strip otherwise
             header
 
-            // Body
-            VStack(alignment: .leading, spacing: 10) {
+            // Body — the feed card is for scanning; the full amenity breakdown
+            // lives on HomeDetailPage, so the card shows only host, place, and the
+            // at-a-glance summary pills.
+            VStack(alignment: .leading, spacing: 8) {
                 if reason != nil || distanceMiles != nil {
                     HStack(spacing: 6) {
                         if let reason {
@@ -73,107 +63,8 @@ struct HomeCard: View {
                     .clipShape(Capsule())
                     .accessibilityLabel(avail.text)
                 }
-
-                // Amenity icons in colored chips
-                VStack(alignment: .leading, spacing: 8) {
-                    // MARK: Guests, Space & Laundry
-                    AmenityRow(
-                        isVisible: listing.guestPolicy.kidsAllowed ||
-                                   listing.guestPolicy.guestPetsAllowed ||
-                                   listing.amenities.hostHasPets ||
-                                   listing.amenities.hasPrivateGuestBathroom ||
-                                   listing.amenities.hasInUnitLaundry ||
-                                   listing.amenities.hasCoinLaundryNearby
-                    ) {
-                        if listing.guestPolicy.kidsAllowed {
-                            ChipIcon(systemName: "figure.2.and.child.holdinghands", color: .purple, label: "Kids allowed")
-                        }
-                        if listing.guestPolicy.guestPetsAllowed {
-                            ChipIcon(systemName: "pawprint.fill", color: .purple, label: "Guest pets allowed")
-                        }
-                        if listing.amenities.hostHasPets {
-                            ChipIcon(systemName: "pet.carrier.fill", color: .purple, label: "Host has pets")
-                        }
-                        if listing.amenities.hasPrivateGuestBathroom {
-                            ChipIcon(systemName: "toilet.fill", color: .purple, label: "Private guest bathroom")
-                        }
-                        if listing.amenities.hasInUnitLaundry {
-                            ChipIcon(systemName: "washer.fill", color: .purple, label: "In-unit laundry")
-                        }
-                        if listing.amenities.hasCoinLaundryNearby {
-                            ChipIcon(systemName: "washer.circle.fill", color: .purple, label: "Coin laundry nearby")
-                        }
-                    }
-
-                    // MARK: Accessibility
-                    AmenityRow(isVisible: listing.amenities.hasAnyAccessibility) {
-                        if listing.amenities.hasStepFreeEntry {
-                            ChipIcon(systemName: "figure.roll", color: .green, label: "Step-free entry")
-                        }
-                        if listing.amenities.hasElevator {
-                            ChipIcon(systemName: "arrow.up.arrow.down.circle.fill", color: .green, label: "Elevator")
-                        }
-                        if listing.amenities.hasAccessibleBathroom {
-                            ChipIcon(systemName: "accessibility", color: .green, label: "Accessible bathroom")
-                        }
-                    }
-
-                    // MARK: Comfort & Amenities
-                    AmenityRow(
-                        isVisible: listing.amenities.hasAC ||
-                                   listing.amenities.hasHeating ||
-                                   listing.amenities.hasKitchen ||
-                                   listing.amenities.hasFridgeSpace ||
-                                   listing.amenities.hasMicrowave ||
-                                   listing.amenities.hasTV ||
-                                   listing.amenities.hasWifi
-                    ) {
-                        if listing.amenities.hasAC {
-                            ChipIcon(systemName: "snowflake", color: .blue, label: "Air conditioning")
-                        }
-                        if listing.amenities.hasHeating {
-                            ChipIcon(systemName: "heat.waves", color: .blue, label: "Heating")
-                        }
-                        if listing.amenities.hasKitchen {
-                            ChipIcon(systemName: "stove", color: .blue, label: "Kitchen")
-                        }
-                        if listing.amenities.hasFridgeSpace {
-                            ChipIcon(systemName: "refrigerator.fill", color: .blue, label: "Fridge space")
-                        }
-                        if listing.amenities.hasMicrowave {
-                            ChipIcon(systemName: "microwave.fill", color: .blue, label: "Microwave")
-                        }
-                        if listing.amenities.hasTV {
-                            ChipIcon(systemName: "tv.fill", color: .blue, label: "TV")
-                        }
-                        if listing.amenities.hasWifi {
-                            ChipIcon(systemName: "wifi", color: .blue, label: "WiFi")
-                        }
-                    }
-
-                    // MARK: Provisions
-                    AmenityRow(
-                        isVisible: listing.amenities.providesPillows ||
-                                   listing.amenities.providesBlankets ||
-                                   listing.amenities.providesTowels ||
-                                   listing.amenities.providesToiletries
-                    ) {
-                        if listing.amenities.providesPillows {
-                            ChipIcon(systemName: "bed.double.fill", color: Color.callToAction, label: "Pillows provided")
-                        }
-                        if listing.amenities.providesBlankets {
-                            ChipIcon(systemName: "square.stack.fill", color: Color.callToAction, label: "Blankets provided")
-                        }
-                        if listing.amenities.providesTowels {
-                            ChipIcon(systemName: "shower.fill", color: Color.callToAction, label: "Towels provided")
-                        }
-                        if listing.amenities.providesToiletries {
-                            ChipIcon(systemName: "bubbles.and.sparkles.fill", color: Color.callToAction, label: "Toiletries provided")
-                        }
-                    }
-                }
             }
-            .padding(16)
+            .padding(14)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.secondaryBackground.opacity(0.35))
@@ -346,24 +237,6 @@ struct SummaryPill: View {
         .padding(.vertical, 4)
         .background(Color.accent.opacity(0.15))
         .clipShape(Capsule())
-    }
-}
-
-// Amenity icon in a colored chip
-struct ChipIcon: View {
-    let systemName: String
-    let color: Color
-    let label: String
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.footnote)
-            .fontWeight(.semibold)
-            .foregroundColor(color)
-            .padding(6)
-            .background(color.opacity(0.15))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .accessibilityLabel(label)
     }
 }
 
