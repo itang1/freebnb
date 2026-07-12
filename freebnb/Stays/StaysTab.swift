@@ -14,6 +14,7 @@ struct StaysTab: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(HomeStore.self) private var homeStore
     @Environment(ReviewStore.self) private var reviewStore
+    @Environment(DeepLinkRouter.self) private var router
     @State private var respondingTo: StayRequest?
     @State private var reviewing: ReviewTarget?
     @State private var thanking: StayRequest?
@@ -437,12 +438,17 @@ extension StaysTab {
         onShare: (() -> Void)? = nil,
         onComplete: (() -> Void)? = nil
     ) -> some View {
-        if let home = listing(for: request) {
-            NavigationLink { HomeDetailPage(home: home) } label: {
+        Group {
+            if let home = listing(for: request) {
+                NavigationLink { HomeDetailPage(home: home) } label: {
+                    OutgoingRequestRow(request: request, onCancel: onCancel, onModify: onModify, onShare: onShare, onComplete: onComplete)
+                }
+            } else {
                 OutgoingRequestRow(request: request, onCancel: onCancel, onModify: onModify, onShare: onShare, onComplete: onComplete)
             }
-        } else {
-            OutgoingRequestRow(request: request, onCancel: onCancel, onModify: onModify, onShare: onShare, onComplete: onComplete)
+        }
+        .stayConversationActions(name: subjectName(for: request)) {
+            openConversation(for: request)
         }
     }
 
@@ -473,10 +479,15 @@ extension StaysTab {
             onDecline: onDecline,
             onComplete: onComplete
         )
-        if !showActions, let home {
-            NavigationLink { HomeDetailPage(home: home) } label: { row }
-        } else {
-            row
+        Group {
+            if !showActions, let home {
+                NavigationLink { HomeDetailPage(home: home) } label: { row }
+            } else {
+                row
+            }
+        }
+        .stayConversationActions(name: guestName(for: request)) {
+            openConversation(for: request)
         }
     }
 
@@ -485,6 +496,35 @@ extension StaysTab {
     /// Looks up the full Home object for a request from the cached listings.
     private func listing(for request: StayRequest) -> Home? {
         homeStore.listings.first { $0.id == request.listingID }
+    }
+
+    /// Hands the other party's thread to the deep-link router; ContentView
+    /// consumes it, switches to the Messages tab, and pushes the conversation
+    /// (the same route a push-notification tap takes).
+    private func openConversation(for request: StayRequest) {
+        router.pendingConversationUserID =
+            request.hostUserID == authManager.userID ? request.guestUserID : request.hostUserID
+    }
+}
+
+// The stay/chat link now runs both ways: threads already pin the request banner
+// with accept/decline, and this gives every stay row the reverse jump into the
+// conversation. A swipe for speed plus a context menu for discoverability, the
+// same pairing YourListingsPage uses.
+private extension View {
+    func stayConversationActions(name: String, open: @escaping () -> Void) -> some View {
+        self
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                Button(action: open) {
+                    Label("Message", systemImage: "message")
+                }
+                .tint(.accent)
+            }
+            .contextMenu {
+                Button(action: open) {
+                    Label("Message \(name)", systemImage: "message")
+                }
+            }
     }
 }
 
