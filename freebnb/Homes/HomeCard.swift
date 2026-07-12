@@ -25,9 +25,13 @@ struct HomeCard: View {
             // lives on HomeDetailPage, so the card shows only host, place, and the
             // at-a-glance summary pills.
             VStack(alignment: .leading, spacing: 8) {
-                if reason != nil || distanceMiles != nil {
+                // The feed is only ever your listings and your friends', so "from
+                // a friend" is a given and goes unlabelled; only your own listings
+                // still earn a chip to set them apart from the rest.
+                let showReasonChip = reason == .yourListing
+                if showReasonChip || distanceMiles != nil {
                     HStack(spacing: 6) {
-                        if let reason {
+                        if showReasonChip, let reason {
                             FeedReasonChip(reason: reason)
                         }
                         if let distanceMiles {
