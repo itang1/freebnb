@@ -22,6 +22,9 @@ struct UserProfilePage: View {
 
     @State private var showWriteReference = false
     @State private var showReport = false
+    @State private var showBlockConfirm = false
+
+    private var isBlocked: Bool { userProfileStore.isBlocked(userID) }
 
     private var profile: UserProfile? { userProfileStore.profile(for: userID) }
     private var displayName: String { profile?.displayName ?? fallbackName }
@@ -99,14 +102,26 @@ struct UserProfilePage: View {
 
                 if !isSelf && authManager.authMethod != .guest {
                     Divider()
-                    Button {
-                        showReport = true
-                    } label: {
-                        Label("Report \(displayName)", systemImage: "flag")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                    VStack(alignment: .leading, spacing: 16) {
+                        Button {
+                            showReport = true
+                        } label: {
+                            Label("Report \(displayName)", systemImage: "flag")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showBlockConfirm = true
+                        } label: {
+                            Label(isBlocked ? "Unblock \(displayName)" : "Block \(displayName)",
+                                  systemImage: isBlocked ? "person.fill.checkmark" : "person.fill.xmark")
+                                .font(.subheadline)
+                                .foregroundColor(isBlocked ? .secondary : .red)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding()
@@ -133,6 +148,25 @@ struct UserProfilePage: View {
         }
         .sheet(isPresented: $showReport) {
             ReportSheet(targetType: .user, targetID: userID, targetName: displayName)
+        }
+        .confirmationDialog(
+            isBlocked ? "Unblock \(displayName)?" : "Block \(displayName)?",
+            isPresented: $showBlockConfirm,
+            titleVisibility: .visible
+        ) {
+            if isBlocked {
+                Button("Unblock") {
+                    Task { try? await userProfileStore.unblockUser(userID) }
+                }
+            } else {
+                Button("Block", role: .destructive) {
+                    Task { try? await userProfileStore.blockUser(userID) }
+                }
+            }
+        } message: {
+            if !isBlocked {
+                Text("You won't see messages or listings from \(displayName). You can unblock them any time.")
+            }
         }
     }
 

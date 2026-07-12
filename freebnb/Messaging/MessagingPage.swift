@@ -103,6 +103,24 @@ struct MessagingPage: View {
                         .foregroundColor(Color.accent)
                 }
             }
+            // Tapping the name opens the profile — the thread's bridge to the
+            // person hub, where relationship actions (unfriend) and the full
+            // safety controls live.
+            ToolbarItem(placement: .principal) {
+                NavigationLink {
+                    UserProfilePage(userID: otherUserID, fallbackName: otherName)
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(otherName)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .accessibilityLabel("\(otherName), view profile")
+            }
             ToolbarItem(placement: .topBarLeading) {
                 ConversationActionsMenu(
                     otherName: otherName,
