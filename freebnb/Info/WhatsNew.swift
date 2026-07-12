@@ -25,52 +25,52 @@ struct Release: Identifiable, Hashable {
     /// as "current".
     let version: String
     let date: String
+    /// Optional welcome blurb shown above the highlights. Used for the very first
+    /// release to greet the reader; later releases can leave it nil.
+    var intro: String? = nil
     let highlights: [ReleaseHighlight]
     var id: String { version }
 }
 
 enum WhatsNew {
-    /// Newest first. `latest` is the head of this list.
+    /// Newest first. `latest` is the head of this list. FreeBNB has shipped exactly
+    /// one release so far, so this is a single "welcome" entry rather than a running
+    /// changelog; the next real version bump prepends a new `Release` here.
     static let releases: [Release] = [
         Release(
-            version: "1.2",
+            version: "1.0",
             date: "July 2026",
+            intro: "Welcome to FreeBNB, this is our very first release. FreeBNB is a place to stay with people you actually know: browse rooms and homes opened up by your friends, ask to stay, and host them back. No fees, no payments, ever. Here's everything the app can do on day one.",
             highlights: [
                 ReleaseHighlight(
-                    icon: "wifi.slash",
-                    title: "Works offline",
-                    detail: "A banner now tells you when you've lost connection, and messages you send are queued and delivered automatically once you're back online."
+                    icon: "house.fill",
+                    title: "Stay with friends, for free",
+                    detail: "Browse spare rooms and whole homes that people in your circle have opened up, and request a stay. Money never changes hands; it's friends hosting friends."
                 ),
                 ReleaseHighlight(
-                    icon: "magnifyingglass",
-                    title: "Saved places in Spotlight",
-                    detail: "Search your saved listings straight from the iOS home screen. Tap a result to jump right to the listing."
+                    icon: "message.fill",
+                    title: "Message and request, all in one chat",
+                    detail: "Reach out to a host and request your stay in the same conversation. They accept or decline right there, and every trip you take and guest you host lives in the Stays tab."
                 ),
-                ReleaseHighlight(
-                    icon: "bubble.left.and.text.bubble.right",
-                    title: "Tell us what you think",
-                    detail: "A new feedback composer under Info lets you send ideas, report problems, or just say hi."
-                )
-            ]
-        ),
-        Release(
-            version: "1.1",
-            date: "June 2026",
-            highlights: [
                 ReleaseHighlight(
                     icon: "calendar",
-                    title: "Availability calendars",
-                    detail: "Hosts can block off dates, and guests see them before they ask. Export blocked periods to your own calendar."
+                    title: "See everything before you go",
+                    detail: "Check a host's availability, read reviews from past guests, and unlock the exact address and house manual the moment your stay is accepted."
                 ),
                 ReleaseHighlight(
-                    icon: "person.2",
-                    title: "Co-hosts",
-                    detail: "Add a friend as a co-host so they can help manage a listing without taking it over."
+                    icon: "checkmark.shield.fill",
+                    title: "Hosts you can trust",
+                    detail: "Mutual friends, past stays, and how quickly someone replies sit right up front, so you always know who's on the other side before you ask."
                 ),
                 ReleaseHighlight(
                     icon: "qrcode",
-                    title: "QR-code invites",
-                    detail: "Invite a friend by having them scan your code, no link-copying required."
+                    title: "Bring your people in",
+                    detail: "Invite a friend by having them scan your QR code, and add a co-host to help you run a listing without handing it over."
+                ),
+                ReleaseHighlight(
+                    icon: "wifi.slash",
+                    title: "Works even offline",
+                    detail: "Lose signal? A banner lets you know, and any message you send is queued and delivered automatically the moment you're back online."
                 )
             ]
         )

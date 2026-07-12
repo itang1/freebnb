@@ -50,6 +50,13 @@ struct WhatsNewPage: View {
                     .foregroundColor(.secondary)
             }
 
+            if let intro = release.intro {
+                Text(intro)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             ForEach(release.highlights) { highlight in
                 HStack(alignment: .top, spacing: 14) {
                     Image(systemName: highlight.icon)

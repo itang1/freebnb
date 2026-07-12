@@ -578,6 +578,17 @@ extension HomeDetailPage {
                         .cornerRadius(10)
                     }
                     .accessibilityIdentifier("homeDetail.messageHostButton")
+
+                    // Requesting a stay isn't a separate button; it happens inside
+                    // the conversation. Spell that out before the first message,
+                    // then drop it once a request exists and the banner explains state.
+                    if existing == nil {
+                        Text("Requesting a stay happens right in the chat.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
             }
         case .contactInfo:

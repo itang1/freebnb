@@ -24,6 +24,14 @@ struct InfoPage: View {
                     )
                 }
 
+                NavigationLink(destination: FeatureSpotlightPage()) {
+                    InfoCard(
+                        icon: "lightbulb.max.fill",
+                        title: "Feature Spotlight",
+                        subtitle: "Short reads on getting the most from FreeBNB"
+                    )
+                }
+
                 NavigationLink(destination: AboutPage()) {
                     InfoCard(
                         icon: "heart.fill",
