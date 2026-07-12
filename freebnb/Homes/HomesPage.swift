@@ -40,9 +40,8 @@ struct HomesPage: View {
     // that incoming order; the other sorts reorder it explicitly.
     var listings: [Home]
     /// Viewer identity and friend set, supplied by `ContentView` from the same
-    /// `FeedContext` that ranks the feed. Used to explain each card (feature 18)
-    /// and to populate the network rail (feature 10). Empty for a signed-out or
-    /// anonymous viewer, which collapses both features to nothing.
+    /// `FeedContext` that ranks the feed. Used to explain each card (feature 18).
+    /// Empty for a signed-out or anonymous viewer, which collapses that to nothing.
     var viewerID: String = ""
     var friendIDs: Set<String> = []
     var isLoading: Bool = false

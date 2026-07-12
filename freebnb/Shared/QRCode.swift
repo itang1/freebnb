@@ -3,12 +3,11 @@
 //  freebnb
 //
 //  Renders a string as a scannable QR code on-device (feature 32). The invite
-//  sheet encodes the same `freebnb://invite?from=<uid>` link the share flow uses,
-//  so a friend standing next to you can point the stock Camera app at it and land
-//  in the exact confirmation prompt a tapped link would produce. No network, no
-//  new permission: the OS camera does the scanning, and the existing deep-link
-//  path (S9-safe: it resolves the inviter's real name before prompting) does the
-//  rest.
+//  sheet encodes the same plain `freebnb://invite` link the share flow uses, so a
+//  friend standing next to you can point the stock Camera app at it and open the
+//  app. No network, no new permission: the OS camera does the scanning. The link
+//  carries no identity and takes no action — friends are added in-app, never by a
+//  scan.
 //
 
 import CoreImage

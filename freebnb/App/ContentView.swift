@@ -22,7 +22,6 @@ struct ContentView: View {
     @State private var listingsPath = NavigationPath()
     @AppStorage(UserDefaultsKey.selectedTab) private var selectedTab = 0
     @State private var messagesDeepLinkUserID: String? = nil
-    @State private var inviteToConfirm: PendingInvite? = nil
 
     // The viewer identity, friend set, and block set the feed is filtered and
     // ranked against. Cheap to build; pushing it into HomeStore only recomputes
@@ -49,20 +48,6 @@ struct ContentView: View {
     // Re-indexes when the saved set changes or a saved listing loads in.
     private var spotlightIndexKey: [String] {
         savedHomesForSpotlight.map(\.id)
-    }
-
-    // Validates an incoming invite deep link and, if the inviter is a real user,
-    // stages a confirmation prompt. Guests and self-invites are ignored, and an
-    // unknown inviter ID is dropped silently rather than prompting.
-    private func processPendingInvite() async {
-        guard let invite = router.pendingInvite else { return }
-        // Guests can't have friends; leave the invite pending in case they
-        // upgrade to a full account before leaving this screen.
-        guard authManager.authMethod != .guest else { return }
-        router.pendingInvite = nil
-        guard invite.inviterID != authManager.userID else { return }
-        guard let profile = await userProfileStore.fetchProfileOnce(userID: invite.inviterID) else { return }
-        inviteToConfirm = PendingInvite(inviterID: invite.inviterID, inviterName: profile.displayName)
     }
 
     var body: some View {
@@ -190,30 +175,6 @@ struct ContentView: View {
                         listingsPath.append(home)
                     }
                     router.pendingListingID = nil
-                }
-                // Runs on appear and whenever a new invite link arrives, so an
-                // invite that was opened before sign-in is still handled once the
-                // signed-in UI mounts. This is the real auth-state gate that
-                // replaces the old fixed sleep.
-                .task(id: router.pendingInvite) {
-                    await processPendingInvite()
-                }
-                .alert(
-                    "Add friend?",
-                    isPresented: Binding(
-                        get: { inviteToConfirm != nil },
-                        set: { if !$0 { inviteToConfirm = nil } }
-                    ),
-                    presenting: inviteToConfirm
-                ) { invite in
-                    Button("Add") {
-                        let inviterID = invite.inviterID
-                        Task { try? await friendStore.sendRequest(to: inviterID) }
-                        inviteToConfirm = nil
-                    }
-                    Button("Not now", role: .cancel) { inviteToConfirm = nil }
-                } message: { invite in
-                    Text("Send a friend request to \(invite.inviterName ?? "this person")?")
                 }
             } else {
                 NavigationStack {

@@ -180,6 +180,13 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
     #expect(MutualFriends(count: 3, names: []).summary == "3 mutual friends")
 }
 
+@Test func mutualFriendCountSummaryIgnoresNames() {
+    // The profile pill shows the bare count, never the resolved names.
+    #expect(MutualFriends(count: 0, names: []).countSummary == nil)
+    #expect(MutualFriends(count: 1, names: ["Priya"]).countSummary == "1 mutual friend")
+    #expect(MutualFriends(count: 3, names: ["Priya", "Sam"]).countSummary == "3 mutual friends")
+}
+
 // MARK: - Friends-only visibility (feature 7)
 
 @Test func feedChecksTheFriendshipNotJustTheACL() {

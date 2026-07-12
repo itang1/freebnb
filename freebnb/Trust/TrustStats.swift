@@ -70,6 +70,14 @@ struct MutualFriends: Codable, Hashable, Sendable {
 
     static let empty = MutualFriends(count: 0, names: [])
 
+    /// A name-free count for the profile pill: "1 mutual friend",
+    /// "3 mutual friends", or nil when there are none.
+    var countSummary: String? {
+        // swiftlint:disable:next empty_count
+        guard count > 0 else { return nil }
+        return "\(count) mutual friend\(count == 1 ? "" : "s")"
+    }
+
     /// "Priya and Sam", "Priya, Sam and 3 others", or nil when there are none.
     var summary: String? {
         // `count` is the callable's total, not a collection length: it can

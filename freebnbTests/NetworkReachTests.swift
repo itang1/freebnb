@@ -2,9 +2,10 @@
 //  NetworkReachTests.swift
 //  freebnbTests
 //
-//  Covers the pure derivation behind the "Your network" section (feature 34). The
-//  cases that matter are the ones where it must not over-claim: your own listings
-//  don't count, and neither does a host the client can't verify as a friend.
+//  Covers the pure derivation behind the per-friend home count shown in the
+//  Friends list. The cases that matter are the ones where it must not over-claim:
+//  your own listings don't count, and neither does a host the client can't verify
+//  as a friend.
 //
 
 import Foundation

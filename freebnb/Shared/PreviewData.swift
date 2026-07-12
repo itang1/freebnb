@@ -117,11 +117,4 @@ enum PreviewData {
         subjectUserID: viewerID,
         text: "We've been friends for a decade; you can hand them your keys."
     )
-
-    static let reach = NetworkReach(
-        hosts: [
-            NetworkReach.HostReach(friendID: friendID, displayName: "Maya", homeCount: 2),
-            NetworkReach.HostReach(friendID: "preview-friend-2", displayName: "Sam", homeCount: 1),
-        ]
-    )
 }

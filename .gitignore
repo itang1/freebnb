@@ -42,3 +42,6 @@ ui-debug.log
 
 # Local Firebase emulator runtime logs/pids (dev_emulator.sh)
 .emulator/
+
+# Local seed login reference (fake test credentials)
+SEED_LOGINS.md

@@ -2,11 +2,11 @@
 //  NetworkReach.swift
 //  freebnb
 //
-//  Makes the graph tangible (feature 34): "3 homes reachable through Priya". A
-//  pure derivation of (visible listings, viewer, friends), like `FeedSections`,
-//  so it is unit-tested directly rather than only seen by scrolling a signed-in
-//  build. It reuses `FeedSections.reason`, so the one rule about who-knows-whom
-//  lives in exactly one place.
+//  Tallies how many listings each friend hosts, so the Friends list can show a
+//  "2 homes" count beside each friend. A pure derivation of (visible listings,
+//  viewer, friends), like `FeedSections`, so it is unit-tested directly rather
+//  than only seen by scrolling a signed-in build. It reuses `FeedSections.reason`,
+//  so the one rule about who-knows-whom lives in exactly one place.
 //
 
 import Foundation

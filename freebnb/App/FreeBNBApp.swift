@@ -158,31 +158,14 @@ struct FreeBNBApp: App {
         }
     }
 
-    // Handle freebnb://invite?from=<uid>
-    // The URL scheme "freebnb" must be registered in the project's Info.plist
-    // under CFBundleURLTypes before this fires (Xcode -> Info -> URL Types).
+    // Claims the Google sign-in callback, which arrives through the reversed
+    // client ID URL scheme. Our own `freebnb://` links carry no action — opening
+    // one simply launches the app — so there is nothing else to route here.
+    // Friend connections are made only in-app, through search, request, and
+    // accept; a deep link never creates one.
     private func handleIncomingURL(_ url: URL) {
 #if canImport(GoogleSignIn)
-        // Google's sign-in flow returns to the app through the reversed client ID
-        // URL scheme; let the SDK claim its own callback before we look for our
-        // invite links.
-        if GIDSignIn.sharedInstance.handle(url) { return }
+        GIDSignIn.sharedInstance.handle(url)
 #endif
-        guard url.scheme == "freebnb",
-              url.host == "invite" else { return }
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        guard let inviterID = components?.queryItems?.first(where: { $0.name == "from" })?.value,
-              !inviterID.isEmpty else { return }
-
-        // Record the invite and let ContentView confirm it with the user once
-        // they're signed in. We deliberately do NOT send a friend request here:
-        // a crafted link must not silently write on the recipient's behalf, and
-        // the previous fixed one-second sleep was a race against auth state.
-        //
-        // Only the UID is read. Any other query parameter, including a `name`
-        // an old build or a crafted link may carry, is ignored: the link is
-        // unsigned, so ContentView resolves the inviter's real display name
-        // from their profile before showing the prompt (S9).
-        router.pendingInvite = PendingInvite(inviterID: inviterID)
     }
 }

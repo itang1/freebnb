@@ -68,7 +68,7 @@ struct TrustBadgeRow: View {
                 TrustChip(text: tenure, systemImage: "calendar")
             }
 
-            if !isSelf, let summary = mutualFriends?.summary {
+            if !isSelf, let summary = mutualFriends?.countSummary {
                 TrustChip(text: summary, systemImage: "person.2.fill", tint: Color.accent)
             }
         }
