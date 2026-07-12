@@ -109,6 +109,44 @@ struct HomeDetailPage: View {
 
                 stayLogisticsSection
 
+                if authManager.userID != home.hostUserID {
+                    Text("Contact Host")
+                        .font(.headline)
+                    contactSection
+                }
+
+                Spacer(minLength: 10)
+
+                Text("View on Map")
+                    .font(.headline)
+
+                Text(formattedAddress)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                if exactLocation == nil {
+                    Label(
+                        "\(home.hostName) shares the exact address once they accept your stay.",
+                        systemImage: "lock.fill"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+
+                mapSection
+
+                Button(action: openInMaps) {
+                    Text("Open in Apple Maps")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.callToAction)
+                        .foregroundColor(.onAccent)
+                        .cornerRadius(10)
+                }
+                .disabled(mapState != .loaded || exactLocation == nil)
+
+                Spacer(minLength: 10)
+
                 // MARK: Details
                 Text("Details")
                     .font(.headline)
@@ -247,44 +285,6 @@ struct HomeDetailPage: View {
                 // What past guests said about this host (feature 1). Capped, with
                 // the full list one tap away on their profile.
                 ReviewsSection(subjectUserID: home.hostUserID, subjectName: home.hostName, limit: 3)
-
-                Spacer(minLength: 10)
-
-                if authManager.userID != home.hostUserID {
-                    Text("Contact Host")
-                        .font(.headline)
-                    contactSection
-                }
-
-                Spacer(minLength: 10)
-
-                Text("View on Map")
-                    .font(.headline)
-
-                Text(formattedAddress)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                if exactLocation == nil {
-                    Label(
-                        "\(home.hostName) shares the exact address once they accept your stay.",
-                        systemImage: "lock.fill"
-                    )
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                }
-
-                mapSection
-
-                Button(action: openInMaps) {
-                    Text("Open in Apple Maps")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.callToAction)
-                        .foregroundColor(.onAccent)
-                        .cornerRadius(10)
-                }
-                .disabled(mapState != .loaded || exactLocation == nil)
 
                 if authManager.userID != home.hostUserID {
                     Divider().padding(.vertical, 8)
