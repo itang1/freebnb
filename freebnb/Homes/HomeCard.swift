@@ -40,6 +40,16 @@ struct HomeCard: View {
                     }
                 }
 
+                HStack(spacing: 4) {
+                    Image(systemName: listing.hostMotivation.iconName)
+                        .font(.caption2)
+                    Text(listing.hostMotivation.homeText)
+                        .font(.caption)
+                }
+                .foregroundColor(.accent)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Host motivation: \(listing.hostMotivation.homeText)")
+
                 // Summary pills
                 HStack(spacing: 6) {
                     SummaryPill(icon: "door.left.hand.open", text: "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")")
@@ -151,14 +161,6 @@ struct HomeCard: View {
                     .foregroundColor(.white.opacity(0.85))
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Image(systemName: listing.hostMotivation.iconName)
-                    .font(.caption2)
-                Text(listing.hostMotivation.displayName)
-                    .font(.caption2)
-            }
-            .foregroundColor(.white.opacity(0.8))
-            .accessibilityLabel("Host motivation: \(listing.hostMotivation.displayName)")
             Image(systemName: "chevron.right")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.8))
@@ -181,15 +183,6 @@ struct HomeCard: View {
             }
 
             Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Image(systemName: listing.hostMotivation.iconName)
-                    .font(.caption2)
-                Text(listing.hostMotivation.displayName)
-                    .font(.caption2)
-            }
-            .opacity(0.8)
-            .accessibilityLabel("Host motivation: \(listing.hostMotivation.displayName)")
 
             Image(systemName: "chevron.right")
                 .font(.subheadline)

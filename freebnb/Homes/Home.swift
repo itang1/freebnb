@@ -164,6 +164,16 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
         }
     }
 
+    /// Phrased for display on a specific listing, since a host's motivation can
+    /// differ across homes they list.
+    var homeText: String {
+        switch self {
+        case .eager:     return "I'd love to host at this home"
+        case .open:      return "I'm open to hosting at this home"
+        case .selective: return "I have limited availability at this home"
+        }
+    }
+
     /// Sort key for "Most Eager to Host" — higher means more eager.
     var rank: Int {
         switch self {
