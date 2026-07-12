@@ -122,14 +122,18 @@ struct FeedbackComposerView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Done") { dismiss() }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.accent)
-                .foregroundColor(.onAccent)
-                .cornerRadius(12)
-                .padding(.top, 8)
+            Button {
+                dismiss()
+            } label: {
+                Text("Done")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.accent)
+                    .foregroundColor(.onAccent)
+                    .cornerRadius(12)
+            }
+            .padding(.top, 8)
             Spacer()
         }
         .padding(24)
