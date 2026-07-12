@@ -103,7 +103,7 @@ nohup firebase emulators:start \
   --only "$EMULATORS" \
   --project "$PROJECT" \
   --export-on-exit "$DATA_DIR" \
-  "${IMPORT_ARGS[@]}" \
+  ${IMPORT_ARGS[@]+"${IMPORT_ARGS[@]}"} \
   >"$LOG_DIR/emulators.log" 2>&1 &
 echo $! >"$LOG_DIR/emulators.pid"
 
