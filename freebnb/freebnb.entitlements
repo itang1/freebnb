@@ -4,5 +4,12 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Required for AppleSignInCoordinator; without it ASAuthorization fails at
+	     runtime. Also enable the capability on the App ID in the developer portal
+	     (Xcode does this automatically once a team is set). -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>

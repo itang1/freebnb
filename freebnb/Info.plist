@@ -5,6 +5,10 @@
 	<!-- Only custom keys live here. GENERATE_INFOPLIST_FILE=YES still merges the
 	     INFOPLIST_KEY_* build settings (display name, orientations, etc.) on top
 	     of this file at build time. -->
+	<!-- Only standard, exempt encryption (HTTPS/ATS). Declaring it here skips the
+	     export-compliance question on every App Store Connect upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<!-- App deep links: freebnb://invite?from=<uid> -->
