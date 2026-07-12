@@ -29,6 +29,7 @@
 "use strict";
 
 const path = require("path");
+const { createRequire } = require("module");
 
 const useProd = process.argv.includes("--prod");
 const resetFirst = process.argv.includes("--reset") || process.argv.includes("--reset-homes");
@@ -45,18 +46,28 @@ if (!useProd) {
   process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || "localhost:9099";
 }
 
-let admin;
+// Use the modular firebase-admin API (getAuth/getFirestore, v10+). The legacy
+// namespaced accessors (admin.auth(), admin.firestore.FieldValue) were removed
+// in firebase-admin v13, so a repo-root `npm install firebase-admin` (which now
+// pulls v14) made this script crash on load and seed nothing. Prefer a
+// firebase-admin at the repo root; fall back to the copy in functions/, which
+// always depends on it. createRequire from functions/package.json resolves the
+// `firebase-admin/*` subpaths through that package's exports map.
+let adminRequire = require;
 try {
-  admin = require("firebase-admin");
+  require.resolve("firebase-admin/app");
 } catch {
-  admin = require(path.join(__dirname, "..", "functions", "node_modules", "firebase-admin"));
+  adminRequire = createRequire(path.join(__dirname, "..", "functions", "package.json"));
 }
+const { initializeApp } = adminRequire("firebase-admin/app");
+const { getAuth } = adminRequire("firebase-admin/auth");
+const { getFirestore, FieldValue, Timestamp } = adminRequire("firebase-admin/firestore");
 
-admin.initializeApp({ projectId: "freebnb-6814a" });
-const auth = admin.auth();
-const db = admin.firestore();
+initializeApp({ projectId: "freebnb-6814a" });
+const auth = getAuth();
+const db = getFirestore();
 
-const now = admin.firestore.FieldValue.serverTimestamp();
+const now = FieldValue.serverTimestamp();
 
 // `savedListingIDs` and `blockedUserIDs` are optional per-user overrides written
 // into the private profile; omitted means an empty list. They let the seed mimic
@@ -413,7 +424,7 @@ function geohashEncode(latitude, longitude, precision = 6) {
 }
 
 function daysFromNow(n) {
-  return admin.firestore.Timestamp.fromDate(new Date(Date.now() + n * 86_400_000));
+  return Timestamp.fromDate(new Date(Date.now() + n * 86_400_000));
 }
 
 async function seedUsers() {
@@ -684,7 +695,7 @@ async function seedThread(a, b, msgs, mutedBy = []) {
   let lastMessage = null;
   let lastTimestamp = null;
   msgs.forEach((m, index) => {
-    const ts = admin.firestore.Timestamp.fromDate(new Date(Date.now() - m.minsAgo * 60_000));
+    const ts = Timestamp.fromDate(new Date(Date.now() - m.minsAgo * 60_000));
     m._ts = ts;
     m._id = `seed-msg-${conversationID}-${index}`;
     const recipient = m.from === a ? b : a;
