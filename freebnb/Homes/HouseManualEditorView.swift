@@ -103,5 +103,5 @@ struct HouseManualEditorView: View {
 
 #Preview {
     HouseManualEditorView(homeID: "preview")
-        .environment(HomeStore())
+        .previewEnvironment()
 }

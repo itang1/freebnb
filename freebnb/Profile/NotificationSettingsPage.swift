@@ -78,6 +78,6 @@ struct NotificationSettingsPage: View {
 #Preview {
     NavigationStack {
         NotificationSettingsPage()
-            .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
+            .previewEnvironment()
     }
 }

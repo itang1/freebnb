@@ -170,6 +170,5 @@ struct StarRatingView: View {
 
 #Preview {
     WriteReviewSheet(stay: PreviewData.stay, role: .hostReviewingGuest, subjectName: "Maya")
-        .environment(ReviewStore(repository: InMemoryReviewsRepository()))
-        .environment(AuthManager())
+        .previewEnvironment()
 }

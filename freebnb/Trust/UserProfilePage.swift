@@ -139,8 +139,5 @@ struct UserProfilePage: View {
     NavigationStack {
         UserProfilePage(userID: PreviewData.friendID, fallbackName: "Maya")
     }
-    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
-    .environment(AuthManager())
-    .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
-    .environment(ReviewStore(repository: InMemoryReviewsRepository()))
+    .previewEnvironment()
 }

@@ -136,5 +136,5 @@ struct EmailAuthView: View {
 
 #Preview {
     EmailAuthView()
-        .environment(AuthManager())
+        .previewEnvironment()
 }

@@ -323,8 +323,5 @@ struct CreateListingPage: View {
 
 #Preview {
     CreateListingPage()
-        .environment(HomeStore())
-        .environment(AuthManager())
-        .environment(UserProfileStore())
-        .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
+        .previewEnvironment()
 }

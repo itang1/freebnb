@@ -368,9 +368,6 @@ struct ListingDashboardPage: View {
     )
     NavigationStack {
         ListingDashboardPage(listing: home)
-            .environment(StayRequestStore())
-            .environment(MessageStore())
-            .environment(AuthManager())
-            .environment(UserProfileStore())
+            .previewEnvironment()
     }
 }

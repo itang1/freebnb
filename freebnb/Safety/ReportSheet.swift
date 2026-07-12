@@ -95,5 +95,5 @@ struct ReportSheet: View {
         targetID: "abc123",
         targetName: "Irene's place in Austin"
     )
-    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
+    .previewEnvironment()
 }

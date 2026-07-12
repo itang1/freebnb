@@ -492,10 +492,5 @@ extension StaysTab {
     NavigationStack {
         StaysTab()
     }
-    .environment(StayRequestStore(repository: InMemoryStayRequestsRepository()))
-    .environment(MessageStore(repository: InMemoryMessagesRepository()))
-    .environment(AuthManager())
-    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
-    .environment(HomeStore(repository: InMemoryHomesRepository()))
-    .environment(ReviewStore(repository: InMemoryReviewsRepository()))
+    .previewEnvironment()
 }

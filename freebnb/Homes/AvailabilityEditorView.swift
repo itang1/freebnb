@@ -179,5 +179,5 @@ struct AvailabilityEditorView: View {
 
 #Preview {
     AvailabilityEditorView(listing: PreviewData.home)
-        .environment(HomeStore(repository: InMemoryHomesRepository()))
+        .previewEnvironment()
 }

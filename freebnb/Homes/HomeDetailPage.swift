@@ -648,11 +648,6 @@ extension HomeDetailPage {
                 foodProvision: .all
             )
         ))
-        .environment(MessageStore())
-        .environment(AuthManager())
-        .environment(StayRequestStore())
-        .environment(UserProfileStore())
-        .environment(HomeStore())
-        .environment(ReviewStore())
+        .previewEnvironment()
     }
 }

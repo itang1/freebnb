@@ -228,12 +228,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environment(AuthManager())
-        .environment(HomeStore())
-        .environment(MessageStore())
-        .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
-        .environment(StayRequestStore())
-        .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
-        .environment(DeepLinkRouter())
-        .environment(NetworkMonitor(start: false))
+        .previewEnvironment()
 }

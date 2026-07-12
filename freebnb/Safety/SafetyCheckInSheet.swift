@@ -135,5 +135,5 @@ struct SafetyCheckInSheet: View {
         location: PreviewData.location,
         manual: PreviewData.manual
     )
-    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
+    .previewEnvironment()
 }

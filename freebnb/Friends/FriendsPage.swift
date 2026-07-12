@@ -551,9 +551,6 @@ struct InviteSheet: View {
 #Preview {
     NavigationStack {
         FriendsPage()
-            .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
-            .environment(UserProfileStore())
-            .environment(AuthManager())
-            .environment(HomeStore())
+            .previewEnvironment()
     }
 }

@@ -141,4 +141,5 @@ private struct InfoCard: View {
     NavigationStack {
         InfoPage()
     }
+    .previewEnvironment()
 }

@@ -226,9 +226,5 @@ struct MessagingPage: View {
     NavigationStack {
         MessagingPage(otherUserID: PreviewData.friendID, otherName: "Maya", listing: PreviewData.home)
     }
-    .environment(MessageStore(repository: InMemoryMessagesRepository()))
-    .environment(StayRequestStore(repository: InMemoryStayRequestsRepository()))
-    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
-    .environment(AuthManager())
-    .environment(NetworkMonitor(start: false))
+    .previewEnvironment()
 }

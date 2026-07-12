@@ -156,6 +156,5 @@ struct FeedbackComposerView: View {
 
 #Preview {
     FeedbackComposerView()
-        .environment(AuthManager())
-        .environment(UserProfileStore())
+        .previewEnvironment()
 }

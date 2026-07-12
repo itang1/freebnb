@@ -220,6 +220,6 @@ private struct QuickSignInButton: View {
 #Preview {
     NavigationStack {
         WelcomePage()
-            .environment(AuthManager())
+            .previewEnvironment()
     }
 }

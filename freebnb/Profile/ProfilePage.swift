@@ -441,11 +441,6 @@ struct ProfilePage: View {
 #Preview {
     NavigationStack {
         ProfilePage()
-            .environment(AuthManager())
-            .environment(UserProfileStore())
-            .environment(StayRequestStore())
-            .environment(HomeStore())
-            .environment(FriendStore())
-            .environment(ReviewStore())
+            .previewEnvironment()
     }
 }

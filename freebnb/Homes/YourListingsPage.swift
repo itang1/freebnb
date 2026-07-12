@@ -281,8 +281,6 @@ private struct ListingRow: View {
 #Preview {
     NavigationStack {
         YourListingsPage()
-            .environment(HomeStore())
-            .environment(StayRequestStore())
-            .environment(AuthManager())
+            .previewEnvironment()
     }
 }

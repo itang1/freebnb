@@ -578,6 +578,5 @@ private extension HomesPage {
 
 #Preview {
     HomesPage(listings: [], onSelectHome: { _ in })
-        .environment(UserProfileStore())
-        .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
+        .previewEnvironment()
 }

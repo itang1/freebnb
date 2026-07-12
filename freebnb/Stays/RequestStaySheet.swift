@@ -169,7 +169,5 @@ struct RequestStaySheet: View {
 
 #Preview {
     RequestStaySheet(listing: PreviewData.home)
-        .environment(StayRequestStore(repository: InMemoryStayRequestsRepository()))
-        .environment(MessageStore(repository: InMemoryMessagesRepository()))
-        .environment(AuthManager())
+        .previewEnvironment()
 }

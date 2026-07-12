@@ -150,8 +150,5 @@ struct MessagesTab: View {
     NavigationStack {
         MessagesTab(listings: PreviewData.homes, deepLinkUserID: .constant(nil))
     }
-    .environment(MessageStore(repository: InMemoryMessagesRepository()))
-    .environment(StayRequestStore(repository: InMemoryStayRequestsRepository()))
-    .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
-    .environment(AuthManager())
+    .previewEnvironment()
 }

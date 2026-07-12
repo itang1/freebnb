@@ -190,8 +190,5 @@ struct EditNameSheet: View {
 
 #Preview("Edit name") {
     EditNameSheet()
-        .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
-        .environment(HomeStore())
-        .environment(StayRequestStore())
-        .environment(AuthManager())
+        .previewEnvironment()
 }

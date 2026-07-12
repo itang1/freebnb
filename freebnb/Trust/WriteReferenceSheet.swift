@@ -101,6 +101,5 @@ struct WriteReferenceSheet: View {
         subjectName: "Maya",
         existing: nil
     )
-    .environment(ReviewStore(repository: InMemoryReviewsRepository()))
-    .environment(AuthManager())
+    .previewEnvironment()
 }

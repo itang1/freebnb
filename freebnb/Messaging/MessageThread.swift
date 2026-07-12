@@ -104,5 +104,5 @@ struct MessageThread: View {
         searchQuery: "",
         onReport: { _ in }
     )
-    .environment(MessageStore(repository: InMemoryMessagesRepository()))
+    .previewEnvironment()
 }

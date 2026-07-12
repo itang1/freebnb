@@ -162,8 +162,5 @@ struct CoHostManagerView: View {
 
 #Preview {
     CoHostManagerView(listing: PreviewData.home)
-        .environment(HomeStore(repository: InMemoryHomesRepository()))
-        .environment(AuthManager())
-        .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
-        .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
+        .previewEnvironment()
 }
