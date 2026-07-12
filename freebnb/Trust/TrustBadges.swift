@@ -10,19 +10,27 @@
 import SwiftUI
 
 /// A single capsule chip. Neutral by default; `tint` marks the earned ones.
+///
+/// Color carries meaning here, so it is spent sparingly: a factual stat stays
+/// grey and quiet, while an *earned* signal takes a semantic tint and a heavier
+/// weight so the eye lands on it first. The three tints each mean one thing —
+/// green for platform assurance, teal for your network, amber for guest ratings —
+/// so no two earned chips ever read as the same kind of signal.
 struct TrustChip: View {
     let text: String
     let systemImage: String
     var tint: Color?
 
+    private var isEarned: Bool { tint != nil }
+    private var color: Color { tint ?? .secondary }
+
     var body: some View {
         Label(text, systemImage: systemImage)
-            .font(.caption)
-            .foregroundColor(tint ?? .secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background((tint ?? .secondary).opacity(tint == nil ? 0.08 : 0.12))
-            .clipShape(Capsule())
+            .font(.caption.weight(isEarned ? .semibold : .medium))
+            .foregroundColor(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(color.opacity(isEarned ? 0.15 : 0.09), in: Capsule())
             .accessibilityLabel(text)
     }
 }
@@ -45,7 +53,10 @@ struct TrustBadgeRow: View {
     var body: some View {
         FlowRow(spacing: 6) {
             if stats.isVerified {
-                TrustChip(text: "ID verified", systemImage: "checkmark.seal.fill", tint: Color.accent)
+                // Green, not brand teal: identity assurance is a safety signal, and
+                // keeping it distinct from the teal "mutual friends" chip means the
+                // two never blur into one "trusted" colour.
+                TrustChip(text: "ID verified", systemImage: "checkmark.seal.fill", tint: .success)
             }
 
             if let rating = stats.ratingText {
