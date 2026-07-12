@@ -76,6 +76,7 @@ struct ProfilePage: View {
                     .sectionCard()
                     .padding(.bottom, 20)
 
+                    hostingSection
                 }
 
                 sectionLabel("Preferences")
@@ -437,6 +438,47 @@ struct ProfilePage: View {
     }
 }
 
+// Sections kept out of the main struct body so their lines don't count toward
+// SwiftLint's type_body_length; `private` stays file-scoped, so they still see
+// the view's environment.
+extension ProfilePage {
+    // MARK: - Hosting section
+
+    /// Hosting lives on the Stays tab behind a segmented picker, which a would-be
+    /// host has no reason to look under. Surface the same page here, where "list
+    /// my home" is a natural thing to go looking for.
+    var hostingSection: some View {
+        Group {
+            sectionLabel("Hosting")
+            VStack(spacing: 0) {
+                NavigationLink {
+                    YourListingsPage()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "house")
+                            .frame(width: 28)
+                            .foregroundColor(Color.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Your listings")
+                                .foregroundColor(.primary)
+                            Text("List your home so friends can request to stay.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary.opacity(0.5))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+            }
+            .sectionCard()
+            .padding(.bottom, 20)
+        }
+    }
+}
 
 #Preview {
     NavigationStack {
