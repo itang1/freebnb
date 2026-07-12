@@ -99,12 +99,6 @@ struct ContentView: View {
                     }
                     .tabItem { Label("Profile", systemImage: "person.fill") }
                     .tag(3)
-
-                    NavigationStack {
-                        InfoPage()
-                    }
-                    .tabItem { Label("Info", systemImage: "book.fill") }
-                    .tag(4)
                 }
                 .tint(.accent)
                 // Keep HomeStore's derived feed in sync with who the viewer is,
@@ -132,6 +126,10 @@ struct ContentView: View {
                     WhatsNewSheet { showWhatsNew = false }
                 }
                 .onAppear {
+                    // The Info tab (old tag 4) was folded into Profile. selectedTab
+                    // is persisted, so a selection pointing at the removed tab would
+                    // leave the tab bar with nothing selected; land on Listings.
+                    if selectedTab > 3 { selectedTab = 0 }
                     if !hasSeenOnboarding {
                         showOnboarding = true
                     } else if lastSeenWhatsNewVersion.isEmpty {

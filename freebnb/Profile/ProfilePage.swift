@@ -176,6 +176,8 @@ struct ProfilePage: View {
 
                 sectionLabel("About")
                 VStack(spacing: 0) {
+                    helpAndInfoRow
+                    rowDivider
                     SettingsRow(icon: "number", label: "Version", trailingText: appVersion)
                     rowDivider
                     SettingsRow(icon: "hand.raised", label: "Privacy Policy", chevron: true) {
@@ -472,6 +474,36 @@ extension ProfilePage {
             }
             .sectionCard()
             .padding(.bottom, 20)
+        }
+    }
+
+    // MARK: - Help & info row
+
+    /// The former Info tab, folded in here: reference content (guides, FAQ,
+    /// safety) is visited too rarely to earn a fifth of the tab bar, but it
+    /// still needs a stable, findable home.
+    var helpAndInfoRow: some View {
+        NavigationLink {
+            InfoPage()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "book")
+                    .frame(width: 28)
+                    .foregroundColor(Color.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Help & Info")
+                        .foregroundColor(.primary)
+                    Text("Guides, FAQ, safety, and what's new.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary.opacity(0.5))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
         }
     }
 }
