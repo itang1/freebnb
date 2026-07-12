@@ -54,6 +54,24 @@ struct RequestStaySheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Which place this request is for. A host can list more than one
+                // home and the thread is shared across all of them, so "Request a
+                // Stay" alone wouldn't say which one you're asking about.
+                Section {
+                    HStack(spacing: 12) {
+                        Image(systemName: "house.fill")
+                            .foregroundColor(.accent)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(listing.hostName)'s place")
+                                .font(.subheadline.weight(.semibold))
+                            Text("\(listing.address.city), \(listing.address.state)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
                 Section("Dates") {
                     DatePicker("Check in", selection: $checkIn, in: Date()..., displayedComponents: .date)
                     DatePicker("Check out", selection: $checkOut, in: (Calendar.current.date(byAdding: .day, value: 1, to: checkIn) ?? checkIn)..., displayedComponents: .date)

@@ -13,11 +13,11 @@ struct EmailAuthView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
-    private enum Mode {
+    enum Mode {
         case signIn, register
     }
 
-    @State private var mode: Mode = .signIn
+    @State private var mode: Mode
     @State private var email = ""
     @State private var password = ""
     @State private var displayName = ""
@@ -25,6 +25,10 @@ struct EmailAuthView: View {
 
     private enum Field {
         case name, email, password
+    }
+
+    init(initialMode: Mode = .signIn) {
+        _mode = State(initialValue: initialMode)
     }
 
     private var isRegistering: Bool { mode == .register }

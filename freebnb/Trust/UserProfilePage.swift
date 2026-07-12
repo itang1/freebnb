@@ -61,7 +61,13 @@ struct UserProfilePage: View {
                 )
 
                 if !isSelf && authManager.authMethod != .guest {
-                    FriendshipControl(userID: userID, displayName: displayName)
+                    // The relationship control only earns space up here when there's
+                    // an action to take (add, or answer a request). Once you're
+                    // friends, status and unfriending move to the bottom, so this is
+                    // absent rather than an empty gap above Message.
+                    if !friendStore.isFriend(userID) {
+                        FriendshipControl(userID: userID, displayName: displayName)
+                    }
 
                     NavigationLink {
                         MessagingPage(otherUserID: userID, otherName: displayName)
@@ -115,14 +121,14 @@ struct UserProfilePage: View {
 
                 if !isSelf && authManager.authMethod != .guest {
                     Divider()
-                    // Manage section: the rare, deliberate ways to step back from
-                    // someone. Colour signals severity rather than category, so red
-                    // is spent on exactly one action. Unfriending (reversible) and
-                    // reporting (routes to us, costs the other person nothing yet)
-                    // stay neutral; blocking, the one hostile, self-protective cut,
-                    // is the only thing in red.
+                    // Manage section: the friendship status plus the rare, deliberate
+                    // ways to step back from someone. Colour signals severity, so red
+                    // is spent on exactly one action. "Friends" is a positive status
+                    // (accent) that hides unfriending behind a tap; reporting (routes
+                    // to us, costs the other person nothing yet) stays neutral;
+                    // blocking, the one hostile, self-protective cut, is the only red.
                     VStack(alignment: .leading, spacing: 16) {
-                        UnfriendButton(userID: userID, displayName: displayName)
+                        FriendStatusButton(userID: userID, displayName: displayName)
 
                         Button {
                             showReport = true

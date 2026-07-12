@@ -563,6 +563,10 @@ extension HomeDetailPage {
                     .multilineTextAlignment(.center)
             } else {
                 let existing = requestStore.activeRequest(for: home.id, guestUserID: authManager.userID)
+                // "Open conversation" the moment a thread exists, not only once a
+                // request does: sending a plain message already starts the chat, so
+                // the button shouldn't keep inviting a first message after one.
+                let hasThread = messageStore.hasConversation(with: home.hostUserID)
                 VStack(spacing: 10) {
                     if let existing {
                         existingRequestBanner(existing)
@@ -578,7 +582,7 @@ extension HomeDetailPage {
                         // inside the conversation. The label carries that so nobody
                         // has to hunt for a request action or read fine print.
                         Label(
-                            existing == nil ? "Message \(home.hostName) to request a stay" : "Open conversation",
+                            (existing == nil && !hasThread) ? "Message \(home.hostName) to request a stay" : "Open conversation",
                             systemImage: "message.fill"
                         )
                         .font(.headline)

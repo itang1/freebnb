@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import AuthenticationServices
 import UserNotifications
 
 struct ProfilePage: View {
@@ -368,33 +367,30 @@ struct ProfilePage: View {
     // MARK: - Guest sign-up section
 
     private var guestSignUpSection: some View {
-        VStack(spacing: 12) {
-            Text("Create an account to save your info")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-
-            SignInWithAppleButton(.signUp) { request in
-                authManager.prepareAppleSignInRequest(request)
-            } onCompletion: { result in
-                authManager.handleAuthorization(result)
-            }
-            .signInWithAppleButtonStyle(.black)
-            .frame(height: 50)
-            .cornerRadius(12)
-            .padding(.horizontal)
-
-            HStack(spacing: 6) {
-                Image(systemName: "lock.shield")
+        NavigationLink {
+            CreateAccountPage()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "person.crop.circle.badge.plus")
+                    .frame(width: 28)
+                    .foregroundColor(Color.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Create an account")
+                        .foregroundColor(.primary)
+                    Text("Save your info so it's there next time.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
                     .font(.caption)
-                Text("FreeBNB never sees or stores your password. Sign-in is handled entirely by Apple.")
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary.opacity(0.5))
             }
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 24)
-            .padding(.top, 4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
         }
+        .sectionCard()
+        .accessibilityIdentifier("profile.createAccountButton")
     }
 
     // MARK: - Helpers

@@ -56,7 +56,10 @@ struct FriendshipControl: View {
         case .incoming(let edge):
             incomingControls(edge)
         case .friends:
-            friendsStatus
+            // Once you're friends there's nothing to do up here: the status and the
+            // (deliberately buried) way to end it live at the bottom of the profile,
+            // beside Report and Block. See `FriendStatusButton`.
+            EmptyView()
         }
     }
 
@@ -130,17 +133,6 @@ struct FriendshipControl: View {
         }
     }
 
-    /// Being friends is a confirmation, not an action, so it reads as a quiet
-    /// status line rather than a full-width button. Ending the friendship is a
-    /// rare, deliberate thing and lives down in the manage section with Report
-    /// and Block (see `UnfriendButton`), not behind this label.
-    private var friendsStatus: some View {
-        Label("Friends", systemImage: "checkmark.circle.fill")
-            .font(.subheadline.weight(.medium))
-            .foregroundColor(Color.accent)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     // MARK: - Actions
 
     /// Runs a friend-graph mutation with a shared busy flag and inline error, so
@@ -157,11 +149,12 @@ struct FriendshipControl: View {
     }
 }
 
-/// The low-key way to end a friendship, sized and coloured to sit with Report and
-/// Block at the bottom of a profile rather than shouting from the top. Renders
-/// nothing unless the two people are actually friends, so the profile can drop it
-/// in unconditionally.
-struct UnfriendButton: View {
+/// The friendship status, shown at the bottom of a profile beside Report and
+/// Block. It reads as a quiet "Friends ✓" confirmation; unfriending is tucked
+/// behind a tap and a confirmation, so ending a friendship is never a stray,
+/// one-tap thing. Renders nothing unless the two people are actually friends, so
+/// the profile can drop it in unconditionally.
+struct FriendStatusButton: View {
     let userID: String
     let displayName: String
 
@@ -177,9 +170,9 @@ struct UnfriendButton: View {
                 Button {
                     confirming = true
                 } label: {
-                    Label("Unfriend \(displayName)", systemImage: "person.badge.minus")
+                    Label("Friends", systemImage: "checkmark.circle.fill")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color.accent)
                 }
                 .buttonStyle(.plain)
                 .disabled(isWorking)
@@ -189,11 +182,11 @@ struct UnfriendButton: View {
                 }
             }
             .confirmationDialog(
-                "Remove \(displayName) as a friend?",
+                "You're friends with \(displayName)",
                 isPresented: $confirming,
                 titleVisibility: .visible
             ) {
-                Button("Unfriend", role: .destructive) {
+                Button("Unfriend \(displayName)", role: .destructive) {
                     errorMessage = nil
                     isWorking = true
                     Task {
@@ -204,7 +197,7 @@ struct UnfriendButton: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("You'll no longer see each other's homes. To reconnect, one of you will need to send a new friend request.")
+                Text("Unfriending means you'll no longer see each other's homes. To reconnect, one of you will need to send a new friend request.")
             }
         }
     }

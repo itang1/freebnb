@@ -226,7 +226,16 @@ final class AuthManager {
                     withIDToken: idToken,
                     accessToken: result.user.accessToken.tokenString
                 )
-                _ = try await Auth.auth().signIn(with: credential)
+                if let anon = Auth.auth().currentUser, anon.isAnonymous {
+                    do {
+                        _ = try await anon.link(with: credential)
+                    } catch let linkError as NSError
+                        where linkError.code == AuthErrorCode.credentialAlreadyInUse.rawValue {
+                        _ = try await Auth.auth().signIn(with: credential)
+                    }
+                } else {
+                    _ = try await Auth.auth().signIn(with: credential)
+                }
                 Telemetry.log(.signInCompleted, parameters: ["method": "google"])
             } catch let error as NSError where error.code == GIDSignInError.canceled.rawValue {
                 return
@@ -259,6 +268,8 @@ final class AuthManager {
     }
 
     /// Creates a new email/password account, optionally stamping a display name.
+    /// If a guest (anonymous) session is active, links the credential to it
+    /// instead of creating a fresh account, so guest data carries over.
     func register(withEmail email: String, password: String, displayName: String) {
         let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -266,7 +277,13 @@ final class AuthManager {
             isLoading = true
             defer { isLoading = false }
             do {
-                let result = try await Auth.auth().createUser(withEmail: email, password: password)
+                let result: AuthDataResult
+                if let anon = Auth.auth().currentUser, anon.isAnonymous {
+                    let credential = EmailAuthProvider.credential(withEmail: email, password: password)
+                    result = try await anon.link(with: credential)
+                } else {
+                    result = try await Auth.auth().createUser(withEmail: email, password: password)
+                }
                 if !name.isEmpty {
                     let change = result.user.createProfileChangeRequest()
                     change.displayName = name

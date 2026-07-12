@@ -428,6 +428,19 @@ final class MessageStore {
 
     // MARK: - Public interface
 
+    /// True once a thread with `otherUserID` exists, meaning a message has been
+    /// sent either way (including an optimistic send not yet echoed by the
+    /// server). Lets a listing offer "Open conversation" the moment contact has
+    /// been made, rather than waiting on a stay request.
+    func hasConversation(with otherUserID: String) -> Bool {
+        guard let currentUserID else { return false }
+        let cid = MessageStore.conversationID(userIDs: [currentUserID, otherUserID])
+        if conversationDocs[cid] != nil { return true }
+        return pendingMessages.values.contains {
+            Set($0.participants) == Set([currentUserID, otherUserID])
+        }
+    }
+
     var conversationSummaries: [ConversationSummary] {
         guard let currentUserID else { return [] }
         var summaries: [String: ConversationSummary] = [:]
