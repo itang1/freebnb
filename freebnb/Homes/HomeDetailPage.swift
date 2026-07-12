@@ -93,7 +93,7 @@ struct HomeDetailPage: View {
                     HStack(spacing: 5) {
                         Image(systemName: home.hostMotivation.iconName)
                             .font(.caption2)
-                        Text(home.hostMotivation.displayName)
+                        Text(home.hostMotivation.homeText)
                             .font(.caption)
                             .fontWeight(.medium)
                     }
@@ -102,7 +102,7 @@ struct HomeDetailPage: View {
                     .padding(.vertical, 4)
                     .background(home.hostMotivation.tintColor.opacity(0.12))
                     .clipShape(Capsule())
-                    .accessibilityLabel("Host motivation: \(home.hostMotivation.displayName)")
+                    .accessibilityLabel("Host motivation: \(home.hostMotivation.homeText)")
 
                     hostTrustSignals
                 }

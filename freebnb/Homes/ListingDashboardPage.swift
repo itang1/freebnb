@@ -199,7 +199,7 @@ struct ListingDashboardPage: View {
                 HStack(spacing: 5) {
                     Image(systemName: listing.hostMotivation.iconName)
                         .font(.caption2)
-                    Text(listing.hostMotivation.displayName)
+                    Text(listing.hostMotivation.homeText)
                         .font(.caption)
                         .fontWeight(.medium)
                 }
