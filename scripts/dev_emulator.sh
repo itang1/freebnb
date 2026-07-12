@@ -33,13 +33,43 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 AUTH_PORT=9099
+FIRESTORE_PORT=8080
+PROJECT=freebnb-6814a
 LOG_DIR="$REPO_ROOT/.emulator"
+# Firestore export/import lives here so hand-created data survives a clean
+# emulator restart (see --export-on-exit / --import below). Gitignored.
+DATA_DIR="$LOG_DIR/data"
 mkdir -p "$LOG_DIR"
 
 emulator_up() { curl -sf "http://localhost:${AUTH_PORT}/" >/dev/null 2>&1; }
 
+# True when the demo data is present. Probes a seed *listing* with the emulator's
+# "owner" bypass so it works regardless of Firestore rules. This is what lets a
+# re-run *heal* an emulator that came up empty, rather than trusting "the port is
+# open" to mean "the data is there" (which is exactly how a crashed seed used to
+# leave the app with nothing to show).
+#
+# The sentinel is a seed-only listing, never a user doc: the running app rewrites
+# the signed-in user's own profile on launch, so users/seed-dev-tester can exist
+# on an otherwise-empty emulator and would give a false positive.
+is_seeded() {
+  [ "$(curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer owner' \
+      "http://localhost:${FIRESTORE_PORT}/v1/projects/${PROJECT}/databases/(default)/documents/homes/seed-home-spongebob-1")" = "200" ]
+}
+
+seed() {
+  echo "Seeding demo data (Devna, Guesta, and the SpongeBob cast)…"
+  node scripts/seed_test_data.js --reset
+}
+
 if emulator_up; then
-  echo "Firebase emulator already running — leaving existing data in place."
+  if is_seeded; then
+    echo "Firebase emulator already running and seeded — leaving your data in place."
+  else
+    echo "Emulator is running but has no demo data — seeding it now…"
+    seed
+  fi
+  echo "Ready. The 'Sign in as devna' / 'Sign in as guest' buttons are live."
   exit 0
 fi
 
@@ -61,9 +91,19 @@ else
   echo "Functions did not build; starting without them (see .emulator/functions-build.log)."
 fi
 
+# Persist data across restarts: export on a clean shutdown, and re-import it on
+# the next cold start. --import only accepts an existing export, so pass it only
+# when one is there (the first ever run has none).
+IMPORT_ARGS=()
+if [ -d "$DATA_DIR" ]; then
+  IMPORT_ARGS=(--import "$DATA_DIR")
+fi
+
 nohup firebase emulators:start \
   --only "$EMULATORS" \
-  --project freebnb-6814a \
+  --project "$PROJECT" \
+  --export-on-exit "$DATA_DIR" \
+  "${IMPORT_ARGS[@]}" \
   >"$LOG_DIR/emulators.log" 2>&1 &
 echo $! >"$LOG_DIR/emulators.pid"
 
@@ -78,7 +118,12 @@ if ! emulator_up; then
   exit 1
 fi
 
-echo "Seeding demo data (Devna, Guesta, and the SpongeBob cast)…"
-node scripts/seed_test_data.js --reset
+# A restored export already has the demo data; only a truly empty start needs a
+# seed. Either way the app ends up with data — no manual re-run required.
+if is_seeded; then
+  echo "Restored demo data from the previous session."
+else
+  seed
+fi
 
 echo "Ready. The 'Sign in as devna' / 'Sign in as guest' buttons are now live."
