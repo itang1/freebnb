@@ -59,9 +59,13 @@ struct AuthEmulatorTests {
         let change = result.user.createProfileChangeRequest()
         change.displayName = "New Member"
         try await change.commitChanges()
+        // commitChanges persists the name to the backend but does not reliably
+        // refresh the in-memory user (especially against the emulator); reload it
+        // before reading the display name back.
+        try await result.user.reload()
 
         #expect(AuthManager.method(for: result.user) == .email)
-        #expect(auth.currentUser?.displayName == "New Member")
+        #expect(result.user.displayName == "New Member")
     }
 
     // The real SDK error for a duplicate email must still map to .emailInUse —
