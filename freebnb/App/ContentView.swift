@@ -221,6 +221,12 @@ struct ContentView: View {
                 }
             }
         }
+        // Land on the Listings tab after signing in. selectedTab is persisted,
+        // so without this a returning user would reopen on whatever tab they
+        // last used before signing out.
+        .onChange(of: authManager.isSignedIn) { _, signedIn in
+            if signedIn { selectedTab = 0 }
+        }
         .offlineBanner(isOnline: networkMonitor.isOnline)
         .appliesStoredAppearance()
     }
