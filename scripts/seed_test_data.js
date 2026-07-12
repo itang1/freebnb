@@ -565,7 +565,31 @@ const stayRequests = [
     stayRequest({ id: "seed-request-completed-sandy-spongebob", listingID: "seed-home-spongebob-1", guestUserID: "seed-host-sandy",
       checkInDays: -20, checkOutDays: -17, status: "completed", guestNote: "Y'all got a spare room?", hostNote: "Always!" }),
     stayRequest({ id: "seed-request-completed-gary-pearl", listingID: "seed-home-pearl-1", guestUserID: "seed-guest-gary",
-      checkInDays: -12, checkOutDays: -10, status: "completed", guestNote: "Meow." })
+      checkInDays: -12, checkOutDays: -10, status: "completed", guestNote: "Meow." }),
+    // More bookings across more hosts, so every host has at least one taken
+    // (accepted or completed) stay somewhere, not just the original core cast.
+    stayRequest({ id: "seed-request-patrick-puff", listingID: "seed-home-puff-1", guestUserID: "seed-guest-patrick",
+      checkInDays: 25, checkOutDays: 27, status: "accepted", guestNote: "Promise there will be no driving lessons involved.", hostNote: "See that there isn't." }),
+    stayRequest({ id: "seed-request-completed-gary-puff", listingID: "seed-home-puff-1", guestUserID: "seed-guest-gary",
+      checkInDays: -8, checkOutDays: -6, status: "completed", guestNote: "Meow.", hostNote: "Quiet as a mouse. Lovely guest." }),
+    stayRequest({ id: "seed-request-barnacleboy-karen", listingID: "seed-home-karen-1", guestUserID: "seed-guest-barnacleboy",
+      checkInDays: 18, checkOutDays: 20, status: "accepted", guestNote: "Does the loft do sarcasm in stereo?", hostNote: "Only in stereo." }),
+    stayRequest({ id: "seed-request-squidward-karen", listingID: "seed-home-karen-1", guestUserID: "seed-host-squidward",
+      checkInDays: 33, checkOutDays: 35, status: "pending", guestNote: "I appreciate a well-automated space." }),
+    stayRequest({ id: "seed-request-gary-mermaidman", listingID: "seed-home-mermaidman-1", guestUserID: "seed-guest-gary",
+      checkInDays: 15, checkOutDays: 17, status: "accepted", guestNote: "Meow.", hostNote: "A hero's welcome awaits, citizen snail." }),
+    stayRequest({ id: "seed-request-completed-patrick-neptune", listingID: "seed-home-neptune-1", guestUserID: "seed-guest-patrick",
+      checkInDays: -15, checkOutDays: -13, status: "completed", guestNote: "Is the trident for swimming or just for looking royal?", hostNote: "Looking royal. Obviously." }),
+    stayRequest({ id: "seed-request-karen-plankton", listingID: "seed-home-plankton-1", guestUserID: "seed-host-karen",
+      checkInDays: 9, checkOutDays: 10, status: "accepted", guestNote: "Bringing the good soldering iron.", hostNote: "Excellent. We have work to do." }),
+    stayRequest({ id: "seed-request-patrick-larry", listingID: "seed-home-larry-1", guestUserID: "seed-guest-patrick",
+      checkInDays: 28, checkOutDays: 30, status: "accepted", guestNote: "Do we lift at sunrise or can I sleep in?", hostNote: "Sunrise. No excuses." }),
+    stayRequest({ id: "seed-request-larry-krabs2", listingID: "seed-home-krabs-2", guestUserID: "seed-host-larry",
+      checkInDays: 45, checkOutDays: 47, status: "pending", guestNote: "Need a beach recovery week after leg day." }),
+    stayRequest({ id: "seed-request-larry-sandy2", listingID: "seed-home-sandy-2", guestUserID: "seed-host-larry",
+      checkInDays: 22, checkOutDays: 24, status: "accepted", guestNote: "Passing through Austin, mind if I raid the workshop?", hostNote: "Just don't reprogram anything." }),
+    stayRequest({ id: "seed-request-completed-neptune-squidward1", listingID: "seed-home-squidward-1", guestUserID: "seed-host-neptune",
+      checkInDays: -25, checkOutDays: -23, status: "completed", guestNote: "A king requires impeccable manners, and you delivered.", hostNote: "Naturally." })
 ];
 
 // Post-stay reviews (feature 1). The document id is "{stayRequestID}_{authorUID}",
@@ -591,7 +615,19 @@ const reviews = [
   review({ stayRequestID: "seed-request-completed-sandy-spongebob", authorUserID: "seed-host-spongebob",
     role: "hostReviewingGuest", rating: 5, publicComment: "Sandy left the place cleaner than she found it!" }),
   review({ stayRequestID: "seed-request-completed-gary-pearl", authorUserID: "seed-guest-gary",
-    role: "guestReviewingHost", rating: 5, publicComment: "Meow." })
+    role: "guestReviewingHost", rating: 5, publicComment: "Meow." }),
+  review({ stayRequestID: "seed-request-completed-gary-puff", authorUserID: "seed-guest-gary",
+    role: "guestReviewingHost", rating: 5, publicComment: "Meow." }),
+  review({ stayRequestID: "seed-request-completed-gary-puff", authorUserID: "seed-host-puff",
+    role: "hostReviewingGuest", rating: 5, publicComment: "The quietest guest I have ever hosted. Ten out of ten." }),
+  review({ stayRequestID: "seed-request-completed-patrick-neptune", authorUserID: "seed-guest-patrick",
+    role: "guestReviewingHost", rating: 5, publicComment: "Got to hold the trident for a whole minute. Best vacation ever." }),
+  review({ stayRequestID: "seed-request-completed-patrick-neptune", authorUserID: "seed-host-neptune",
+    role: "hostReviewingGuest", rating: 3, publicComment: "Asked about the trident forty times. Otherwise pleasant." }),
+  review({ stayRequestID: "seed-request-completed-neptune-squidward1", authorUserID: "seed-host-neptune",
+    role: "guestReviewingHost", rating: 5, publicComment: "The self-portraits alone are worth the trip. A cultured host." }),
+  review({ stayRequestID: "seed-request-completed-neptune-squidward1", authorUserID: "seed-host-squidward",
+    role: "hostReviewingGuest", rating: 5, publicComment: "Finally, a guest who understands the clarinet is not optional listening." })
 ];
 
 // Friend-written character references (feature 1). One per (subject, author),
@@ -655,11 +691,29 @@ const explicitFriendEdges = [
     friendEdge("seed-guest-barnacleboy", "seed-host-pearl", "accepted", "seed-guest-barnacleboy"),
     friendEdge("seed-host-sandy", "seed-host-krabs", "accepted", "seed-host-sandy"),
     friendEdge("seed-host-neptune", "seed-host-squidward", "accepted", "seed-host-neptune"),
+    // Backfills edges that completed stays below already required (every stay
+    // request needs an accepted friend edge) but that were missing.
+    friendEdge("seed-guest-gary", "seed-host-pearl", "accepted", "seed-guest-gary"),
+    friendEdge("seed-guest-patrick", "seed-host-krabs", "accepted", "seed-guest-patrick"),
+    // More density across the graph, backing the additional stay requests below
+    // and giving the previously under-connected hosts (Puff, Karen, Neptune,
+    // Mermaid Man on his own listing) guests who can actually book them.
+    friendEdge("seed-guest-patrick", "seed-host-puff", "accepted", "seed-guest-patrick"),
+    friendEdge("seed-guest-gary", "seed-host-puff", "accepted", "seed-host-puff"),
+    friendEdge("seed-guest-barnacleboy", "seed-host-karen", "accepted", "seed-guest-barnacleboy"),
+    friendEdge("seed-host-squidward", "seed-host-karen", "accepted", "seed-host-karen"),
+    friendEdge("seed-guest-gary", "seed-host-mermaidman", "accepted", "seed-guest-gary"),
+    friendEdge("seed-guest-patrick", "seed-host-neptune", "accepted", "seed-host-neptune"),
+    friendEdge("seed-guest-patrick", "seed-host-larry", "accepted", "seed-guest-patrick"),
+    friendEdge("seed-host-larry", "seed-host-krabs", "accepted", "seed-host-larry"),
     // Pending: Patrick asked Gary (outgoing for Patrick), Neptune asked Krabs,
-    // Pearl asked Patrick (incoming for Patrick).
+    // Pearl asked Patrick (incoming for Patrick), Karen asked Mermaid Man,
+    // Puff asked Krabs.
     friendEdge("seed-guest-patrick", "seed-guest-gary", "pending", "seed-guest-patrick"),
     friendEdge("seed-host-neptune", "seed-host-krabs", "pending", "seed-host-neptune"),
-    friendEdge("seed-host-pearl", "seed-guest-patrick", "pending", "seed-host-pearl")
+    friendEdge("seed-host-pearl", "seed-guest-patrick", "pending", "seed-host-pearl"),
+    friendEdge("seed-host-karen", "seed-host-mermaidman", "pending", "seed-host-karen"),
+    friendEdge("seed-host-puff", "seed-host-krabs", "pending", "seed-host-puff")
 ];
 
 // S1: each test account (dev, guest-tester) is an accepted friend of every
@@ -749,6 +803,26 @@ const conversationThreads = [
     a: "seed-host-mermaidman", b: "seed-guest-barnacleboy", mutedBy: ["seed-guest-barnacleboy"], msgs: [
       { from: "seed-host-mermaidman", text: "EVIL is afoot! We must patrol Sarasota at dawn!", minsAgo: 90 },
       { from: "seed-host-mermaidman", text: "Barnacle Boy? Are you napping again?", minsAgo: 30 }
+    ]
+  },
+  {
+    a: "seed-guest-patrick", b: "seed-host-puff", msgs: [
+      { from: "seed-guest-patrick", text: "Mrs. Puff! Room for me next month?", minsAgo: 600 },
+      { from: "seed-host-puff", text: "Accepted. And no, we are not discussing your license.", minsAgo: 590 },
+      { from: "seed-guest-patrick", text: "Wasn't gonna!!", minsAgo: 588 }
+    ]
+  },
+  {
+    a: "seed-guest-barnacleboy", b: "seed-host-karen", msgs: [
+      { from: "seed-guest-barnacleboy", text: "Heard your loft talks back. Sold.", minsAgo: 250 },
+      { from: "seed-host-karen", text: "It does. It also judges your bedtime.", minsAgo: 240 }
+    ]
+  },
+  {
+    a: "seed-guest-patrick", b: "seed-host-larry", msgs: [
+      { from: "seed-host-larry", text: "Sunrise workout, don't be late, buddy.", minsAgo: 150 },
+      { from: "seed-guest-patrick", text: "what if I'm asleep at sunrise", minsAgo: 145 },
+      { from: "seed-host-larry", text: "Then we wake you up. See you soon!", minsAgo: 140 }
     ]
   }
 ];
