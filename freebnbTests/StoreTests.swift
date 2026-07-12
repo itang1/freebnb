@@ -31,7 +31,10 @@ struct HomeStoreTests {
     @Test func saveAddsListingToRepository() async throws {
         let repo = InMemoryHomesRepository()
         let store = HomeStore(repository: repo)
-        let home = HomeFixture.make(hostUserID: "host1")
+        // The ACL names the host, as CreateListingViewModel stamps on every save;
+        // the feed read below is a pure "ACL contains me" query with no host
+        // fallback, in memory just like in Firestore.
+        let home = HomeFixture.make(hostUserID: "host1", allowedViewerIDs: ["host1"])
 
         try await store.save(home)
 

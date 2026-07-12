@@ -92,15 +92,18 @@ struct CoHostStoreTests {
         return try #require(all.first { $0.id == id })
     }
 
+    // Fixtures that are read back through the feed carry `allowedViewerIDs`
+    // naming the host, exactly as CreateListingViewModel stamps on every save —
+    // the feed is a single "ACL contains me" query, with no host fallback.
     @Test func addCoHostAppendsOneToTheRoster() async throws {
-        let home = HomeFixture.make()
+        let home = HomeFixture.make(allowedViewerIDs: ["host"])
         let (store, repo) = store([home])
         try await store.addCoHost("friend", to: home, hostUserID: "host")
         #expect(try await fetch(repo, id: home.id).coHosts == ["friend"])
     }
 
     @Test func addingAnExistingCoHostIsANoOp() async throws {
-        let home = HomeFixture.make(coHosts: ["friend"])
+        let home = HomeFixture.make(coHosts: ["friend"], allowedViewerIDs: ["host"])
         let (store, repo) = store([home])
         try await store.addCoHost("friend", to: home, hostUserID: "host")
         #expect(try await fetch(repo, id: home.id).coHosts == ["friend"])
@@ -134,7 +137,7 @@ struct CoHostStoreTests {
     }
 
     @Test func removeCoHostDropsThemFromTheRoster() async throws {
-        let home = HomeFixture.make(coHosts: ["a", "b"])
+        let home = HomeFixture.make(coHosts: ["a", "b"], allowedViewerIDs: ["host"])
         let (store, repo) = store([home])
         try await store.removeCoHost("a", from: home, hostUserID: "host")
         #expect(try await fetch(repo, id: home.id).coHosts == ["b"])
