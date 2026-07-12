@@ -23,7 +23,6 @@ struct FriendsPage: View {
     @State private var isSearching = false
     @State private var searchError: String?
     @State private var pendingRequests: Set<String> = []
-    @State private var searchTask: Task<Void, Never>?
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespaces) }
     private var isSearchActive: Bool { !trimmedQuery.isEmpty }
@@ -42,7 +41,7 @@ struct FriendsPage: View {
         .textInputAutocapitalization(.words)
         .autocorrectionDisabled()
         .task { await friendStore.loadSuggestions() }
-        .onChange(of: query) { _, newValue in scheduleSearch(newValue) }
+        .task(id: trimmedQuery) { await performSearch() }
         .navigationTitle("Friends")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -190,33 +189,44 @@ struct FriendsPage: View {
 
     // MARK: - Search actions
 
-    /// Debounces the name search: each keystroke cancels the pending fetch, so
-    /// only a pause in typing reaches `searchProfiles`. An empty query clears the
-    /// results and drops back to the friend-management list.
-    private func scheduleSearch(_ newValue: String) {
-        searchTask?.cancel()
-        let trimmed = newValue.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else {
+    /// Runs the debounced name search for the current query. Driven by
+    /// `.task(id: trimmedQuery)`, so SwiftUI cancels the previous run and starts a
+    /// fresh one on every change: the newest query always owns the loading state,
+    /// and an empty query clears it, so the spinner can never outlive a search
+    /// (including one that finds no one). An empty query drops back to the
+    /// friend-management list.
+    private func performSearch() async {
+        let needle = trimmedQuery
+        guard !needle.isEmpty else {
             searchResults = []
             isSearching = false
             searchError = nil
             return
         }
-        isSearching = true
-        searchTask = Task {
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-            await runSearch(trimmed)
-        }
-    }
 
-    private func runSearch(_ query: String) async {
+        isSearching = true
         searchError = nil
+
+        // Debounce: a newer keystroke changes the task id and cancels this run
+        // during the pause, so only a lull in typing reaches the network.
         do {
-            searchResults = try await userProfileStore.searchProfiles(query: query)
+            try await Task.sleep(nanoseconds: 300_000_000)
         } catch {
+            return // superseded; the newer run owns the state from here
+        }
+
+        do {
+            let results = try await userProfileStore.searchProfiles(query: needle)
+            guard !Task.isCancelled else { return } // don't stomp a newer query's state
+            searchResults = results
+            searchError = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled else { return }
             searchError = error.localizedDescription
         }
+
         isSearching = false
     }
 
