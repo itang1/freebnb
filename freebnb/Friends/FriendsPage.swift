@@ -130,10 +130,12 @@ struct FriendsPage: View {
             Section("Friends") {
                 ForEach(friendStore.friendEdges) { edge in
                     let otherID = edge.otherUserID(relativeTo: authManager.userID)
-                    FriendRow(
-                        name: userProfileStore.displayName(for: otherID) ?? "FreeBNB User",
-                        homeCount: counts[otherID] ?? 0
-                    )
+                    let name = userProfileStore.displayName(for: otherID) ?? "FreeBNB User"
+                    NavigationLink {
+                        UserProfilePage(userID: otherID, fallbackName: name)
+                    } label: {
+                        FriendRow(name: name, homeCount: counts[otherID] ?? 0)
+                    }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             Task { await remove(edge) }

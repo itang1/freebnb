@@ -18,6 +18,7 @@ struct UserProfilePage: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(FriendStore.self) private var friendStore
     @Environment(AuthManager.self) private var authManager
+    @Environment(HomeStore.self) private var homeStore
 
     @State private var showWriteReference = false
     @State private var showReport = false
@@ -25,6 +26,14 @@ struct UserProfilePage: View {
     private var profile: UserProfile? { userProfileStore.profile(for: userID) }
     private var displayName: String { profile?.displayName ?? fallbackName }
     private var isSelf: Bool { authManager.userID == userID }
+
+    /// This person's listings that the viewer is allowed to see. `visibleListings`
+    /// is already privacy-filtered to the viewer's network, so filtering it by host
+    /// never exposes a home the viewer couldn't otherwise reach. Keyed on
+    /// `hostUserID` to match the "N homes" count on the Friends list.
+    private var hostHomes: [Home] {
+        homeStore.visibleListings.filter { $0.hostUserID == userID }
+    }
 
     /// Only an accepted friend may write a reference, which is exactly what the
     /// rules enforce. Checking the same condition here keeps the button from
@@ -64,6 +73,11 @@ struct UserProfilePage: View {
                         .cornerRadius(10)
                     }
                     .buttonStyle(.pressable)
+                }
+
+                if !hostHomes.isEmpty {
+                    Divider()
+                    homesSection
                 }
 
                 Divider()
@@ -116,6 +130,28 @@ struct UserProfilePage: View {
         .sheet(isPresented: $showReport) {
             ReportSheet(targetType: .user, targetID: userID, targetName: displayName)
         }
+    }
+
+    /// The person's places, each tapping through to the full listing. Uses the
+    /// same `HomeCard` the feed shows, so a home looks identical wherever it
+    /// appears. Destination-based `NavigationLink` rather than value-based because
+    /// this page is pushed from stacks (the Friends sheet) that don't register a
+    /// `Home` navigation destination.
+    private var homesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(isSelf ? "Your homes" : "\(displayName)'s homes")
+                .font(.headline)
+
+            ForEach(hostHomes) { home in
+                NavigationLink {
+                    HomeDetailPage(home: home)
+                } label: {
+                    HomeCard(listing: home)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var header: some View {
