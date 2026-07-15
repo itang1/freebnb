@@ -7,14 +7,10 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 
-# Node. Unanchored on purpose so it covers functions/, rules-tests/, and any
-# package directory added later. Unlike `lib/` below, nothing legitimate is ever
-# named node_modules, so matching at every depth is safe.
+# Node
 node_modules/
 
-# Python venv. Anchored to the repo root with a leading slash: unanchored,
-# `lib/` and `bin/` match at every depth and would silently swallow real source
-# directories. functions/lib is covered by functions/.gitignore.
+# Python venv
 .venv/
 venv/
 /bin/
@@ -22,15 +18,13 @@ venv/
 /share/
 /include/
 /pyvenv.cfg
+functions/lib/
+functions/node_modules/
+
 
 # Project
 freebnb/Shared/sampleData.swift
 freebnb/GoogleService-Info.plist
-TODO.md
-TODO_MANUAL.md
-TESTING_CHECKLIST.md
-CREDITS.md
-FEATURES.md
 
 # Secrets - never commit
 .secrets/
@@ -43,5 +37,6 @@ ui-debug.log
 # Local Firebase emulator runtime logs/pids (dev_emulator.sh)
 .emulator/
 
-# Local seed login reference (fake test credentials)
-SEED_LOGINS.md
+# Documentation
+# Internal docs are private; public docs are tracked
+docs/internal/
