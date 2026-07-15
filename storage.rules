@@ -1,15 +1,21 @@
 rules_version = '2';
 
 // Listing photos: organized as /listings/{hostUserID}/{listingID}/{file}.
-// Any signed-in user can read (visibility narrows later, once friend
-// connections land). Only the host may write, only up to 10 MB per image,
-// and only image content types.
+// Reads require a full (non-anonymous) member. Storage rules cannot read
+// Firestore, so they cannot mirror a listing's friends-only `allowedViewerIDs`
+// ACL the way firestore.rules does; a full ACL check would need a Cloud
+// Function image proxy. This gate is defense in depth: photo URLs live only on
+// the friends-only home document and so are only ever handed to allowed
+// viewers, and blocking anonymous sessions denies the cheapest path-enumeration
+// attack (an anon session minted from the public web config). Only the host may
+// write, only up to 10 MB per image, and only image content types.
 service firebase.storage {
   match /b/{bucket}/o {
     match /listings/{hostUserID}/{listingID}/{allPaths=**} {
-      allow read: if request.auth != null;
-      // Anonymous guests may browse photos but not upload; only a full-member
-      // host may write their own listing images.
+      // Full members only; an anonymous guest cannot read listing photos.
+      allow read: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      // Only a full-member host may write their own listing images.
       allow write: if request.auth != null
         && request.auth.token.firebase.sign_in_provider != 'anonymous'
         && request.auth.uid == hostUserID

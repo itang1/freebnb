@@ -163,7 +163,7 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     // Users
     // The user document is a PUBLIC projection (displayName + timestamps +
-    // trustStats) that any signed-in user may read for name display in
+    // trustStats) that any full member may read for name display in
     // chat/listings and for the reputation chips on a listing card. PII and
     // safety-sensitive data (email, fcmToken, blockedUserIDs, savedListingIDs,
     // emergencyContact) live in the owner-only `private/profile` subdocument below
@@ -187,7 +187,11 @@ service cloud.firestore {
             && data.updatedAt == request.time;
       }
 
-      allow read: if isSignedIn();
+      // Full members only: the public projection is readable by any real
+      // account for name display, but not by an anonymous guest minted from the
+      // public web config, which would otherwise let anyone enumerate the whole
+      // user base. Elevated get()/exists() in other rules still read it freely.
+      allow read: if isFullMember();
 
       allow create: if isSignedIn()
           && isOwner(userID)
@@ -788,8 +792,10 @@ service cloud.firestore {
             && isOptionalString(data, 'publicComment', 2000);
       }
 
-      // Reviews are the public record; anyone signed in may read them.
-      allow read: if isSignedIn();
+      // Reviews are the public reputation record; any full member may read
+      // them. Gated to full members (not merely signed in) so an anonymous
+      // guest minted from the public web config cannot enumerate them.
+      allow read: if isFullMember();
 
       allow create: if isFullMember()
           && request.resource.data.keys().hasOnly([
@@ -872,7 +878,8 @@ service cloud.firestore {
     // have to keep one they didn't ask for.
     // -------------------------------------------------------------------------
     match /references/{referenceID} {
-      allow read: if isSignedIn();
+      // Public reputation record, full members only (see the reviews read).
+      allow read: if isFullMember();
 
       allow create: if isFullMember()
           && request.resource.data.keys().hasOnly([
