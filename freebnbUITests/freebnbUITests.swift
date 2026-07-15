@@ -169,6 +169,61 @@ final class freebnbUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Looking forward to it!"].waitForExistence(timeout: 10))
     }
 
+    // MARK: - ChoiceSection selection
+    //
+    // ChoiceSection (the create-listing form's radio-style sections) exposes its
+    // selected option only through the `.isSelected` accessibility trait. This
+    // taps through the cancellation-policy section and asserts the trait follows
+    // the tapped option rather than sticking to the default.
+
+    @MainActor
+    func testChoiceSectionSelectionMovesTrait() throws {
+        let app = launchApp()
+        signInAsDev(app)
+
+        // A listing requires a display name; set one if this is a fresh emulator user.
+        if app.buttons["Edit Name"].waitForExistence(timeout: 5) {
+            app.buttons["Edit Name"].tap()
+            let nameField = app.textFields["Name"]
+            if nameField.waitForExistence(timeout: 5), (nameField.value as? String)?.isEmpty != false {
+                nameField.tap()
+                nameField.typeText("Dev Host")
+                app.buttons["Save"].tap()
+            } else {
+                app.buttons["Cancel"].tap()
+            }
+        }
+
+        waitAndTap(app.tabBars.buttons["Stays"])
+        waitAndTap(app.buttons["Listings"])
+        waitAndTap(app.buttons["Create listing"])
+
+        XCTAssertTrue(app.textFields["Street"].waitForExistence(timeout: 10))
+
+        // ChoiceSection combines each option into a single element whose label
+        // begins with the option's display name (CancellationPolicy.displayName).
+        let moderate = app.otherElements
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Moderate")).firstMatch
+        let strict = app.otherElements
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Strict")).firstMatch
+
+        // The cancellation-policy section sits below the address and sleeping
+        // fields, so scroll it into the accessibility tree first.
+        var scrolls = 0
+        while !moderate.exists && scrolls < 8 {
+            app.swipeUp()
+            scrolls += 1
+        }
+        XCTAssertTrue(moderate.waitForExistence(timeout: 5), "Cancellation-policy options never appeared")
+
+        moderate.tap()
+        XCTAssertTrue(moderate.isSelected, "Tapping Moderate should mark it selected")
+
+        strict.tap()
+        XCTAssertTrue(strict.isSelected, "Tapping Strict should move the selection to it")
+        XCTAssertFalse(moderate.isSelected, "Selecting Strict should clear Moderate's selected trait")
+    }
+
     @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
