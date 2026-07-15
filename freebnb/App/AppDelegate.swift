@@ -70,18 +70,23 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let info = response.notification.request.content.userInfo
-        switch info["type"] as? String {
-        case "message":
-            if let senderID = info["senderUserID"] as? String {
-                router?.pendingConversationUserID = senderID
+        // This callback is delivered on the main thread, and DeepLinkRouter is
+        // @MainActor, so assume the isolation rather than hopping asynchronously
+        // (which would race the completionHandler call below).
+        MainActor.assumeIsolated {
+            switch info["type"] as? String {
+            case "message":
+                if let senderID = info["senderUserID"] as? String {
+                    router?.pendingConversationUserID = senderID
+                }
+            case "stay_request", "stay_update", "stay_reminder":
+                // Stay pushes and the local check-in / checkout reminders (feature 22)
+                // all land the user on the Stays tab, where the relevant stay is
+                // already visible in its section.
+                router?.pendingStayEvent = true
+            default:
+                break
             }
-        case "stay_request", "stay_update", "stay_reminder":
-            // Stay pushes and the local check-in / checkout reminders (feature 22)
-            // all land the user on the Stays tab, where the relevant stay is
-            // already visible in its section.
-            router?.pendingStayEvent = true
-        default:
-            break
         }
         completionHandler()
     }
@@ -93,7 +98,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 extension AppDelegate: MessagingDelegate {
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
-        Task {
+        // Not guaranteed to arrive on the main thread, and userProfileStore is
+        // main-actor isolated, so hop explicitly.
+        Task { @MainActor in
             try? await userProfileStore?.saveFCMToken(token)
         }
     }

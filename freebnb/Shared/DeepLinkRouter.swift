@@ -6,6 +6,7 @@
 import Foundation
 import Observation
 
+@MainActor
 @Observable
 final class DeepLinkRouter {
     var pendingConversationUserID: String?
