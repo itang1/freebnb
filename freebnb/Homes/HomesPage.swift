@@ -11,12 +11,12 @@ import SwiftUI
 struct HomesPage: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(FriendStore.self) private var friendStore
+    @Environment(DeepLinkRouter.self) private var router
 
     @State private var selectedFilters: Set<FilterOption> = []
     @State private var selectedSort: SortOption = .default
     @State private var citySearch: String = ""
     @State private var showSavedOnly: Bool = false
-    @State private var showFriends: Bool = false
     @State private var showMap: Bool = false
     /// Pages fetched on behalf of the active query, reset whenever the query
     /// changes. Bounds the exhaustion loop below.
@@ -308,44 +308,11 @@ struct HomesPage: View {
             if selectedSort == .nearest { selectedSort = .default }
         }
         .navigationTitle("Available FreeBNBs")
-        .toolbar { friendsToolbarItem; mapToolbarItem }
-        .sheet(isPresented: $showFriends) { friendsSheet }
+        .toolbar { mapToolbarItem }
         .sheet(isPresented: $showMap) {
             ListingsMapView(listings: listings) { home in
                 onSelectHome(home)
             }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var friendsToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                showFriends = true
-            } label: {
-                if friendStore.friendEdges.isEmpty && friendStore.pendingCount == 0 {
-                    Label("Add Friends", systemImage: "person.badge.plus")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(Color.accent)
-                } else {
-                    ZStack(alignment: .topTrailing) {
-                        Label("Friends", systemImage: "person.2")
-                            .font(.subheadline.weight(.medium))
-                        if friendStore.pendingCount > 0 {
-                            Text("\(friendStore.pendingCount)")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Color.red, in: Capsule())
-                                .offset(x: 8, y: -6)
-                        }
-                    }
-                }
-            }
-            .accessibilityLabel(friendStore.pendingCount > 0
-                ? "Friends, \(friendStore.pendingCount) pending"
-                : friendStore.friendEdges.isEmpty ? "Add Friends" : "Friends")
         }
     }
 
@@ -358,17 +325,6 @@ struct HomesPage: View {
                 Image(systemName: "map")
             }
             .accessibilityLabel("Show map view")
-        }
-    }
-
-    private var friendsSheet: some View {
-        NavigationStack {
-            FriendsPage()
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") { showFriends = false }
-                    }
-                }
         }
     }
 
@@ -510,7 +466,7 @@ private extension HomesPage {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             Button {
-                showFriends = true
+                router.pendingFriendsTab = true
             } label: {
                 Label("Find Friends", systemImage: "person.badge.plus")
                     .capsuleChip()

@@ -23,7 +23,8 @@ struct StaysTab: View {
     @State private var completing: StayRequest?
     @State private var actionError: String?
     @State private var selectedTab: StaysTabSelection = .trips
-    @State private var showPast = false
+    @State private var showPastTrips = false
+    @State private var showPastHosting = false
 
     enum StaysTabSelection { case trips, listings }
 
@@ -61,31 +62,51 @@ struct StaysTab: View {
         requestStore.completedStays.filter { reviewStore.needsReview(stayRequestID: $0.id) }
     }
 
-    private var hasActive: Bool {
-        !pendingOut.isEmpty || !acceptedOut.isEmpty || !pendingIn.isEmpty || !acceptedIn.isEmpty
+    // Gates the empty state for My Trips specifically (traveler side only) — a
+    // host with pending requests but no trips of their own should still see
+    // "No trips yet" here; their requests live under My Listings instead.
+    private var hasTripsContent: Bool {
+        !pendingOut.isEmpty || !acceptedOut.isEmpty || !pastOut.isEmpty
     }
-    private var hasPast: Bool { !pastOut.isEmpty || !pastIn.isEmpty }
-    private var hasAny: Bool { hasActive || hasPast }
+
+    /// The signed-in user's own completed stays as a guest, not yet reviewed.
+    private var awaitingReviewAsGuest: [StayRequest] {
+        awaitingReview.filter { $0.guestUserID == authManager.userID }
+    }
+
+    /// Completed stays the signed-in user hosted, not yet reviewed.
+    private var awaitingReviewAsHost: [StayRequest] {
+        awaitingReview.filter { $0.hostUserID == authManager.userID }
+    }
 
     var body: some View {
-        Group {
-            if selectedTab == .listings {
-                YourListingsPage()
-            } else {
-                tripsView
-            }
-        }
-        .navigationTitle("Stays")
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("", selection: $selectedTab) {
-                    Text("Trips").tag(StaysTabSelection.trips)
-                    Text("Listings").tag(StaysTabSelection.listings)
+        VStack(spacing: 0) {
+            // A big, filled pill per pane rather than the system segmented
+            // control: that one sat quietly in the nav bar under a static
+            // "Stays" title and people weren't noticing it moved between two
+            // very different screens. Color plus a badge on whichever pane
+            // owes you something makes the switch itself worth looking at.
+            StaysModeSwitcher(
+                selection: $selectedTab,
+                tripsBadge: awaitingReviewAsGuest.count,
+                listingsBadge: pendingIn.count + awaitingReviewAsHost.count
+            )
+
+            Group {
+                if selectedTab == .listings {
+                    // Requests against your properties surface here, above the
+                    // properties themselves — "My Listings" means everything tied
+                    // to homes you host, not just the properties list.
+                    YourListingsPage(title: "My Listings") {
+                        listingsRequestSections
+                    }
+                } else {
+                    tripsView
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
             }
         }
+        .navigationTitle(selectedTab == .listings ? "My Listings" : "My Trips")
+        .navigationBarTitleDisplayMode(.inline)
         .background(Color.primaryBackground.ignoresSafeArea())
         .sheet(item: $respondingTo) { req in
             AcceptSheet(request: req) { hostNote in
@@ -134,7 +155,7 @@ struct StaysTab: View {
     private var tripsView: some View {
         if let error = requestStore.listenerError {
             listenerErrorState(error)
-        } else if !hasAny {
+        } else if !hasTripsContent {
             emptyState
         } else {
             staysList
@@ -175,10 +196,9 @@ struct StaysTab: View {
                         .foregroundColor(.red)
                 }
             }
-            reviewSection
+            reviewSection(awaitingReviewAsGuest)
             travelerSections
-            hostSections
-            pastSection
+            pastTripsSection
         }
         .refreshable { requestStore.reload() }
         .scrollContentBackground(.hidden)
@@ -191,12 +211,15 @@ struct StaysTab: View {
     }
 
     /// First on the page: a stay is freshest the day it ends, and an unreviewed
-    /// stay is the one thing here that both parties are waiting on each other for.
+    /// stay is the one thing here that both parties are waiting on each other
+    /// for. Called once per pane with that pane's role-filtered stays, so a
+    /// guest-side review prompt never shows up while you're looking at My
+    /// Listings, and vice versa.
     @ViewBuilder
-    private var reviewSection: some View {
-        if !awaitingReview.isEmpty {
+    private func reviewSection(_ items: [StayRequest]) -> some View {
+        if !items.isEmpty {
             Section("Needs your review") {
-                ForEach(awaitingReview, id: \.id) { req in
+                ForEach(items, id: \.id) { req in
                     ReviewPromptRow(
                         request: req,
                         subjectName: subjectName(for: req),
@@ -284,32 +307,55 @@ struct StaysTab: View {
         }
     }
 
-    @ViewBuilder
-    private var pastSection: some View {
-        if hasPast {
-            Section {
-                Button {
-                    withAnimation { showPast.toggle() }
-                } label: {
-                    Label(showPast ? "Hide past stays" : "Show past stays",
-                          systemImage: showPast ? "chevron.up" : "chevron.down")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
+    private func pastToggleRow(isShown: Binding<Bool>, label: String) -> some View {
+        Section {
+            Button {
+                withAnimation { isShown.wrappedValue.toggle() }
+            } label: {
+                Label(isShown.wrappedValue ? "Hide \(label)" : "Show \(label)",
+                      systemImage: isShown.wrappedValue ? "chevron.up" : "chevron.down")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
-            if showPast {
-                if !pastOut.isEmpty {
-                    Section("Past trips") {
-                        ForEach(pastOut, id: \.id) { req in outgoingRow(req) }
-                    }
-                }
-                if !pastIn.isEmpty {
-                    Section("Past hosting") {
-                        ForEach(pastIn, id: \.id) { req in incomingRow(req) }
-                    }
+        }
+    }
+
+    @ViewBuilder
+    private var pastTripsSection: some View {
+        if !pastOut.isEmpty {
+            pastToggleRow(isShown: $showPastTrips, label: "past trips")
+            if showPastTrips {
+                Section("Past trips") {
+                    ForEach(pastOut, id: \.id) { req in outgoingRow(req) }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var pastHostingSection: some View {
+        if !pastIn.isEmpty {
+            pastToggleRow(isShown: $showPastHosting, label: "past hosting")
+            if showPastHosting {
+                Section("Past hosting") {
+                    ForEach(pastIn, id: \.id) { req in incomingRow(req) }
+                }
+            }
+        }
+    }
+
+    // MARK: - My Listings
+
+    /// Everything about requests against your properties: reviews owed, live
+    /// hosting sections, and past hosting. Injected above the properties list
+    /// in `YourListingsPage` so "My Listings" reads as one coherent screen
+    /// about your homes, requests included, rather than requests hiding under
+    /// "My Trips" while this pane only manages listing settings.
+    @ViewBuilder
+    private var listingsRequestSections: some View {
+        reviewSection(awaitingReviewAsHost)
+        hostSections
+        pastHostingSection
     }
 }
 
@@ -525,6 +571,79 @@ private extension View {
                     Label("Message \(name)", systemImage: "message")
                 }
             }
+    }
+}
+
+// MARK: - Mode switcher
+
+/// Two full-width filled pills standing in for the system segmented control.
+/// The accent fill on whichever pane is active, plus a badge on whichever pane
+/// owes the user something, is meant to be noticed at a glance — the system
+/// segmented control, tucked into the nav bar under a static title, wasn't.
+private struct StaysModeSwitcher: View {
+    @Binding var selection: StaysTab.StaysTabSelection
+    let tripsBadge: Int
+    let listingsBadge: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            segment(
+                title: "My Trips",
+                systemImage: "suitcase.fill",
+                badge: tripsBadge,
+                isSelected: selection == .trips
+            ) {
+                selection = .trips
+            }
+            segment(
+                title: "My Listings",
+                systemImage: "house.fill",
+                badge: listingsBadge,
+                isSelected: selection == .listings
+            ) {
+                selection = .listings
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .background(Color.primaryBackground)
+    }
+
+    private func segment(
+        title: String,
+        systemImage: String,
+        badge: Int,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.2)) { action() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                Text(title)
+                if badge > 0 {
+                    Text("\(badge)")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(isSelected ? Color.onAccent.opacity(0.3) : Color.red, in: Capsule())
+                        .foregroundColor(isSelected ? Color.onAccent : .white)
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .foregroundColor(isSelected ? Color.onAccent : .primary)
+            .background(
+                isSelected ? Color.accent : Color.secondaryBackground.opacity(0.5),
+                in: Capsule()
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel(badge > 0 ? "\(title), \(badge) need\(badge == 1 ? "s" : "") your attention" : title)
     }
 }
 

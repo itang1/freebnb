@@ -95,10 +95,17 @@ struct ContentView: View {
                     .tag(2)
 
                     NavigationStack {
+                        FriendsPage()
+                    }
+                    .tabItem { Label("Friends", systemImage: "person.2") }
+                    .badge(friendStore.pendingCount)
+                    .tag(3)
+
+                    NavigationStack {
                         ProfilePage()
                     }
                     .tabItem { Label("Profile", systemImage: "person.fill") }
-                    .tag(3)
+                    .tag(4)
                 }
                 .tint(.accent)
                 // Keep HomeStore's derived feed in sync with who the viewer is,
@@ -126,10 +133,11 @@ struct ContentView: View {
                     WhatsNewSheet { showWhatsNew = false }
                 }
                 .onAppear {
-                    // The Info tab (old tag 4) was folded into Profile. selectedTab
-                    // is persisted, so a selection pointing at the removed tab would
-                    // leave the tab bar with nothing selected; land on Listings.
-                    if selectedTab > 3 { selectedTab = 0 }
+                    // selectedTab is persisted; a stale value pointing past the last
+                    // tab (from before Friends was added, or before Info was folded
+                    // into Profile) would leave the tab bar with nothing selected —
+                    // land on Listings instead.
+                    if selectedTab > 4 { selectedTab = 0 }
                     if !hasSeenOnboarding {
                         showOnboarding = true
                     } else if lastSeenWhatsNewVersion.isEmpty {
@@ -155,6 +163,11 @@ struct ContentView: View {
                     guard pending else { return }
                     selectedTab = 1
                     router.pendingStayEvent = false
+                }
+                .onChange(of: router.pendingFriendsTab) { _, pending in
+                    guard pending else { return }
+                    selectedTab = 3
+                    router.pendingFriendsTab = false
                 }
                 // Keep the Spotlight index in step with the saved set (feature 40).
                 // Fires on appear and whenever a listing is saved/unsaved or the

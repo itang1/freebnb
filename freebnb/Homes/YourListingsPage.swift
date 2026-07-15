@@ -20,13 +20,32 @@ private struct ListingSheet: Identifiable, Hashable {
     }
 }
 
-struct YourListingsPage: View {
+struct YourListingsPage<LeadingContent: View>: View {
     @Environment(HomeStore.self) private var homeStore
     @Environment(AuthManager.self) private var authManager
     @State private var sheet: ListingSheet?
     @State private var deleteTarget: Home? = nil
     @State private var isDeleting = false
     @State private var errorMessage: String?
+
+    /// Extra sections rendered above the properties list — the Stays tab uses
+    /// this to fold hosting requests into "My Listings" so the pane covers
+    /// everything tied to your homes, not just property management. Defaults
+    /// to nothing so the Profile entry point is unaffected.
+    private var leadingContent: () -> LeadingContent
+
+    /// The Stays tab overrides this to "My Listings" so the nav bar (and the
+    /// back-button label on the next pushed view) matches its own switcher
+    /// rather than showing "Your Listings" underneath it.
+    private var title: String
+
+    init(
+        title: String = "Your Listings",
+        @ViewBuilder leadingContent: @escaping () -> LeadingContent = { EmptyView() }
+    ) {
+        self.title = title
+        self.leadingContent = leadingContent
+    }
 
     private var myID: String { authManager.userID }
 
@@ -53,7 +72,7 @@ struct YourListingsPage: View {
                 listView
             }
         }
-        .navigationTitle("Your Listings")
+        .navigationTitle(title)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -96,6 +115,8 @@ struct YourListingsPage: View {
 
     private var listView: some View {
         List {
+            leadingContent()
+
             if let errorMessage {
                 Section { InlineErrorLabel(message: errorMessage) }
             }

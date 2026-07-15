@@ -19,4 +19,10 @@ final class DeepLinkRouter {
     /// Consumed by ContentView, which switches to the Listings tab and pushes the
     /// listing if it's loaded. Navigation-only, so acting on it directly is safe.
     var pendingListingID: String?
+
+    /// Set when a child view (e.g. the empty feed's "Find Friends" prompt) wants
+    /// to send the user to the Friends tab. Consumed by ContentView, which
+    /// switches tabs and resets this. Navigation-only, so acting on it directly
+    /// is safe.
+    var pendingFriendsTab: Bool = false
 }
