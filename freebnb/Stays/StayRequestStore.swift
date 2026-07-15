@@ -113,6 +113,7 @@ final class StayRequestStore {
         let request = StayRequest(
             listingID: listing.id,
             listingCity: listing.address.city,
+            listingTitle: listing.title,
             listingHostName: listing.hostName,
             hostUserID: listing.hostUserID,
             guestUserID: guestUserID,

@@ -840,11 +840,18 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
 
   const requestID = event.params.requestID;
   const listingCity: string = after.listingCity ?? "";
+  const listingTitle: string = after.listingTitle ?? "";
   const guestUserID: string = after.guestUserID;
   const hostUserID: string = after.hostUserID;
   const beforeStatus: string | undefined = before?.status;
   const afterStatus: string = after.status;
-  const citySuffix = listingCity ? ` in ${listingCity}` : "";
+  // Name the specific home when the host titled it ("for Guest room by the Rose
+  // Bowl"), since one host can list several; otherwise fall back to the city.
+  const placeSuffix = listingTitle
+    ? ` for ${listingTitle}`
+    : listingCity
+    ? ` in ${listingCity}`
+    : "";
 
   // Stays hosted, stays taken, and the host's response rate all move with a
   // status change, so both parties' reputations are recomputed before anything
@@ -863,7 +870,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
       category: "stayRequests",
       senderID: guestUserID,
       title: "New stay request",
-      body: `${guestName} asked to stay${citySuffix}.`,
+      body: `${guestName} asked to stay${placeSuffix}.`,
       data: { type: "stay_request", requestID, role: "host" },
     });
     return;
@@ -879,7 +886,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
         category: "stayUpdates",
         senderID: hostUserID,
         title: "Stay accepted 🎉",
-        body: `${hostName} accepted your request${citySuffix}.`,
+        body: `${hostName} accepted your request${placeSuffix}.`,
         data: { type: "stay_update", requestID, role: "guest", status: "accepted" },
       });
     } else if (afterStatus === "declined") {
@@ -888,7 +895,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
         category: "stayUpdates",
         senderID: hostUserID,
         title: "Stay request update",
-        body: `${hostName} couldn't host your request${citySuffix}.`,
+        body: `${hostName} couldn't host your request${placeSuffix}.`,
         data: { type: "stay_update", requestID, role: "guest", status: "declined" },
       });
     }

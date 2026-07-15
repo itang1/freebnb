@@ -373,6 +373,12 @@ struct Home: Identifiable, Hashable, Codable {
     // MARK: Host and location
     var hostUserID: String
     var hostName: String
+    // Optional host-chosen label for the listing ("Guest room by the Rose
+    // Bowl"). A host may run more than one home and they share a single
+    // conversation thread, so a title is what tells two of them apart. Nil (the
+    // default, and every listing created before this field existed) falls back
+    // to "<hostName>'s place" through `displayTitle`.
+    var title: String? = nil
     var address: Address
     var description: String?
     var contactPreference: HostContactPreference
@@ -459,6 +465,20 @@ struct Home: Identifiable, Hashable, Codable {
 
     // Non-optional view of photo URLs for view code.
     var photos: [String] { photoURLs ?? [] }
+
+    /// The host's title only when they actually set one (trimmed, non-empty).
+    /// Views that already show the host's name use this to add the title as a
+    /// second line without printing the "<host>'s place" fallback.
+    var customTitle: String? {
+        guard let title else { return nil }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// How the listing names itself where it stands alone (chat banner, request
+    /// sheet): the host's title if they set one, otherwise "<hostName>'s place".
+    /// The single source of truth so those surfaces agree.
+    var displayTitle: String { customTitle ?? "\(hostName)'s place" }
 
     /// Non-optional view of the co-host roster.
     var coHosts: [String] { coHostUserIDs ?? [] }

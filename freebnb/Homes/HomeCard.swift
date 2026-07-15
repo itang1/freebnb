@@ -156,6 +156,12 @@ struct HomeCard: View {
                 Text(listing.hostName)
                     .font(.headline)
                     .foregroundColor(.white)
+                if let title = listing.customTitle {
+                    Text(title)
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                }
                 Text("\(listing.address.city), \(listing.address.state)")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.85))
@@ -177,6 +183,12 @@ struct HomeCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(listing.hostName)
                     .font(.headline)
+                if let title = listing.customTitle {
+                    Text(title)
+                        .font(.subheadline)
+                        .opacity(0.9)
+                        .lineLimit(1)
+                }
                 Text("\(listing.address.city), \(listing.address.state)")
                     .font(.caption)
                     .opacity(0.85)

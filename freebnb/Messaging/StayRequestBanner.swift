@@ -30,9 +30,9 @@ struct StayRequestBanner: View {
                         .foregroundColor(.secondary)
                 }
                 // Names the home this request is for. The thread is shared across
-                // all of a host's listings, so the city is what tells two of them
-                // apart here.
-                Label(request.listingCity, systemImage: "house.fill")
+                // all of a host's listings, so this (title if set, else city) is
+                // what tells two of them apart here.
+                Label(request.listingLabel, systemImage: "house.fill")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .labelStyle(.titleAndIcon)

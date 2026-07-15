@@ -64,6 +64,9 @@ final class CreateListingViewModel {
     var foodProvision: FoodProvision
 
     // Host and contact
+    // Optional short label so a host running more than one home can tell them
+    // apart; blank means "use <hostName>'s place" (see Home.displayTitle).
+    var title: String
     var description: String
     var contactPreference: HostContactPreference
     var hostContactInfo: String
@@ -120,6 +123,7 @@ final class CreateListingViewModel {
         providesTowels = source?.amenities.providesTowels ?? false
         providesToiletries = source?.amenities.providesToiletries ?? false
         foodProvision = source?.amenities.foodProvision ?? .none
+        title = source?.title ?? ""
         description = source?.description ?? ""
         contactPreference = source?.contactPreference ?? .inApp
         hostContactInfo = source?.hostContactInfo ?? ""
@@ -177,6 +181,7 @@ final class CreateListingViewModel {
             draft.providesTowels = providesTowels
             draft.providesToiletries = providesToiletries
             draft.foodProvision = foodProvision
+            draft.title = title
             draft.description = description
             draft.contactPreference = contactPreference
             draft.hostContactInfo = hostContactInfo
@@ -217,6 +222,7 @@ final class CreateListingViewModel {
             providesTowels = newValue.providesTowels
             providesToiletries = newValue.providesToiletries
             foodProvision = newValue.foodProvision
+            title = newValue.title
             description = newValue.description
             contactPreference = newValue.contactPreference
             hostContactInfo = newValue.hostContactInfo
@@ -245,9 +251,15 @@ final class CreateListingViewModel {
         store.clear(userID: userID)
     }
 
+    /// Cap on the optional listing title. Mirrors `isOptionalString(data,
+    /// 'title', 60)` in firestore.rules, which is what actually enforces it; the
+    /// client checks the same bound so a save never round-trips only to bounce.
+    static let titleMaxLength = 60
+
     func canSave(displayName: String) -> Bool {
         guard !isSaving else { return false }
         guard !displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        guard title.trimmingCharacters(in: .whitespacesAndNewlines).count <= Self.titleMaxLength else { return false }
         guard !street.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !city.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !stateField.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
@@ -353,6 +365,7 @@ final class CreateListingViewModel {
     /// Builds the `Home` document from the form fields. Split out of `save`
     /// purely so each stays within lint's function-length limit.
     private func makeHome(hostUserID: String, hostName: String) -> Home {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedContactInfo = hostContactInfo.trimmingCharacters(in: .whitespacesAndNewlines)
         let sleepingRaw = sleepingCounts.reduce(into: [String: Int]()) { acc, pair in
@@ -368,6 +381,7 @@ final class CreateListingViewModel {
         return Home(
             hostUserID: hostUserID,
             hostName: hostName,
+            title: trimmedTitle.isEmpty ? nil : trimmedTitle,
             // Street deliberately absent: it goes to the private location doc below.
             address: Address(
                 city: city.trimmingCharacters(in: .whitespaces),

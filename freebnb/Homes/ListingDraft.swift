@@ -62,6 +62,7 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var providesToiletries = false
     var foodProvision: FoodProvision = .none
 
+    var title = ""
     var description = ""
     var contactPreference: HostContactPreference = .inApp
     var hostContactInfo = ""

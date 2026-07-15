@@ -63,7 +63,7 @@ struct RequestStaySheet: View {
                             .foregroundColor(.accent)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("\(listing.hostName)'s place")
+                            Text(listing.displayTitle)
                                 .font(.subheadline.weight(.semibold))
                             Text("\(listing.address.city), \(listing.address.state)")
                                 .font(.caption)

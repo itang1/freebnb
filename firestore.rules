@@ -244,7 +244,7 @@ service cloud.firestore {
       // the tail of this list.
       function isValidListing(data) {
         return data.keys().hasOnly([
-                 'id', 'hostUserID', 'hostName', 'address', 'description',
+                 'id', 'hostUserID', 'hostName', 'title', 'address', 'description',
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
                  'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
@@ -272,7 +272,9 @@ service cloud.firestore {
             && data.sleeping.numGuestRooms is int
             && data.guestPolicy.maxGuests is int
             && data.guestPolicy.maxStayDays is int
-            // Size caps so a document can't be stuffed toward the 1 MiB limit
+            // Size caps so a document can't be stuffed toward the 1 MiB limit.
+            // The 60-char title cap mirrors CreateListingViewModel.titleMaxLength.
+            && isOptionalString(data, 'title', 60)
             && isOptionalString(data, 'description', 2000)
             && isOptionalString(data, 'hostContactInfo', 500)
             && isOptionalList(data, 'photoURLs', 10)
@@ -478,11 +480,14 @@ service cloud.firestore {
 
       allow create: if isFullMember()
           && request.resource.data.keys().hasOnly([
-               'id', 'listingID', 'listingCity', 'listingHostName',
+               'id', 'listingID', 'listingCity', 'listingTitle', 'listingHostName',
                'hostUserID', 'guestUserID', 'checkIn', 'checkOut',
                'guestNote', 'hostNote', 'guestCount', 'arrivalWindow',
                'status', 'completedAt', 'createdAt', 'updatedAt'
              ])
+          // Denormalized listing title, snapshotted at request time (optional).
+          // Same 60-char cap as the listing's own title.
+          && isOptionalString(request.resource.data, 'listingTitle', 60)
           // A stay cannot be born finished.
           && isUnset(request.resource.data, 'completedAt')
           && request.resource.data.guestUserID == request.auth.uid

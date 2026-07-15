@@ -86,6 +86,11 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     let listingID: String
     // Denormalized so the request row is displayable without fetching the listing.
     let listingCity: String
+    // The listing's display title at request time, snapshotted like listingCity
+    // so a shared host thread can say which of their homes a request is for.
+    // Optional: requests created before the field, and listings with no custom
+    // title, decode cleanly as nil. Read through `listingLabel`.
+    let listingTitle: String?
     // Denormalized copy of the host's display name, rewritten in place when the
     // host renames (L7); `var` so the in-memory repository can update it.
     var listingHostName: String
@@ -111,6 +116,7 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         id: String = UUID().uuidString,
         listingID: String,
         listingCity: String,
+        listingTitle: String? = nil,
         listingHostName: String,
         hostUserID: String,
         guestUserID: String,
@@ -128,6 +134,7 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         self.id = id
         self.listingID = listingID
         self.listingCity = listingCity
+        self.listingTitle = listingTitle
         self.listingHostName = listingHostName
         self.hostUserID = hostUserID
         self.guestUserID = guestUserID
@@ -168,6 +175,16 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
 }
 
 extension StayRequest {
+    /// How the requested home names itself in trip rows and the chat banner: the
+    /// snapshotted title if there was one, otherwise the city. Mirrors
+    /// `Home.displayTitle`'s intent for the denormalized copy.
+    var listingLabel: String {
+        if let listingTitle, !listingTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return listingTitle
+        }
+        return listingCity
+    }
+
     /// "Mar 5 – Mar 9", the form used by every stay row and chat banner.
     var dateRangeText: String {
         let f = AppDateFormatters.shortDay

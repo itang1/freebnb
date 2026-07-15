@@ -40,6 +40,7 @@ struct CreateListingPage: View {
                     }
                 }
 
+                titleSection
                 locationSection
                 capacitySection
                 sleepingSection
@@ -296,6 +297,22 @@ struct CreateListingPage: View {
                     .foregroundColor(.secondary)
             } icon: {
                 Image(systemName: "lock.fill")
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private var titleSection: some View {
+        Section("Listing name (optional)") {
+            TextField("e.g. Guest room by the Rose Bowl", text: $vm.title)
+                .textInputAutocapitalization(.words)
+            if vm.title.trimmingCharacters(in: .whitespacesAndNewlines).count > CreateListingViewModel.titleMaxLength {
+                Text("Keep it under \(CreateListingViewModel.titleMaxLength) characters.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            } else {
+                Text("Helps people tell your homes apart if you list more than one. Left blank, guests see your name's place.")
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
         }

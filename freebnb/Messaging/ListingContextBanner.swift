@@ -19,7 +19,7 @@ struct ListingContextBanner: View {
                 .foregroundColor(.accent)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Re: \(listing.hostName)'s place")
+                Text("Re: \(listing.displayTitle)")
                     .font(.subheadline).fontWeight(.semibold)
                 Text("\(listing.address.city), \(listing.address.state)")
                     .font(.caption).foregroundColor(.secondary)
