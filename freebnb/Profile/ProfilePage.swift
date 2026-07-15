@@ -12,17 +12,12 @@ struct ProfilePage: View {
     @AppStorage(UserDefaultsKey.notificationsEnabled) private var notificationsEnabled = true
     @AppStorage(UserDefaultsKey.appearance) private var appearance = "system"
 
-    @Environment(\.openURL) private var openURL
     @State private var showEditName = false
     @State private var showDeleteConfirm = false
     @State private var notifAuthStatus: UNAuthorizationStatus = .notDetermined
     @State private var isExporting = false
     @State private var exportFile: ExportFile?
     @State private var exportError: String?
-
-    // Force-unwraps are safe: compile-time constant URLs.
-    private static let privacyURL = URL(string: "https://freebnb.app/privacy")!
-    private static let termsURL   = URL(string: "https://freebnb.app/terms")!
 
     var body: some View {
         ScrollView {
@@ -180,12 +175,40 @@ struct ProfilePage: View {
                     rowDivider
                     SettingsRow(icon: "number", label: "Version", trailingText: appVersion)
                     rowDivider
-                    SettingsRow(icon: "hand.raised", label: "Privacy Policy", chevron: true) {
-                        openURL(Self.privacyURL)
+                    NavigationLink {
+                        MarkdownPage(fileName: "privacy-policy", title: "Privacy Policy")
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "hand.raised")
+                                .frame(width: 28)
+                                .foregroundColor(Color.accent)
+                            Text("Privacy Policy")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary.opacity(0.5))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
                     }
                     rowDivider
-                    SettingsRow(icon: "doc.text", label: "Terms of Service", chevron: true) {
-                        openURL(Self.termsURL)
+                    NavigationLink {
+                        MarkdownPage(fileName: "terms-of-service", title: "Terms of Service")
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "doc.text")
+                                .frame(width: 28)
+                                .foregroundColor(Color.accent)
+                            Text("Terms of Service")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary.opacity(0.5))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
                     }
                 }
                 .sectionCard()
