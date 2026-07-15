@@ -47,7 +47,7 @@ struct SafetyCheckInSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Send one person your dates and address. They'll get it from you directly — FreeBNB doesn't message them.")
+                    Text("Send one person your dates and address. They'll get it from you directly; FreeBNB doesn't message them.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
