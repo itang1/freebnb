@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct InfoPage: View {
+    @Environment(\.openURL) private var openURL
     @State private var showFeedback = false
 
     var body: some View {
@@ -77,6 +78,26 @@ struct InfoPage: View {
                         icon: "shield.checkered",
                         title: "Safety Guidelines",
                         subtitle: "Stay safe and set boundaries"
+                    )
+                }
+
+                Button {
+                    openURL(LegalLinks.privacyPolicy)
+                } label: {
+                    InfoCard(
+                        icon: "hand.raised",
+                        title: "Privacy Policy",
+                        subtitle: "What we collect and how it's used"
+                    )
+                }
+
+                Button {
+                    openURL(LegalLinks.termsOfService)
+                } label: {
+                    InfoCard(
+                        icon: "doc.text",
+                        title: "Terms of Service",
+                        subtitle: "The rules for using FreeBNB"
                     )
                 }
 

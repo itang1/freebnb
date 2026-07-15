@@ -9,6 +9,7 @@ import UserNotifications
 struct ProfilePage: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(\.openURL) private var openURL
     @AppStorage(UserDefaultsKey.notificationsEnabled) private var notificationsEnabled = true
     @AppStorage(UserDefaultsKey.appearance) private var appearance = "system"
 
@@ -175,40 +176,12 @@ struct ProfilePage: View {
                     rowDivider
                     SettingsRow(icon: "number", label: "Version", trailingText: appVersion)
                     rowDivider
-                    NavigationLink {
-                        MarkdownPage(fileName: "privacy-policy", title: "Privacy Policy")
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "hand.raised")
-                                .frame(width: 28)
-                                .foregroundColor(Color.accent)
-                            Text("Privacy Policy")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary.opacity(0.5))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
+                    SettingsRow(icon: "hand.raised", label: "Privacy Policy", chevron: true) {
+                        openURL(LegalLinks.privacyPolicy)
                     }
                     rowDivider
-                    NavigationLink {
-                        MarkdownPage(fileName: "terms-of-service", title: "Terms of Service")
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "doc.text")
-                                .frame(width: 28)
-                                .foregroundColor(Color.accent)
-                            Text("Terms of Service")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary.opacity(0.5))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
+                    SettingsRow(icon: "doc.text", label: "Terms of Service", chevron: true) {
+                        openURL(LegalLinks.termsOfService)
                     }
                 }
                 .sectionCard()
