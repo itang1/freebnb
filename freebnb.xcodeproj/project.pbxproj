@@ -19,6 +19,10 @@
 		FCAA00062FA000000000AA01 /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00052FA000000000AA01 /* FirebasePerformance */; };
 		FCAA00082FA000000000AA01 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00072FA000000000AA01 /* FirebaseFunctions */; };
 		FCDFEB2A300770A1002BD75D /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = FCDFEB29300770A1002BD75D /* FirebaseAppCheck */; };
+		FCDFEC6F3008B8EB002BD75D /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FCDFEC6E3008B8EB002BD75D /* WidgetKit.framework */; };
+		FCDFEC713008B8EB002BD75D /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FCDFEC703008B8EB002BD75D /* SwiftUI.framework */; };
+		FCDFEC803008B8ED002BD75D /* freebnbWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FCDFEC6D3008B8EB002BD75D /* freebnbWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FCDFEC943008F48E002BD75D /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = FCDFEC933008F48E002BD75D /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,7 +40,28 @@
 			remoteGlobalIDString = FC3EE6B52E3360ED004B2E1B;
 			remoteInfo = freebnb;
 		};
+		FCDFEC7E3008B8ED002BD75D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FC3EE6AE2E3360ED004B2E1B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FCDFEC6C3008B8EB002BD75D;
+			remoteInfo = freebnbWidgetsExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FCDFEC853008B8ED002BD75D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FCDFEC803008B8ED002BD75D /* freebnbWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		FC38E3892E382803000906CA /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
@@ -45,6 +70,9 @@
 		FC3EE6CE2E3360EE004B2E1B /* freebnbUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = freebnbUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCBB00012FA000000000BB01 /* config/Config.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = config/Config.Debug.xcconfig; sourceTree = "<group>"; };
 		FCBB00022FA000000000BB01 /* config/Config.Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = config/Config.Release.xcconfig; sourceTree = "<group>"; };
+		FCDFEC6D3008B8EB002BD75D /* freebnbWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = freebnbWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FCDFEC6E3008B8EB002BD75D /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		FCDFEC703008B8EB002BD75D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -55,6 +83,23 @@
 			);
 			target = FC3EE6B52E3360ED004B2E1B /* freebnb */;
 		};
+		FCDFEC843008B8ED002BD75D /* Exceptions for "freebnbWidgets" folder in "freebnbWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FCDFEC6C3008B8EB002BD75D /* freebnbWidgetsExtension */;
+		};
+		FCDFEC923008B952002BD75D /* Exceptions for "freebnb" folder in "freebnbWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Shared/Widget/AppGroup.swift,
+				Shared/Widget/StayActivityAttributes.swift,
+				Shared/Widget/StayWidgetSnapshot.swift,
+				Shared/Widget/WidgetPalette.swift,
+			);
+			target = FCDFEC6C3008B8EB002BD75D /* freebnbWidgetsExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -62,6 +107,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				FC1855AA3002B000006C621E /* Exceptions for "freebnb" folder in "freebnb" target */,
+				FCDFEC923008B952002BD75D /* Exceptions for "freebnb" folder in "freebnbWidgetsExtension" target */,
 			);
 			path = freebnb;
 			sourceTree = "<group>";
@@ -76,6 +122,14 @@
 			path = freebnbUITests;
 			sourceTree = "<group>";
 		};
+		FCDFEC723008B8EB002BD75D /* freebnbWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FCDFEC843008B8ED002BD75D /* Exceptions for "freebnbWidgets" folder in "freebnbWidgetsExtension" target */,
+			);
+			path = freebnbWidgets;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -83,6 +137,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FCDFEC943008F48E002BD75D /* FirebaseMessaging in Frameworks */,
 				FCA1F5762F94741C00045A12 /* FirebaseCore in Frameworks */,
 				FCA1F5902F97273B00045A12 /* FirebaseStorage in Frameworks */,
 				FCA1F5782F94742D00045A12 /* FirebaseAuth in Frameworks */,
@@ -111,6 +166,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FCDFEC6A3008B8EB002BD75D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FCDFEC713008B8EB002BD75D /* SwiftUI.framework in Frameworks */,
+				FCDFEC6F3008B8EB002BD75D /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -120,6 +184,7 @@
 				FC3EE6B82E3360ED004B2E1B /* freebnb */,
 				FC3EE6C72E3360EE004B2E1B /* freebnbTests */,
 				FC3EE6D12E3360EE004B2E1B /* freebnbUITests */,
+				FCDFEC723008B8EB002BD75D /* freebnbWidgets */,
 				FC3EE6B72E3360ED004B2E1B /* Products */,
 				FC38E3892E382803000906CA /* .gitignore */,
 				FCBB00012FA000000000BB01 /* config/Config.Debug.xcconfig */,
@@ -134,6 +199,7 @@
 				FC3EE6B62E3360ED004B2E1B /* freebnb.app */,
 				FC3EE6C42E3360EE004B2E1B /* freebnbTests.xctest */,
 				FC3EE6CE2E3360EE004B2E1B /* freebnbUITests.xctest */,
+				FCDFEC6D3008B8EB002BD75D /* freebnbWidgetsExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -141,6 +207,8 @@
 		FCA1F5742F94741C00045A12 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				FCDFEC6E3008B8EB002BD75D /* WidgetKit.framework */,
+				FCDFEC703008B8EB002BD75D /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -156,10 +224,12 @@
 				FC3EE6B22E3360ED004B2E1B /* Sources */,
 				FC3EE6B32E3360ED004B2E1B /* Frameworks */,
 				FC3EE6B42E3360ED004B2E1B /* Resources */,
+				FCDFEC853008B8ED002BD75D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				FCDFEC7F3008B8ED002BD75D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				FC3EE6B82E3360ED004B2E1B /* freebnb */,
@@ -177,6 +247,7 @@
 				FC1854373002A4C6006C621E /* GoogleSignIn */,
 				FC1854393002A4C6006C621E /* GoogleSignInSwift */,
 				FCDFEB29300770A1002BD75D /* FirebaseAppCheck */,
+				FCDFEC933008F48E002BD75D /* FirebaseMessaging */,
 			);
 			productName = freebnb;
 			productReference = FC3EE6B62E3360ED004B2E1B /* freebnb.app */;
@@ -228,6 +299,28 @@
 			productReference = FC3EE6CE2E3360EE004B2E1B /* freebnbUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		FCDFEC6C3008B8EB002BD75D /* freebnbWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FCDFEC813008B8ED002BD75D /* Build configuration list for PBXNativeTarget "freebnbWidgetsExtension" */;
+			buildPhases = (
+				FCDFEC693008B8EB002BD75D /* Sources */,
+				FCDFEC6A3008B8EB002BD75D /* Frameworks */,
+				FCDFEC6B3008B8EB002BD75D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				FCDFEC723008B8EB002BD75D /* freebnbWidgets */,
+			);
+			name = freebnbWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = freebnbWidgetsExtension;
+			productReference = FCDFEC6D3008B8EB002BD75D /* freebnbWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -235,7 +328,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1640;
+				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					FC3EE6B52E3360ED004B2E1B = {
@@ -248,6 +341,9 @@
 					FC3EE6CD2E3360EE004B2E1B = {
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = FC3EE6B52E3360ED004B2E1B;
+					};
+					FCDFEC6C3008B8EB002BD75D = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -272,6 +368,7 @@
 				FC3EE6B52E3360ED004B2E1B /* freebnb */,
 				FC3EE6C32E3360EE004B2E1B /* freebnbTests */,
 				FC3EE6CD2E3360EE004B2E1B /* freebnbUITests */,
+				FCDFEC6C3008B8EB002BD75D /* freebnbWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -293,6 +390,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		FC3EE6CC2E3360EE004B2E1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FCDFEC6B3008B8EB002BD75D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -346,6 +450,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FCDFEC693008B8EB002BD75D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -358,6 +469,11 @@
 			isa = PBXTargetDependency;
 			target = FC3EE6B52E3360ED004B2E1B /* freebnb */;
 			targetProxy = FC3EE6CF2E3360EE004B2E1B /* PBXContainerItemProxy */;
+		};
+		FCDFEC7F3008B8ED002BD75D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FCDFEC6C3008B8EB002BD75D /* freebnbWidgetsExtension */;
+			targetProxy = FCDFEC7E3008B8ED002BD75D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -640,6 +756,73 @@
 			};
 			name = Release;
 		};
+		FCDFEC823008B8ED002BD75D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_ENTITLEMENTS = freebnbWidgets/freebnbWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = freebnbWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = freebnbWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.poodlestrategy.freebnb.freebnbWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FCDFEC833008B8ED002BD75D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_ENTITLEMENTS = freebnbWidgets/freebnbWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = freebnbWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = freebnbWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.poodlestrategy.freebnb.freebnbWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -675,6 +858,15 @@
 			buildConfigurations = (
 				FC3EE6DF2E3360EE004B2E1B /* Debug */,
 				FC3EE6E02E3360EE004B2E1B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FCDFEC813008B8ED002BD75D /* Build configuration list for PBXNativeTarget "freebnbWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FCDFEC823008B8ED002BD75D /* Debug */,
+				FCDFEC833008B8ED002BD75D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -755,6 +947,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAppCheck;
+		};
+		FCDFEC933008F48E002BD75D /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

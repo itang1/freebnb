@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The shared container the app writes the widget snapshot into and this
+	     extension reads back (StayWidgetBridge / AppGroup.swift). Must stay
+	     identical to the group in freebnb/freebnb.entitlements. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.poodlestrategy.freebnb</string>
+	</array>
+</dict>
+</plist>
