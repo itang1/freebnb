@@ -290,40 +290,7 @@ final class CreateListingViewModel {
         defer { isSaving = false }
 
         let trimmedStreet = street.trimmingCharacters(in: .whitespaces)
-        var home = makeHome(hostUserID: hostUserID, hostName: hostName)
-        // Recomputed on every save rather than carried over from `editing`, so an
-        // edit picks up friends added since the listing was created. The
-        // `onFriendEdgeWritten` function keeps it current between saves.
-        home.allowedViewerIDs = Home.viewerIDs(hostUserID: hostUserID, friendIDs: friendIDs)
-        // Preserve identity and creation time when editing so an edit keeps the
-        // listing's feed position instead of jumping to the top (L3). A duplicate
-        // has no target, so it keeps neither: it is a new listing that happens to
-        // start out looking like an old one, and it belongs at the top of the feed.
-        if let existing = mode.target {
-            home.id = existing.id
-            home.createdAt = existing.createdAt
-            // The roster is never rewritten by an edit. Only `HomeStore.addCoHost`
-            // and `removeCoHost` touch it, one addition per write, because that is
-            // all a loop-free rule can check against the friend graph.
-            home.coHostUserIDs = existing.coHostUserIDs
-
-            // A co-host is editing (feature 14). Every field `firestore.rules`
-            // pins to the host is carried over from the stored listing rather than
-            // rebuilt from this session. Two of these would otherwise be actively
-            // wrong, not merely rejected: `hostName` would become the co-host's own
-            // name, and `allowedViewerIDs` — recomputed above from the *saving*
-            // user's friends — would republish a friends-only listing to the
-            // co-host's social graph. The rules reject the write either way; this
-            // is what stops it from being attempted.
-            if !existing.isHostedBy(hostUserID) {
-                home.hostUserID = existing.hostUserID
-                home.hostName = existing.hostName
-                home.address = existing.address
-                home.contactPreference = existing.contactPreference
-                home.hostContactInfo = existing.hostContactInfo
-                home.allowedViewerIDs = existing.allowedViewerIDs
-            }
-        }
+        var home = makeHome(hostUserID: hostUserID, hostName: hostName, friendIDs: friendIDs)
 
         // Geocode so the map view can place a pin. The exact coordinate is private
         // — publishing it would give away the street the address split just hid —
@@ -362,9 +329,12 @@ final class CreateListingViewModel {
         }
     }
 
-    /// Builds the `Home` document from the form fields. Split out of `save`
-    /// purely so each stays within lint's function-length limit.
-    private func makeHome(hostUserID: String, hostName: String) -> Home {
+    /// Builds the `Home` document a save would write: the form fields, the read
+    /// ACL, and (when editing) every stored field the form does not manage.
+    /// Split out of `save` so the assembly is testable without geocoding or
+    /// persistence, and so each function stays within lint's length limit.
+    /// Internal, not private, for exactly that testability.
+    func makeHome(hostUserID: String, hostName: String, friendIDs: [String]) -> Home {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedContactInfo = hostContactInfo.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -378,7 +348,7 @@ final class CreateListingViewModel {
             ? bedSizeCounts.reduce(into: [String: Int]()) { acc, pair in acc[pair.key.rawValue] = pair.value }
             : [:]
 
-        return Home(
+        var home = Home(
             hostUserID: hostUserID,
             hostName: hostName,
             title: trimmedTitle.isEmpty ? nil : trimmedTitle,
@@ -428,5 +398,48 @@ final class CreateListingViewModel {
             ),
             cancellationPolicy: cancellationPolicy
         )
+
+        // Recomputed on every save rather than carried over from `editing`, so an
+        // edit picks up friends added since the listing was created. The
+        // `onFriendEdgeWritten` function keeps it current between saves.
+        home.allowedViewerIDs = Home.viewerIDs(hostUserID: hostUserID, friendIDs: friendIDs)
+
+        // Preserve identity and creation time when editing so an edit keeps the
+        // listing's feed position instead of jumping to the top (L3). A duplicate
+        // has no target, so it keeps neither: it is a new listing that happens to
+        // start out looking like an old one, and it belongs at the top of the feed.
+        if let existing = mode.target {
+            home.id = existing.id
+            home.createdAt = existing.createdAt
+            // The roster is never rewritten by an edit. Only `HomeStore.addCoHost`
+            // and `removeCoHost` touch it, one addition per write, because that is
+            // all a loop-free rule can check against the friend graph.
+            home.coHostUserIDs = existing.coHostUserIDs
+            // The form has no photo or availability controls, and the repository
+            // save is a full-document overwrite: anything not carried over here is
+            // erased from the stored listing. Losing these two would silently
+            // reopen every date the availability editor blocked and strip the
+            // listing's photos.
+            home.photoURLs = existing.photoURLs
+            home.blockedDateRanges = existing.blockedDateRanges
+
+            // A co-host is editing (feature 14). Every field `firestore.rules`
+            // pins to the host is carried over from the stored listing rather than
+            // rebuilt from this session. Two of these would otherwise be actively
+            // wrong, not merely rejected: `hostName` would become the co-host's own
+            // name, and `allowedViewerIDs` (recomputed above from the *saving*
+            // user's friends) would republish a friends-only listing to the
+            // co-host's social graph. The rules reject the write either way; this
+            // is what stops it from being attempted.
+            if !existing.isHostedBy(hostUserID) {
+                home.hostUserID = existing.hostUserID
+                home.hostName = existing.hostName
+                home.address = existing.address
+                home.contactPreference = existing.contactPreference
+                home.hostContactInfo = existing.hostContactInfo
+                home.allowedViewerIDs = existing.allowedViewerIDs
+            }
+        }
+        return home
     }
 }
