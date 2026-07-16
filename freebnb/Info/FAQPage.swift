@@ -35,7 +35,7 @@ struct FAQPage: View {
         FAQItem(
             question: "How is FreeBNB different from Couchsurfing or other home-sharing platforms?",
             // swiftlint:disable:next line_length
-            answer: "FreeBNB is built around trust, not strangers. Unlike Couchsurfing or similar platforms where you open your home to the public, FreeBNB is invite-only: you only see listings from your own friends. There's no public marketplace, no reviews from strangers, and no algorithm matching you with random people. Your guests are people you know and chose to connect with, not strangers you met online."
+            answer: "FreeBNB is built around trust, not strangers. Unlike Couchsurfing or similar platforms where you open your home to the public, FreeBNB is friends-only: you only see listings from your own friends. There's no public marketplace, no reviews from strangers, and no algorithm matching you with random people. Your guests are people you know and chose to connect with, not strangers you met online."
         ),
         FAQItem(
             question: "Does FreeBNB track my location?",

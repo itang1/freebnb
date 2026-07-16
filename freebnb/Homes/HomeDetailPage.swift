@@ -392,7 +392,7 @@ struct HomeDetailPage: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 ShareLink(
-                    item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB. Ask them for an invite!",
+                    item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB, a free, friends-only home-sharing app. If you know them, you can connect on the app and request a stay.",
                     subject: Text("FreeBNB Listing")
                 )
             }
