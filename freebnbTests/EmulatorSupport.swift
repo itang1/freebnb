@@ -18,8 +18,7 @@
 //    firebase emulators:exec --only firestore,auth \
 //      --project freebnb-emulator-tests \
 //      "xcodebuild test -scheme freebnb -testPlan EmulatorTests \
-//         -only-testing:freebnbTests/FirestoreHomesRepositoryEmulatorTests \
-//         -only-testing:freebnbTests/AuthEmulatorTests \
+//         -only-testing:freebnbTests/EmulatorBackedTests \
 //         CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO"
 //
 //  In Xcode, switch the scheme's test plan to EmulatorTests. The default plan
@@ -31,6 +30,20 @@ import FirebaseAuth
 import FirebaseCore
 @preconcurrency import FirebaseFirestore
 import Foundation
+import Testing
+
+/// Parent of every emulator-backed suite. Nesting them here is what keeps them
+/// from running *alongside each other*: `.serialized` on a suite only orders
+/// that suite's own tests, and Swift Testing is free to run two peer suites in
+/// parallel. These share one Auth session (`EmulatorSupport.auth` — one
+/// `currentUser`), so interleaved sign-ins swap `request.auth.uid` out from
+/// under a test in flight; the listing writes then fail the rules' hostUserID
+/// check with PERMISSION_DENIED, and the run wedges long enough for the test
+/// host's watchdog to kill it. Serialized here, the trait applies to every
+/// descendant, so the suites take turns. Run either one on its own and it has
+/// always passed — which is exactly what made this look like a flake.
+@Suite(.serialized, .enabled(if: EmulatorSupport.isEnabled))
+struct EmulatorBackedTests {}
 
 enum EmulatorSupport {
     // Must match the --project passed to `firebase emulators:exec` so the
