@@ -163,10 +163,11 @@ final class freebnbUITests: XCTestCase {
 
     // MARK: - Request a stay + message the host
     //
-    // Uses the dev account as both host and guest against a listing it just
-    // created, since a single UI test only drives one signed-in session.
-    // Accept/decline (which needs a second account) is covered by
-    // StayRequestStore-level tests instead — see freebnbTests.
+    // Drives the dev account as the guest against a seeded host's listing. The
+    // dev account is seeded as an accepted friend of the whole cast, so those
+    // listings are visible to it and messageable. Accept/decline (which needs a
+    // second signed-in session) is covered by StayRequestStore-level tests
+    // instead — see freebnbTests.
 
     @MainActor
     func testRequestStayAndSendMessage() throws {
@@ -174,16 +175,26 @@ final class freebnbUITests: XCTestCase {
         signInAsDev(app)
 
         waitAndTap(app.tabBars.buttons["Listings"])
-        let firstListing = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Opens listing details")).firstMatch
-        // Fall back to the first cell-like button in the list if the accessibility hint isn't matched this way.
-        let target = firstListing.exists ? firstListing : app.scrollViews.buttons.firstMatch
-        XCTAssertTrue(target.waitForExistence(timeout: 10))
-        target.tap()
+
+        // It has to be someone else's listing: HomeDetailPage drops the whole
+        // contact section when you're the host, so the message button never
+        // appears on your own. Taking the feed's first row picked exactly that —
+        // the feed is newest-first and testCreateListingFlow leaves a fresh
+        // dev-owned listing on top — which is why this test spent its life
+        // skipping itself instead of covering anything. Name a seeded host.
+        let host = "SpongeBob SquarePants"
+        let listing = app.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH %@", host)).firstMatch
+        var scrolls = 0
+        while !listing.exists && scrolls < 10 {
+            app.swipeUp()
+            scrolls += 1
+        }
+        XCTAssertTrue(listing.waitForExistence(timeout: 10), "\(host)'s seeded listing never appeared in the feed")
+        listing.tap()
 
         let messageButton = app.buttons["homeDetail.messageHostButton"]
-        guard messageButton.waitForExistence(timeout: 10) else {
-            throw XCTSkip("No messageable listing available in this environment")
-        }
+        XCTAssertTrue(messageButton.waitForExistence(timeout: 10))
         messageButton.tap()
 
         if app.buttons["Request a Stay"].waitForExistence(timeout: 5) {
