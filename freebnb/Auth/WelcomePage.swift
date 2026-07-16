@@ -31,7 +31,7 @@ struct WelcomePage: View {
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
 
-                    Text("The guest rooms of people you know")
+                    Text("A free place to stay with people you actually trust.")
                         .font(.headline)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
@@ -39,7 +39,7 @@ struct WelcomePage: View {
                     Image(systemName: "house.lodge.fill")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 250, height: 200)
+                        .frame(width: 180, height: 150)
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(Color.accent)
                         .accessibilityHidden(true)
@@ -48,6 +48,12 @@ struct WelcomePage: View {
                 Spacer()
 
                 VStack(spacing: 16) {
+                    // The three-line pitch, sitting right above the sign-in
+                    // buttons: not strangers, no fees, no contacts-grab. Each
+                    // line is a claim the product actually keeps, so it reads as
+                    // a promise rather than marketing.
+                    trustStrip
+
                     // Quick sign-in into fixed, pre-seeded accounts for local
                     // development — never a real user's path. Compile- and
                     // emulator-gated so these credentials can never reach the
@@ -92,6 +98,50 @@ struct WelcomePage: View {
             EmailAuthView()
                 .environment(authManager)
         }
+    }
+
+    // MARK: - Trust strip
+
+    private var trustStrip: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            trustRow(
+                icon: "person.2.fill",
+                title: "Only people you know",
+                subtitle: "No strangers, ever."
+            )
+            trustRow(
+                icon: "tag.slash.fill",
+                title: "Always free",
+                subtitle: "No booking fees."
+            )
+            trustRow(
+                icon: "lock.shield.fill",
+                title: "Your circle stays yours",
+                subtitle: "We never upload your contacts."
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 32)
+    }
+
+    private func trustRow(icon: String, title: String, subtitle: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(Color.accent)
+                .frame(width: 28)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     #if DEBUG

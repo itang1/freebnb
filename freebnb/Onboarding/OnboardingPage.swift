@@ -15,21 +15,30 @@ struct OnboardingPage: View {
         let body: String
     }
 
+    // One slide per differentiator, each distinct: the promise (free + trusted),
+    // trust made visible (you always know your host), privacy (no contacts grab,
+    // which is literally true since the network is built from friends, never the
+    // address book), then how a stay works.
     private let slides: [Slide] = [
         Slide(
             icon: "house.lodge.fill",
-            title: "Welcome to FreeBNB",
-            body: "Stay with people you know, for free. No booking fees, no strangers."
+            title: "Stay with people you trust",
+            body: "A free place to crash with friends and friends of friends. No strangers, no booking fees."
         ),
         Slide(
             icon: "person.2.fill",
-            title: "People You Know",
-            body: "You only see listings from people in your network. Hosts control who can view and request their space."
+            title: "You'll always know your host",
+            body: "You only see places from people in your network, and hosts choose who can view and request their space. You never request a stay from a stranger."
+        ),
+        Slide(
+            icon: "lock.shield.fill",
+            title: "Your circle stays yours",
+            body: "Your network is built only from people you choose to connect with. We never scrape or upload your contacts."
         ),
         Slide(
             icon: "calendar.badge.checkmark",
-            title: "Request a Stay",
-            body: "Find a listing, send a request with your dates, and your host confirms. Pack your bags and go."
+            title: "Request and go",
+            body: "Find a place, send a request with your dates, and your host confirms. Then pack your bags."
         )
     ]
 
