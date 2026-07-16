@@ -55,6 +55,23 @@ struct StaysTab: View {
     private var inProgressIn:  [StayRequest] { acceptedIn.filter { $0.isUnderway() } }
     private var upcomingIn:    [StayRequest] { acceptedIn.filter { !$0.isUnderway() } }
 
+    /// The single stay currently live enough to headline (feature 21): an accepted
+    /// stay with a real `StayPhase` — arriving today, under way, or checking out
+    /// today — and among those the soonest check-in. Deliberately the same
+    /// selection the Live Activity uses, so the in-app banner and the Lock Screen
+    /// never point at different stays. Paired with its phase so the banner and the
+    /// activity share one source of truth for the copy.
+    private var liveStay: (stay: StayRequest, phase: StayPhase)? {
+        (requestStore.incomingRequests + requestStore.outgoingRequests)
+            .filter { $0.status == .accepted }
+            .compactMap { stay -> (StayRequest, StayPhase)? in
+                guard let phase = StayPhase.current(checkIn: stay.checkIn, checkOut: stay.checkOut) else { return nil }
+                return (stay, phase)
+            }
+            .min { $0.0.checkIn < $1.0.checkIn }
+            .map { (stay: $0.0, phase: $0.1) }
+    }
+
     /// Finished stays this user hasn't reviewed yet (features 1 and 4). Empty
     /// until `ReviewStore` knows what they've already written, so nobody is asked
     /// twice for a review they already left.
@@ -91,6 +108,20 @@ struct StaysTab: View {
                 tripsBadge: awaitingReviewAsGuest.count,
                 listingsBadge: pendingIn.count + awaitingReviewAsHost.count
             )
+
+            // Pinned above both panes: a stay you're in the middle of is the one
+            // thing worth seeing before you've even chosen Trips vs Listings.
+            if let live = liveStay {
+                HappeningNowBanner(
+                    stay: live.stay,
+                    isHost: live.stay.hostUserID == authManager.userID,
+                    phase: live.phase,
+                    onTap: { openConversation(for: live.stay) }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
             Group {
                 if selectedTab == .listings {
