@@ -510,6 +510,19 @@ service cloud.firestore {
           // The named host must actually own the (live) listing being requested,
           // so a request can't be aimed at an arbitrary user's inbox (S8).
           && listingHasActiveHost(request.resource.data.listingID, request.resource.data.hostUserID)
+          // Only someone the listing is shared with may knock: the guest must be
+          // in its read ACL. Without this, any member holding a leaked listing id
+          // could file requests into a host's inbox, straight past the
+          // friends-only boundary. The get() is cached with the ones
+          // listingHasActiveHost already did, so it costs no extra read.
+          && request.auth.uid in get(/databases/$(database)/documents/homes/$(request.resource.data.listingID))
+               .data.get('allowedViewerIDs', [])
+          // A block severs this the same way it severs a thread (S11).
+          && !blockedEitherWay(request.auth.uid, request.resource.data.hostUserID)
+          // The inbox and trip lists order by createdAt; pin it so a request
+          // cannot backdate itself. The client's @ServerTimestamp field encodes
+          // to the server-timestamp sentinel, which equals request.time here.
+          && request.resource.data.createdAt == request.time
           && isOptionalString(request.resource.data, 'guestNote', 2000)
           // Party size, when given, is a positive int no larger than the
           // listing's advertised capacity (feature 20).
@@ -570,6 +583,17 @@ service cloud.firestore {
                   (isOwner(resource.data.guestUserID)
                       && request.resource.data.status == "cancelled"
                       && changedKeys().hasOnly(['status', 'updatedAt']))
+                  ||
+                  // Host calls off an accepted stay they can no longer honor
+                  // (illness, a burst pipe). Distinct from declining: a pending
+                  // request is declined, an accepted stay is cancelled, so the
+                  // trip rows read the same whichever side backed out. The note
+                  // gives the guest a why, same as a decline's.
+                  (isOwner(resource.data.hostUserID)
+                      && resource.data.status == "accepted"
+                      && request.resource.data.status == "cancelled"
+                      && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
+                      && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
                   // Either party closes out an accepted stay that has begun
                   // (feature 4). Completion is what unlocks reviews and what
@@ -734,8 +758,12 @@ service cloud.firestore {
           && (request.auth.uid == resource.data.userA
               || request.auth.uid == resource.data.userB);
 
-      // Send a friend request (create pending edge).
+      // Send a friend request (create pending edge). The key allowlist keeps a
+      // modified client from stashing arbitrary extra fields on the edge.
       allow create: if isFullMember()
+          && request.resource.data.keys().hasOnly(
+               ['userA', 'userB', 'status', 'initiator', 'createdAt', 'updatedAt']
+             )
           && request.resource.data.initiator == request.auth.uid
           && (request.resource.data.userA == request.auth.uid
               || request.resource.data.userB == request.auth.uid)
@@ -745,7 +773,11 @@ service cloud.firestore {
           && request.resource.data.userA < request.resource.data.userB
           && request.resource.data.userA != request.resource.data.userB
           // edgeID must match the canonical "{userA}_{userB}" form
-          && edgeID == request.resource.data.userA + "_" + request.resource.data.userB;
+          && edgeID == request.resource.data.userA + "_" + request.resource.data.userB
+          // A block must stop friend requests too (S11): deleting a declined
+          // edge lets it be re-sent forever, so without this a blocked user
+          // could keep landing in the blocker's Requests list.
+          && !blockedEitherWay(request.resource.data.userA, request.resource.data.userB);
 
       // Accept a pending request (only the non-initiator may accept).
       allow update: if isSignedIn()
@@ -939,7 +971,11 @@ service cloud.firestore {
           // A fresh report enters triage at the top of the queue, and is filed by
           // a person — `source: "auto"` belongs to the moderation triggers.
           && (isUnset(request.resource.data, 'status') || request.resource.data.status == 'new')
-          && (isUnset(request.resource.data, 'source') || request.resource.data.source == 'user');
+          && (isUnset(request.resource.data, 'source') || request.resource.data.source == 'user')
+          // The console orders the queue by createdAt, so a report must not be
+          // able to backdate itself out of sight.
+          && (isUnset(request.resource.data, 'createdAt')
+              || request.resource.data.createdAt == request.time);
 
       allow update: if isAdmin()
           && changedKeys().hasOnly(['status', 'moderatorNote', 'reviewedBy', 'reviewedAt'])
