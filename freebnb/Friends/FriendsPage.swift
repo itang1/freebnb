@@ -458,24 +458,10 @@ struct InviteSheet: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(\.dismiss) private var dismiss
 
-    private var inviterName: String {
-        userProfileStore.displayName ?? "A friend"
-    }
-
-    /// A plain link that just opens the app. It carries no identity and takes no
-    /// action: opening it never creates a friend connection. Once both people are
-    /// on FreeBNB they add each other in-app, through search and an accepted
-    /// request, so there is nothing here to spoof or act on.
-    private var inviteURL: URL {
-        var components = URLComponents()
-        components.scheme = "freebnb"
-        components.host = "invite"
-        // Force-unwrap is safe: compile-time constant URL.
-        return components.url ?? URL(string: "freebnb://invite")!
-    }
-
+    // The message and link live in InviteCopy so every invite surface (this
+    // sheet, the feed's empty states) sends the same vouching story.
     private var inviteMessage: String {
-        "\(inviterName) invited you to FreeBNB — a free home-sharing app for people who trust each other. Install the app, then search for me to send a friend request: \(inviteURL.absoluteString)"
+        InviteCopy.vouch(inviterName: userProfileStore.displayName)
     }
 
     var body: some View {
@@ -488,9 +474,9 @@ struct InviteSheet: View {
                     .padding(.top, 32)
 
                 VStack(spacing: 8) {
-                    Text("Invite to FreeBNB")
+                    Text("Vouch for a friend")
                         .font(.title2.weight(.semibold))
-                    Text("Share the link below so your friend can install the app. Once they're on FreeBNB, search for each other to send a friend request.")
+                    Text("FreeBNB only shows people places from their own friends, so your invite is what unlocks the app for them. Share the link; once they're in, search for each other to connect.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -506,7 +492,7 @@ struct InviteSheet: View {
                         .background(Color.accent, in: Capsule())
                 }
 
-                if let qr = QRCode.image(for: inviteURL.absoluteString) {
+                if let qr = QRCode.image(for: InviteCopy.inviteURL.absoluteString) {
                     VStack(spacing: 8) {
                         Image(uiImage: qr)
                             .interpolation(.none)
@@ -528,7 +514,7 @@ struct InviteSheet: View {
                     Text("Your invite link")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text(inviteURL.absoluteString)
+                    Text(InviteCopy.inviteURL.absoluteString)
                         .font(.caption.monospaced())
                         .foregroundColor(.secondary)
                         .padding(10)

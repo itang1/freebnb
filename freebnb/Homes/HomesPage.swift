@@ -370,6 +370,13 @@ private extension HomesPage {
             emptyStateMessage
         }
         .padding()
+        // The suggestions bridge in the unfiltered branch needs the FoF list,
+        // which otherwise only loads once the Friends tab is opened.
+        .task {
+            if isUnfilteredEmptyFeed {
+                await friendStore.loadSuggestions()
+            }
+        }
     }
 
     var filterMenu: some View {
@@ -442,6 +449,19 @@ private extension HomesPage {
         !showSavedOnly && selectedFilters.isEmpty && citySearch.isEmpty
     }
 
+    var trimmedCityQuery: String {
+        citySearch.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// "3 people you may know are already here", grammatical at one. Bridges an
+    /// empty feed to the friend suggestions that would fill it.
+    var suggestionBridgeLabel: String {
+        let count = friendStore.suggestions.count
+        return count == 1
+            ? "1 person you may know is already here"
+            : "\(count) people you may know are already here"
+    }
+
     var emptyStateTitle: String {
         if isUnfilteredEmptyFeed && friendStore.friendEdges.isEmpty {
             return "Homes come from friends"
@@ -472,15 +492,37 @@ private extension HomesPage {
                     .capsuleChip()
             }
         } else if isUnfilteredEmptyFeed {
-            Text("None of your friends have listed a home yet. Invite someone who hosts, or ask friends to list their place.")
+            Text("None of your friends have listed a place yet. Nudge one; hosts are what make FreeBNB work.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             ShareLink(
-                item: "Join me on FreeBNB: free stays with people you trust. Download the app and we can connect!",
+                item: InviteCopy.nudgeHost(inviterName: userProfileStore.displayName),
                 subject: Text("FreeBNB Invite")
             ) {
-                Label("Invite a Friend", systemImage: "person.badge.plus")
+                Label("Nudge a Friend to List", systemImage: "sofa")
+                    .capsuleChip()
+            }
+            if !friendStore.suggestions.isEmpty {
+                Button {
+                    router.pendingFriendsTab = true
+                } label: {
+                    Label(suggestionBridgeLabel, systemImage: "person.2")
+                        .capsuleChip()
+                }
+            }
+        } else if !trimmedCityQuery.isEmpty {
+            // A trip with nowhere to stay is the highest-intent invite moment:
+            // the user already knows whose couch they want in that city.
+            Text("No friends with a place near \"\(trimmedCityQuery)\" yet. Who would you text for a couch there? Invite them and their place shows up here.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            ShareLink(
+                item: InviteCopy.tripIntent(city: trimmedCityQuery, inviterName: userProfileStore.displayName),
+                subject: Text("FreeBNB Invite")
+            ) {
+                Label("Invite a Friend There", systemImage: "paperplane")
                     .capsuleChip()
             }
         } else {
