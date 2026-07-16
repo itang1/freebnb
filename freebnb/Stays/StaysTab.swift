@@ -21,6 +21,10 @@ struct StaysTab: View {
     @State private var sharingStay: StayRequest?
     @State private var modifying: StayRequest?
     @State private var completing: StayRequest?
+    // An accepted stay someone is about to call off. Cancelling a confirmed stay
+    // is consequential for both parties, so unlike a pending request it asks
+    // first; pending cancels stay immediate.
+    @State private var cancelling: StayRequest?
     @State private var actionError: String?
     @State private var selectedTab: StaysTabSelection = .trips
     @State private var showPastTrips = false
@@ -178,6 +182,18 @@ struct StaysTab: View {
         } message: {
             Text("This closes the stay out and lets you both leave a review. It can't be undone.")
         }
+        .confirmationDialog(
+            "Cancel this stay?",
+            isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Cancel stay", role: .destructive) {
+                if let stay = cancelling { Task { await cancel(stay) } }
+            }
+            Button("Keep stay", role: .cancel) { cancelling = nil }
+        } message: {
+            Text("This calls the stay off for both of you. The other person sees the change in your conversation.")
+        }
     }
 
     // MARK: - Trips view
@@ -294,6 +310,9 @@ struct StaysTab: View {
                 ForEach(upcomingOut, id: \.id) { req in
                     outgoingRow(
                         req,
+                        // Plans change; a confirmed trip can be called off, with
+                        // a confirmation because it affects the host too.
+                        onCancel: { cancelling = req },
                         onShare: { sharingStay = req },
                         onComplete: req.canBeMarkedComplete() ? { completing = req } : nil
                     )
@@ -331,7 +350,11 @@ struct StaysTab: View {
                 ForEach(upcomingIn, id: \.id) { req in
                     incomingRow(
                         req,
-                        onComplete: req.canBeMarkedComplete() ? { completing = req } : nil
+                        onComplete: req.canBeMarkedComplete() ? { completing = req } : nil,
+                        // A host can no longer honor a stay sometimes (illness, a
+                        // burst pipe). firestore.rules admits accepted → cancelled
+                        // from the host's side for exactly this.
+                        onCancel: { cancelling = req }
                     )
                 }
             }
@@ -396,14 +419,18 @@ struct StaysTab: View {
 extension StaysTab {
     // MARK: - Actions
 
+    /// Cancels a request or an accepted stay, from either side. The chat event
+    /// goes to the other party, whoever that is: the host when a guest cancels,
+    /// the guest when a host calls a stay off.
     private func cancel(_ request: StayRequest) async {
         actionError = nil
+        cancelling = nil
         do {
             try await requestStore.cancel(request)
             messageStore.sendStayEvent(
                 StayEvent(kind: .cancelled, dateRange: request.dateRangeText),
                 senderUserID: authManager.userID,
-                recipientUserID: request.hostUserID
+                recipientUserID: request.otherParty(from: authManager.userID)
             )
         } catch {
             actionError = error.localizedDescription
@@ -538,7 +565,8 @@ extension StaysTab {
         showActions: Bool = false,
         onAccept: (() -> Void)? = nil,
         onDecline: (() -> Void)? = nil,
-        onComplete: (() -> Void)? = nil
+        onComplete: (() -> Void)? = nil,
+        onCancel: (() -> Void)? = nil
     ) -> some View {
         let home = listing(for: request)
         // Show the street address when the host has more than one listing so the
@@ -554,7 +582,8 @@ extension StaysTab {
             showActions: showActions,
             onAccept: onAccept,
             onDecline: onDecline,
-            onComplete: onComplete
+            onComplete: onComplete,
+            onCancel: onCancel
         )
         Group {
             if !showActions, let home {

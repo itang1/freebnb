@@ -70,7 +70,9 @@ struct OutgoingRequestRow: View {
 
             if let onCancel, request.status.isActive {
                 Button(role: .destructive, action: onCancel) {
-                    Text("Cancel request")
+                    // A pending request is withdrawn; a confirmed stay is called
+                    // off. Same verb underneath, but the label should say which.
+                    Text(request.status == .accepted ? "Cancel stay" : "Cancel request")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background(Color.secondary.opacity(0.1))
@@ -222,6 +224,9 @@ struct IncomingRequestRow: View {
     var onDecline: (() -> Void)? = nil
     /// Close the stay out (feature 4). Nil until the stay has begun.
     var onComplete: (() -> Void)? = nil
+    /// Call off an accepted stay the host can no longer honor. Offered on
+    /// upcoming hosting rows; the tab confirms before acting.
+    var onCancel: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -267,6 +272,19 @@ struct IncomingRequestRow: View {
             if let onComplete, !showActions {
                 StayActionButton(title: "Mark complete", systemImage: "checkmark.circle", action: onComplete)
                     .padding(.top, 4)
+            }
+
+            if let onCancel, request.status == .accepted {
+                Button(role: .destructive, action: onCancel) {
+                    Text("Cancel stay")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.secondary.opacity(0.1))
+                        .foregroundColor(.red)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.pressable)
+                .padding(.top, 4)
             }
 
             if showActions {
