@@ -25,12 +25,12 @@ enum InviteCopy {
 
     /// The general "join me" invite, framed as vouching. On a friends-only app
     /// the feed is empty until a friend shows up, so a personal invite genuinely
-    /// is what unlocks it; the copy says so instead of asking for a favor.
+    /// is what unlocks it; the copy says so as an offer, never as pressure.
     static func vouch(inviterName: String?) -> String {
         intro(inviterName)
             + "FreeBNB is a free home-sharing app that only ever shows you places from your own friends. "
-            + "No strangers, no fees, and it never touches your contacts. I'm vouching for you. "
-            + "Install the app, then search for \(searchTarget(inviterName)) so we can connect: "
+            + "No strangers, no fees, and it never touches your contacts. "
+            + "I'm vouching for you; if you'd like in, install the app and search for \(searchTarget(inviterName)) so we can connect: "
             + inviteURL.absoluteString
     }
 
@@ -39,20 +39,20 @@ enum InviteCopy {
     /// app: they already know exactly whose couch they want.
     static func tripIntent(city: String, inviterName: String?) -> String {
         intro(inviterName)
-            + "I'm planning a trip to \(city) and I'd rather crash with you than with strangers. "
-            + "FreeBNB is a free, friends-only home-sharing app; join it and I can request a stay properly. "
-            + "Search for \(searchTarget(inviterName)) once you're in: "
+            + "I'm planning a trip to \(city) and I'd love to crash with you. "
+            + "FreeBNB is a free, friends-only home-sharing app; if you join, I can send a real request with dates instead of a vague text. "
+            + "Search for \(searchTarget(inviterName)) if you're up for it: "
             + inviteURL.absoluteString
     }
 
-    /// Sent from a feed that has friends but no listings: a nudge that asks for
-    /// one specific thing, listing a place. Works whether or not the recipient
-    /// is already on FreeBNB.
-    static func nudgeHost(inviterName: String?) -> String {
+    /// Sent from a feed that has friends but no listings: an open question about
+    /// hosting, with the choice left entirely to the recipient. Works whether or
+    /// not they are already on FreeBNB.
+    static func askToHost(inviterName: String?) -> String {
         intro(inviterName)
-            + "Got a couch or a guest room? Put it on FreeBNB so friends like me can finally stay with you the easy way. "
+            + "Got a couch or a guest room? If you put it on FreeBNB, friends like me could stay with you without the group-chat scramble. "
             + "It's free, always, and only friends you approve can ever see it. "
-            + "Search for \(searchTarget(inviterName)) once you're in: "
+            + "Search for \(searchTarget(inviterName)) if you're curious: "
             + inviteURL.absoluteString
     }
 

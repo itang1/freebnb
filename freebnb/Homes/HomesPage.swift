@@ -492,15 +492,15 @@ private extension HomesPage {
                     .capsuleChip()
             }
         } else if isUnfilteredEmptyFeed {
-            Text("None of your friends have listed a place yet. Nudge one; hosts are what make FreeBNB work.")
+            Text("None of your friends have listed a place yet. Know someone with a couch or a guest room? Ask if they'd like to share it.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             ShareLink(
-                item: InviteCopy.nudgeHost(inviterName: userProfileStore.displayName),
+                item: InviteCopy.askToHost(inviterName: userProfileStore.displayName),
                 subject: Text("FreeBNB Invite")
             ) {
-                Label("Nudge a Friend to List", systemImage: "sofa")
+                Label("Ask a Friend About Hosting", systemImage: "sofa")
                     .capsuleChip()
             }
             if !friendStore.suggestions.isEmpty {
@@ -514,7 +514,7 @@ private extension HomesPage {
         } else if !trimmedCityQuery.isEmpty {
             // A trip with nowhere to stay is the highest-intent invite moment:
             // the user already knows whose couch they want in that city.
-            Text("No friends with a place near \"\(trimmedCityQuery)\" yet. Who would you text for a couch there? Invite them and their place shows up here.")
+            Text("No friends with a place near \"\(trimmedCityQuery)\" yet. Who would you normally text for a couch there? If they join, their place shows up here.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
