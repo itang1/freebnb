@@ -51,9 +51,15 @@ enum StayPhase: String, Codable, Hashable, Sendable {
         let dayAfterCheckout = calendar.date(byAdding: .day, value: 1, to: checkOut) ?? checkOut
         guard now < dayAfterCheckout else { return nil }
 
-        if now < checkIn {
-            // Only surface it once we're inside check-in day.
-            return calendar.isDate(now, inSameDayAs: checkIn) ? .arrivingToday : nil
+        // Not yet check-in day: no phase to report.
+        if now < checkIn && !calendar.isDate(now, inSameDayAs: checkIn) {
+            return nil
+        }
+        // The whole check-in day counts as arriving. checkIn is stored as a
+        // start-of-day date, so a `now < checkIn` comparison alone would flip
+        // the stay to "underway" at midnight, before anyone has arrived.
+        if calendar.isDate(now, inSameDayAs: checkIn) {
+            return .arrivingToday
         }
         if calendar.isDate(now, inSameDayAs: checkOut) {
             return .checkoutToday
