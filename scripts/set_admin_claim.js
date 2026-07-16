@@ -22,17 +22,19 @@
 // changed claim reaches their requests: custom claims ride in the token, and an
 // already-issued token keeps its old claims until it expires.
 
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 
-admin.initializeApp({
+const app = initializeApp({
   projectId: process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT,
 });
+const auth = getAuth(app);
 
 async function listAdmins() {
   let pageToken;
   const admins = [];
   do {
-    const result = await admin.auth().listUsers(1000, pageToken);
+    const result = await auth.listUsers(1000, pageToken);
     for (const user of result.users) {
       if (user.customClaims?.admin === true) admins.push(user.email || user.uid);
     }
@@ -48,7 +50,7 @@ async function listAdmins() {
 }
 
 async function setClaim(email, grant) {
-  const user = await admin.auth().getUserByEmail(email);
+  const user = await auth.getUserByEmail(email);
   // Merge rather than replace: blowing away another claim while adding this one
   // would be a silent, hard-to-trace privilege change.
   const claims = { ...(user.customClaims || {}) };
@@ -57,7 +59,7 @@ async function setClaim(email, grant) {
   } else {
     delete claims.admin;
   }
-  await admin.auth().setCustomUserClaims(user.uid, claims);
+  await auth.setCustomUserClaims(user.uid, claims);
   console.log(`${grant ? "Granted" : "Revoked"} admin for ${email} (${user.uid}).`);
   console.log("They must sign out and back in before the change takes effect.");
 }
