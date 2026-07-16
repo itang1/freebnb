@@ -3,9 +3,8 @@
 //  freebnbTests
 //
 //  Pure-logic coverage for the feedback composer's validation (feature 43) and
-//  the "what's new" auto-present decision. The Firestore round trip is proven
-//  separately by rules-tests/feedback.test.mjs; the store's submit method is
-//  auth-gated and so is not deterministic in this host.
+//  the "what's new" auto-present decision. Delivery is a Google Form POST
+//  (see FeedbackService); its network round trip is not exercised here.
 //
 
 import Testing
@@ -41,14 +40,6 @@ struct FeedbackDraftTests {
         // trimmed before the note is sent.
         let draft = FeedbackDraft(message: "  hi  ")
         #expect(draft.remainingCharacters == FeedbackDraft.maxLength - 2)
-    }
-
-    @Test func everyCategoryHasTitleAndPrompt() {
-        for category in FeedbackCategory.allCases {
-            #expect(category.title.isEmpty == false)
-            #expect(category.prompt.isEmpty == false)
-            #expect(category.icon.isEmpty == false)
-        }
     }
 }
 

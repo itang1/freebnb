@@ -31,10 +31,6 @@ protocol UserProfileRepository: Sendable {
     func updateEmergencyContact(userID: String, contact: EmergencyContact?) async throws
     func searchProfiles(query: String) async throws -> [UserProfile]
     func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws
-    /// Files an in-app feedback note into the moderator-readable `feedback`
-    /// collection (feature 43). `appVersion` rides along so a bug report carries
-    /// the build it came from.
-    func submitFeedback(userID: String, category: String, message: String, appVersion: String?) async throws
     /// Invokes the `exportUserData` callable and returns the result as
     /// pretty-printed JSON, fulfilling the GDPR/CCPA right-to-access (L12).
     func exportUserData() async throws -> Data
@@ -203,24 +199,6 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
         ]
         try await withRetry { [db] in
             _ = try await db.collection(FirestorePaths.reports).addDocument(data: payload)
-        }
-    }
-
-    func submitFeedback(userID: String, category: String, message: String, appVersion: String?) async throws {
-        let payload: [String: Any] = {
-            var payload: [String: Any] = [
-                "userID": userID,
-                "category": category,
-                "message": message,
-                // A fresh note enters the moderator queue as `new`, mirroring reports.
-                "status": "new",
-                "createdAt": FieldValue.serverTimestamp()
-            ]
-            if let appVersion { payload["appVersion"] = appVersion }
-            return payload
-        }()
-        try await withRetry { [db] in
-            _ = try await db.collection(FirestorePaths.feedback).addDocument(data: payload)
         }
     }
 

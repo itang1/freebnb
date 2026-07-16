@@ -12,8 +12,6 @@ export const Collections = {
   messages: "messages",
   reports: "reports",
   rateLimits: "rateLimits",
-  // In-app feedback notes (feature 43). Moderator-readable only; users create.
-  feedback: "feedback",
   // Post-stay two-way reviews, one per (stay request, author).
   reviews: "reviews",
   // Friend-written character references on a profile, one per (subject, author).

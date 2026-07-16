@@ -2,10 +2,10 @@
 //  FeedbackComposerView.swift
 //  freebnb
 //
-//  The in-app feedback composer (feature 43). Writes a categorized note to the
-//  moderator-readable `feedback` collection. Guests can't write (the rules reject
-//  anonymous accounts), so the send button is gated behind a full account here
-//  rather than letting the write fail server-side.
+//  The in-app feedback composer (feature 43). Posts a note to the Google Form in
+//  `FeedbackService`, whose responses feed the team's spreadsheet. The button is
+//  gated behind a full account as a product choice, so a note carries an ID we
+//  can reply to; the same form is public on the web for anyone else.
 //
 
 import SwiftUI
@@ -13,6 +13,7 @@ import SwiftUI
 struct FeedbackComposerView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
+    @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft = FeedbackDraft()
@@ -58,21 +59,16 @@ struct FeedbackComposerView: View {
     private var composer: some View {
         Form {
             Section {
-                Picker("Category", selection: $draft.category) {
-                    ForEach(FeedbackCategory.allCases) { category in
-                        Label(category.title, systemImage: category.icon).tag(category)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            Section {
-                TextField(draft.category.prompt, text: $draft.message, axis: .vertical)
-                    .lineLimit(5...12)
-                    .disabled(isSending)
+                TextField(
+                    "A problem, something you loved, a feature you want, anything.",
+                    text: $draft.message,
+                    axis: .vertical
+                )
+                .lineLimit(5...12)
+                .disabled(isSending)
             } footer: {
                 HStack {
-                    Text("Your name and app version are attached so we can follow up.")
+                    Text("Your account and app version are attached so we can follow up.")
                     Spacer()
                     Text("\(draft.remainingCharacters)")
                         .monospacedDigit()
@@ -85,6 +81,9 @@ struct FeedbackComposerView: View {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(.subheadline)
                         .foregroundColor(.red)
+                    Button("Open the feedback form in your browser") {
+                        openURL(FeedbackForm.webURL)
+                    }
                 }
             }
         }
@@ -147,10 +146,7 @@ struct FeedbackComposerView: View {
         errorMessage = nil
         defer { isSending = false }
         do {
-            try await userProfileStore.submitFeedback(
-                category: draft.category,
-                message: draft.message
-            )
+            try await userProfileStore.submitFeedback(message: draft.message)
             didSend = true
         } catch {
             errorMessage = error.localizedDescription

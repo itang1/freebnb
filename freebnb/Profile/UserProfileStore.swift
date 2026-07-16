@@ -45,6 +45,7 @@ final class UserProfileStore {
     private(set) var profileCache: [String: UserProfile] = [:]
 
     @ObservationIgnored private let repository: UserProfileRepository
+    @ObservationIgnored private let feedbackService: FeedbackService
     // `nonisolated(unsafe)` because `deinit` is nonisolated and must tear
     // these down. Both are only assigned from @MainActor contexts, and
     // Firebase's `ListenerRegistration.remove()` and
@@ -55,8 +56,12 @@ final class UserProfileStore {
     @ObservationIgnored private var hasAttemptedProfileCreation = false
     @ObservationIgnored private let log = AppLog.logger("profile")
 
-    init(repository: UserProfileRepository = FirestoreUserProfileRepository()) {
+    init(
+        repository: UserProfileRepository = FirestoreUserProfileRepository(),
+        feedbackService: FeedbackService = GoogleFormFeedbackService()
+    ) {
         self.repository = repository
+        self.feedbackService = feedbackService
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in self?.restartCurrentListener(user: user) }
         }
@@ -198,22 +203,19 @@ final class UserProfileStore {
         try await repository.submitReport(reporterUserID: myID, targetType: targetType, targetID: targetID, reason: reason)
     }
 
-    /// Sends an in-app feedback note (feature 43). The message is trimmed to match
-    /// what the composer validated and what the rules enforce. `appVersion`
-    /// defaults to the running build so a bug report identifies itself; tests
-    /// override it. Full members only — the rules reject anonymous guests, so the
-    /// composer gates the button before we get here.
+    /// Sends an in-app feedback note (feature 43) to the Google Form behind
+    /// `FeedbackService`. The message is trimmed to match what the composer
+    /// validated. `appVersion` defaults to the running build so a bug report
+    /// identifies itself; tests override it. The account ID rides along for
+    /// follow-up when the sender is signed in; the Form accepts it regardless.
     func submitFeedback(
-        category: FeedbackCategory,
         message: String,
         appVersion: String? = Bundle.main.appVersionString
     ) async throws {
-        guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        try await repository.submitFeedback(
-            userID: myID,
-            category: category.rawValue,
+        try await feedbackService.submit(
             message: trimmed,
+            userID: Auth.auth().currentUser?.uid,
             appVersion: appVersion
         )
     }

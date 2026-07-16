@@ -950,29 +950,5 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // In-app feedback notes (feature 43). Like reports, these are readable only by
-    // a moderator and are created by a full member about themselves. A user can
-    // send a note but never read the queue, edit, or delete — the same one-way
-    // drop-box shape as `reports`.
-    match /feedback/{feedbackID} {
-      allow read: if isAdmin();
-
-      allow create: if isFullMember()
-          && request.resource.data.keys().hasOnly([
-               'userID', 'category', 'message', 'appVersion', 'status', 'createdAt'
-             ])
-          && request.resource.data.userID == request.auth.uid
-          && request.resource.data.category in ['idea', 'problem', 'praise']
-          && request.resource.data.message is string
-          && request.resource.data.message.size() > 0
-          && request.resource.data.message.size() <= 2000
-          && isOptionalString(request.resource.data, 'appVersion', 32)
-          // A fresh note enters the queue as `new`; the moderator triage half is
-          // the only writer that advances it, and there is no update rule here.
-          && (isUnset(request.resource.data, 'status') || request.resource.data.status == 'new');
-
-      allow update, delete: if false;
-    }
-
   }
 }
