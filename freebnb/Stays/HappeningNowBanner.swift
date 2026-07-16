@@ -88,7 +88,7 @@ private struct LiveDot: View {
         checkOut: Calendar.current.date(byAdding: .day, value: 3, to: base)!,
         status: .accepted
     )
-    return VStack(spacing: 12) {
+    VStack(spacing: 12) {
         HappeningNowBanner(stay: stay, isHost: false, phase: .underway) {}
         HappeningNowBanner(stay: stay, isHost: true, phase: .arrivingToday) {}
         HappeningNowBanner(stay: stay, isHost: false, phase: .checkoutToday) {}
