@@ -3,7 +3,7 @@
 //   Project > Info > Configurations > Debug > freebnb target → select this file
 //
 // To use a separate dev Firebase project, place its GoogleService-Info.plist
-// at Config/GoogleService-Info.Debug.plist and add a Run Script phase that
+// at config/GoogleService-Info.Debug.plist and add a Run Script phase that
 // copies the right plist to $(SRCROOT)/freebnb/GoogleService-Info.plist before
 // the Compile Sources phase.
 

@@ -67,7 +67,7 @@ The visual theme is "summer lakeside cabin": sandy neutrals, lake and sky blues,
 2. Add `GoogleService-Info.plist` (from the Firebase console) to the `freebnb/` folder. This file is gitignored; never commit it.
 3. Build and run. A scheme pre-action (`scripts/dev_emulator.sh`) boots a seeded local emulator for Debug builds, which powers the DEBUG-only one-tap sign-in buttons on the welcome screen.
 
-To point Debug and Release builds at separate Firebase projects, place environment-specific plists at `Config/GoogleService-Info.Debug.plist` and `Config/GoogleService-Info.Release.plist`; a pre-compile script copies the right one in, and the `Config/*.xcconfig` files give Debug its own bundle ID so both installs coexist on one device.
+To point Debug and Release builds at separate Firebase projects, place environment-specific plists at `config/GoogleService-Info.Debug.plist` and `config/GoogleService-Info.Release.plist`; a pre-compile script copies the right one in, and the `config/*.xcconfig` files give Debug its own bundle ID so both installs coexist on one device.
 
 ### Backend
 

@@ -4,8 +4,8 @@
 # "Compile Sources" phase (Build Phases → + → New Run Script Phase).
 #
 # Place env-specific plists here:
-#   Config/GoogleService-Info.Debug.plist    — dev/staging Firebase project
-#   Config/GoogleService-Info.Release.plist  — production Firebase project
+#   config/GoogleService-Info.Debug.plist    — dev/staging Firebase project
+#   config/GoogleService-Info.Release.plist  — production Firebase project
 #
 # If the env-specific plist is absent the script falls back to the
 # checked-in freebnb/GoogleService-Info.plist so the build still succeeds.
@@ -15,9 +15,9 @@ set -euo pipefail
 DEST="${SRCROOT}/freebnb/GoogleService-Info.plist"
 
 if [ "${CONFIGURATION}" = "Debug" ]; then
-    CANDIDATE="${SRCROOT}/Config/GoogleService-Info.Debug.plist"
+    CANDIDATE="${SRCROOT}/config/GoogleService-Info.Debug.plist"
 else
-    CANDIDATE="${SRCROOT}/Config/GoogleService-Info.Release.plist"
+    CANDIDATE="${SRCROOT}/config/GoogleService-Info.Release.plist"
 fi
 
 if [ -f "${CANDIDATE}" ]; then

@@ -18,6 +18,7 @@
 		FCAA00042FA000000000AA01 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00032FA000000000AA01 /* FirebaseAnalytics */; };
 		FCAA00062FA000000000AA01 /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00052FA000000000AA01 /* FirebasePerformance */; };
 		FCAA00082FA000000000AA01 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00072FA000000000AA01 /* FirebaseFunctions */; };
+		FCDFEB2A300770A1002BD75D /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = FCDFEB29300770A1002BD75D /* FirebaseAppCheck */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -42,8 +43,8 @@
 		FC3EE6B62E3360ED004B2E1B /* freebnb.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = freebnb.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC3EE6C42E3360EE004B2E1B /* freebnbTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = freebnbTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC3EE6CE2E3360EE004B2E1B /* freebnbUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = freebnbUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		FCBB00012FA000000000BB01 /* Config/Config.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Config.Debug.xcconfig; sourceTree = "<group>"; };
-		FCBB00022FA000000000BB01 /* Config/Config.Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Config.Release.xcconfig; sourceTree = "<group>"; };
+		FCBB00012FA000000000BB01 /* config/Config.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = config/Config.Debug.xcconfig; sourceTree = "<group>"; };
+		FCBB00022FA000000000BB01 /* config/Config.Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = config/Config.Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -92,6 +93,7 @@
 				FCAA00062FA000000000AA01 /* FirebasePerformance in Frameworks */,
 				FCAA00082FA000000000AA01 /* FirebaseFunctions in Frameworks */,
 				FC1854383002A4C6006C621E /* GoogleSignIn in Frameworks */,
+				FCDFEB2A300770A1002BD75D /* FirebaseAppCheck in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -120,8 +122,8 @@
 				FC3EE6D12E3360EE004B2E1B /* freebnbUITests */,
 				FC3EE6B72E3360ED004B2E1B /* Products */,
 				FC38E3892E382803000906CA /* .gitignore */,
-				FCBB00012FA000000000BB01 /* Config/Config.Debug.xcconfig */,
-				FCBB00022FA000000000BB01 /* Config/Config.Release.xcconfig */,
+				FCBB00012FA000000000BB01 /* config/Config.Debug.xcconfig */,
+				FCBB00022FA000000000BB01 /* config/Config.Release.xcconfig */,
 				FCA1F5742F94741C00045A12 /* Frameworks */,
 			);
 			sourceTree = "<group>";
@@ -174,6 +176,7 @@
 				FCAA00072FA000000000AA01 /* FirebaseFunctions */,
 				FC1854373002A4C6006C621E /* GoogleSignIn */,
 				FC1854393002A4C6006C621E /* GoogleSignInSwift */,
+				FCDFEB29300770A1002BD75D /* FirebaseAppCheck */,
 			);
 			productName = freebnb;
 			productReference = FC3EE6B62E3360ED004B2E1B /* freebnb.app */;
@@ -307,8 +310,8 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(SRCROOT)/Config/GoogleService-Info.Debug.plist",
-				"$(SRCROOT)/Config/GoogleService-Info.Release.plist",
+				"$(SRCROOT)/config/GoogleService-Info.Debug.plist",
+				"$(SRCROOT)/config/GoogleService-Info.Release.plist",
 			);
 			outputFileListPaths = (
 			);
@@ -317,7 +320,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n${SRCROOT}/Config/select_google_services.sh\n";
+			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n${SRCROOT}/config/select_google_services.sh\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -479,7 +482,7 @@
 		};
 		FC3EE6D92E3360EE004B2E1B /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = FCBB00012FA000000000BB01 /* Config/Config.Debug.xcconfig */;
+			baseConfigurationReference = FCBB00012FA000000000BB01 /* config/Config.Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -518,7 +521,7 @@
 		};
 		FC3EE6DA2E3360EE004B2E1B /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = FCBB00022FA000000000BB01 /* Config/Config.Release.xcconfig */;
+			baseConfigurationReference = FCBB00022FA000000000BB01 /* config/Config.Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -747,6 +750,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFunctions;
+		};
+		FCDFEB29300770A1002BD75D /* FirebaseAppCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAppCheck;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
