@@ -11,5 +11,12 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Shared container the app writes the widget snapshot into and the widget
+	     extension reads back. The identical group must be enabled on the widget
+	     target's entitlements. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.poodlestrategy.freebnb</string>
+	</array>
 </dict>
 </plist>

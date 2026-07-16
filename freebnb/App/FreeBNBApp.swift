@@ -158,14 +158,17 @@ struct FreeBNBApp: App {
         }
     }
 
-    // Claims the Google sign-in callback, which arrives through the reversed
-    // client ID URL scheme. Our own `freebnb://` links carry no action — opening
-    // one simply launches the app — so there is nothing else to route here.
-    // Friend connections are made only in-app, through search, request, and
-    // accept; a deep link never creates one.
+    // Routes an incoming URL. The reversed-client-ID scheme is the Google
+    // sign-in callback; our own `freebnb://stays` scheme is what the home-screen
+    // widgets and the current-stay Live Activity open when tapped, and it simply
+    // switches to the Stays tab. Friend connections are still made only in-app,
+    // so a deep link never creates one.
     private func handleIncomingURL(_ url: URL) {
 #if canImport(GoogleSignIn)
-        GIDSignIn.sharedInstance.handle(url)
+        if GIDSignIn.sharedInstance.handle(url) { return }
 #endif
+        if url.scheme == "freebnb", url.host == "stays" {
+            router.pendingStayEvent = true
+        }
     }
 }

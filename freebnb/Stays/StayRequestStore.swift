@@ -22,6 +22,10 @@ final class StayRequestStore {
     /// accepted stays below. Kept in sync on every snapshot so a cancellation or a
     /// date change withdraws or moves its reminders without any extra plumbing.
     @ObservationIgnored private let reminderScheduler = StayReminderScheduler()
+    /// Keeps the current-stay Live Activity (feature 21) in step with the accepted
+    /// stays below, the same way `reminderScheduler` keeps the local reminders in
+    /// step. Reconciled on every snapshot.
+    @ObservationIgnored private let liveActivityController = StayLiveActivityController()
     @ObservationIgnored nonisolated(unsafe) private var incomingListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var outgoingListener: RepositoryListener?
     // `nonisolated(unsafe)` for the same reason as other stores: deinit is
@@ -48,7 +52,12 @@ final class StayRequestStore {
         incomingListener?.cancel(); incomingListener = nil
         outgoingListener?.cancel(); outgoingListener = nil
         incomingRequests = []; outgoingRequests = []
-        guard let userID else { return }
+        guard let userID else {
+            // Signed out: take down the widgets and any running Live Activity so
+            // the last user's stay doesn't linger on the Lock Screen.
+            publishToWidgetsAndActivities(viewerID: "")
+            return
+        }
 
         incomingListener = repository.listenToRequests(userID: userID, role: .host) { [weak self] result in
             Task { @MainActor [weak self] in
@@ -60,6 +69,7 @@ final class StayRequestStore {
                     self?.listenerError = nil
                     self?.incomingRequests = requests.sortedByDate()
                     self?.syncReminders(viewerID: userID)
+                    self?.publishToWidgetsAndActivities(viewerID: userID)
                 }
             }
         }
@@ -74,6 +84,7 @@ final class StayRequestStore {
                     self?.listenerError = nil
                     self?.outgoingRequests = requests.sortedByDate()
                     self?.syncReminders(viewerID: userID)
+                    self?.publishToWidgetsAndActivities(viewerID: userID)
                 }
             }
         }
@@ -85,6 +96,21 @@ final class StayRequestStore {
     private func syncReminders(viewerID: String) {
         let accepted = (incomingRequests + outgoingRequests).filter { $0.status == .accepted }
         Task { await reminderScheduler.sync(acceptedStays: accepted, viewerID: viewerID) }
+    }
+
+    /// Republishes the home-screen widget snapshot and reconciles the current-stay
+    /// Live Activity. Called on every snapshot (and on sign-out with an empty
+    /// viewerID to tear both down). Cheap and idempotent, like `syncReminders`.
+    private func publishToWidgetsAndActivities(viewerID: String) {
+        StayWidgetBridge.publish(
+            incoming: incomingRequests,
+            outgoing: outgoingRequests,
+            viewerID: viewerID
+        )
+        liveActivityController.sync(
+            activeStays: (incomingRequests + outgoingRequests).filter { $0.status == .accepted },
+            viewerID: viewerID
+        )
     }
 
     // MARK: - Reload

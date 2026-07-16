@@ -9,6 +9,9 @@
 	     export-compliance question on every App Store Connect upload. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Lets the app start Live Activities for the current stay (feature 21). -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<!-- App deep links: freebnb://invite?from=<uid> -->

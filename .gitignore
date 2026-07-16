@@ -41,3 +41,6 @@ ui-debug.log
 # Internal docs are private; public docs are tracked
 docs/internal/
 docs_secret/
+
+# Local task list — never committed
+TODO.md
