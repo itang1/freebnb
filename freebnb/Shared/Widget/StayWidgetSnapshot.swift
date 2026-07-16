@@ -1,6 +1,6 @@
 //
 //  StayWidgetSnapshot.swift
-//  WidgetShared
+//  freebnb (shared with the freebnbWidgets extension)
 //
 //  The payload the app writes to the App Group and the home-screen widgets read
 //  back. Deliberately a small, self-contained value type with no Firebase or app

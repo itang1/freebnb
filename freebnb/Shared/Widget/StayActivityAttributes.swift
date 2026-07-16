@@ -1,6 +1,6 @@
 //
 //  StayActivityAttributes.swift
-//  WidgetShared
+//  freebnb (shared with the freebnbWidgets extension)
 //
 //  The Live Activity contract for an in-progress stay (feature 21). Shared
 //  verbatim between the app (which starts, updates, and ends the activity) and

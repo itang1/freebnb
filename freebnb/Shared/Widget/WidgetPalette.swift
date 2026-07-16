@@ -1,6 +1,6 @@
 //
 //  WidgetPalette.swift
-//  WidgetShared
+//  freebnb (shared with the freebnbWidgets extension)
 //
 //  The widget extension can't reach the app's asset catalog, so the brand accent
 //  is defined in code here (matching Assets.xcassets/Color/accent.colorset) and

@@ -1,6 +1,6 @@
 //
 //  AppGroup.swift
-//  WidgetShared
+//  freebnb (shared with the freebnbWidgets extension)
 //
 //  The one place the App Group identifier is written down. Both the app (which
 //  writes the widget snapshot) and the widget extension (which reads it) resolve
