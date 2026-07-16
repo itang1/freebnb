@@ -3,15 +3,14 @@
 //  freebnb
 //
 //  The in-app feedback composer (feature 43). Posts a note to the Google Form in
-//  `FeedbackService`, whose responses feed the team's spreadsheet. The button is
-//  gated behind a full account as a product choice, so a note carries an ID we
-//  can reply to; the same form is public on the web for anyone else.
+//  `FeedbackService`, whose responses feed the team's spreadsheet. Anyone can
+//  send, guests included, since the Form needs no account; the sender's ID rides
+//  along when they are signed in. The same form is public on the web.
 //
 
 import SwiftUI
 
 struct FeedbackComposerView: View {
-    @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -21,15 +20,11 @@ struct FeedbackComposerView: View {
     @State private var errorMessage: String?
     @State private var didSend = false
 
-    private var isGuest: Bool { authManager.authMethod == .guest }
-
     var body: some View {
         NavigationStack {
             Group {
                 if didSend {
                     sentConfirmation
-                } else if isGuest {
-                    guestGate
                 } else {
                     composer
                 }
@@ -44,7 +39,7 @@ struct FeedbackComposerView: View {
                     Button("Close") { dismiss() }
                         .disabled(isSending)
                 }
-                if !didSend && !isGuest {
+                if !didSend {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Send") { Task { await send() } }
                             .disabled(!draft.isValid || isSending)
@@ -68,7 +63,7 @@ struct FeedbackComposerView: View {
                 .disabled(isSending)
             } footer: {
                 HStack {
-                    Text("Your account and app version are attached so we can follow up.")
+                    Text("Your app version is attached to help us track down issues.")
                     Spacer()
                     Text("\(draft.remainingCharacters)")
                         .monospacedDigit()
@@ -87,25 +82,6 @@ struct FeedbackComposerView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Guest gate
-
-    private var guestGate: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "person.crop.circle.badge.questionmark")
-                .font(.system(size: 44))
-                .foregroundColor(.secondary)
-            Text("Create an account to send feedback")
-                .font(.headline)
-            Text("Feedback is tied to your account so we can reply and fix what you flag.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Sent confirmation
