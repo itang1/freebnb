@@ -187,9 +187,7 @@ struct ContentView: View {
                 // Fires on appear and whenever a listing is saved/unsaved or the
                 // loaded feed changes what we can describe.
                 .onChange(of: spotlightIndexKey, initial: true) { _, _ in
-                    #if canImport(CoreSpotlight)
                     SpotlightIndexer.sync(savedHomes: savedHomesForSpotlight)
-                    #endif
                 }
                 // A saved listing opened from Spotlight: switch to Listings and
                 // push it if it's currently loaded (drop silently otherwise).

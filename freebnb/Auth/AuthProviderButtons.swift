@@ -34,7 +34,6 @@ struct AuthProviderButtons: View {
             .padding(.horizontal)
             .disabled(authManager.isLoading)
 
-            #if canImport(GoogleSignIn)
             Button {
                 authManager.signInWithGoogle()
             } label: {
@@ -58,7 +57,6 @@ struct AuthProviderButtons: View {
             .padding(.horizontal)
             .disabled(authManager.isLoading)
             .accessibilityIdentifier(googleAccessibilityID)
-            #endif
 
             Button(action: onEmailTap) {
                 Label(emailLabel, systemImage: "envelope.fill")

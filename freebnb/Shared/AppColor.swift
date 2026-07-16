@@ -4,9 +4,7 @@
 //
 
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#endif
 
 /// Semantic roles for the "lakeside summer" palette.
 ///
@@ -74,7 +72,6 @@ extension ShapeStyle where Self == Color {
 
 // MARK: - UIKit
 
-#if canImport(UIKit)
 extension UIColor {
     /// Resolves a semantic role from the asset catalog. The colorsets ship in
     /// the app bundle, so a miss can only mean a deleted or renamed asset;
@@ -96,4 +93,3 @@ extension UIColor {
     static let success = UIColor.app(.success)
     static let onAccent = UIColor.app(.onAccent)
 }
-#endif

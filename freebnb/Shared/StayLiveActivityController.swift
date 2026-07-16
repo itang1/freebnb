@@ -5,16 +5,12 @@
 //  Drives the current-stay Live Activity (feature 21) off the same accepted-stay
 //  set the store already syncs. It keeps at most one activity running — for the
 //  most imminent live stay — starting it when a stay reaches its check-in day,
-//  moving it through its phases, and ending it after checkout. All ActivityKit
-//  work is behind `canImport` so a build without it (or a target that excludes
-//  it) still compiles.
+//  moving it through its phases, and ending it after checkout.
 //
 
+import ActivityKit
 import Foundation
 import os
-#if canImport(ActivityKit)
-import ActivityKit
-#endif
 
 @MainActor
 final class StayLiveActivityController {
@@ -24,7 +20,6 @@ final class StayLiveActivityController {
     /// on every snapshot. Picks the single stay that should be live now, then
     /// starts / updates / ends activities so exactly that one is showing.
     func sync(activeStays stays: [StayRequest], viewerID: String, now: Date = Date()) {
-        #if canImport(ActivityKit)
         guard !viewerID.isEmpty else {
             Task { await endAll() }
             return
@@ -41,10 +36,8 @@ final class StayLiveActivityController {
             .min { $0.0.checkIn < $1.0.checkIn }
 
         Task { await reconcile(target: target, viewerID: viewerID) }
-        #endif
     }
 
-    #if canImport(ActivityKit)
     private func reconcile(target: (StayRequest, StayPhase)?, viewerID: String) async {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             // The user disabled Live Activities for the app; clean up and bail.
@@ -96,5 +89,4 @@ final class StayLiveActivityController {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
     }
-    #endif
 }

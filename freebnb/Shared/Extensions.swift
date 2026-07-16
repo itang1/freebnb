@@ -4,9 +4,7 @@
 //
 
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#endif
 
 // MARK: - Shared formatters
 
@@ -83,7 +81,6 @@ private struct AppearanceModifier: ViewModifier {
     }
 
     private func apply(_ value: String) {
-        #if canImport(UIKit)
         let style: UIUserInterfaceStyle
         switch value {
         case "light": style = .light
@@ -94,7 +91,6 @@ private struct AppearanceModifier: ViewModifier {
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
             .forEach { $0.overrideUserInterfaceStyle = style }
-        #endif
     }
 }
 

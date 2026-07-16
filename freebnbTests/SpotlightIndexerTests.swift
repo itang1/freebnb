@@ -7,7 +7,6 @@
 //  it, which is the part that must be correct and privacy-safe.
 //
 
-#if canImport(CoreSpotlight)
 import Testing
 @testable import freebnb
 
@@ -86,4 +85,3 @@ struct SpotlightIndexerTests {
         #expect(SpotlightIndexer.contentDescription(for: home) == "Near downtown")
     }
 }
-#endif

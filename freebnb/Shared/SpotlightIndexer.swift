@@ -9,12 +9,9 @@
 //  the street address never does. This is entirely on-device and needs no billing.
 //
 
-#if canImport(CoreSpotlight)
 import CoreSpotlight
 import Foundation
-#if canImport(UniformTypeIdentifiers)
 import UniformTypeIdentifiers
-#endif
 
 enum SpotlightIndexer {
     /// Groups every FreeBNB entry under one domain so the whole set can be
@@ -48,12 +45,7 @@ enum SpotlightIndexer {
     // MARK: - Index item construction
 
     static func attributeSet(for home: Home) -> CSSearchableItemAttributeSet {
-        let attributes: CSSearchableItemAttributeSet
-        if #available(iOS 14.0, macOS 11.0, *) {
-            attributes = CSSearchableItemAttributeSet(contentType: .content)
-        } else {
-            attributes = CSSearchableItemAttributeSet(itemContentType: "public.content")
-        }
+        let attributes = CSSearchableItemAttributeSet(contentType: .content)
         attributes.title = title(for: home)
         attributes.contentDescription = contentDescription(for: home)
         attributes.keywords = keywords(for: home)
@@ -85,4 +77,3 @@ enum SpotlightIndexer {
         }
     }
 }
-#endif

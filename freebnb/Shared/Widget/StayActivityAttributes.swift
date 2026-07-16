@@ -9,12 +9,9 @@
 //  changes over the stay, its phase, lives in `ContentState`.
 //
 
-import Foundation
-#if canImport(ActivityKit)
 import ActivityKit
-#endif
+import Foundation
 
-#if canImport(ActivityKit)
 struct StayActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var phase: StayPhase
@@ -27,10 +24,8 @@ struct StayActivityAttributes: ActivityAttributes {
     let checkOut: Date
     let isHost: Bool
 }
-#endif
 
-/// Where a live stay is in its arc. Declared outside the `ActivityKit` guard so
-/// non-ActivityKit code (and tests) can reason about it too.
+/// Where a live stay is in its arc.
 enum StayPhase: String, Codable, Hashable, Sendable {
     /// The guest arrives today but the stay hasn't started yet.
     case arrivingToday

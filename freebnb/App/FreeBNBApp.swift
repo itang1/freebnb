@@ -3,40 +3,24 @@
 //  freebnb
 //
 
+import CoreSpotlight
+import FirebaseAppCheck
 import FirebaseAuth
 import FirebaseCore
 import FirebaseFirestore
 import FirebaseFunctions
+import FirebaseMessaging
+import GoogleSignIn
 import SwiftUI
 import UserNotifications
 
-#if canImport(CoreSpotlight)
-import CoreSpotlight
-#endif
-
-#if canImport(FirebaseMessaging)
-import FirebaseMessaging
-#endif
-
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
-
-#if canImport(FirebaseAppCheck)
-import FirebaseAppCheck
-
 // Attests that requests come from a genuine, unmodified build of this app so
-// Firestore/Storage/Functions can reject traffic that bypasses the app. App
-// Attest is used in production; DeviceCheck covers older devices.
+// Firestore/Storage/Functions can reject traffic that bypasses the app.
 final class FreeBNBAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
     func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
-        if #available(iOS 14.0, *) {
-            return AppAttestProvider(app: app)
-        }
-        return DeviceCheckProvider(app: app)
+        AppAttestProvider(app: app)
     }
 }
-#endif
 
 @main
 struct FreeBNBApp: App {
@@ -54,14 +38,16 @@ struct FreeBNBApp: App {
 
     init() {
         // App Check must be registered before FirebaseApp.configure() so the
-        // first backend calls are attested. In DEBUG the debug provider lets the
-        // simulator obtain a token (register it in the Firebase console).
-#if canImport(FirebaseAppCheck)
+        // first backend calls are attested. The simulator can't do App Attest, so
+        // DEBUG builds use the debug provider: it reads the token from the
+        // FIRAAppCheckDebugToken environment variable (set in the freebnb scheme)
+        // and falls back to minting a fresh one, logged to the Xcode console, that
+        // must then be registered in Firebase Console → App Check → Manage debug
+        // tokens.
 #if DEBUG
         AppCheck.setAppCheckProviderFactory(AppCheckDebugProviderFactory())
 #else
         AppCheck.setAppCheckProviderFactory(FreeBNBAppCheckProviderFactory())
-#endif
 #endif
         FirebaseApp.configure()
 #if DEBUG
@@ -72,9 +58,7 @@ struct FreeBNBApp: App {
         // FirebaseApp.configure(), and the emulator check above, so an emulator
         // or UI-test run is correctly excluded from collection.
         Telemetry.configure()
-#if canImport(FirebaseMessaging)
         Messaging.messaging().isAutoInitEnabled = true
-#endif
         _authManager = State(initialValue: AuthManager())
         _homeStore = State(initialValue: HomeStore())
         _messageStore = State(initialValue: MessageStore())
@@ -99,13 +83,10 @@ struct FreeBNBApp: App {
                 .onAppear {
                     appDelegate.userProfileStore = userProfileStore
                     appDelegate.router = router
-#if canImport(FirebaseMessaging)
                     Messaging.messaging().delegate = appDelegate
-#endif
                     requestPushPermission()
                 }
                 .onOpenURL { url in handleIncomingURL(url) }
-#if canImport(CoreSpotlight)
                 // A saved listing tapped in Spotlight hands back its identifier;
                 // route it into the app, which pushes the listing (feature 40).
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
@@ -113,7 +94,6 @@ struct FreeBNBApp: App {
                         router.pendingListingID = listingID
                     }
                 }
-#endif
         }
     }
 
@@ -164,9 +144,7 @@ struct FreeBNBApp: App {
     // switches to the Stays tab. Friend connections are still made only in-app,
     // so a deep link never creates one.
     private func handleIncomingURL(_ url: URL) {
-#if canImport(GoogleSignIn)
         if GIDSignIn.sharedInstance.handle(url) { return }
-#endif
         if url.scheme == "freebnb", url.host == "stays" {
             router.pendingStayEvent = true
         }

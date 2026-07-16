@@ -9,17 +9,11 @@ import FirebaseAuth
 // FirebaseCore for FirebaseApp.options.clientID in the Google sign-in path —
 // FirebaseAuth does not re-export it under SPM.
 import FirebaseCore
+import GoogleSignIn
 import Observation
 import SwiftUI
-import os
-
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
-
-#if canImport(UIKit)
 import UIKit
-#endif
+import os
 
 enum AuthMethod {
     case apple, google, email, guest, none
@@ -195,11 +189,9 @@ final class AuthManager {
 
     // MARK: - Sign in with Google
 
-#if canImport(GoogleSignIn)
     /// Presents Google's sign-in sheet, then exchanges the returned tokens for a
-    /// Firebase credential. Requires the GoogleSignIn SDK and the reversed client
-    /// ID URL scheme (see the manual setup notes); guarded by `canImport` so the
-    /// project still builds before the package is added.
+    /// Firebase credential. Requires the reversed client ID URL scheme (see the
+    /// manual setup notes).
     func signInWithGoogle() {
         guard let clientID = FirebaseApp.app()?.options.clientID else {
             log.error("google sign in: missing Firebase clientID (GoogleService-Info.plist)")
@@ -246,7 +238,6 @@ final class AuthManager {
             }
         }
     }
-#endif
 
     // MARK: - Email / password
 
@@ -436,9 +427,7 @@ final class AuthManager {
     // MARK: - Presentation helper
 
     // The frontmost view controller, used as the presenter for Google's sign-in
-    // sheet. Apple's flow supplies its own anchor via the coordinator, so this is
-    // only needed on platforms with UIKit.
-#if canImport(UIKit)
+    // sheet. Apple's flow supplies its own anchor via the coordinator.
     private static func topViewController() -> UIViewController? {
         let keyWindow = UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.keyWindow }
@@ -449,5 +438,4 @@ final class AuthManager {
         }
         return top
     }
-#endif
 }

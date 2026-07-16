@@ -4,9 +4,7 @@
 //
 
 import AuthenticationServices
-#if canImport(UIKit)
 import UIKit
-#endif
 
 // `ASAuthorizationController` delivers its delegate callbacks on the main queue,
 // and we only call `signIn(nonce:)` from the main actor, so `continuation` is
@@ -53,13 +51,9 @@ final class AppleSignInCoordinator: NSObject,
 
     nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         MainActor.assumeIsolated {
-            #if canImport(UIKit)
-            return UIApplication.shared.connectedScenes
+            UIApplication.shared.connectedScenes
                 .compactMap { ($0 as? UIWindowScene)?.keyWindow }
                 .first ?? ASPresentationAnchor()
-            #else
-            return ASPresentationAnchor()
-            #endif
         }
     }
 }

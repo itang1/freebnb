@@ -5,21 +5,16 @@
 //  Handles remote-notification registration and FCM token delivery.
 //
 //  Manual steps required before push notifications go live:
-//    1. In Xcode → Package Dependencies, add FirebaseMessaging from
-//       https://github.com/firebase/firebase-ios-sdk
-//    2. In Apple Developer → Certificates, create an APNs Auth Key (.p8),
+//    1. In Apple Developer → Certificates, create an APNs Auth Key (.p8),
 //       then upload it in Firebase Console → Project Settings → Cloud Messaging.
-//    3. In Xcode → Signing & Capabilities, add "Push Notifications".
-//    4. Change the aps-environment entitlement to "production" before archiving.
+//    2. In Xcode → Signing & Capabilities, add "Push Notifications".
+//    3. Change the aps-environment entitlement to "production" before archiving.
 //
 
+import FirebaseMessaging
 import UIKit
 import UserNotifications
 import os
-
-#if canImport(FirebaseMessaging)
-import FirebaseMessaging
-#endif
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
@@ -40,9 +35,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     // Called after the user grants or has previously granted notification permission.
     func application(_ application: UIApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-#if canImport(FirebaseMessaging)
         Messaging.messaging().apnsToken = deviceToken
-#endif
     }
 
     func application(_ application: UIApplication,
@@ -92,7 +85,6 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     }
 }
 
-#if canImport(FirebaseMessaging)
 // MARK: - MessagingDelegate
 
 extension AppDelegate: MessagingDelegate {
@@ -105,4 +97,3 @@ extension AppDelegate: MessagingDelegate {
         }
     }
 }
-#endif
