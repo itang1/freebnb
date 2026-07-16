@@ -183,9 +183,14 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       # emulators:exec boots Firestore + Auth, runs the command, then tears them
-      # down. Only the emulator-backed suites run; EmulatorSupport's reachability
-      # gate lets them execute here (and skip everywhere the emulator is
-      # absent). The simulator reaches the emulator via the host's localhost.
+      # down. The simulator reaches the emulator via the host's localhost.
+      #
+      # The EmulatorTests test plan exists to set FREEBNB_EMULATOR_TESTS=1 in the
+      # test process, which is what flips EmulatorSupport.isEnabled — so this job
+      # is the only place these suites execute. The plan cannot narrow the run
+      # itself (a test plan's selectedTests/skippedTests do not match Swift
+      # Testing @Suite names in Xcode 16), hence the -only-testing flags; those do
+      # match, and they override the plan's own selection.
       #
       # Unlike the main test job, this one must NOT disable code signing:
       # FirebaseAuth stores its session in the keychain, and SecItemAdd fails
@@ -200,6 +205,7 @@ jobs:
               -project freebnb.xcodeproj \
               -scheme \"$SCHEME\" \
               -destination \"id=${{ steps.sim.outputs.udid }}\" \
+              -testPlan EmulatorTests \
               -only-testing:freebnbTests/FirestoreHomesRepositoryEmulatorTests \
               -only-testing:freebnbTests/AuthEmulatorTests \
               CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO"

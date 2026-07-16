@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "A1000000-0000-4000-A000-000000000002",
+      "name" : "Configuration 1",
+      "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "FREEBNB_EMULATOR_TESTS",
+            "value" : "1"
+          }
+        ]
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:freebnb.xcodeproj",
+        "identifier" : "FC3EE6C32E3360EE004B2E1B",
+        "name" : "freebnbTests"
+      }
+    }
+  ],
+  "version" : 1
+}

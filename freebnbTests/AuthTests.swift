@@ -41,8 +41,8 @@ struct AuthErrorMappingTests {
 // MARK: - Auth flows against the emulator
 
 // Gated and serialized like FirestoreHomesRepositoryEmulatorTests: inert unless
-// something is listening on the emulator ports, and sharing one Auth session.
-@Suite(.serialized, .enabled(if: EmulatorSupport.isEmulatorReachable))
+// the run opted in via FREEBNB_EMULATOR_TESTS, and sharing one Auth session.
+@Suite(.serialized, .enabled(if: EmulatorSupport.isEnabled))
 struct AuthEmulatorTests {
 
     private var auth: Auth { EmulatorSupport.auth }

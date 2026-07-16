@@ -7,9 +7,9 @@
 //  admit a full member's listing and reject a guest's, and that the recency
 //  cursor pages against a live composite index.
 //
-//  Gated on the emulator being reachable (see EmulatorSupport) so the suite is
-//  inert on any build that isn't running under `firebase emulators:exec`, and
-//  serialized because the tests share one Auth session on the secondary app.
+//  Gated on EmulatorSupport.isEnabled so the suite is inert unless it was asked
+//  for explicitly (see EmulatorSupport), and serialized because the tests share
+//  one Auth session on the secondary app.
 //
 
 import FirebaseFirestore
@@ -17,7 +17,7 @@ import Foundation
 import Testing
 @testable import freebnb
 
-@Suite(.serialized, .enabled(if: EmulatorSupport.isEmulatorReachable))
+@Suite(.serialized, .enabled(if: EmulatorSupport.isEnabled))
 struct FirestoreHomesRepositoryEmulatorTests {
 
     private var repository: FirestoreHomesRepository {

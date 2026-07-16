@@ -10,12 +10,20 @@
 //  The harness is deliberately self-contained: it stands up its own secondary
 //  FirebaseApp pointed straight at the emulator (host + port set on the
 //  Firestore settings and Auth), so it depends on neither the app's launch
-//  arguments nor any simulator-inherited environment. The whole suite is gated
-//  on `isEmulatorReachable`, a plain TCP probe, so on a machine or CI job
-//  without the emulator running the tests skip rather than fail. Run them with:
+//  arguments nor any simulator-inherited environment. The suites are gated on
+//  `isEnabled`, an explicit opt-in, so they skip rather than fail anywhere they
+//  weren't asked for — including a dev machine whose emulator is serving the
+//  freebnb-6814a dev project on these same ports. Run them with:
 //
 //    firebase emulators:exec --only firestore,auth \
-//      --project freebnb-emulator-tests "xcodebuild test -scheme freebnb ..."
+//      --project freebnb-emulator-tests \
+//      "xcodebuild test -scheme freebnb -testPlan EmulatorTests \
+//         -only-testing:freebnbTests/FirestoreHomesRepositoryEmulatorTests \
+//         -only-testing:freebnbTests/AuthEmulatorTests \
+//         CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO"
+//
+//  In Xcode, switch the scheme's test plan to EmulatorTests. The default plan
+//  leaves the flag unset, so these suites skip there.
 //
 
 import Darwin
@@ -32,9 +40,27 @@ enum EmulatorSupport {
     static let firestorePort: UInt16 = 8080
     static let authPort = 9099
 
+    /// The opt-in switch these suites gate on, set by the `emulator-tests` CI job.
+    ///
+    /// Reachability alone is the wrong condition: `scripts/dev_emulator.sh` (the
+    /// scheme's build pre-action) keeps an emulator on these same ports for the
+    /// `freebnb-6814a` dev project, so a plain `xcodebuild test` on a dev machine
+    /// used to run these suites against that namespace — the wrong project, with
+    /// a different ruleset and no guarantee of a clean slate. Requiring the flag
+    /// means the suites run only where someone stood the emulator up for them.
+    ///
+    /// Set from the EmulatorTests test plan, which exists for exactly this. (A
+    /// `TEST_RUNNER_`-prefixed build setting does not work here: that forwarding
+    /// only applies to a UI test runner, not to app-hosted unit tests.)
+    static var isEnabled: Bool {
+        ProcessInfo.processInfo.environment["FREEBNB_EMULATOR_TESTS"] == "1"
+            && isEmulatorReachable
+    }
+
     /// True when something is listening on the Firestore emulator port. A blocking
     /// connect to localhost resolves immediately (accept or refuse), so no timeout
-    /// dance is needed. Used as the suite's `.enabled(if:)` condition.
+    /// dance is needed. Guards against a hang when the flag is set but the
+    /// emulator never came up.
     static var isEmulatorReachable: Bool {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else { return false }
