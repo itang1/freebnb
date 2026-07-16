@@ -18,6 +18,11 @@ struct ContentView: View {
     @AppStorage(UserDefaultsKey.ageGateAccepted) private var ageGateAccepted = false
     @AppStorage(UserDefaultsKey.lastSeenWhatsNewVersion) private var lastSeenWhatsNewVersion = ""
     @State private var showOnboarding = false
+    // Set when the user answers onboarding's hosting step with "List My Place".
+    // The create-listing sheet can only present after the onboarding sheet has
+    // fully dismissed, so the intent is parked here and consumed in onDismiss.
+    @State private var pendingHostListing = false
+    @State private var showCreateListing = false
     @State private var showWhatsNew = false
     @State private var listingsPath = NavigationPath()
     @AppStorage(UserDefaultsKey.selectedTab) private var selectedTab = 0
@@ -124,8 +129,17 @@ struct ContentView: View {
                     // stamp the current version so the changelog only ever
                     // auto-presents on a later *update*, never right after install.
                     lastSeenWhatsNewVersion = Bundle.main.appVersionString
+                    if pendingHostListing {
+                        pendingHostListing = false
+                        showCreateListing = true
+                    }
                 }) {
-                    OnboardingPage(isPresented: $showOnboarding)
+                    OnboardingPage(isPresented: $showOnboarding) {
+                        pendingHostListing = true
+                    }
+                }
+                .sheet(isPresented: $showCreateListing) {
+                    CreateListingPage(mode: .create)
                 }
                 .sheet(isPresented: $showWhatsNew, onDismiss: {
                     lastSeenWhatsNewVersion = Bundle.main.appVersionString

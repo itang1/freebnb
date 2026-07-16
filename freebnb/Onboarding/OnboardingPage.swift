@@ -7,6 +7,10 @@ import SwiftUI
 
 struct OnboardingPage: View {
     @Binding var isPresented: Bool
+    /// Called when the user answers the hosting step with "List My Place".
+    /// The parent presents the create-listing flow after this sheet dismisses;
+    /// doing it here would race the dismissal animation.
+    var onChooseHost: () -> Void = {}
     @State private var currentPage = 0
 
     private struct Slide {
@@ -42,6 +46,12 @@ struct OnboardingPage: View {
         )
     ]
 
+    /// The hosting-intent ask sits after the walkthrough slides as its own page.
+    /// Hosts are the scarce side of the network, so the one question worth
+    /// asking before the user ever sees a (possibly thin) feed is whether they
+    /// have a couch to offer.
+    private var isHostStep: Bool { currentPage == slides.count }
+
     var body: some View {
         ZStack {
             LinearGradient(
@@ -56,12 +66,13 @@ struct OnboardingPage: View {
                     ForEach(Array(slides.enumerated()), id: \.offset) { index, slide in
                         slideView(slide).tag(index)
                     }
+                    hostStepView.tag(slides.count)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .always))
 
                 VStack(spacing: 12) {
                     Button(action: advance) {
-                        Text(currentPage < slides.count - 1 ? "Next" : "Get Started")
+                        Text(isHostStep ? "List My Place" : "Next")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -69,9 +80,14 @@ struct OnboardingPage: View {
                             .foregroundColor(.onAccent)
                             .cornerRadius(12)
                     }
-                    // Fixed-height slot keeps layout stable when Skip disappears
+                    // Fixed-height slot keeps layout stable across pages: Skip on
+                    // the walkthrough, the guest-only answer on the hosting step.
                     Group {
-                        if currentPage < slides.count - 1 {
+                        if isHostStep {
+                            Button("I'm just looking for now") { isPresented = false }
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        } else {
                             Button("Skip") { isPresented = false }
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
@@ -83,6 +99,40 @@ struct OnboardingPage: View {
                 .padding(.bottom, 36)
             }
         }
+    }
+
+    private var hostStepView: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.accent.opacity(0.15))
+                    .frame(width: 140, height: 140)
+                Image(systemName: "sofa.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 64, height: 64)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(Color.accent)
+            }
+            .accessibilityHidden(true)
+
+            VStack(spacing: 12) {
+                Text("Got a couch or a guest room?")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .multilineTextAlignment(.center)
+                Text("To one of your friends, that's a free trip. Listing takes about two minutes, and only friends you approve can ever see your place.")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 30)
     }
 
     private func slideView(_ slide: Slide) -> some View {
@@ -120,10 +170,11 @@ struct OnboardingPage: View {
     }
 
     private func advance() {
-        if currentPage < slides.count - 1 {
-            withAnimation { currentPage += 1 }
-        } else {
+        if isHostStep {
             isPresented = false
+            onChooseHost()
+        } else {
+            withAnimation { currentPage += 1 }
         }
     }
 }
