@@ -145,6 +145,10 @@ struct WelcomePage: View {
     }
 
     #if DEBUG
+    private let quickSignInColumns = Array(
+        repeating: GridItem(.flexible(), spacing: 10), count: 3
+    )
+
     private var quickSignInSection: some View {
         VStack(spacing: 8) {
             Text("Debug quick sign-in")
@@ -154,23 +158,23 @@ struct WelcomePage: View {
                 .textCase(.uppercase)
                 .tracking(0.5)
 
-            HStack(spacing: 10) {
-                QuickSignInButton(
-                    label: "Sign in as guest",
-                    systemImage: "person.fill.questionmark",
-                    accessibilityID: "welcome.guestSignInButton"
-                ) {
-                    authManager.signInWithEmail("guest@freebnb.test", password: "***REDACTED***")
+            // The whole seeded cast, three across. Bounded in a ScrollView so a
+            // long roster never pushes the real Apple/Google buttons off screen.
+            ScrollView {
+                LazyVGrid(columns: quickSignInColumns, spacing: 10) {
+                    ForEach(TestProfile.all) { profile in
+                        QuickSignInButton(
+                            label: profile.displayName,
+                            systemImage: profile.systemImage,
+                            accessibilityID: profile.accessibilityID(surface: "welcome")
+                        ) {
+                            authManager.signInWithEmail(profile.email, password: profile.password)
+                        }
+                    }
                 }
-
-                QuickSignInButton(
-                    label: "Sign in as devna",
-                    systemImage: "hammer.fill",
-                    accessibilityID: "welcome.devnaSignInButton"
-                ) {
-                    authManager.signInWithEmail("dev@freebnb.test", password: "***REDACTED***")
-                }
+                .padding(.horizontal, 2)
             }
+            .frame(maxHeight: 220)
             .disabled(authManager.isLoading)
         }
         .padding(.horizontal)

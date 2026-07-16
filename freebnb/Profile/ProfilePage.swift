@@ -191,16 +191,21 @@ struct ProfilePage: View {
                 // seeded credentials are never sent to the production project.
                 #if DEBUG
                 if EmulatorEnvironment.isActive {
-                    sectionLabel("Dev")
+                    sectionLabel("Switch account")
                     VStack(spacing: 0) {
-                        SettingsRow(icon: "person.fill.questionmark", label: "Sign in as guest",
-                                    accessibilityID: "profile.guestSignInButton") {
-                            authManager.signInWithEmail("guest@freebnb.test", password: "***REDACTED***")
-                        }
-                        rowDivider
-                        SettingsRow(icon: "hammer.fill", label: "Sign in as devna",
-                                    accessibilityID: "profile.devSignInButton") {
-                            authManager.signInWithEmail("dev@freebnb.test", password: "***REDACTED***")
+                        ForEach(Array(TestProfile.all.enumerated()), id: \.element.id) { index, profile in
+                            if index > 0 { rowDivider }
+                            // A checkmark marks whoever is signed in now, so the
+                            // list doubles as an account switcher you can read at
+                            // a glance. Tapping any row hops straight to it.
+                            SettingsRow(
+                                icon: profile.systemImage,
+                                label: profile.displayName,
+                                trailingText: profile.email == authManager.userEmail ? "Signed in" : nil,
+                                accessibilityID: profile.accessibilityID(surface: "profile")
+                            ) {
+                                authManager.signInWithEmail(profile.email, password: profile.password)
+                            }
                         }
                     }
                     .sectionCard()
