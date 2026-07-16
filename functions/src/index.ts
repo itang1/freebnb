@@ -760,6 +760,12 @@ export const acceptStayRequest = onCall(async (request) => {
   if (hostNote !== undefined && typeof hostNote !== "string") {
     throw new HttpsError("invalid-argument", "hostNote must be a string.");
   }
+  // Admin writes bypass firestore.rules, so the rules' 2000-char cap on
+  // hostNote has to be re-enforced here or this callable becomes the one path
+  // that can stuff an unbounded string onto the document.
+  if (typeof hostNote === "string" && hostNote.length > 2000) {
+    throw new HttpsError("invalid-argument", "hostNote is too long.");
+  }
 
   const requestRef = db.collection(Collections.stayRequests).doc(requestID);
 
@@ -782,6 +788,14 @@ export const acceptStayRequest = onCall(async (request) => {
     }
     if (req.status !== "pending") {
       throw new HttpsError("failed-precondition", "Only a pending request can be accepted.");
+    }
+
+    // The listing must still exist and still be live. Accepting a request for a
+    // deleted listing would disclose a street address for a home that is no
+    // longer offered, via a marker under a document nothing cleans up.
+    const listingSnap = await t.get(db.collection(Collections.homes).doc(req.listingID));
+    if (!listingSnap.exists || listingSnap.data()?.deletedAt) {
+      throw new HttpsError("failed-precondition", "This listing is no longer available.");
     }
 
     // All reads must precede all writes in a transaction. Re-read the accepted
