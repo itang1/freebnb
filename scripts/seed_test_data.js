@@ -30,6 +30,7 @@
 
 const path = require("path");
 const { createRequire } = require("module");
+const { searchTerms } = require("./search_terms");
 
 const useProd = process.argv.includes("--prod");
 const resetFirst = process.argv.includes("--reset") || process.argv.includes("--reset-homes");
@@ -435,6 +436,9 @@ async function seedUsers() {
       });
     await db.collection("users").doc(u.uid).set({
       displayName: u.displayName,
+      // The name-search index the app queries; without it the seeded cast is
+      // invisible to friend search (see scripts/search_terms.js).
+      searchTerms: searchTerms(u.displayName),
       createdAt: now,
       updatedAt: now
     }, { merge: true });

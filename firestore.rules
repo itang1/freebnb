@@ -177,12 +177,33 @@ service cloud.firestore {
       // data channel; hasAll() keeps a merge write from dropping a field.
       // `trustStats` is optional because only the recomputeTrustStats function
       // ever writes it, and it does so with admin credentials that bypass this.
+      // The name-search index (UserSearchTerms in the client). Optional: it is
+      // absent on documents written before the backfill, and search simply does
+      // not find those until scripts/backfill_search_terms.js runs.
+      //
+      // Rules cannot loop, so the individual prefixes can't be checked against
+      // the name — a modified client could add terms it never earned and make
+      // itself findable under words that aren't its own. Bounded rather than
+      // prevented: the size cap limits how much of that is possible, and the
+      // whole lowercased displayName must be present, so the terms can never
+      // disown the name they belong to. Being findable is not access — a
+      // stranger still has to be accepted as a friend to see anything — but
+      // when functions deploy, onUserWritten should own this field outright
+      // (section B).
+      function isValidSearchTerms(data) {
+        return isUnset(data, 'searchTerms')
+            || (data.searchTerms is list
+                && data.searchTerms.size() <= 60
+                && data.searchTerms.hasAll([data.displayName.lower()]));
+      }
+
       function isValidPublicProfile(data) {
-        return data.keys().hasOnly(['displayName', 'createdAt', 'updatedAt', 'trustStats'])
+        return data.keys().hasOnly(['displayName', 'searchTerms', 'createdAt', 'updatedAt', 'trustStats'])
             && data.keys().hasAll(['displayName', 'createdAt', 'updatedAt'])
             && data.displayName is string
             && data.displayName.size() > 0
             && data.displayName.size() < 200
+            && isValidSearchTerms(data)
             && data.createdAt is timestamp
             && data.updatedAt == request.time;
       }
