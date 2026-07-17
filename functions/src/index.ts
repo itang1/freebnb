@@ -164,31 +164,36 @@ export const scheduledFirestoreBackup = onSchedule(
 // ---------------------------------------------------------------------------
 
 // Counts the user's non-muted conversations that still hold unread messages —
-// the value both the app's tab badge and the APNs badge display. Pages over the
-// recipient's conversations so the fan-out stays bounded no matter how many
-// threads they have (A9).
+// the value both the app's tab badge and the APNs badge display.
+//
+// Asks only for the conversations that are already unread for this user, rather
+// than paging over every thread they have and counting in memory. That ran on
+// every single message: a user with 500 conversations cost 500 reads per message
+// received, forever, to compute a number that is usually 1. Now the read count
+// is the badge itself.
+//
+// `unreadCounts` is a map keyed by user ID, so `unreadCounts.{uid} > 0` is an
+// ordinary field-path range query, served by the automatic single-field index —
+// no composite index, and no denormalized field to keep honest. A conversation
+// with no entry for this user simply isn't matched, which is the right answer.
+//
+// Muting is still applied in memory: it lives in a `mutedBy` array, and a second
+// array-contains can't be combined with this filter. That only reads over the
+// already-unread set, not the whole mailbox.
 async function unreadConversationCount(userID: string): Promise<number> {
-  const base = db
+  const snap = await db
     .collection(Collections.conversations)
-    .where("participants", "array-contains", userID)
-    .orderBy(admin.firestore.FieldPath.documentId());
+    .where(new admin.firestore.FieldPath("unreadCounts", userID), ">", 0)
+    // A ceiling on the pathological case rather than a real limit: nobody reads
+    // a badge past PAGE_SIZE, and this keeps one absurd mailbox from making
+    // every message to it expensive.
+    .limit(PAGE_SIZE)
+    .get();
 
   let count = 0;
-  let cursor: string | undefined;
-  for (;;) {
-    let query = base.limit(PAGE_SIZE);
-    if (cursor) query = query.startAfter(cursor);
-    const snap = await query.get();
-    if (snap.empty) break;
-    for (const doc of snap.docs) {
-      const data = doc.data();
-      const muted: string[] = data.mutedBy ?? [];
-      if (muted.includes(userID)) continue;
-      const unread: number = data.unreadCounts?.[userID] ?? 0;
-      if (unread > 0) count++;
-    }
-    if (snap.size < PAGE_SIZE) break;
-    cursor = snap.docs[snap.docs.length - 1].id;
+  for (const doc of snap.docs) {
+    const muted: string[] = doc.data().mutedBy ?? [];
+    if (!muted.includes(userID)) count++;
   }
   return count;
 }
@@ -1108,18 +1113,41 @@ export const suggestFriends = onCall(async (request) => {
 // request already handled carries accessRevokedAt and is skipped, and deleting an
 // absent marker is a no-op.
 // ---------------------------------------------------------------------------
+// How far back the nightly sweep looks for stays whose address grant is due to
+// expire. A year of slack on a job that runs every night: long enough that no
+// plausible outage loses a revocation, short enough that the query stops growing
+// with the app's whole history.
+const EXPIRY_LOOKBACK_DAYS = 365;
+
 export const expireCompletedStays = onSchedule(
   { schedule: "0 4 * * *", timeZone: "UTC" },
   async () => {
     const nowMs = Date.now();
     // Both statuses mean the stay was granted: `accepted` is one nobody closed
     // out, `completed` is one a party already marked done (feature 4) but whose
-    // address grant only expires when the stay is actually over. A single `in`
-    // filter on one field needs no composite index; partition in memory so a
-    // guest's still-running stay can veto the revocation.
+    // address grant only expires when the stay is actually over.
+    //
+    // Bounded by checkOut rather than sweeping the whole collection: without the
+    // cutoff this read every accepted-or-completed stay ever taken, every night,
+    // so the nightly cost grew with the app's lifetime history and would
+    // eventually blow the function's memory outright. The window still covers
+    // both halves of the job — everything with a future checkOut (the active
+    // stays that veto a revocation) and the recently-ended ones actually being
+    // revoked. Partitioned in memory below.
+    //
+    // What the cutoff gives up: a stay whose checkOut is older than the window
+    // and was never revoked stays granted forever. That needs this sweep to have
+    // missed it every night for the whole window — the daily run is what keeps
+    // the backlog a day deep. If it is ever off for longer than this (or is
+    // being deployed for the first time onto history that predates it), widen
+    // EXPIRY_LOOKBACK_DAYS for one run to catch the backlog up.
+    const cutoff = admin.firestore.Timestamp.fromMillis(
+      nowMs - EXPIRY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+    );
     const snap = await db
       .collection(Collections.stayRequests)
       .where("status", "in", ["accepted", "completed"])
+      .where("checkOut", ">=", cutoff)
       .get();
 
     type Expiring = {
