@@ -346,6 +346,38 @@ final class HomeStore {
         }
     }
 
+    /// Adds `ranges` to the blocked dates of every other listing this user hosts,
+    /// preserving each one's existing blocks — a union, never a replace, so a host
+    /// stamping travel dates across their homes can't wipe a home's own closures.
+    /// Co-hosted listings are left alone: they are someone else's to block.
+    ///
+    /// A one-time copy, not a link: the homes do not stay in step afterwards, so
+    /// editing a date on one leaves the others as they were. Returns the ids it
+    /// could not update, so a partial failure names the homes still to fix rather
+    /// than undoing the ones that took (re-running is safe — the union is
+    /// idempotent). `bookedDateRanges` rides through untouched: `save` round-trips
+    /// the whole listing, and this only rewrites the blocked half.
+    func applyBlockedRangesToOtherHostedListings(
+        _ ranges: [DateRange],
+        excludingID: String,
+        hostUserID: String
+    ) async -> [String] {
+        let others = managedListings.filter { $0.isHostedBy(hostUserID) && $0.id != excludingID }
+        let addedDays = AvailabilityCalendar.blockedDays(in: ranges)
+        var failed: [String] = []
+        for var home in others {
+            let merged = AvailabilityCalendar.merging(home.blockedDateRanges ?? [], adding: addedDays)
+            home.blockedDateRanges = merged.isEmpty ? nil : merged
+            do {
+                try await save(home)
+            } catch {
+                log.error("apply-to-all save failed for \(home.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                failed.append(home.id)
+            }
+        }
+        return failed
+    }
+
     /// Uploads any attached images in parallel, then saves the listing with
     /// the resulting URLs. If `images` is empty the upload step is skipped.
     /// Errors from either step propagate so the caller can show them.

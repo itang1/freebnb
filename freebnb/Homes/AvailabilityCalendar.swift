@@ -60,6 +60,15 @@ enum AvailabilityCalendar {
         return ranges
     }
 
+    /// `existing` ranges with `added` days folded in — the merge behind "apply to
+    /// all my homes". Additive and deduped by day: a home keeps every date it had
+    /// blocked and gains the new ones, so stamping travel dates across homes can't
+    /// erase a home's own closures. Order-independent, and idempotent, so re-running
+    /// it changes nothing.
+    static func merging(_ existing: [DateRange], adding added: Set<Date>, calendar: Calendar = .current) -> [DateRange] {
+        ranges(from: blockedDays(in: existing, calendar: calendar).union(added), calendar: calendar)
+    }
+
     /// Ranges that have not finished yet. The editor drops the rest on save: a
     /// blocked week from last year is noise a host has to scroll past, and it can
     /// no longer affect a request.

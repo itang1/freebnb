@@ -143,6 +143,60 @@ struct BlockedDayRoundTripTests {
     }
 }
 
+/// `merging` is what "apply to all my homes" runs against each other listing, so
+/// its one job is to be additive: never drop a date a home already had.
+struct MergeBlockedRangesTests {
+    /// A home's own blocked stretch survives the dates stamped across from another.
+    @Test func mergeKeepsExistingAndAddsNew() {
+        let existing = [DateRange(start: date(2026, 1, 1), end: date(2026, 1, 3))]
+        let added = AvailabilityCalendar.blockedDays(
+            in: [DateRange(start: date(2026, 8, 10), end: date(2026, 8, 12))], calendar: utc
+        )
+        let merged = AvailabilityCalendar.merging(existing, adding: added, calendar: utc)
+        let days = AvailabilityCalendar.blockedDays(in: merged, calendar: utc)
+        #expect(days.contains(date(2026, 1, 1)))
+        #expect(days.contains(date(2026, 1, 2)))
+        #expect(days.contains(date(2026, 8, 10)))
+        #expect(days.contains(date(2026, 8, 11)))
+        #expect(merged.count == 2)
+    }
+
+    /// Stamping the same dates twice leaves the home exactly as the first pass did.
+    @Test func mergeIsIdempotent() {
+        let existing = [DateRange(start: date(2026, 1, 1), end: date(2026, 1, 3))]
+        let added = AvailabilityCalendar.blockedDays(
+            in: [DateRange(start: date(2026, 8, 10), end: date(2026, 8, 12))], calendar: utc
+        )
+        let once = AvailabilityCalendar.merging(existing, adding: added, calendar: utc)
+        let twice = AvailabilityCalendar.merging(once, adding: added, calendar: utc)
+        #expect(AvailabilityCalendar.blockedDays(in: once, calendar: utc)
+            == AvailabilityCalendar.blockedDays(in: twice, calendar: utc))
+    }
+
+    /// A home that had blocked nothing simply takes the stamped dates.
+    @Test func mergeOntoEmptyIsJustTheAddedDays() {
+        let added = AvailabilityCalendar.blockedDays(
+            in: [DateRange(start: date(2026, 8, 10), end: date(2026, 8, 12))], calendar: utc
+        )
+        let merged = AvailabilityCalendar.merging([], adding: added, calendar: utc)
+        #expect(merged.count == 1)
+        #expect(merged[0].start == date(2026, 8, 10))
+        #expect(merged[0].end == date(2026, 8, 12))
+    }
+
+    /// Dates that touch an existing block fuse into it rather than double-counting.
+    @Test func mergeAdjacentToExistingFuses() {
+        let existing = [DateRange(start: date(2026, 8, 10), end: date(2026, 8, 12))]
+        let added = AvailabilityCalendar.blockedDays(
+            in: [DateRange(start: date(2026, 8, 12), end: date(2026, 8, 14))], calendar: utc
+        )
+        let merged = AvailabilityCalendar.merging(existing, adding: added, calendar: utc)
+        #expect(merged.count == 1)
+        #expect(merged[0].start == date(2026, 8, 10))
+        #expect(merged[0].end == date(2026, 8, 14))
+    }
+}
+
 struct TogglePastDayTests {
     private let now = date(2026, 3, 10)
 

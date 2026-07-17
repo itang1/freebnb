@@ -18,9 +18,11 @@ struct AvailabilityEditorView: View {
     let listing: Home
 
     @Environment(HomeStore.self) private var homeStore
+    @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var blockedDays: Set<Date>
+    @State private var applyToAllHomes = false
     @State private var isSaving = false
     @State private var errorMessage: String?
     /// Rebuilt only when the blocked days change. Writing the .ics inside `body`
@@ -53,11 +55,24 @@ struct AvailabilityEditorView: View {
         )
     }
 
+    /// The host's other homes, the ones "apply to all" would reach. Only listings
+    /// this user hosts — a co-host editing someone else's availability has no "my
+    /// other homes" to speak of. Empty (so the option stays hidden) unless the user
+    /// hosts this listing and at least one more.
+    private var otherHostedListings: [Home] {
+        guard listing.isHostedBy(authManager.userID) else { return [] }
+        return homeStore.managedListings.filter {
+            $0.isHostedBy(authManager.userID) && $0.id != listing.id
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     blockedSection
+
+                    applyToAllSection
 
                     if let errorMessage {
                         InlineErrorLabel(message: errorMessage)
@@ -111,6 +126,29 @@ struct AvailabilityEditorView: View {
             }
 
             summary
+        }
+    }
+
+    // MARK: - Apply to all homes
+
+    /// Offered only to a host with more than one home, and phrased as a plain
+    /// choice: it copies the dates onto the other homes once, adding to whatever
+    /// each already has rather than replacing it, and does not keep them in step
+    /// afterwards. Hidden entirely for a single-home host and for a co-host, for
+    /// whom "all my homes" is either one home or none.
+    @ViewBuilder
+    private var applyToAllSection: some View {
+        let others = otherHostedListings
+        if !others.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: $applyToAllHomes) {
+                    Text("Also block these dates on your other homes")
+                        .font(.subheadline.weight(.medium))
+                }
+                Text("Adds them to your other \(others.count) listing\(others.count == 1 ? "" : "s"). Each home keeps its own blocked dates, and they don't stay linked afterward.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 
@@ -194,10 +232,25 @@ struct AvailabilityEditorView: View {
         updated.blockedDateRanges = ranges.isEmpty ? nil : ranges
         do {
             try await homeStore.save(updated)
-            dismiss()
         } catch {
+            // This listing didn't save, so don't fan out onto the others — the
+            // host would be left with the change applied everywhere but here.
             errorMessage = error.localizedDescription
+            return
         }
+        // The fan-out unions these dates onto the host's other homes. A failure
+        // here is reported by name and leaves this listing (already saved) alone,
+        // so the host can retry without losing what took.
+        if applyToAllHomes {
+            let failed = await homeStore.applyBlockedRangesToOtherHostedListings(
+                ranges, excludingID: listing.id, hostUserID: authManager.userID
+            )
+            if !failed.isEmpty {
+                errorMessage = "Saved here, but \(failed.count) of your other homes couldn't be updated. Try again to finish."
+                return
+            }
+        }
+        dismiss()
     }
 
     // MARK: - Labels
