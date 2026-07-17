@@ -28,8 +28,9 @@ import os
 /// the name's length, and leading-edge typing is what a name search is actually
 /// for.
 ///
-/// Keep in step with `scripts/backfill_search_terms.js` and the seed script,
-/// which build the same array from Node.
+/// Keep in step with `scripts/search_terms.js`, the Node twin the seed script
+/// builds the same array from. A profile indexed by one and queried through the
+/// other is a user search cannot find, so a test pins the two outputs together.
 enum UserSearchTerms {
     /// Longer prefixes than this aren't stored: a query longer than the cap is
     /// truncated to it for the lookup, and the client-side pass below re-checks
