@@ -198,30 +198,13 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
     }
 
     func accept(_ request: StayRequest, hostNote: String?) async throws {
-        // Fast-path UX guard: reject an obvious overlap without a round trip to
-        // the function. It is NOT the enforcement point — two devices could both
-        // pass it — so the authoritative, atomic check is the acceptStayRequest
-        // transaction the callable runs (L1).
-        //
-        // Host-only, and not merely as an optimization. The rules let a user read
-        // a stay request only if they are one of its two parties, so this query —
-        // every accepted request for the listing — is rejected outright for a
-        // guest accepting an offer (feature 43), taking the whole accept down with
-        // it. The guest cannot see the host's other bookings by design, so there
-        // is no honest client-side check for them to run; the callable, which
-        // reads as admin, is the only thing that can tell them.
-        if request.status == .pending {
-            let snap = try await db.collection(FirestorePaths.stayRequests)
-                .whereField("listingID", isEqualTo: request.listingID)
-                .whereField("status", isEqualTo: StayRequestStatus.accepted.rawValue)
-                .getDocuments()
-            for doc in snap.documents where doc.documentID != request.id {
-                guard let other = try? doc.data(as: StayRequest.self) else { continue }
-                if other.overlaps(checkIn: request.checkIn, checkOut: request.checkOut) {
-                    throw StayRequestError.overlappingStay
-                }
-            }
-        }
+        // No client-side overlap pre-check, because the rules cannot admit one:
+        // they allow a stay-request read only to the document's own two parties,
+        // and a `list` is evaluated against its potential result set, so a query
+        // for every accepted request on a listing is denied for the host as well
+        // as the guest. Only the callable, reading as admin, can see the other
+        // bookings; it returns `aborted` on a double-booking, which
+        // `mapAcceptError` maps to `overlappingStay`.
 
         // Authoritative accept: an admin transaction re-checks overlap and writes
         // the status plus the address-disclosure marker atomically. Client rules

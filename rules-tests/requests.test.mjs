@@ -2,13 +2,15 @@
 // in another's inbox, so they are where the friends-only boundary and the block
 // feature have to hold at the rules level, not just in the UI.
 //
-// Three boundaries are pinned here:
+// Four boundaries are pinned here:
 //   - a stay request requires the guest to be in the listing's read ACL, and no
 //     block in either direction.
 //   - the host may call off an accepted stay (cancelled), but a pending request
 //     is declined, never host-cancelled.
 //   - a friend request is refused when either party has blocked the other, and
 //     the edge carries only its known keys.
+//   - a stay request is readable only to its own two parties, which is why no
+//     client can run the accept-time overlap query.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -18,7 +20,17 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, serverTimestamp, setDoc, updateDoc, Timestamp } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  Timestamp,
+} from "firebase/firestore";
 
 const rulesPath = fileURLToPath(new URL("../firestore.rules", import.meta.url));
 
@@ -282,6 +294,51 @@ describe("friendEdges/{id} create — blocks stop friend requests", () => {
   it("denies an edge smuggling an unexpected key", async () => {
     await assertFails(
       setDoc(doc(as(FRIEND), "friendEdges", edgeID), edgeBody(FRIEND, { note: "hi" }))
+    );
+  });
+});
+
+// The overlap question — "is any accepted stay on this listing in my dates?" —
+// cannot be asked from the client, and this pins why. A `list` is evaluated
+// against its potential result set, so a query that does not constrain
+// guestUserID or hostUserID is denied even for the host, whose own listing it
+// is. `StayRequestsRepository.accept()` therefore asks the acceptStayRequest
+// callable instead; a fast-path guard here would throw permission-denied on
+// every accept.
+describe("stayRequests — the overlap query the client cannot run", () => {
+  const acceptedOnListing = (uid) =>
+    getDocs(
+      query(
+        collection(as(uid), "stayRequests"),
+        where("listingID", "==", LISTING),
+        where("status", "==", "accepted")
+      )
+    );
+
+  beforeEach(async () => {
+    await seedListing();
+    await seedStay("accepted");
+  });
+
+  it("denies the unconstrained overlap query to the host", async () => {
+    await assertFails(acceptedOnListing(HOST));
+  });
+
+  it("denies it to the guest", async () => {
+    await assertFails(acceptedOnListing(FRIEND));
+  });
+
+  // The control: constraining the query to one party's own requests is provable
+  // against the read rule, so the denials above are about the missing
+  // constraint, not a rule that denies every list.
+  it("allows a query constrained to the caller's own requests", async () => {
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(as(FRIEND), "stayRequests"),
+          where("guestUserID", "==", FRIEND)
+        )
+      )
     );
   });
 });
