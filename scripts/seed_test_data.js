@@ -6,8 +6,12 @@
 //
 // SAFE BY DEFAULT: targets the Local Emulator Suite only. It refuses to touch
 // the real freebnb-6814a project unless you pass --prod AND set
-// SEED_CONFIRM_PROD=1, because this writes fake accounts and listings that
-// have no business existing in production.
+// SEED_CONFIRM_PROD=1.
+//
+// Prod additionally requires SEED_PROD_PASSWORD (see EMULATOR_PASSWORD below):
+// the cast is real in prod, this file is public, and a password committed here
+// would be an open door to every listing the cast can see. Re-running --prod
+// with a new SEED_PROD_PASSWORD rotates the whole cast.
 //
 // Usage:
 //   1. firebase emulators:start --only auth,firestore
@@ -41,6 +45,38 @@ if (useProd && process.env.SEED_CONFIRM_PROD !== "1") {
   );
   process.exit(1);
 }
+
+// The cast's sign-in password.
+//
+// An emulator account is a throwaway on a local port, so its password protects
+// nothing and lives here in the open — TestProfiles.swift hardcodes the same
+// value for the DEBUG sign-in buttons, and the two have to agree.
+//
+// Production is the opposite: those accounts are real, hold real friend edges,
+// and see real friends-only listings — and this file is public. A committed
+// password would be an open front door, which is exactly what it was until
+// 2026-07-16. So --prod refuses to run without SEED_PROD_PASSWORD and never
+// falls back to the value below. Keep that secret out of the repo (a password
+// manager, or `read -s`), and note that anyone who learns it gets whatever the
+// cast can see.
+const EMULATOR_PASSWORD = "emulator-only";
+const prodPassword = process.env.SEED_PROD_PASSWORD;
+if (useProd && !prodPassword) {
+  console.error(
+    "Refusing to seed production without SEED_PROD_PASSWORD. The cast's prod\n" +
+    "password must not live in this repo — the repo is public. Set it to\n" +
+    "something only you know:\n" +
+    "  SEED_PROD_PASSWORD='...' SEED_CONFIRM_PROD=1 node scripts/seed_test_data.js --prod\n" +
+    "Re-running with a new value rotates every cast account's password."
+  );
+  process.exit(1);
+}
+if (useProd && prodPassword.length < 6) {
+  // Firebase's own floor; failing here beats failing halfway through the cast.
+  console.error("SEED_PROD_PASSWORD must be at least 6 characters.");
+  process.exit(1);
+}
+const castPassword = useProd ? prodPassword : EMULATOR_PASSWORD;
 
 if (!useProd) {
   process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "localhost:8080";
@@ -86,22 +122,22 @@ const DEV_UID = "seed-dev-tester";
 const GUEST_UID = "seed-guest-tester";
 const TEST_ACCOUNT_UIDS = [DEV_UID, GUEST_UID];
 const users = [
-  { uid: DEV_UID, email: "dev@freebnb.test", password: "***REDACTED***", displayName: "Devna" },
-  { uid: GUEST_UID, email: "guest@freebnb.test", password: "***REDACTED***", displayName: "Guesta" },
-  { uid: "seed-host-spongebob", email: "spongebob@seed.freebnb.test", password: "***REDACTED***", displayName: "SpongeBob SquarePants" },
-  { uid: "seed-host-sandy", email: "sandy@seed.freebnb.test", password: "***REDACTED***", displayName: "Sandy Cheeks", savedListingIDs: ["seed-home-squidward-2"] },
-  { uid: "seed-host-squidward", email: "squidward@seed.freebnb.test", password: "***REDACTED***", displayName: "Squidward Tentacles" },
-  { uid: "seed-host-krabs", email: "krabs@seed.freebnb.test", password: "***REDACTED***", displayName: "Eugene Krabs" },
-  { uid: "seed-host-pearl", email: "pearl@seed.freebnb.test", password: "***REDACTED***", displayName: "Pearl Krabs" },
-  { uid: "seed-host-larry", email: "larry@seed.freebnb.test", password: "***REDACTED***", displayName: "Larry the Lobster" },
-  { uid: "seed-host-puff", email: "puff@seed.freebnb.test", password: "***REDACTED***", displayName: "Mrs. Puff" },
-  { uid: "seed-host-plankton", email: "plankton@seed.freebnb.test", password: "***REDACTED***", displayName: "Sheldon Plankton", blockedUserIDs: ["seed-host-krabs"] },
-  { uid: "seed-host-karen", email: "karen@seed.freebnb.test", password: "***REDACTED***", displayName: "Karen Plankton" },
-  { uid: "seed-host-neptune", email: "neptune@seed.freebnb.test", password: "***REDACTED***", displayName: "King Neptune" },
-  { uid: "seed-host-mermaidman", email: "mermaidman@seed.freebnb.test", password: "***REDACTED***", displayName: "Mermaid Man" },
-  { uid: "seed-guest-patrick", email: "patrick@seed.freebnb.test", password: "***REDACTED***", displayName: "Patrick Star", savedListingIDs: ["seed-home-spongebob-1", "seed-home-krabs-1"] },
-  { uid: "seed-guest-gary", email: "gary@seed.freebnb.test", password: "***REDACTED***", displayName: "Gary the Snail", savedListingIDs: ["seed-home-krabs-1"] },
-  { uid: "seed-guest-barnacleboy", email: "barnacleboy@seed.freebnb.test", password: "***REDACTED***", displayName: "Barnacle Boy" }
+  { uid: DEV_UID, email: "dev@freebnb.test", displayName: "Devna" },
+  { uid: GUEST_UID, email: "guest@freebnb.test", displayName: "Guesta" },
+  { uid: "seed-host-spongebob", email: "spongebob@seed.freebnb.test", displayName: "SpongeBob SquarePants" },
+  { uid: "seed-host-sandy", email: "sandy@seed.freebnb.test", displayName: "Sandy Cheeks", savedListingIDs: ["seed-home-squidward-2"] },
+  { uid: "seed-host-squidward", email: "squidward@seed.freebnb.test", displayName: "Squidward Tentacles" },
+  { uid: "seed-host-krabs", email: "krabs@seed.freebnb.test", displayName: "Eugene Krabs" },
+  { uid: "seed-host-pearl", email: "pearl@seed.freebnb.test", displayName: "Pearl Krabs" },
+  { uid: "seed-host-larry", email: "larry@seed.freebnb.test", displayName: "Larry the Lobster" },
+  { uid: "seed-host-puff", email: "puff@seed.freebnb.test", displayName: "Mrs. Puff" },
+  { uid: "seed-host-plankton", email: "plankton@seed.freebnb.test", displayName: "Sheldon Plankton", blockedUserIDs: ["seed-host-krabs"] },
+  { uid: "seed-host-karen", email: "karen@seed.freebnb.test", displayName: "Karen Plankton" },
+  { uid: "seed-host-neptune", email: "neptune@seed.freebnb.test", displayName: "King Neptune" },
+  { uid: "seed-host-mermaidman", email: "mermaidman@seed.freebnb.test", displayName: "Mermaid Man" },
+  { uid: "seed-guest-patrick", email: "patrick@seed.freebnb.test", displayName: "Patrick Star", savedListingIDs: ["seed-home-spongebob-1", "seed-home-krabs-1"] },
+  { uid: "seed-guest-gary", email: "gary@seed.freebnb.test", displayName: "Gary the Snail", savedListingIDs: ["seed-home-krabs-1"] },
+  { uid: "seed-guest-barnacleboy", email: "barnacleboy@seed.freebnb.test", displayName: "Barnacle Boy" }
 ];
 
 // The accessibility trio (feature 17) is false here on purpose: most hosts have
@@ -430,9 +466,18 @@ function daysFromNow(n) {
 
 async function seedUsers() {
   for (const u of users) {
-    await auth.createUser({ uid: u.uid, email: u.email, password: u.password, displayName: u.displayName })
-      .catch((err) => {
+    await auth.createUser({ uid: u.uid, email: u.email, password: castPassword, displayName: u.displayName })
+      .catch(async (err) => {
         if (err.code !== "auth/uid-already-exists") throw err;
+        // createUser sets a password; it never resets one. Without this, an
+        // account that already exists keeps whatever password it was born with
+        // forever — which is how the cast went on answering to a committed
+        // password in prod. Updating here makes a re-run a rotation.
+        await auth.updateUser(u.uid, {
+          email: u.email,
+          password: castPassword,
+          displayName: u.displayName,
+        });
       });
     await db.collection("users").doc(u.uid).set({
       displayName: u.displayName,
@@ -907,7 +952,11 @@ async function main() {
   await seedReferences();
   // Last: it reads the stay requests and reviews the steps above wrote.
   await seedTrustStats();
-  console.log("Done. Sign in with any seed-*@seed.freebnb.test / ***REDACTED*** account (or the dev@freebnb.test button in DEBUG builds) to explore.");
+  console.log(
+    useProd
+      ? "Done. The cast now answers to SEED_PROD_PASSWORD; nothing in this repo unlocks them."
+      : `Done. Sign in with any seed-*@seed.freebnb.test / ${EMULATOR_PASSWORD} account (or the dev@freebnb.test button in DEBUG builds) to explore.`
+  );
   process.exit(0);
 }
 

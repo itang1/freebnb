@@ -91,7 +91,7 @@ extension EmulatorBackedTests {
         @Test func aGuestCancelIsAcceptedAndNamesTheGuest() async throws {
             let (guest, request) = try await makePendingRequest()
 
-            try await requests.updateStatus(request, status: .cancelled, hostNote: nil, cancelledBy: guest.uid)
+            try await requests.updateStatus(request, status: .cancelled, hostNote: nil, guestNote: nil, cancelledBy: guest.uid)
 
             let stored = try await storedRequest(request.id)
             #expect(stored?["status"] as? String == "cancelled")
@@ -106,7 +106,7 @@ extension EmulatorBackedTests {
 
             await #expect(throws: (any Error).self) {
                 try await requests.updateStatus(
-                    request, status: .cancelled, hostNote: nil, cancelledBy: request.hostUserID
+                    request, status: .cancelled, hostNote: nil, guestNote: nil, cancelledBy: request.hostUserID
                 )
             }
         }
@@ -117,7 +117,7 @@ extension EmulatorBackedTests {
             let (_, request) = try await makePendingRequest()
 
             await #expect(throws: (any Error).self) {
-                try await requests.updateStatus(request, status: .cancelled, hostNote: nil, cancelledBy: nil)
+                try await requests.updateStatus(request, status: .cancelled, hostNote: nil, guestNote: nil, cancelledBy: nil)
             }
         }
     }

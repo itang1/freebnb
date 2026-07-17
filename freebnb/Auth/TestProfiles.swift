@@ -13,9 +13,14 @@ import SwiftUI
 /// signing out.
 ///
 /// Keep this list in sync with the `users` array in scripts/seed_test_data.js:
-/// the emails and passwords must match exactly, or a button signs into nothing.
-/// Every `@seed.freebnb.test` host/guest shares one password; only the two
-/// utility accounts (Devna, Guesta) carry their own.
+/// the emails must match exactly, or a button signs into nothing. The whole cast
+/// shares `emulatorPassword`, which mirrors that script's EMULATOR_PASSWORD.
+///
+/// That password is public and that is fine: it unlocks throwaway accounts on a
+/// local emulator port and nothing else. The prod cast answers to a secret the
+/// seed script takes from SEED_PROD_PASSWORD, so these buttons cannot sign into
+/// production — which is the point. They used to, because the same committed
+/// string worked in both places.
 struct TestProfile: Identifiable {
     let displayName: String
     let email: String
@@ -39,17 +44,21 @@ struct TestProfile: Identifiable {
         return "\(surface).\(token)SignInButton"
     }
 
+    /// Mirrors EMULATOR_PASSWORD in scripts/seed_test_data.js. Emulator-only, so
+    /// it is not a secret; see the note above.
+    static let emulatorPassword = "emulator-only"
+
     private static func seed(_ name: String, _ handle: String, _ symbol: String) -> TestProfile {
         TestProfile(displayName: name, email: "\(handle)@seed.freebnb.test",
-                    password: "***REDACTED***", systemImage: symbol)
+                    password: emulatorPassword, systemImage: symbol)
     }
 
     /// The two utility accounts first (the everyday testing entry points), then
     /// the cast. Short display names so they read well on compact buttons.
     static let all: [TestProfile] = [
-        TestProfile(displayName: "Guest",  email: "guest@freebnb.test", password: "***REDACTED***",
+        TestProfile(displayName: "Guest",  email: "guest@freebnb.test", password: emulatorPassword,
                     systemImage: "person.fill.questionmark"),
-        TestProfile(displayName: "Devna",  email: "dev@freebnb.test", password: "***REDACTED***",
+        TestProfile(displayName: "Devna",  email: "dev@freebnb.test", password: emulatorPassword,
                     systemImage: "hammer.fill"),
         seed("SpongeBob",   "spongebob",   "square.fill"),
         seed("Patrick",     "patrick",     "star.fill"),
