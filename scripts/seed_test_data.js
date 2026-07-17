@@ -198,11 +198,6 @@ const homes = [
     guestPolicy: { maxGuests: 2, maxStayDays: 7, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "flexible",
-    // Standing availability (feature 42). Spread deliberately across the seed so
-    // the feed shows all four stances, including the listings that carry no
-    // stance at all and therefore read as "ask" — which is what a real host who
-    // hasn't answered looks like, and the case most worth being able to see.
-    availabilityStance: "always",
   },
   {
     id: "seed-home-sandy-1",
@@ -237,10 +232,6 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 4, kidsAllowed: false, guestPetsAllowed: false },
     amenities: cozyAmenities,
     cancellationPolicy: "strict",
-    // Motivation and stance are independent, and Squidward is the clearest case:
-    // "selective" is a mood about guests, "paused" is a fact about dates. A host
-    // can be eager and unavailable, or reluctant and free all month.
-    availabilityStance: "paused",
   },
   {
     id: "seed-home-krabs-1",
@@ -271,15 +262,6 @@ const homes = [
     guestPolicy: { maxGuests: 4, maxStayDays: 3, kidsAllowed: true, guestPetsAllowed: true },
     amenities: cozyAmenities,
     cancellationPolicy: "flexible",
-    // Open on specific stretches, which is the stance with actual dates behind
-    // it. Relative to now so the windows are always in the future and the feed
-    // filter has something live to match; a fixed date would silently expire and
-    // quietly turn this listing into a "no" a month after anyone last reseeded.
-    availabilityStance: "windows",
-    openDateRanges: [
-      { start: daysFromNow(14), end: daysFromNow(21) },
-      { start: daysFromNow(45), end: daysFromNow(52) },
-    ],
   },
   {
     id: "seed-home-larry-1",

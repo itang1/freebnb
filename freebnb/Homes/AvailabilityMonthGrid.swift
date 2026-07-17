@@ -3,38 +3,31 @@
 //  freebnb
 //
 //  One month of day cells (feature 16). The host taps them to block and unblock;
-//  the guest reads the same grid to see which windows are open. Both surfaces get
-//  the same view, because a guest who sees a different calendar from the one the
-//  host filled in has been told a small lie.
+//  the guest reads the same grid to see which days are unavailable. Both surfaces
+//  get the same view, because a guest who sees a different calendar from the one
+//  the host filled in has been told a small lie.
 //
 
 import SwiftUI
 
-/// What a marked day on the grid means. The same grid draws both halves of
-/// availability, because they are opposites and a host editing one right after
-/// the other should not have to relearn the widget in between.
+/// What a marked day on the grid means. Only one meaning today — a day the host
+/// can't host — kept as an enum so the tint and the VoiceOver terms have one home
+/// and a second marking (a booked day) has an obvious place to land.
 enum DayMarking {
-    /// The host ruled this day out. Guests cannot request across it.
+    /// The host ruled this day out, or an accepted stay claimed it. Guests cannot
+    /// request across it.
     case blocked
-    /// The host affirmatively offered this day (`AvailabilityStance.windows`).
-    /// Not a gate — an unmarked day is one the host didn't offer, not one they
-    /// refused, and a friend may still ask about it.
-    case open
 
-    var tint: Color { self == .blocked ? .orange : .green }
+    var tint: Color { .orange }
 
-    /// How a marked day reads to VoiceOver, and in the legend.
-    var markedTerm: String { self == .blocked ? "unavailable" : "open" }
-
-    /// The opposite. Deliberately vaguer for `.open`: an unmarked day under
-    /// `.windows` means "not offered", which is not the same as "unavailable",
-    /// and saying the stronger word would put a refusal in the host's mouth.
-    var unmarkedTerm: String { self == .blocked ? "available" : "not offered" }
+    /// How a marked day reads to VoiceOver.
+    var markedTerm: String { "unavailable" }
+    var unmarkedTerm: String { "available" }
 
     /// Legend labels. Written out rather than capitalizing the VoiceOver terms,
     /// which reads as a hack and mis-cases anything but plain lowercase ASCII.
-    var markedLegend: String { self == .blocked ? "Unavailable" : "Offered" }
-    var unmarkedLegend: String { self == .blocked ? "Available" : "Not offered" }
+    var markedLegend: String { "Unavailable" }
+    var unmarkedLegend: String { "Available" }
 }
 
 struct AvailabilityMonthGrid: View {
@@ -124,12 +117,7 @@ struct AvailabilityMonthGrid: View {
 
     private func hint(marked: Bool, past: Bool) -> String {
         guard !past, isInteractive else { return "" }
-        switch (marking, marked) {
-        case (.blocked, true):  return "Tap to unblock"
-        case (.blocked, false): return "Tap to block"
-        case (.open, true):     return "Tap to stop offering"
-        case (.open, false):    return "Tap to offer"
-        }
+        return marked ? "Tap to unblock" : "Tap to block"
     }
 }
 
@@ -161,14 +149,6 @@ struct AvailabilityLegend: View {
     VStack(spacing: 16) {
         AvailabilityLegend()
         AvailabilityMonthGrid(month: .now, markedDays: []) { _ in }
-    }
-    .padding()
-}
-
-#Preview("Open windows") {
-    VStack(spacing: 16) {
-        AvailabilityLegend(marking: .open)
-        AvailabilityMonthGrid(month: .now, markedDays: [], marking: .open) { _ in }
     }
     .padding()
 }

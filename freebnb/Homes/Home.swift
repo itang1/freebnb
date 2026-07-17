@@ -199,89 +199,6 @@ struct DateRange: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-/// What a host is actually saying about guests, which `blockedDateRanges` cannot
-/// express. Blocked dates are a negative: they say where a guest may not go, and
-/// a host who has blocked nothing has said nothing at all. That silence used to
-/// read as "every date for the next year is free", which is a promise the app was
-/// making on the host's behalf rather than one the host made.
-///
-/// This is the positive half. It lets the feed answer "who can host me in April?"
-/// instead of "who has not said no to April?", and it gives a newly recruited host
-/// something to say on the day they install, before any guest has asked.
-///
-/// Deliberately not a substitute for blocked dates: a host can be `.always` open
-/// and still block the week their in-laws visit. Stance is the standing posture;
-/// blocked ranges are the exceptions to it.
-enum AvailabilityStance: String, CaseIterable, Hashable, Codable, Sendable {
-    /// Standing yes. Ask about any date that isn't blocked.
-    case always  = "always"
-    /// Open during specific stretches only; `Home.openDateRanges` holds them.
-    case windows = "windows"
-    /// No standing answer either way. The honest default, and what every listing
-    /// written before this field existed means.
-    case ask     = "ask"
-    /// Not hosting at the moment. A friend can still ask (the app never stops a
-    /// friend from asking a friend), but the listing stops claiming to be free.
-    case paused  = "paused"
-
-    var displayName: String {
-        switch self {
-        case .always:  return "Always open to friends"
-        case .windows: return "Open on specific dates"
-        case .ask:     return "Ask me anytime"
-        case .paused:  return "Not hosting right now"
-        }
-    }
-
-    /// Host-facing explanation in the availability editor.
-    var editorDescription: String {
-        switch self {
-        case .always:
-            return "Friends can ask about any date you haven't blocked."
-        case .windows:
-            return "Friends see the stretches you're open, and can still ask about other dates."
-        case .ask:
-            return "You're not promising anything either way. Friends can ask, and you decide then."
-        case .paused:
-            return "Your listing stays visible to friends, but it won't say it's free."
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .always:  return "door.left.hand.open"
-        case .windows: return "calendar.badge.clock"
-        case .ask:     return "questionmark.bubble"
-        case .paused:  return "pause.circle"
-        }
-    }
-
-    /// How the stance reads to a guest looking at the listing, in the host's
-    /// third person. `.ask` says who hasn't answered rather than pretending to an
-    /// answer, and `.paused` states the fact without closing the door — a friend
-    /// may still ask a friend, and the app does not speak for the host by
-    /// implying otherwise.
-    func guestText(hostName: String) -> String {
-        switch self {
-        case .always:  return "\(hostName) is open to friends anytime"
-        case .windows: return "\(hostName) is offering these dates"
-        case .ask:     return "\(hostName) hasn't said — ask anytime"
-        case .paused:  return "\(hostName) isn't hosting right now"
-        }
-    }
-
-    /// The compact form for a feed card, where the host's name is already on the
-    /// row and repeating it would just cost width.
-    var cardText: String {
-        switch self {
-        case .always:  return "Open anytime"
-        case .windows: return "Offering dates"
-        case .ask:     return "Ask anytime"
-        case .paused:  return "Not hosting now"
-        }
-    }
-}
-
 // MARK: - Nested types
 
 struct Sleeping: Codable, Hashable {
@@ -489,24 +406,10 @@ struct Home: Identifiable, Hashable, Codable {
     var photoURLs: [String]? = nil
 
     // MARK: Availability
-    // Nil or empty means no blocked dates. Host marks date ranges as blocked;
-    // guests cannot request stays that overlap any blocked range.
-    //
-    // Read this together with `availabilityStance`: an empty block list does NOT
-    // mean the host is offering every date, only that they have ruled none out.
+    // Nil or empty means no blocked dates. The host marks date ranges as blocked;
+    // guests cannot request stays that overlap any blocked range. Read reason-free
+    // on purpose: "unavailable" never says why, so a host's plans stay their own.
     var blockedDateRanges: [DateRange]? = nil
-
-    // The host's standing posture toward guests (see `AvailabilityStance`). Nil
-    // on every listing written before this field, and on any the host hasn't
-    // answered for, which is exactly what `.ask` means — so `stance` reads nil as
-    // `.ask` rather than inventing a yes. Go through `stance`, never this.
-    var availabilityStance: AvailabilityStance? = nil
-
-    // The stretches the host is affirmatively open, used only when `stance` is
-    // `.windows`. Nil or empty for every other stance. Unlike `blockedDateRanges`
-    // these are an invitation, not a gate: a guest may still ask about a date
-    // outside them, because a friend asking a friend is the whole product.
-    var openDateRanges: [DateRange]? = nil
 
     // MARK: Location coordinates
     // Geocoded at save time and then deliberately blurred: this document is
@@ -583,43 +486,6 @@ struct Home: Identifiable, Hashable, Codable {
     /// The single source of truth so those surfaces agree.
     var displayTitle: String { customTitle ?? "\(hostName)'s place" }
 
-    /// The host's standing posture, reading the absence of an answer as `.ask`.
-    /// Every surface goes through this rather than the optional, so "nobody said"
-    /// renders one way everywhere instead of each view guessing.
-    var stance: AvailabilityStance { availabilityStance ?? .ask }
-
-    /// Non-optional view of the affirmative open windows, which only `.windows`
-    /// uses. Past windows are dropped: a stretch that has already ended tells a
-    /// guest nothing, and the editor prunes them on save anyway.
-    func openWindows(now: Date = Date()) -> [DateRange] {
-        guard stance == .windows else { return [] }
-        return (openDateRanges ?? [])
-            .filter { $0.end > now }
-            .sorted { $0.start < $1.start }
-    }
-
-    /// Whether the host has put a standing yes on this listing that a guest can
-    /// act on today: always open, or open during a window that hasn't passed.
-    /// Backs the "Open to friends" feed filter. `.ask` is excluded because it is
-    /// the absence of an answer, and a filter that admitted it would be the old
-    /// silent-yes wearing a new label.
-    func hasStandingYes(now: Date = Date()) -> Bool {
-        switch stance {
-        case .always:  return true
-        case .windows: return !openWindows(now: now).isEmpty
-        case .ask, .paused: return false
-        }
-    }
-
-    /// Whether `[checkIn, checkOut)` sits entirely inside a window the host said
-    /// they're open. Only meaningful for `.windows`; every other stance has no
-    /// windows to sit inside, so this is false and callers fall back to `stance`.
-    func isWithinOpenWindow(checkIn: Date, checkOut: Date, now: Date = Date()) -> Bool {
-        // A stay may not straddle two windows: the gap between them is a stretch
-        // the host did not offer, so spanning it is not something they agreed to.
-        openWindows(now: now).contains { $0.start <= checkIn && checkOut <= $0.end }
-    }
-
     /// Non-optional view of the co-host roster.
     var coHosts: [String] { coHostUserIDs ?? [] }
 
@@ -668,8 +534,6 @@ struct Home: Identifiable, Hashable, Codable {
         case cancellationPolicy
         case photoURLs
         case blockedDateRanges
-        case availabilityStance
-        case openDateRanges
         case latitude, longitude
         case geohash
         case allowedViewerIDs
@@ -701,14 +565,6 @@ extension Home {
         cancellationPolicy  = try c.decodeIfPresent(CancellationPolicy.self,  forKey: .cancellationPolicy)
         photoURLs           = try c.decodeIfPresent([String].self,            forKey: .photoURLs)
         blockedDateRanges   = try c.decodeIfPresent([DateRange].self,         forKey: .blockedDateRanges)
-        // Decoded via the raw string on purpose. `decodeIfPresent(AvailabilityStance)`
-        // returns nil for an absent key but *throws* on an unrecognised one, and a
-        // decode failure drops the whole listing from the feed (A5) — too high a
-        // price for a stance a future build added and this one hasn't heard of.
-        // Both cases mean the same thing here anyway: nobody told us, so `.ask`.
-        availabilityStance  = try c.decodeIfPresent(String.self,              forKey: .availabilityStance)
-            .flatMap(AvailabilityStance.init(rawValue:))
-        openDateRanges      = try c.decodeIfPresent([DateRange].self,         forKey: .openDateRanges)
         latitude            = try c.decodeIfPresent(Double.self,              forKey: .latitude)
         longitude          = try c.decodeIfPresent(Double.self,               forKey: .longitude)
         geohash            = try c.decodeIfPresent(String.self,               forKey: .geohash)
