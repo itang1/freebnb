@@ -875,6 +875,67 @@ export const acceptStayRequest = onCall(async (request) => {
 });
 
 // ---------------------------------------------------------------------------
+// Booked dates
+//
+// The listing publishes the ranges its accepted stays have taken so guests see
+// them as "unavailable" — indistinguishable from a host-blocked day, so a guest
+// learns a date is spoken for without learning the home is occupied. This is a
+// display cache: the authoritative double-booking guard is the acceptStayRequest
+// transaction, which reads the stays themselves. Recomputed from scratch (never
+// incremented) on every accepted-stay change, the same shape as trust stats and
+// ACLs, so a retry can't drift it.
+// ---------------------------------------------------------------------------
+
+/** Mirrors isOptionalList(data, 'bookedDateRanges', 100) in firestore.rules. */
+const BOOKED_RANGES_CAP = 100;
+
+type StoredRange = { start: admin.firestore.Timestamp; end: admin.firestore.Timestamp };
+
+function sameStoredRanges(a: StoredRange[], b: StoredRange[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].start.toMillis() !== b[i].start.toMillis()) return false;
+    if (a[i].end.toMillis() !== b[i].end.toMillis()) return false;
+  }
+  return true;
+}
+
+async function recomputeListingBookedRanges(listingID: string): Promise<void> {
+  const listingRef = db.collection(Collections.homes).doc(listingID);
+  const [listingSnap, acceptedSnap] = await Promise.all([
+    listingRef.get(),
+    db
+      .collection(Collections.stayRequests)
+      .where("listingID", "==", listingID)
+      .where("status", "==", "accepted")
+      .get(),
+  ]);
+  // Nothing to publish onto a listing that's gone, and writing would resurrect
+  // fields on a document onHomeDeleted is retiring.
+  if (!listingSnap.exists || listingSnap.data()?.deletedAt) return;
+
+  // One range per accepted stay. Accepted stays for a listing never overlap — the
+  // acceptStayRequest guard forbids it — so there is nothing to merge; sorting
+  // keeps the write stable so the change-check below doesn't fire on reordering.
+  type StayDates = { checkIn: admin.firestore.Timestamp; checkOut: admin.firestore.Timestamp };
+  const ranges: StoredRange[] = acceptedSnap.docs
+    .map((d) => d.data() as { checkIn?: admin.firestore.Timestamp; checkOut?: admin.firestore.Timestamp })
+    .filter((r): r is StayDates => !!r.checkIn && !!r.checkOut)
+    .map((r) => ({ start: r.checkIn, end: r.checkOut }))
+    .sort((a, b) => a.start.toMillis() - b.start.toMillis())
+    .slice(0, BOOKED_RANGES_CAP);
+
+  const existing = (listingSnap.data()?.bookedDateRanges ?? []) as StoredRange[];
+  if (sameStoredRanges(existing, ranges)) return;
+
+  // A field update, not a set: the listing's other fields and its ACL (which
+  // rebuildListingACLs maintains with its own update) must survive this write.
+  // This fires onHomeWrittenACL and moderateListingContent, but neither writes
+  // back for a booked-dates change, so there is no loop.
+  await listingRef.update({ bookedDateRanges: ranges });
+}
+
+// ---------------------------------------------------------------------------
 // onStayRequestWritten
 // Stay-lifecycle push notifications with a deep link into the Stays tab
 // (feature 36): the host hears about a brand-new request, and the guest hears
@@ -886,6 +947,18 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
   const change = event.data;
   const before = change?.before.exists ? change.before.data() : undefined;
   const after = change?.after.exists ? change.after.data() : undefined;
+
+  // Keep the listing's published booked dates in step with its accepted stays.
+  // Runs before the notification bail-outs below, and on deletions too (a hard-
+  // deleted accepted stay must not strand its range), so a booked range never
+  // outlives the stay behind it. Any accept, cancel, decline, completion, or
+  // date change touches a stay whose status is 'accepted' on one side of the
+  // write, which is exactly when the listing's booked set can move.
+  const bookedListingID: string | undefined = after?.listingID ?? before?.listingID;
+  if (bookedListingID && (before?.status === "accepted" || after?.status === "accepted")) {
+    await recomputeListingBookedRanges(bookedListingID);
+  }
+
   if (!after) return; // a deletion has no one to notify
 
   const requestID = event.params.requestID;

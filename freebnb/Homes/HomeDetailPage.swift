@@ -70,8 +70,10 @@ struct HomeDetailPage: View {
     /// friend asking a friend is still the way to settle a date.
     @ViewBuilder
     private var availabilitySection: some View {
+        // Blocked and booked merged: a guest sees one "unavailable" grid and can't
+        // tell a host-blocked day from one an accepted stay has taken.
         let blocked = AvailabilityCalendar.blockedDays(
-            in: AvailabilityCalendar.upcoming(home.blockedDateRanges ?? [])
+            in: AvailabilityCalendar.upcoming(home.unavailableRanges)
         )
         if !blocked.isEmpty {
             VStack(alignment: .leading, spacing: 12) {

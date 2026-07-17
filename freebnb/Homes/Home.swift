@@ -411,6 +411,19 @@ struct Home: Identifiable, Hashable, Codable {
     // on purpose: "unavailable" never says why, so a host's plans stay their own.
     var blockedDateRanges: [DateRange]? = nil
 
+    // The dates an accepted stay has spoken for. Server-owned: recomputed from the
+    // listing's accepted stays by `onStayRequestWritten` and never authored here,
+    // so the client only decodes it and rides it back out on save (the repository
+    // replaces the whole document, so dropping it would wipe it). A tampered value
+    // changes nothing that matters — it is a display cache, and the real
+    // double-booking guard lives in the `acceptStayRequest` transaction.
+    //
+    // Guests see this merged with `blockedDateRanges` into one "unavailable", with
+    // no way to tell a booking from a host-blocked day. That is the point: a guest
+    // learns a date is taken, never that the home is occupied. Go through
+    // `unavailableRanges`, never this, so the two are never shown apart by mistake.
+    var bookedDateRanges: [DateRange]? = nil
+
     // MARK: Location coordinates
     // Geocoded at save time and then deliberately blurred: this document is
     // world-readable, so the public coordinate is rounded to a neighbourhood
@@ -486,6 +499,15 @@ struct Home: Identifiable, Hashable, Codable {
     /// The single source of truth so those surfaces agree.
     var displayTitle: String { customTitle ?? "\(hostName)'s place" }
 
+    /// Every date a guest cannot have: the host's blocked ranges and the ranges
+    /// an accepted stay has taken, together. The one thing guest-facing surfaces
+    /// read, so a booked day and a blocked day render identically as "unavailable"
+    /// and neither betrays why. A host's own editor keeps them apart (booked is
+    /// read-only there), but nowhere a guest can see does.
+    var unavailableRanges: [DateRange] {
+        (blockedDateRanges ?? []) + (bookedDateRanges ?? [])
+    }
+
     /// Non-optional view of the co-host roster.
     var coHosts: [String] { coHostUserIDs ?? [] }
 
@@ -534,6 +556,7 @@ struct Home: Identifiable, Hashable, Codable {
         case cancellationPolicy
         case photoURLs
         case blockedDateRanges
+        case bookedDateRanges
         case latitude, longitude
         case geohash
         case allowedViewerIDs
@@ -565,6 +588,7 @@ extension Home {
         cancellationPolicy  = try c.decodeIfPresent(CancellationPolicy.self,  forKey: .cancellationPolicy)
         photoURLs           = try c.decodeIfPresent([String].self,            forKey: .photoURLs)
         blockedDateRanges   = try c.decodeIfPresent([DateRange].self,         forKey: .blockedDateRanges)
+        bookedDateRanges    = try c.decodeIfPresent([DateRange].self,         forKey: .bookedDateRanges)
         latitude            = try c.decodeIfPresent(Double.self,              forKey: .latitude)
         longitude          = try c.decodeIfPresent(Double.self,               forKey: .longitude)
         geohash            = try c.decodeIfPresent(String.self,               forKey: .geohash)

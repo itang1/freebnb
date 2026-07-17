@@ -29,15 +29,19 @@ struct RequestStaySheet: View {
         max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
     }
 
-    private var blockedConflict: DateRange? {
-        listing.blockedDateRanges?.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
+    // Any date the listing isn't free: the host's blocked ranges and the ranges an
+    // accepted stay has taken, together (`unavailableRanges`). The listing does not
+    // say which, so this can't either — the guest learns the date is taken, not
+    // that the home is occupied. This now catches other guests' bookings too, which
+    // used to be invisible to a client; the friendlier own-stay message below still
+    // wins when the overlap is the guest's own confirmed stay.
+    private var unavailableConflict: DateRange? {
+        listing.unavailableRanges.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
     }
 
-    // A stay this guest has already had accepted for this listing that overlaps
-    // the requested dates. The rules hide other guests' bookings, so this is the
-    // only double-booking a client can honestly detect — but it's the common one
-    // (re-requesting dates you're already confirmed for) and it would fail the
-    // host's overlap check at accept time anyway (L10).
+    // A stay this guest has already had accepted for this listing that overlaps the
+    // requested dates — the common self-inflicted double-booking (re-requesting
+    // dates you're already confirmed for), worth its own clearer message.
     private var acceptedConflict: StayRequest? {
         requestStore.outgoingRequests.first { req in
             req.listingID == listing.id
@@ -48,7 +52,7 @@ struct RequestStaySheet: View {
 
     private var canSend: Bool {
         !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays
-            && blockedConflict == nil && acceptedConflict == nil
+            && unavailableConflict == nil && acceptedConflict == nil
     }
 
     var body: some View {
@@ -89,15 +93,17 @@ struct RequestStaySheet: View {
                             .font(.caption)
                             .foregroundColor(.red)
                     }
-                    if let conflict = blockedConflict {
-                        let f = AppDateFormatters.shortDay
-                        Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
+                    // The own-stay message is more specific, so it wins: an overlap
+                    // that is the guest's own confirmed stay shows only that, not
+                    // the generic "host is unavailable" the same dates would trip.
                     if let conflict = acceptedConflict {
                         let f = AppDateFormatters.shortDay
                         Label("You already have an accepted stay here \(f.string(from: conflict.checkIn)) – \(f.string(from: conflict.checkOut))", systemImage: "calendar.badge.exclamationmark")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    } else if let conflict = unavailableConflict {
+                        let f = AppDateFormatters.shortDay
+                        Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
                             .font(.caption)
                             .foregroundColor(.red)
                     }

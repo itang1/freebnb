@@ -43,6 +43,16 @@ struct AvailabilityEditorView: View {
         AvailabilityCalendar.ranges(from: blockedDays)
     }
 
+    /// The days an accepted stay has taken. Read from the listing (the server
+    /// keeps it current) rather than toggled, so the grid can show them filled in
+    /// and locked. Not folded into `blockedDays`: those are the host's to edit and
+    /// get written back on save, and a booking is neither.
+    private var bookedDays: Set<Date> {
+        AvailabilityCalendar.blockedDays(
+            in: AvailabilityCalendar.upcoming(listing.bookedDateRanges ?? [])
+        )
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -87,10 +97,17 @@ struct AvailabilityEditorView: View {
 
             AvailabilityLegend()
 
+            let booked = bookedDays
             ForEach(AvailabilityCalendar.months(count: Self.monthsAhead), id: \.self) { month in
-                AvailabilityMonthGrid(month: month, markedDays: blockedDays) { day in
+                AvailabilityMonthGrid(month: month, markedDays: blockedDays, lockedDays: booked) { day in
                     blockedDays = AvailabilityCalendar.toggling(day, in: blockedDays)
                 }
+            }
+
+            if !booked.isEmpty {
+                Label("Dates a guest has booked are filled in for you and can't be changed here. Cancel the stay to free them.", systemImage: "lock.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             summary

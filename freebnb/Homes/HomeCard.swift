@@ -101,7 +101,10 @@ struct HomeCard: View {
     private var availabilityLabel: AvailabilityLabel? {
         let now = Date()
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now
-        let upcoming = (listing.blockedDateRanges ?? []).filter { $0.end > now }
+        // Blocked and booked together, so a booked stretch shows "unavailable" the
+        // same as a host-blocked one. The card never says which it is; a guest sees
+        // a date is taken, not that the home is occupied.
+        let upcoming = listing.unavailableRanges.filter { $0.end > now }
 
         if upcoming.contains(where: { $0.overlaps(checkIn: now, checkOut: tomorrow) }) {
             return AvailabilityLabel(text: "Unavailable now", icon: "calendar.badge.minus", color: .red)

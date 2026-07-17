@@ -272,7 +272,8 @@ service cloud.firestore {
                  'id', 'hostUserID', 'hostName', 'title', 'address', 'description',
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
-                 'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
+                 'photoURLs', 'blockedDateRanges', 'bookedDateRanges',
+                 'latitude', 'longitude',
                  'geohash', 'allowedViewerIDs', 'coHostUserIDs',
                  'deletedAt', 'createdAt'
                ])
@@ -304,6 +305,13 @@ service cloud.firestore {
             && isOptionalString(data, 'hostContactInfo', 500)
             && isOptionalList(data, 'photoURLs', 10)
             && isOptionalList(data, 'blockedDateRanges', 100)
+            // Server-owned: `onStayRequestWritten` derives this from the listing's
+            // accepted stays. Not pinned here because the client round-trips it on
+            // every save and a tampered value only changes this listing's own
+            // "unavailable" display — the real double-booking guard is the
+            // acceptStayRequest transaction, which reads stays, not this field. The
+            // cap is all this rule owes it: it rides every feed document.
+            && isOptionalList(data, 'bookedDateRanges', 100)
             // Enums and coordinates: a value the client can't decode makes the
             // listing silently disappear from the feed (see A5).
             && (isUnset(data, 'contactPreference')
@@ -343,7 +351,8 @@ service cloud.firestore {
       function coHostEditableKeys() {
         return ['description', 'hostMotivation', 'sleeping', 'guestPolicy',
                 'amenities', 'cancellationPolicy', 'photoURLs',
-                'blockedDateRanges', 'latitude', 'longitude', 'geohash'];
+                'blockedDateRanges', 'bookedDateRanges',
+                'latitude', 'longitude', 'geohash'];
       }
 
       // The co-hosts this write adds. Rules cannot loop, so a roster change is

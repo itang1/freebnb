@@ -417,11 +417,16 @@ final class CreateListingViewModel {
             home.coHostUserIDs = existing.coHostUserIDs
             // The form has no photo or availability controls, and the repository
             // save is a full-document overwrite: anything not carried over here is
-            // erased from the stored listing. Losing these two would silently
-            // reopen every date the availability editor blocked and strip the
-            // listing's photos.
+            // erased from the stored listing. Losing these would silently reopen
+            // every date the availability editor blocked, drop the bookings the
+            // server had filled in (until the next stay change rewrote them), and
+            // strip the listing's photos.
             home.photoURLs = existing.photoURLs
             home.blockedDateRanges = existing.blockedDateRanges
+            // Server-owned, but it still has to survive a client overwrite: the
+            // trigger only rewrites it when a stay changes, so an edit that dropped
+            // it would leave the listing wrongly bookable until then.
+            home.bookedDateRanges = existing.bookedDateRanges
 
             // A co-host is editing (feature 14). Every field `firestore.rules`
             // pins to the host is carried over from the stored listing rather than

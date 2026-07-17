@@ -33,6 +33,12 @@ enum DayMarking {
 struct AvailabilityMonthGrid: View {
     let month: Date
     let markedDays: Set<Date>
+    /// Days marked unavailable that the host cannot toggle here — the ones an
+    /// accepted stay has taken. Drawn the same as any other unavailable day (a
+    /// guest must not be able to tell a booking apart), but never tappable, so the
+    /// host can't unblock a real booking out from under a guest. Empty on the
+    /// guest-side calendar, where the whole grid is already read-only.
+    var lockedDays: Set<Date> = []
     var marking: DayMarking = .blocked
     /// Nil makes the grid read-only, which is the guest-side calendar.
     var onToggle: ((Date) -> Void)?
@@ -76,8 +82,10 @@ struct AvailabilityMonthGrid: View {
 
     @ViewBuilder
     private func cell(_ day: Date) -> some View {
+        let startOfDay = calendar.startOfDay(for: day)
         let past = AvailabilityCalendar.isPast(day, calendar: calendar)
-        let marked = markedDays.contains(calendar.startOfDay(for: day))
+        let locked = lockedDays.contains(startOfDay)
+        let marked = locked || markedDays.contains(startOfDay)
 
         Button {
             onToggle?(day)
@@ -92,9 +100,9 @@ struct AvailabilityMonthGrid: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-        .disabled(past || !isInteractive)
+        .disabled(past || !isInteractive || locked)
         .accessibilityLabel(accessibilityLabel(day, marked: marked, past: past))
-        .accessibilityHint(hint(marked: marked, past: past))
+        .accessibilityHint(hint(marked: marked, past: past, locked: locked))
     }
 
     private func background(marked: Bool, past: Bool) -> Color {
@@ -115,8 +123,12 @@ struct AvailabilityMonthGrid: View {
         return "\(date), \(marked ? marking.markedTerm : marking.unmarkedTerm)"
     }
 
-    private func hint(marked: Bool, past: Bool) -> String {
+    private func hint(marked: Bool, past: Bool, locked: Bool) -> String {
         guard !past, isInteractive else { return "" }
+        // A locked day carries a booking. Say it's held rather than offering a
+        // tap that does nothing, but keep it vague — "booked" is for the host's
+        // own editor, and the guest-side grid passes no locked days at all.
+        if locked { return "Held by a booking" }
         return marked ? "Tap to unblock" : "Tap to block"
     }
 }
