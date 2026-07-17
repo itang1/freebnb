@@ -60,29 +60,71 @@ struct HomeDetailPage: View {
         }
     }
 
-    /// The guest's read-only view of the same grid the host fills in (feature 16).
-    /// Three months is what fits before the page turns into a calendar app; a
-    /// guest planning further out will be asking the host anyway.
+    /// The guest's read-only view of the same grid the host fills in (feature 16),
+    /// led by the host's standing answer (feature 42). Three months of grid is
+    /// what fits before the page turns into a calendar app; a guest planning
+    /// further out will be asking the host anyway.
+    ///
+    /// This section used to open with "Every upcoming date is open" whenever the
+    /// host had blocked nothing — which was every brand-new listing, and was the
+    /// app inventing a promise no host had made. The stance is the host's own
+    /// words, so it goes first and the blocked grid is the footnote.
     private var availabilitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Spacer(minLength: 10)
             Text("Availability")
                 .font(.headline)
 
+            stanceLine
+
+            if home.stance == .windows {
+                let windows = home.openWindows()
+                if windows.isEmpty {
+                    Text("The dates \(home.hostName) offered have passed. You can still ask about new ones.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(windows) { window in
+                        Label(Self.windowLabel(window), systemImage: "calendar.badge.plus")
+                            .font(.subheadline)
+                            .foregroundColor(.green)
+                    }
+                }
+            }
+
             let blocked = AvailabilityCalendar.blockedDays(
                 in: AvailabilityCalendar.upcoming(home.blockedDateRanges ?? [])
             )
-            if blocked.isEmpty {
-                Label("Every upcoming date is open.", systemImage: "checkmark.circle")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            } else {
+            if !blocked.isEmpty {
                 AvailabilityLegend()
                 ForEach(AvailabilityCalendar.months(count: 3), id: \.self) { month in
-                    AvailabilityMonthGrid(month: month, blockedDays: blocked)
+                    AvailabilityMonthGrid(month: month, markedDays: blocked)
                 }
             }
         }
+    }
+
+    private var stanceLine: some View {
+        HStack(spacing: 6) {
+            Image(systemName: home.stance.iconName)
+                .font(.caption)
+            Text(home.stance.guestText(hostName: home.hostName))
+                .font(.subheadline.weight(.medium))
+        }
+        .foregroundColor(home.stance == .paused ? .secondary : .primary)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// `end` is exclusive, so the last offered night is the day before it —
+    /// mirroring `AvailabilityEditorView.rangeLabel`, which is what the host saw
+    /// when they drew this window.
+    private static func windowLabel(_ window: DateRange) -> String {
+        let formatter = AppDateFormatters.shortDay
+        let last = Calendar.current.date(byAdding: .day, value: -1, to: window.end) ?? window.start
+        if Calendar.current.isDate(window.start, inSameDayAs: last) {
+            return formatter.string(from: window.start)
+        }
+        return "\(formatter.string(from: window.start)) – \(formatter.string(from: last))"
     }
 
     var body: some View {

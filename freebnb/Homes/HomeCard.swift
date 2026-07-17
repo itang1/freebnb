@@ -94,14 +94,33 @@ struct HomeCard: View {
         let color: Color
     }
 
+    /// One chip, most-specific-first: a hard "not tonight" outranks the host's
+    /// standing posture, which outranks a general note that some dates are spoken
+    /// for. Two chips would compete for the same glance and the card has no room.
+    ///
+    /// `.ask` deliberately earns no chip. It is the absence of an answer, and the
+    /// card already says nothing rather than something false elsewhere (see the
+    /// bathroom pill). A chip on every listing whose host has not answered would
+    /// be noise on exactly the listings with the least to say.
     private var availabilityLabel: AvailabilityLabel? {
         let now = Date()
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now
         let upcoming = (listing.blockedDateRanges ?? []).filter { $0.end > now }
-        guard !upcoming.isEmpty else { return nil }
+
         if upcoming.contains(where: { $0.overlaps(checkIn: now, checkOut: tomorrow) }) {
             return AvailabilityLabel(text: "Unavailable now", icon: "calendar.badge.minus", color: .red)
         }
+        switch listing.stance {
+        case .paused:
+            return AvailabilityLabel(text: listing.stance.cardText, icon: listing.stance.iconName, color: .secondary)
+        case .always, .windows where listing.hasStandingYes(now: now):
+            return AvailabilityLabel(text: listing.stance.cardText, icon: listing.stance.iconName, color: .green)
+        case .windows, .ask:
+            // `.windows` lands here only once every window it named has passed,
+            // which is no longer a yes a guest can act on.
+            break
+        }
+        guard !upcoming.isEmpty else { return nil }
         return AvailabilityLabel(text: "Some dates blocked", icon: "calendar.badge.exclamationmark", color: .orange)
     }
 

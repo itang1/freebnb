@@ -272,7 +272,8 @@ service cloud.firestore {
                  'id', 'hostUserID', 'hostName', 'title', 'address', 'description',
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
-                 'photoURLs', 'blockedDateRanges', 'latitude', 'longitude',
+                 'photoURLs', 'blockedDateRanges', 'availabilityStance',
+                 'openDateRanges', 'latitude', 'longitude',
                  'geohash', 'allowedViewerIDs', 'coHostUserIDs',
                  'deletedAt', 'createdAt'
                ])
@@ -304,6 +305,9 @@ service cloud.firestore {
             && isOptionalString(data, 'hostContactInfo', 500)
             && isOptionalList(data, 'photoURLs', 10)
             && isOptionalList(data, 'blockedDateRanges', 100)
+            // Same cap as blocked ranges, and for the same reason: this array
+            // rides along with every feed document.
+            && isOptionalList(data, 'openDateRanges', 100)
             // Enums and coordinates: a value the client can't decode makes the
             // listing silently disappear from the feed (see A5).
             && (isUnset(data, 'contactPreference')
@@ -312,6 +316,11 @@ service cloud.firestore {
                 || data.hostMotivation in ['eager', 'open', 'selective'])
             && (isUnset(data, 'cancellationPolicy')
                 || data.cancellationPolicy in ['flexible', 'moderate', 'strict'])
+            // The host's standing posture (feature 42). Unset means `.ask` — the
+            // absence of an answer — which is what every listing written before
+            // this field carries and is a legitimate state, not a missing one.
+            && (isUnset(data, 'availabilityStance')
+                || data.availabilityStance in ['always', 'windows', 'ask', 'paused'])
             // The read ACL. A host may grant whoever they like access to their own
             // listing, so the only constraints are a size cap (this array is
             // downloaded with every feed document) and that the host cannot lock
@@ -343,7 +352,8 @@ service cloud.firestore {
       function coHostEditableKeys() {
         return ['description', 'hostMotivation', 'sleeping', 'guestPolicy',
                 'amenities', 'cancellationPolicy', 'photoURLs',
-                'blockedDateRanges', 'latitude', 'longitude', 'geohash'];
+                'blockedDateRanges', 'availabilityStance', 'openDateRanges',
+                'latitude', 'longitude', 'geohash'];
       }
 
       // The co-hosts this write adds. Rules cannot loop, so a roster change is

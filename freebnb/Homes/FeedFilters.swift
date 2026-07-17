@@ -12,6 +12,7 @@ import SwiftUI
 
 enum FilterCategory: String, CaseIterable {
     case host = "Host"
+    case availability = "Availability"
     case guestsAndSpace = "Guests & Space"
     case accessibility = "Accessibility"
     case amenities = "Amenities"
@@ -69,6 +70,15 @@ extension FilterOption {
         FilterOption(id: "eager",     label: "Eager to Host",   category: .host) { $0.hostMotivation == .eager },
         FilterOption(id: "open",      label: "Open to Hosting", category: .host) { $0.hostMotivation == .open },
         FilterOption(id: "selective", label: "Selective",       category: .host) { $0.hostMotivation == .selective },
+
+        // Availability. Distinct from host motivation above, which is a mood
+        // ("I'd love to host") that says nothing about dates. This is the host's
+        // standing answer about actual availability, so "who can host me in
+        // April" stops meaning "who has not said no to April".
+        FilterOption(id: "standingYes", label: "Open to Friends", category: .availability) { $0.hasStandingYes() },
+        FilterOption(id: "alwaysOpen", label: "Always Open", category: .availability) { $0.stance == .always },
+        // Nothing filters *for* `.paused` or `.ask`: a guest looking for somewhere
+        // to stay has no use for "show me the hosts who aren't hosting".
 
         // Guests & Space
         FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.sleeping.numGuestRooms > 0 },

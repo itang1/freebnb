@@ -10,9 +10,37 @@
 
 import SwiftUI
 
+/// What a marked day on the grid means. The same grid draws both halves of
+/// availability, because they are opposites and a host editing one right after
+/// the other should not have to relearn the widget in between.
+enum DayMarking {
+    /// The host ruled this day out. Guests cannot request across it.
+    case blocked
+    /// The host affirmatively offered this day (`AvailabilityStance.windows`).
+    /// Not a gate — an unmarked day is one the host didn't offer, not one they
+    /// refused, and a friend may still ask about it.
+    case open
+
+    var tint: Color { self == .blocked ? .orange : .green }
+
+    /// How a marked day reads to VoiceOver, and in the legend.
+    var markedTerm: String { self == .blocked ? "unavailable" : "open" }
+
+    /// The opposite. Deliberately vaguer for `.open`: an unmarked day under
+    /// `.windows` means "not offered", which is not the same as "unavailable",
+    /// and saying the stronger word would put a refusal in the host's mouth.
+    var unmarkedTerm: String { self == .blocked ? "available" : "not offered" }
+
+    /// Legend labels. Written out rather than capitalizing the VoiceOver terms,
+    /// which reads as a hack and mis-cases anything but plain lowercase ASCII.
+    var markedLegend: String { self == .blocked ? "Unavailable" : "Offered" }
+    var unmarkedLegend: String { self == .blocked ? "Available" : "Not offered" }
+}
+
 struct AvailabilityMonthGrid: View {
     let month: Date
-    let blockedDays: Set<Date>
+    let markedDays: Set<Date>
+    var marking: DayMarking = .blocked
     /// Nil makes the grid read-only, which is the guest-side calendar.
     var onToggle: ((Date) -> Void)?
 
@@ -56,51 +84,63 @@ struct AvailabilityMonthGrid: View {
     @ViewBuilder
     private func cell(_ day: Date) -> some View {
         let past = AvailabilityCalendar.isPast(day, calendar: calendar)
-        let blocked = blockedDays.contains(calendar.startOfDay(for: day))
+        let marked = markedDays.contains(calendar.startOfDay(for: day))
 
         Button {
             onToggle?(day)
         } label: {
             Text("\(calendar.component(.day, from: day))")
                 .font(.caption)
-                .fontWeight(blocked ? .semibold : .regular)
+                .fontWeight(marked ? .semibold : .regular)
                 .frame(maxWidth: .infinity)
                 .frame(height: 34)
-                .background(background(blocked: blocked, past: past))
-                .foregroundColor(foreground(blocked: blocked, past: past))
+                .background(background(marked: marked, past: past))
+                .foregroundColor(foreground(marked: marked, past: past))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .disabled(past || !isInteractive)
-        .accessibilityLabel(accessibilityLabel(day, blocked: blocked, past: past))
-        .accessibilityHint(past || !isInteractive ? "" : (blocked ? "Tap to unblock" : "Tap to block"))
+        .accessibilityLabel(accessibilityLabel(day, marked: marked, past: past))
+        .accessibilityHint(hint(marked: marked, past: past))
     }
 
-    private func background(blocked: Bool, past: Bool) -> Color {
+    private func background(marked: Bool, past: Bool) -> Color {
         if past { return Color.secondary.opacity(0.06) }
-        return blocked ? Color.orange.opacity(0.22) : Color.accent.opacity(0.12)
+        return marked ? marking.tint.opacity(0.22) : Color.accent.opacity(0.12)
     }
 
-    private func foreground(blocked: Bool, past: Bool) -> Color {
+    private func foreground(marked: Bool, past: Bool) -> Color {
         if past { return .secondary.opacity(0.4) }
-        return blocked ? .orange : .primary
+        return marked ? marking.tint : .primary
     }
 
     /// Spelled out rather than left to the number alone: a bare "14" tells a
     /// VoiceOver user nothing about whether the day is open.
-    private func accessibilityLabel(_ day: Date, blocked: Bool, past: Bool) -> String {
+    private func accessibilityLabel(_ day: Date, marked: Bool, past: Bool) -> String {
         let date = day.formatted(.dateTime.month(.wide).day())
         if past { return "\(date), in the past" }
-        return blocked ? "\(date), unavailable" : "\(date), available"
+        return "\(date), \(marked ? marking.markedTerm : marking.unmarkedTerm)"
+    }
+
+    private func hint(marked: Bool, past: Bool) -> String {
+        guard !past, isInteractive else { return "" }
+        switch (marking, marked) {
+        case (.blocked, true):  return "Tap to unblock"
+        case (.blocked, false): return "Tap to block"
+        case (.open, true):     return "Tap to stop offering"
+        case (.open, false):    return "Tap to offer"
+        }
     }
 }
 
 /// Shared key for both calendars, so "orange means blocked" is stated once.
 struct AvailabilityLegend: View {
+    var marking: DayMarking = .blocked
+
     var body: some View {
         HStack(spacing: 16) {
-            swatch(Color.accent.opacity(0.12), "Available")
-            swatch(Color.orange.opacity(0.22), "Unavailable")
+            swatch(Color.accent.opacity(0.12), marking.unmarkedLegend)
+            swatch(marking.tint.opacity(0.22), marking.markedLegend)
         }
         .font(.caption)
         .foregroundColor(.secondary)
@@ -117,10 +157,18 @@ struct AvailabilityLegend: View {
     }
 }
 
-#Preview {
+#Preview("Blocked") {
     VStack(spacing: 16) {
         AvailabilityLegend()
-        AvailabilityMonthGrid(month: .now, blockedDays: []) { _ in }
+        AvailabilityMonthGrid(month: .now, markedDays: []) { _ in }
+    }
+    .padding()
+}
+
+#Preview("Open windows") {
+    VStack(spacing: 16) {
+        AvailabilityLegend(marking: .open)
+        AvailabilityMonthGrid(month: .now, markedDays: [], marking: .open) { _ in }
     }
     .padding()
 }
