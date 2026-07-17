@@ -32,10 +32,16 @@ protocol StayRequestsRepository: Sendable {
     /// `cancelledBy` is the caller's own user ID and is required when `status`
     /// is `.cancelled` — the rules pin it to whichever party the transition
     /// belongs to, and the push trigger reads it to notify the other one.
+    ///
+    /// A decline carries the note of whichever side declined: `hostNote` when the
+    /// host turns down a request, `guestNote` when the guest turns down an offer
+    /// (feature 43). Passing both, or the wrong one for the caller's role, is
+    /// rejected by the rules rather than silently ignored.
     func updateStatus(
         _ request: StayRequest,
         status: StayRequestStatus,
         hostNote: String?,
+        guestNote: String?,
         cancelledBy: String?
     ) async throws
     /// Changes the dates on a *pending* request in place (feature 23), instead of
@@ -55,6 +61,11 @@ protocol StayRequestsRepository: Sendable {
     /// listing overlaps its dates. Throws `StayRequestError.overlappingStay` on
     /// a conflict. A best-effort double-booking guard; authoritative enforcement
     /// still belongs in a server transaction.
+    ///
+    /// Accepts either direction (feature 43): a host accepting a guest's pending
+    /// request, or a guest accepting a host's offer. The callable works out which
+    /// from the document and the caller's uid, because the double-booking guard
+    /// has to be the same one either way — an offer books the same room.
     ///
     /// Acceptance is also what discloses the exact address, by writing the
     /// `homes/{listingID}/accepted/{guestUserID}` marker the rules check.
@@ -121,6 +132,7 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
     private func statusPayload(
         _ status: StayRequestStatus,
         hostNote: String?,
+        guestNote: String? = nil,
         cancelledBy: String? = nil
     ) -> [String: Any] {
         var data: [String: Any] = [
@@ -128,8 +140,11 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
             "updatedAt": FieldValue.serverTimestamp()
         ]
         if let hostNote { data["hostNote"] = hostNote }
-        // Only ever on a cancellation: the rules' other branches pin their
-        // changed keys, so carrying it elsewhere would be rejected outright.
+        // Only ever on a guest's decline of a host's offer (feature 43); every
+        // other branch of the rules pins its changed keys, so carrying it
+        // elsewhere would be rejected outright.
+        if let guestNote { data["guestNote"] = guestNote }
+        // Only ever on a cancellation, for the same reason.
         if status == .cancelled, let cancelledBy { data["cancelledBy"] = cancelledBy }
         return data
     }
@@ -138,9 +153,10 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         _ request: StayRequest,
         status: StayRequestStatus,
         hostNote: String?,
+        guestNote: String?,
         cancelledBy: String?
     ) async throws {
-        let payload = statusPayload(status, hostNote: hostNote, cancelledBy: cancelledBy)
+        let payload = statusPayload(status, hostNote: hostNote, guestNote: guestNote, cancelledBy: cancelledBy)
         let request = request
         try await withRetry { [db] in
             let batch = db.batch()
@@ -183,18 +199,27 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
 
     func accept(_ request: StayRequest, hostNote: String?) async throws {
         // Fast-path UX guard: reject an obvious overlap without a round trip to
-        // the function. The host can read every request to their own listing, so
-        // this catches the common conflict instantly. It is NOT the enforcement
-        // point — two devices could both pass it — so the authoritative, atomic
-        // check is the acceptStayRequest transaction the callable runs (L1).
-        let snap = try await db.collection(FirestorePaths.stayRequests)
-            .whereField("listingID", isEqualTo: request.listingID)
-            .whereField("status", isEqualTo: StayRequestStatus.accepted.rawValue)
-            .getDocuments()
-        for doc in snap.documents where doc.documentID != request.id {
-            guard let other = try? doc.data(as: StayRequest.self) else { continue }
-            if other.overlaps(checkIn: request.checkIn, checkOut: request.checkOut) {
-                throw StayRequestError.overlappingStay
+        // the function. It is NOT the enforcement point — two devices could both
+        // pass it — so the authoritative, atomic check is the acceptStayRequest
+        // transaction the callable runs (L1).
+        //
+        // Host-only, and not merely as an optimization. The rules let a user read
+        // a stay request only if they are one of its two parties, so this query —
+        // every accepted request for the listing — is rejected outright for a
+        // guest accepting an offer (feature 43), taking the whole accept down with
+        // it. The guest cannot see the host's other bookings by design, so there
+        // is no honest client-side check for them to run; the callable, which
+        // reads as admin, is the only thing that can tell them.
+        if request.status == .pending {
+            let snap = try await db.collection(FirestorePaths.stayRequests)
+                .whereField("listingID", isEqualTo: request.listingID)
+                .whereField("status", isEqualTo: StayRequestStatus.accepted.rawValue)
+                .getDocuments()
+            for doc in snap.documents where doc.documentID != request.id {
+                guard let other = try? doc.data(as: StayRequest.self) else { continue }
+                if other.overlaps(checkIn: request.checkIn, checkOut: request.checkOut) {
+                    throw StayRequestError.overlappingStay
+                }
             }
         }
 

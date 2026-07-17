@@ -45,11 +45,17 @@ struct StaysTab: View {
     private var pendingOut:  [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .pending  } }
     private var acceptedOut: [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .accepted } }
     private var pastOut:     [StayRequest] { requestStore.outgoingRequests.filter { !$0.status.isActive   } }
+    /// Offers a friend has made this user, which they owe an answer to
+    /// (feature 43). The only thing in the traveler pane that is waiting on *them*
+    /// rather than on somebody else, which is why it sits at the top.
+    private var offeredOut:  [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .offered  } }
 
     // Incoming (host)
     private var pendingIn:  [StayRequest] { requestStore.incomingRequests.filter { $0.status == .pending  } }
     private var acceptedIn: [StayRequest] { requestStore.incomingRequests.filter { $0.status == .accepted } }
     private var pastIn:     [StayRequest] { requestStore.incomingRequests.filter { !$0.status.isActive   } }
+    /// Offers this user has made that a friend hasn't answered yet.
+    private var offeredIn:  [StayRequest] { requestStore.incomingRequests.filter { $0.status == .offered  } }
 
     // The trip timeline splits accepted stays into the one under way right now
     // and the ones still ahead (feature 21), so a stay you're in the middle of
@@ -283,6 +289,20 @@ struct StaysTab: View {
 
     @ViewBuilder
     private var travelerSections: some View {
+        // Above "Waiting to hear back" on purpose: everything below is this user
+        // waiting on somebody else, and this is the one thing somebody else is
+        // waiting on them for.
+        if !offeredOut.isEmpty {
+            Section("A friend offered you a place") {
+                ForEach(offeredOut, id: \.id) { req in
+                    outgoingRow(
+                        req,
+                        onAccept:  { Task { await acceptOffer(req) } },
+                        onDecline: { Task { await declineOffer(req) } }
+                    )
+                }
+            }
+        }
         if !pendingOut.isEmpty {
             Section("Waiting to hear back") {
                 ForEach(pendingOut, id: \.id) { req in
@@ -323,6 +343,13 @@ struct StaysTab: View {
 
     @ViewBuilder
     private var hostSections: some View {
+        if !offeredIn.isEmpty {
+            Section("Offers you've sent") {
+                ForEach(offeredIn, id: \.id) { req in
+                    incomingRow(req)
+                }
+            }
+        }
         if !pendingIn.isEmpty {
             Section("Needs your response") {
                 ForEach(pendingIn, id: \.id) { req in
@@ -487,6 +514,38 @@ extension StaysTab {
         }
     }
 
+    /// The guest says yes to a host's offer (feature 43). Goes through the same
+    /// callable a host's accept does, so the same transaction guards the same
+    /// room: the offer may have sat for days while another guest was accepted for
+    /// those dates, and only the server can see that.
+    private func acceptOffer(_ request: StayRequest) async {
+        actionError = nil
+        do {
+            try await requestStore.accept(request)
+            messageStore.sendStayEvent(
+                StayEvent(kind: .accepted, dateRange: request.dateRangeText),
+                senderUserID: authManager.userID,
+                recipientUserID: request.hostUserID
+            )
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
+    private func declineOffer(_ request: StayRequest) async {
+        actionError = nil
+        do {
+            try await requestStore.declineOffer(request)
+            messageStore.sendStayEvent(
+                StayEvent(kind: .declined, dateRange: request.dateRangeText),
+                senderUserID: authManager.userID,
+                recipientUserID: request.hostUserID
+            )
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
     private func markComplete(_ request: StayRequest) async {
         actionError = nil
         completing = nil
@@ -540,15 +599,28 @@ extension StaysTab {
         onCancel: (() -> Void)? = nil,
         onModify: (() -> Void)? = nil,
         onShare: (() -> Void)? = nil,
-        onComplete: (() -> Void)? = nil
+        onComplete: (() -> Void)? = nil,
+        onAccept: (() -> Void)? = nil,
+        onDecline: (() -> Void)? = nil
     ) -> some View {
         Group {
-            if let home = listing(for: request) {
+            // A row carrying inline Yes/No is never wrapped in a NavigationLink,
+            // for the same reason the incoming rows aren't: the full-width tap
+            // target would swallow the buttons.
+            if let home = listing(for: request), onAccept == nil {
                 NavigationLink { HomeDetailPage(home: home) } label: {
                     OutgoingRequestRow(request: request, onCancel: onCancel, onModify: onModify, onShare: onShare, onComplete: onComplete)
                 }
             } else {
-                OutgoingRequestRow(request: request, onCancel: onCancel, onModify: onModify, onShare: onShare, onComplete: onComplete)
+                OutgoingRequestRow(
+                    request: request,
+                    onCancel: onCancel,
+                    onModify: onModify,
+                    onShare: onShare,
+                    onComplete: onComplete,
+                    onAccept: onAccept,
+                    onDecline: onDecline
+                )
             }
         }
         .stayConversationActions(name: subjectName(for: request)) {

@@ -193,9 +193,52 @@ final class StayRequestStore {
 
     // MARK: - Host actions
 
+    /// Offers the listing to a friend for specific dates (feature 43): the mirror
+    /// of `send(listing:...)`, originated by the host.
+    ///
+    /// The document is the same shape a guest's request has — same two parties,
+    /// same dates — because it becomes the same stay. Only `status` and
+    /// `initiatedBy` record which way it was pointing when it started.
+    func offer(
+        listing: Home,
+        guestUserID: String,
+        checkIn: Date,
+        checkOut: Date,
+        hostNote: String?
+    ) async throws {
+        let trimmedNote = hostNote.flatMap {
+            let t = $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }
+        let request = StayRequest(
+            listingID: listing.id,
+            listingCity: listing.address.city,
+            listingTitle: listing.title,
+            listingHostName: listing.hostName,
+            hostUserID: listing.hostUserID,
+            guestUserID: guestUserID,
+            checkIn: checkIn,
+            checkOut: checkOut,
+            hostNote: trimmedNote,
+            status: .offered,
+            initiatedBy: listing.hostUserID
+        )
+        do {
+            try await repository.create(request)
+            Telemetry.log(.stayOfferSent)
+        } catch {
+            log.error("offer error: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
+    // MARK: - Answering (either side)
+
+    /// Says yes. The host accepting a guest's request, or the guest accepting a
+    /// host's offer — the callable works out which and runs the same atomic
+    /// double-booking guard either way, because an offer books the same room.
     func accept(_ request: StayRequest, hostNote: String? = nil) async throws {
         do {
-            // Guards against accepting a request that double-books the listing.
             try await repository.accept(request, hostNote: hostNote)
             Telemetry.log(.stayRequestAccepted)
         } catch {
@@ -204,8 +247,30 @@ final class StayRequestStore {
         }
     }
 
+    /// A host turns down a guest's request, with an optional note explaining why.
     func decline(_ request: StayRequest, hostNote: String? = nil) async throws {
         try await update(request, status: .declined, hostNote: hostNote)
+    }
+
+    /// A guest turns down a host's offer (feature 43).
+    ///
+    /// Separate from `decline` rather than one role-sniffing method, because the
+    /// two writes are not the same write: the note lands on `guestNote` here and
+    /// `hostNote` there, and the rules pin each branch to its own key. Naming the
+    /// caller's role at the call site is also what keeps this store from having to
+    /// ask `Auth` who is holding the phone.
+    func declineOffer(_ request: StayRequest, guestNote: String? = nil) async throws {
+        try await update(request, status: .declined, hostNote: nil, guestNote: guestNote)
+    }
+
+    /// A host takes back an offer the guest hasn't answered. Cancelled, not
+    /// declined: it was the host's to retract, and "declined" would read on the
+    /// guest's trip list as though they had turned it down.
+    func withdrawOffer(_ request: StayRequest, hostNote: String? = nil) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw StayRequestError.notSignedIn
+        }
+        try await update(request, status: .cancelled, hostNote: hostNote, cancelledBy: uid)
     }
 
     // MARK: - Completion (feature 4)
@@ -247,17 +312,30 @@ final class StayRequestStore {
         }
     }
 
+    /// Unresolved stays on listings this user hosts: guests' requests they owe an
+    /// answer to, plus offers they made that a friend hasn't answered.
     var pendingIncomingCount: Int {
-        incomingRequests.filter { $0.status == .pending }.count
+        incomingRequests.filter { $0.status.isAwaitingReply }.count
     }
 
+    /// Unresolved stays where this user is the guest: requests they sent that a
+    /// host hasn't answered, plus offers a host made them (feature 43).
     var pendingOutgoingCount: Int {
-        outgoingRequests.filter { $0.status == .pending }.count
+        outgoingRequests.filter { $0.status.isAwaitingReply }.count
     }
 
-    /// Total shown as the Stays tab badge: pending requests in either direction.
+    /// Total shown as the Stays tab badge: unresolved stays in either direction,
+    /// which is what it has always meant — the badge counts what is in flight, not
+    /// only what this user owes a reply to.
     var pendingStaysTabCount: Int {
         pendingIncomingCount + pendingOutgoingCount
+    }
+
+    /// Offers a host made this user that they haven't answered. The host-initiated
+    /// mirror of the incoming requests a host answers, and what the Stays tab's
+    /// "Needs your response" section shows a guest (feature 43).
+    func offersAwaiting(_ userID: String) -> [StayRequest] {
+        outgoingRequests.filter { $0.status == .offered && $0.awaitsReply(from: userID) }.sortedByDate()
     }
 
     // MARK: - Private
@@ -266,10 +344,17 @@ final class StayRequestStore {
         _ request: StayRequest,
         status: StayRequestStatus,
         hostNote: String?,
+        guestNote: String? = nil,
         cancelledBy: String? = nil
     ) async throws {
         do {
-            try await repository.updateStatus(request, status: status, hostNote: hostNote, cancelledBy: cancelledBy)
+            try await repository.updateStatus(
+                request,
+                status: status,
+                hostNote: hostNote,
+                guestNote: guestNote,
+                cancelledBy: cancelledBy
+            )
         } catch {
             log.error("update error: \(error.localizedDescription, privacy: .public)")
             throw error

@@ -44,7 +44,8 @@ struct Message: Identifiable, Codable, Hashable, Sendable {
 /// can render it as a card rather than an emoji-prefixed string (item 29).
 struct StayEvent: Codable, Hashable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case requested, accepted, declined, cancelled, modified
+        /// `offered` is the host-initiated mirror of `requested` (feature 43).
+        case requested, offered, accepted, declined, cancelled, modified
     }
 
     let kind: Kind
@@ -60,6 +61,7 @@ struct StayEvent: Codable, Hashable, Sendable {
         var base: String
         switch kind {
         case .requested: base = "Requested to stay · \(dateRange)"
+        case .offered:   base = "Offered their place · \(dateRange)"
         case .accepted:  base = "Stay accepted · \(dateRange)"
         case .declined:  base = "Stay request declined · \(dateRange)"
         case .cancelled: base = "Request cancelled · \(dateRange)"

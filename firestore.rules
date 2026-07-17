@@ -518,15 +518,42 @@ service cloud.firestore {
                'id', 'listingID', 'listingCity', 'listingTitle', 'listingHostName',
                'hostUserID', 'guestUserID', 'checkIn', 'checkOut',
                'guestNote', 'hostNote', 'guestCount', 'arrivalWindow',
-               'status', 'completedAt', 'createdAt', 'updatedAt'
+               'status', 'initiatedBy', 'completedAt', 'createdAt', 'updatedAt'
              ])
           // Denormalized listing title, snapshotted at request time (optional).
           // Same 60-char cap as the listing's own title.
           && isOptionalString(request.resource.data, 'listingTitle', 60)
           // A stay cannot be born finished.
           && isUnset(request.resource.data, 'completedAt')
-          && request.resource.data.guestUserID == request.auth.uid
-          && request.resource.data.status == "pending"
+          // Two ways a stay can start, and the creator must be the party the
+          // status says started it (feature 43). Pinned together so neither can
+          // be forged: a guest cannot create a document that claims the host
+          // offered, and a host cannot manufacture a "request" from a friend who
+          // never asked — which would otherwise let a host fabricate a stay and
+          // then accept it themselves, minting trust stats out of nothing.
+          && (
+            // The guest asks. `initiatedBy` is optional here purely so the field
+            // stays absent on the path that predates offers.
+            (request.resource.data.guestUserID == request.auth.uid
+                && request.resource.data.status == "pending"
+                && (isUnset(request.resource.data, 'initiatedBy')
+                    || request.resource.data.initiatedBy == request.auth.uid)
+                // A host's note is the host's to write, and only on a reply.
+                && isUnset(request.resource.data, 'hostNote'))
+            ||
+            // The host offers. The mirror: the host writes the note, and the
+            // guest's own fields (their note, their party size, their arrival
+            // time) are theirs to fill in if they accept — the host must not put
+            // words in their mouth.
+            (request.resource.data.hostUserID == request.auth.uid
+                && request.resource.data.status == "offered"
+                && request.resource.data.initiatedBy == request.auth.uid
+                && request.resource.data.guestUserID != request.auth.uid
+                && isUnset(request.resource.data, 'guestNote')
+                && isUnset(request.resource.data, 'guestCount')
+                && isUnset(request.resource.data, 'arrivalWindow')
+                && isOptionalString(request.resource.data, 'hostNote', 2000))
+          )
           && request.resource.data.hostUserID is string
           && request.resource.data.hostUserID.size() > 0
           && request.resource.data.listingID is string
@@ -546,10 +573,20 @@ service cloud.firestore {
           // could file requests into a host's inbox, straight past the
           // friends-only boundary. The get() is cached with the ones
           // listingHasActiveHost already did, so it costs no extra read.
-          && request.auth.uid in get(/databases/$(database)/documents/homes/$(request.resource.data.listingID))
-               .data.get('allowedViewerIDs', [])
-          // A block severs this the same way it severs a thread (S11).
-          && !blockedEitherWay(request.auth.uid, request.resource.data.hostUserID)
+          //
+          // Keyed to guestUserID rather than the caller, which is what makes it
+          // hold for both directions (feature 43). On the guest path the two are
+          // the same uid, pinned above. On the host path the caller is the host,
+          // who is always in their own listing's ACL — so checking the caller
+          // there would check nothing at all, and would let a host offer their
+          // place to someone who cannot even see it.
+          && request.resource.data.guestUserID in
+               get(/databases/$(database)/documents/homes/$(request.resource.data.listingID))
+                 .data.get('allowedViewerIDs', [])
+          // A block severs this the same way it severs a thread (S11). Between the
+          // two parties, for the same reason as above: on the host path the caller
+          // *is* the host, and blockedEitherWay(host, host) is vacuously false.
+          && !blockedEitherWay(request.resource.data.guestUserID, request.resource.data.hostUserID)
           // The inbox and trip lists order by createdAt; pin it so a request
           // cannot backdate itself. The client's @ServerTimestamp field encodes
           // to the server-timestamp sentinel, which equals request.time here.
@@ -598,7 +635,7 @@ service cloud.firestore {
                 && request.resource.data.checkIn > request.time - duration.value(1, 'd'))
             ||
             // Status transitions: no edits once the request is terminal.
-            (resource.data.status in ["pending", "accepted"]
+            (resource.data.status in ["pending", "offered", "accepted"]
                 && request.resource.data.updatedAt == request.time
                 && (
                   // Host declines a pending request. Acceptance is NOT a client
@@ -608,6 +645,29 @@ service cloud.firestore {
                       && resource.data.status == "pending"
                       && request.resource.data.status == "declined"
                       && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
+                      && isOptionalString(request.resource.data, 'hostNote', 2000))
+                  ||
+                  // Guest declines a host's offer (feature 43): the mirror of the
+                  // branch above. Their note goes in guestNote, because hostNote
+                  // belongs to the host who wrote the offer and overwriting it
+                  // would edit someone else's words. Accepting an offer is a
+                  // callable for the same reason accepting a request is — an
+                  // offer books the same room, so it needs the same guard.
+                  (isOwner(resource.data.guestUserID)
+                      && resource.data.status == "offered"
+                      && request.resource.data.status == "declined"
+                      && changedKeys().hasOnly(['status', 'guestNote', 'updatedAt'])
+                      && isOptionalString(request.resource.data, 'guestNote', 2000))
+                  ||
+                  // Host withdraws an offer the guest hasn't answered. Cancelled
+                  // rather than declined: the offer was the host's to retract, and
+                  // "declined" would read on the guest's trip list as though they
+                  // had turned it down.
+                  (isOwner(resource.data.hostUserID)
+                      && resource.data.status == "offered"
+                      && request.resource.data.status == "cancelled"
+                      && changedKeys().hasOnly(['status', 'hostNote', 'cancelledBy', 'updatedAt'])
+                      && request.resource.data.get('cancelledBy', '') == resource.data.hostUserID
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
                   // Guest cancels a pending or accepted request. `cancelledBy`

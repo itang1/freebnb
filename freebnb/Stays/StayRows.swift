@@ -20,6 +20,15 @@ struct OutgoingRequestRow: View {
     var onShare: (() -> Void)? = nil
     /// Close the stay out (feature 4). Nil until the stay has begun.
     var onComplete: (() -> Void)? = nil
+    /// Answer a host's offer (feature 43). Non-nil only while `.offered`, which is
+    /// the one status where the guest is the party who owes a reply — every other
+    /// row in this list is the guest waiting on somebody else.
+    var onAccept:  (() -> Void)? = nil
+    var onDecline: (() -> Void)? = nil
+
+    private var showsOfferActions: Bool {
+        request.status == .offered && onAccept != nil && onDecline != nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -80,6 +89,34 @@ struct OutgoingRequestRow: View {
                         .cornerRadius(8)
                 }
                 .buttonStyle(.pressable)
+                .padding(.top, 4)
+            }
+
+            // Answering a host's offer. "No thanks" rather than "Decline": the
+            // friend is turning down an invitation, not rejecting an application,
+            // and the button should sound like the former.
+            if showsOfferActions {
+                HStack(spacing: 12) {
+                    Button(action: { onDecline?() }) {
+                        Text("No thanks")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.secondary.opacity(0.1))
+                            .foregroundColor(.primary)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.pressable)
+
+                    Button(action: { onAccept?() }) {
+                        Text("Yes please")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.accent)
+                            .foregroundColor(.onAccent)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.pressable)
+                }
                 .padding(.top, 4)
             }
         }
@@ -335,6 +372,9 @@ struct StatusBadge: View {
     private var badgeColor: Color {
         switch status {
         case .pending:   return .orange
+        // Same orange as pending: both mean "somebody owes an answer", and the
+        // badge's job is to say the stay is unresolved, not which way it points.
+        case .offered:   return .orange
         case .accepted:  return .green
         case .completed: return Color.accent
         case .declined:  return .secondary

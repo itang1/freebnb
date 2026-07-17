@@ -30,6 +30,11 @@ enum Telemetry {
         case signInFailed = "sign_in_failed"
         case createListingCompleted = "create_listing_completed"
         case stayRequestSent = "stay_request_sent"
+        /// A host offering their place unprompted (feature 43). Counted apart from
+        /// `stayRequestSent` on purpose: whether hosts ever start anything is the
+        /// question the feature exists to answer, and it is invisible if both
+        /// directions land in one bucket.
+        case stayOfferSent = "stay_offer_sent"
         case stayRequestAccepted = "stay_request_accepted"
     }
 

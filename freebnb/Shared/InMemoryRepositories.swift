@@ -221,12 +221,14 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         _ request: StayRequest,
         status: StayRequestStatus,
         hostNote: String?,
+        guestNote: String? = nil,
         cancelledBy: String? = nil
     ) async throws {
         if !status.isActive { acceptedGuests.remove(markerKey(request)) }
         guard let i = requests.firstIndex(where: { $0.id == request.id }) else { return }
         requests[i].status = status
         if let hostNote { requests[i].hostNote = hostNote }
+        if let guestNote { requests[i].guestNote = guestNote }
         // Mirrors the write path: recorded only on a cancellation.
         if status == .cancelled { requests[i].cancelledBy = cancelledBy }
     }

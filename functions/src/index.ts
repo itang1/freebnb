@@ -454,8 +454,18 @@ async function recomputeTrustStats(userID: string): Promise<void> {
   let receivedCount = 0;
   let respondedCount = 0;
   for (const doc of asHost.docs) {
-    const status: string = doc.data().status;
+    const data = doc.data();
+    const status: string = data.status;
+    // A stay that happened is a stay hosted, whoever proposed it.
     if (status === "completed") staysHosted++;
+    // Response rate measures how reliably this host answers people who ask them.
+    // A stay the host started by offering (feature 43) is not someone asking, so
+    // it belongs to neither count — and must not reach the branch below, where
+    // "offered" is not "pending" and would therefore score as a response. That
+    // would let a host inflate their own response rate by offering into the void,
+    // which is precisely the self-dealing the server-side recompute exists to
+    // prevent. Absent `initiatedBy` means the guest asked; it predates offers.
+    if (data.initiatedBy && data.initiatedBy === data.hostUserID) continue;
     // A guest-cancelled request was withdrawn, not ignored, so it is neither
     // asked nor answered. Everything else landed in the host's inbox.
     if (status === "cancelled") continue;
@@ -751,6 +761,14 @@ export const onHomeDeleted = onDocumentWritten(homeDocPattern, async (event) => 
 // the check. This runs the read-check-write inside one Firestore transaction,
 // which the admin SDK (unlike the iOS client) can do over a query. It also owns
 // the address-disclosure marker, so acceptance is atomic end to end.
+//
+// Accepts in both directions (feature 43). A "pending" request is the guest
+// asking and only the host may accept it; an "offered" request is the host
+// offering and only the guest may accept it. Both run the identical overlap
+// transaction, because an offer books the same room as a request — and the guest
+// side needs it *more*, not less: the rules let a guest read only their own stay
+// requests, so a guest cannot see the host's other bookings to check for
+// themselves. This callable, reading as admin, is the only thing that can.
 // Call from the app: httpsCallable("acceptStayRequest").call(["requestID": id])
 // ---------------------------------------------------------------------------
 export const acceptStayRequest = onCall(async (request) => {
@@ -787,12 +805,25 @@ export const acceptStayRequest = onCall(async (request) => {
       checkIn: admin.firestore.Timestamp;
       checkOut: admin.firestore.Timestamp;
     };
-    // Only the host of this request may accept it, and only while it is pending.
-    if (req.hostUserID !== uid) {
-      throw new HttpsError("permission-denied", "Only the host can accept this request.");
+    // Whoever is owed the answer is the one who may say yes: the host on a
+    // guest's request, the guest on a host's offer. Anyone else — including the
+    // party who *sent* it — is refused, so a host cannot accept their own offer
+    // on the guest's behalf and book them into a stay they never agreed to.
+    if (req.status === "pending") {
+      if (req.hostUserID !== uid) {
+        throw new HttpsError("permission-denied", "Only the host can accept this request.");
+      }
+    } else if (req.status === "offered") {
+      if (req.guestUserID !== uid) {
+        throw new HttpsError("permission-denied", "Only the guest can accept this offer.");
+      }
+    } else {
+      throw new HttpsError("failed-precondition", "This stay is no longer awaiting an answer.");
     }
-    if (req.status !== "pending") {
-      throw new HttpsError("failed-precondition", "Only a pending request can be accepted.");
+    // A hostNote is the host's to write. On an offer the host already wrote one
+    // at create time, and the accepting guest must not overwrite it.
+    if (req.status === "offered" && typeof hostNote === "string") {
+      throw new HttpsError("invalid-argument", "A guest cannot write the host's note.");
     }
 
     // The listing must still exist and still be live. Accepting a request for a
@@ -895,6 +926,26 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     return;
   }
 
+  // A freshly created offer → notify the guest (feature 43). The mirror of the
+  // branch above, and the one push in the app that isn't a reply to something the
+  // recipient did. Rides "stayRequests" like a new request does: both are somebody
+  // opening a question, so muting one mutes the other.
+  //
+  // Phrased as an offer, not a summons. The recipient is free to say no, and copy
+  // that implies otherwise would make a friend's invitation feel like a booking.
+  if (!before && afterStatus === "offered") {
+    const hostName: string = after.listingHostName ?? "A friend";
+    await sendStayPush({
+      recipientID: guestUserID,
+      category: "stayRequests",
+      senderID: hostUserID,
+      title: "A friend offered you their place",
+      body: `${hostName} has space${placeSuffix} and thought of you.`,
+      data: { type: "stay_request", requestID, role: "guest" },
+    });
+    return;
+  }
+
   // Either party called the stay off → tell the other one. Both can cancel, and
   // the document used to read the same either way, so this could not tell whom
   // to notify and said nothing at all; the only signal was the courtesy note in
@@ -947,6 +998,36 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
         title: "Stay request update",
         body: `${hostName} couldn't host your request${placeSuffix}.`,
         data: { type: "stay_update", requestID, role: "guest", status: "declined" },
+      });
+    }
+    return;
+  }
+
+  // The guest answered a host's offer → notify the host (feature 43). Without
+  // this the host who took the one unprompted action in the app would hear
+  // nothing back, which is the surest way to teach them not to bother again.
+  if (beforeStatus === "offered" && afterStatus !== "offered") {
+    const guestName =
+      (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Your friend";
+    if (afterStatus === "accepted") {
+      await sendStayPush({
+        recipientID: hostUserID,
+        category: "stayUpdates",
+        senderID: guestUserID,
+        title: "Offer accepted 🎉",
+        body: `${guestName} is coming to stay${placeSuffix}.`,
+        data: { type: "stay_update", requestID, role: "host", status: "accepted" },
+      });
+    } else if (afterStatus === "declined") {
+      // Neutral by design: a friend passing on an invitation is not a rejection,
+      // and the push should not make it feel like one.
+      await sendStayPush({
+        recipientID: hostUserID,
+        category: "stayUpdates",
+        senderID: guestUserID,
+        title: "Offer update",
+        body: `${guestName} can't make it${placeSuffix}.`,
+        data: { type: "stay_update", requestID, role: "host", status: "declined" },
       });
     }
   }

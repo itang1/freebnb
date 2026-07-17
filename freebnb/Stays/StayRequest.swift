@@ -8,6 +8,15 @@ import Foundation
 
 enum StayRequestStatus: String, Codable, Hashable, CaseIterable, Sendable {
     case pending   = "pending"
+    /// A host offered their place to a friend, and the friend hasn't answered yet
+    /// (feature 43). The mirror of `pending`: same document, same two parties,
+    /// same dates, but the host originated it and the *guest* is the one who
+    /// replies. This exists because every other host action in the app is a reply,
+    /// so a host with an empty week had nothing to do but wait to be asked.
+    ///
+    /// Reaches `accepted` through the same `acceptStayRequest` callable a pending
+    /// request does, because the double-booking guard has to be the same one.
+    case offered   = "offered"
     case accepted  = "accepted"
     /// The stay happened and is over. Reached either by a party tapping "Mark
     /// complete" once the stay has begun, or by the nightly `expireCompletedStays`
@@ -20,6 +29,7 @@ enum StayRequestStatus: String, Codable, Hashable, CaseIterable, Sendable {
     var displayName: String {
         switch self {
         case .pending:   return "Pending"
+        case .offered:   return "Offered"
         case .accepted:  return "Accepted"
         case .completed: return "Completed"
         case .declined:  return "Declined"
@@ -27,7 +37,15 @@ enum StayRequestStatus: String, Codable, Hashable, CaseIterable, Sendable {
         }
     }
 
-    var isActive: Bool { self == .pending || self == .accepted }
+    /// Not yet resolved either way. An offer is active for the same reason a
+    /// pending request is: nobody has said no, and the address grant that
+    /// `updateStatus` withdraws on every inactive status must not be withdrawn
+    /// from underneath it.
+    var isActive: Bool { self == .pending || self == .offered || self == .accepted }
+
+    /// Whether this is waiting on somebody's answer. The two awaiting statuses
+    /// differ only in which side owes the reply — see `awaitingReply(from:)`.
+    var isAwaitingReply: Bool { self == .pending || self == .offered }
 
     /// True for the statuses that mean the stay actually happened. `accepted`
     /// counts because a stay in progress has not been cancelled away.
@@ -109,6 +127,21 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     var guestCount: Int?
     var arrivalWindow: ArrivalWindow?
     var status: StayRequestStatus
+    /// Who started this — the guest asking, or the host offering (feature 43).
+    /// Written once at create and never rewritten.
+    ///
+    /// Needed because `status` stops being able to answer the question the moment
+    /// the stay moves on: an offer the guest accepted and a request the host
+    /// accepted are both just `accepted`, and a declined document could be a host
+    /// turning down a request or a guest turning down an offer. That is exactly
+    /// the hole `cancelledBy` was added to plug for cancellations, and the push
+    /// trigger has the same problem here — it cannot tell whom to notify without
+    /// knowing which way the stay was pointing.
+    ///
+    /// Nil on every request written before offers existed, which can only mean the
+    /// guest asked, since that was the only thing the app could do. Read through
+    /// `initiator`, never directly.
+    var initiatedBy: String?
     /// When the stay was marked complete. Nil for every other status; written
     /// alongside `status == .completed` and never rewritten.
     var completedAt: Date?
@@ -136,6 +169,7 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         guestCount: Int? = nil,
         arrivalWindow: ArrivalWindow? = nil,
         status: StayRequestStatus = .pending,
+        initiatedBy: String? = nil,
         completedAt: Date? = nil,
         cancelledBy: String? = nil,
         createdAt: Date? = nil,
@@ -155,6 +189,7 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         self.guestCount = guestCount
         self.arrivalWindow = arrivalWindow
         self.status = status
+        self.initiatedBy = initiatedBy
         self.completedAt = completedAt
         self.cancelledBy = cancelledBy
         self.createdAt = createdAt
@@ -207,6 +242,37 @@ extension StayRequest {
         if userID == hostUserID { return .host }
         if userID == guestUserID { return .guest }
         return nil
+    }
+
+    /// Which side started this: the guest asking, or the host offering. A request
+    /// written before offers existed has no `initiatedBy`, and could only have
+    /// been the guest asking, because that was the only thing the app could do.
+    var initiator: StayRequestRole {
+        initiatedBy == hostUserID ? .host : .guest
+    }
+
+    /// Whose answer the stay is waiting on, or nil if it isn't waiting on anyone.
+    /// A guest's request waits on the host; a host's offer waits on the guest.
+    var awaitingParty: String? {
+        switch status {
+        case .pending: return hostUserID
+        case .offered: return guestUserID
+        case .accepted, .completed, .declined, .cancelled: return nil
+        }
+    }
+
+    /// Whether `userID` is the one who owes a reply. Backs the "Needs your
+    /// response" section and the tab badge, which now count offers a guest hasn't
+    /// answered alongside requests a host hasn't.
+    func awaitsReply(from userID: String) -> Bool {
+        !userID.isEmpty && awaitingParty == userID
+    }
+
+    /// Whether `userID` may accept this right now. Deliberately the mirror of
+    /// `awaitsReply`, minus the statuses that aren't an open question: the person
+    /// who owes the answer is exactly the person who can say yes.
+    func canBeAccepted(by userID: String) -> Bool {
+        status.isAwaitingReply && awaitsReply(from: userID)
     }
 
     /// The other participant, seen from `userID`.

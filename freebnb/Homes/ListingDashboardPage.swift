@@ -28,6 +28,7 @@ struct ListingDashboardPage: View {
     @State private var showEdit = false
     @State private var showAvailability = false
     @State private var showCoHosts = false
+    @State private var showOffer = false
     @State private var showPast = false
 
     // MARK: - Derived data
@@ -49,6 +50,8 @@ struct ListingDashboardPage: View {
     private var pendingRequests:  [StayRequest] { listingRequests.filter { $0.status == .pending  } }
     private var acceptedRequests: [StayRequest] { listingRequests.filter { $0.status == .accepted } }
     private var pastRequests:     [StayRequest] { listingRequests.filter { !$0.status.isActive   } }
+    /// Offers this host has sent that the friend hasn't answered (feature 43).
+    private var sentOffers:       [StayRequest] { listingRequests.filter { $0.status == .offered  } }
 
     private var guestIDs: Set<String> { Set(listingRequests.map { $0.guestUserID }) }
 
@@ -71,12 +74,42 @@ struct ListingDashboardPage: View {
                 coHostSection
             }
 
+            // The one thing a host can start (feature 43). Above the request
+            // sections on purpose: this page is otherwise entirely a list of
+            // things other people did, which is exactly why a host with an empty
+            // week had no reason to open the app.
+            if isHost {
+                Section {
+                    Button {
+                        showOffer = true
+                    } label: {
+                        Label("Offer your place to a friend", systemImage: "gift")
+                            .font(.subheadline.weight(.medium))
+                    }
+                }
+            }
+
             if !hasContent {
                 Section {
-                    Text("No requests yet. Share your listing so guests can find it.")
+                    Text("No requests yet. Friends who can see this listing can ask to stay — or you can offer it to someone.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .padding(.vertical, 4)
+                }
+            }
+
+            if !sentOffers.isEmpty {
+                Section("Offers you've sent") {
+                    ForEach(sentOffers) { req in
+                        IncomingRequestRow(request: req, guestName: guestName(for: req))
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    Task { await withdraw(req) }
+                                } label: {
+                                    Label("Withdraw", systemImage: "arrow.uturn.backward")
+                                }
+                            }
+                    }
                 }
             }
 
@@ -183,6 +216,9 @@ struct ListingDashboardPage: View {
         }
         .sheet(isPresented: $showCoHosts) {
             CoHostManagerView(listing: listing)
+        }
+        .sheet(isPresented: $showOffer) {
+            OfferStaySheet(listing: listing)
         }
         .sheet(item: $respondingTo) { req in
             AcceptSheet(request: req) { hostNote in
@@ -339,6 +375,23 @@ struct ListingDashboardPage: View {
             try await requestStore.decline(request)
             messageStore.sendStayEvent(
                 StayEvent(kind: .declined, dateRange: dateRangeText(request)),
+                senderUserID: authManager.userID,
+                recipientUserID: request.guestUserID
+            )
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
+    /// Takes back an offer the friend hasn't answered (feature 43). Posts the
+    /// `cancelled` event, not `declined`: the friend never said no, and a thread
+    /// that claimed they did would be a small lie told about them.
+    private func withdraw(_ request: StayRequest) async {
+        actionError = nil
+        do {
+            try await requestStore.withdrawOffer(request)
+            messageStore.sendStayEvent(
+                StayEvent(kind: .cancelled, dateRange: dateRangeText(request)),
                 senderUserID: authManager.userID,
                 recipientUserID: request.guestUserID
             )

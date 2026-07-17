@@ -81,6 +81,7 @@ struct StayEventCard: View {
     private var title: String {
         switch event.kind {
         case .requested: return "Requested to stay"
+        case .offered:   return "Offered their place"
         case .accepted:  return "Stay accepted"
         case .declined:  return "Stay request declined"
         case .cancelled: return "Request cancelled"
@@ -91,6 +92,7 @@ struct StayEventCard: View {
     private var iconName: String {
         switch event.kind {
         case .requested: return "calendar"
+        case .offered:   return "gift"
         case .accepted:  return "checkmark.circle.fill"
         case .declined:  return "xmark.circle"
         case .cancelled: return "slash.circle"
@@ -101,6 +103,10 @@ struct StayEventCard: View {
     private var tint: Color {
         switch event.kind {
         case .requested, .modified: return .accent
+        // Green like an acceptance rather than accent like a request: an offer is
+        // somebody saying yes before being asked, which is good news landing in
+        // the thread, not a question being posed.
+        case .offered:   return .green
         case .accepted:  return .green
         case .declined, .cancelled: return .secondary
         }
