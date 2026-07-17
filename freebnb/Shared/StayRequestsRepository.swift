@@ -29,7 +29,15 @@ protocol StayRequestsRepository: Sendable {
     func updateListingHostName(hostUserID: String, newName: String) async throws
     /// Moves a request to a new status. Any terminal status also revokes the
     /// guest's access to the listing's exact address.
-    func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws
+    /// `cancelledBy` is the caller's own user ID and is required when `status`
+    /// is `.cancelled` — the rules pin it to whichever party the transition
+    /// belongs to, and the push trigger reads it to notify the other one.
+    func updateStatus(
+        _ request: StayRequest,
+        status: StayRequestStatus,
+        hostNote: String?,
+        cancelledBy: String?
+    ) async throws
     /// Changes the dates on a *pending* request in place (feature 23), instead of
     /// forcing the guest to cancel and re-send. Only the guest may call it, only
     /// while pending, and `firestore.rules` pins every other field so the dates
@@ -110,17 +118,29 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         }
     }
 
-    private func statusPayload(_ status: StayRequestStatus, hostNote: String?) -> [String: Any] {
+    private func statusPayload(
+        _ status: StayRequestStatus,
+        hostNote: String?,
+        cancelledBy: String? = nil
+    ) -> [String: Any] {
         var data: [String: Any] = [
             "status": status.rawValue,
             "updatedAt": FieldValue.serverTimestamp()
         ]
         if let hostNote { data["hostNote"] = hostNote }
+        // Only ever on a cancellation: the rules' other branches pin their
+        // changed keys, so carrying it elsewhere would be rejected outright.
+        if status == .cancelled, let cancelledBy { data["cancelledBy"] = cancelledBy }
         return data
     }
 
-    func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws {
-        let payload = statusPayload(status, hostNote: hostNote)
+    func updateStatus(
+        _ request: StayRequest,
+        status: StayRequestStatus,
+        hostNote: String?,
+        cancelledBy: String?
+    ) async throws {
+        let payload = statusPayload(status, hostNote: hostNote, cancelledBy: cancelledBy)
         let request = request
         try await withRetry { [db] in
             let batch = db.batch()

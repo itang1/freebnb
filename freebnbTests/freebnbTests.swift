@@ -117,8 +117,31 @@ struct StayRequestRepositoryTests {
         try await repo.create(request)
         try await repo.accept(request, hostNote: nil)
 
-        try await repo.updateStatus(request, status: .cancelled, hostNote: nil)
+        try await repo.updateStatus(request, status: .cancelled, hostNote: nil, cancelledBy: request.guestUserID)
         #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
+    }
+
+    // Both parties can cancel, and the document reads the same either way, so
+    // the push trigger has nothing to go on but this field.
+    @Test func cancellingRecordsWhichPartyBackedOut() async throws {
+        let repo = InMemoryStayRequestsRepository()
+        let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
+        try await repo.create(request)
+        try await repo.accept(request, hostNote: nil)
+
+        try await repo.updateStatus(request, status: .cancelled, hostNote: nil, cancelledBy: request.hostUserID)
+        #expect(repo.request(id: "r1")?.cancelledBy == request.hostUserID)
+    }
+
+    // Only a cancellation carries it: the rules pin the changed keys on every
+    // other transition, so a stray cancelledBy would be rejected outright.
+    @Test func decliningRecordsNoCanceller() async throws {
+        let repo = InMemoryStayRequestsRepository()
+        let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
+        try await repo.create(request)
+
+        try await repo.updateStatus(request, status: .declined, hostNote: "Sorry!", cancelledBy: nil)
+        #expect(repo.request(id: "r1")?.cancelledBy == nil)
     }
 
     @Test func decliningNeverDisclosesTheAddress() async throws {
@@ -126,7 +149,7 @@ struct StayRequestRepositoryTests {
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
         try await repo.create(request)
 
-        try await repo.updateStatus(request, status: .declined, hostNote: "Sorry!")
+        try await repo.updateStatus(request, status: .declined, hostNote: "Sorry!", cancelledBy: nil)
         #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
     }
 }

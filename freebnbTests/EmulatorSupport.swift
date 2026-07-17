@@ -131,14 +131,37 @@ enum EmulatorSupport {
         return auth
     }()
 
+    /// A member's identity plus the credentials to sign back in as them, for
+    /// tests that have to swap between two accounts (a host writing a listing,
+    /// then the guest requesting it) rather than just be somebody.
+    struct Member {
+        let uid: String
+        let email: String
+        let password: String
+    }
+
+    static let memberPassword = "password123"
+
     /// Signs in a brand-new email/password user and returns its uid. Rules treat
     /// email/password as a full member (sign_in_provider != 'anonymous'), so this
     /// is the identity that may create listings.
     @discardableResult
     static func signInFullMember() async throws -> String {
+        try await createFullMember().uid
+    }
+
+    /// As `signInFullMember`, but hands back what `signIn` needs to return here.
+    static func createFullMember() async throws -> Member {
         try? auth.signOut()
         let email = "member-\(UUID().uuidString.prefix(8))@emulator.test"
-        let result = try await auth.createUser(withEmail: email, password: "password123")
+        let result = try await auth.createUser(withEmail: email, password: memberPassword)
+        return Member(uid: result.user.uid, email: email, password: memberPassword)
+    }
+
+    @discardableResult
+    static func signIn(as member: Member) async throws -> String {
+        try? auth.signOut()
+        let result = try await auth.signIn(withEmail: member.email, password: member.password)
         return result.user.uid
     }
 

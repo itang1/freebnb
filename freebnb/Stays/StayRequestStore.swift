@@ -158,8 +158,14 @@ final class StayRequestStore {
         }
     }
 
+    /// Either party may call off a stay, so the write records which one did:
+    /// the rules pin `cancelledBy` to the caller, and the push trigger reads it
+    /// to tell the other party.
     func cancel(_ request: StayRequest) async throws {
-        try await update(request, status: .cancelled, hostNote: nil)
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw StayRequestError.notSignedIn
+        }
+        try await update(request, status: .cancelled, hostNote: nil, cancelledBy: uid)
     }
 
     /// Changes the dates on a still-pending request (feature 23). Only the guest
@@ -256,9 +262,14 @@ final class StayRequestStore {
 
     // MARK: - Private
 
-    private func update(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws {
+    private func update(
+        _ request: StayRequest,
+        status: StayRequestStatus,
+        hostNote: String?,
+        cancelledBy: String? = nil
+    ) async throws {
         do {
-            try await repository.updateStatus(request, status: status, hostNote: hostNote)
+            try await repository.updateStatus(request, status: status, hostNote: hostNote, cancelledBy: cancelledBy)
         } catch {
             log.error("update error: \(error.localizedDescription, privacy: .public)")
             throw error

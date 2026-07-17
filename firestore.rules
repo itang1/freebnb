@@ -600,10 +600,15 @@ service cloud.firestore {
                       && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
-                  // Guest cancels a pending or accepted request
+                  // Guest cancels a pending or accepted request. `cancelledBy`
+                  // records which side backed out — the two cancellations are
+                  // otherwise indistinguishable on the document, which left the
+                  // push trigger unable to tell whom to notify. Pinned to the
+                  // caller so neither party can pin the blame on the other.
                   (isOwner(resource.data.guestUserID)
                       && request.resource.data.status == "cancelled"
-                      && changedKeys().hasOnly(['status', 'updatedAt']))
+                      && changedKeys().hasOnly(['status', 'cancelledBy', 'updatedAt'])
+                      && request.resource.data.get('cancelledBy', '') == resource.data.guestUserID)
                   ||
                   // Host calls off an accepted stay they can no longer honor
                   // (illness, a burst pipe). Distinct from declining: a pending
@@ -613,7 +618,8 @@ service cloud.firestore {
                   (isOwner(resource.data.hostUserID)
                       && resource.data.status == "accepted"
                       && request.resource.data.status == "cancelled"
-                      && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
+                      && changedKeys().hasOnly(['status', 'hostNote', 'cancelledBy', 'updatedAt'])
+                      && request.resource.data.get('cancelledBy', '') == resource.data.hostUserID
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
                   // Either party closes out an accepted stay that has begun

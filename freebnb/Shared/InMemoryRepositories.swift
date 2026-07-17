@@ -192,6 +192,11 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         acceptedGuests.contains("\(listingID)/\(guestUserID)")
     }
 
+    /// The stored request, for tests asserting on what a write actually recorded.
+    func request(id: String) -> StayRequest? {
+        requests.first { $0.id == id }
+    }
+
     func listenToRequests(
         userID: String,
         role: StayRequestRole,
@@ -212,11 +217,18 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         }
     }
 
-    func updateStatus(_ request: StayRequest, status: StayRequestStatus, hostNote: String?) async throws {
+    func updateStatus(
+        _ request: StayRequest,
+        status: StayRequestStatus,
+        hostNote: String?,
+        cancelledBy: String? = nil
+    ) async throws {
         if !status.isActive { acceptedGuests.remove(markerKey(request)) }
         guard let i = requests.firstIndex(where: { $0.id == request.id }) else { return }
         requests[i].status = status
         if let hostNote { requests[i].hostNote = hostNote }
+        // Mirrors the write path: recorded only on a cancellation.
+        if status == .cancelled { requests[i].cancelledBy = cancelledBy }
     }
 
     func updateDates(_ request: StayRequest, checkIn: Date, checkOut: Date) async throws {
@@ -241,7 +253,7 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
             other.overlaps(checkIn: request.checkIn, checkOut: request.checkOut)
         }
         if conflict { throw StayRequestError.overlappingStay }
-        try await updateStatus(request, status: .accepted, hostNote: hostNote)
+        try await updateStatus(request, status: .accepted, hostNote: hostNote, cancelledBy: nil)
         acceptedGuests.insert(markerKey(request))
     }
 }

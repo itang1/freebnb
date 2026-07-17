@@ -895,8 +895,39 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     return;
   }
 
-  // The host resolved a pending request → notify the guest. "cancelled" is a
-  // guest-initiated status, so it never notifies here.
+  // Either party called the stay off → tell the other one. Both can cancel, and
+  // the document used to read the same either way, so this could not tell whom
+  // to notify and said nothing at all; the only signal was the courtesy note in
+  // the thread, which is silent for anyone who muted it or the "messages"
+  // category. A cancellation is somebody's travel plans changing, so it rides
+  // "stayUpdates" like the accept and the decline it sits beside.
+  //
+  // `cancelledBy` is written in the same update as the status and pinned by the
+  // rules to whichever party made it. Absent on cancellations written before
+  // that field existed: nothing to send, because there is no way to tell who
+  // already knows.
+  if (beforeStatus !== "cancelled" && afterStatus === "cancelled") {
+    const cancelledBy: string | undefined = after.cancelledBy;
+    if (!cancelledBy) return;
+    const cancelledByHost = cancelledBy === hostUserID;
+    const recipientID = cancelledByHost ? guestUserID : hostUserID;
+    const hostName: string = after.listingHostName ?? "The host";
+    const guestName =
+      (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Your guest";
+    await sendStayPush({
+      recipientID,
+      category: "stayUpdates",
+      senderID: cancelledBy,
+      title: "Stay cancelled",
+      body: cancelledByHost
+        ? `${hostName} can no longer host your stay${placeSuffix}.`
+        : `${guestName} cancelled their stay${placeSuffix}.`,
+      data: { type: "stay_update", requestID, role: cancelledByHost ? "guest" : "host", status: "cancelled" },
+    });
+    return;
+  }
+
+  // The host resolved a pending request → notify the guest.
   if (beforeStatus === "pending" && afterStatus !== "pending") {
     const hostName: string = after.listingHostName ?? "The host";
     if (afterStatus === "accepted") {

@@ -72,11 +72,14 @@ enum ArrivalWindow: String, Codable, Hashable, CaseIterable, Sendable {
 
 enum StayRequestError: LocalizedError {
     case overlappingStay
+    case notSignedIn
 
     var errorDescription: String? {
         switch self {
         case .overlappingStay:
             return "Those dates overlap a stay you've already accepted for this listing."
+        case .notSignedIn:
+            return "You're signed out. Sign back in to change this stay."
         }
     }
 }
@@ -109,6 +112,12 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     /// When the stay was marked complete. Nil for every other status; written
     /// alongside `status == .completed` and never rewritten.
     var completedAt: Date?
+    /// Who called the stay off — the guest's or the host's user ID, written in
+    /// the same update as `status == .cancelled`. Both parties can cancel, and
+    /// the resulting document used to look identical either way, so the push
+    /// trigger could not tell whom to notify. Nil for every other status, and on
+    /// cancellations written before this field existed.
+    var cancelledBy: String?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
 
@@ -128,6 +137,7 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         arrivalWindow: ArrivalWindow? = nil,
         status: StayRequestStatus = .pending,
         completedAt: Date? = nil,
+        cancelledBy: String? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil
     ) {
@@ -146,6 +156,7 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         self.arrivalWindow = arrivalWindow
         self.status = status
         self.completedAt = completedAt
+        self.cancelledBy = cancelledBy
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

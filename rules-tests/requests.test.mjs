@@ -153,6 +153,7 @@ describe("stayRequests/{id} update — host cancels an accepted stay", () => {
       updateDoc(doc(as(HOST), "stayRequests", STAY), {
         status: "cancelled",
         hostNote: "A pipe burst; I'm so sorry.",
+        cancelledBy: HOST,
         updatedAt: serverTimestamp(),
       })
     );
@@ -163,6 +164,7 @@ describe("stayRequests/{id} update — host cancels an accepted stay", () => {
     await assertFails(
       updateDoc(doc(as(HOST), "stayRequests", STAY), {
         status: "cancelled",
+        cancelledBy: HOST,
         updatedAt: serverTimestamp(),
       })
     );
@@ -173,6 +175,7 @@ describe("stayRequests/{id} update — host cancels an accepted stay", () => {
     await assertFails(
       updateDoc(doc(as(HOST), "stayRequests", STAY), {
         status: "cancelled",
+        cancelledBy: HOST,
         checkIn: Timestamp.fromMillis(Date.now() + 20 * DAY_MS),
         updatedAt: serverTimestamp(),
       })
@@ -184,6 +187,64 @@ describe("stayRequests/{id} update — host cancels an accepted stay", () => {
     await assertSucceeds(
       updateDoc(doc(as(FRIEND), "stayRequests", STAY), {
         status: "cancelled",
+        cancelledBy: FRIEND,
+        updatedAt: serverTimestamp(),
+      })
+    );
+  });
+});
+
+// `cancelledBy` is what tells the push trigger whom to notify, since both
+// parties can cancel and the document is otherwise identical either way. It is
+// therefore only worth anything if it cannot lie.
+describe("stayRequests/{id} update — cancelledBy names whoever cancelled", () => {
+  it("denies a host cancel that blames the guest", async () => {
+    await seedStay("accepted");
+    await assertFails(
+      updateDoc(doc(as(HOST), "stayRequests", STAY), {
+        status: "cancelled",
+        cancelledBy: FRIEND,
+        updatedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it("denies a guest cancel that blames the host", async () => {
+    await seedStay("accepted");
+    await assertFails(
+      updateDoc(doc(as(FRIEND), "stayRequests", STAY), {
+        status: "cancelled",
+        cancelledBy: HOST,
+        updatedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it("denies a cancel that omits cancelledBy", async () => {
+    // Without it the trigger cannot tell who already knows, so it stays quiet —
+    // making an unattributed cancellation a way to silence the notification.
+    await seedStay("accepted");
+    await assertFails(
+      updateDoc(doc(as(FRIEND), "stayRequests", STAY), {
+        status: "cancelled",
+        updatedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it("denies rewriting cancelledBy after the fact", async () => {
+    await seedStay("accepted");
+    await assertSucceeds(
+      updateDoc(doc(as(FRIEND), "stayRequests", STAY), {
+        status: "cancelled",
+        cancelledBy: FRIEND,
+        updatedAt: serverTimestamp(),
+      })
+    );
+    // Terminal: no edits at all once cancelled.
+    await assertFails(
+      updateDoc(doc(as(FRIEND), "stayRequests", STAY), {
+        cancelledBy: HOST,
         updatedAt: serverTimestamp(),
       })
     );
