@@ -129,6 +129,36 @@ enum AvailabilityCalendar {
         return updated
     }
 
+    /// The nights a stay actually occupies: every day in `[checkIn, checkOut)`.
+    /// The check-out day is not one of them — the guest leaves that morning — which
+    /// is why a stay may end on a day the host has blocked.
+    static func nights(from checkIn: Date, to checkOut: Date, calendar: Calendar = .current) -> [Date] {
+        var nights: [Date] = []
+        var day = calendar.startOfDay(for: checkIn)
+        let end = calendar.startOfDay(for: checkOut)
+        while day < end {
+            nights.append(day)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
+        }
+        return nights
+    }
+
+    /// Whether a guest could actually stay `[checkIn, checkOut)`: at least one
+    /// night, and no night the host has ruled out. The guest-side grid asks this
+    /// before it will draw a span, so a selection that the request sheet would
+    /// reject can't be made in the first place.
+    static func isStaySelectable(
+        checkIn: Date,
+        checkOut: Date,
+        unavailableDays: Set<Date>,
+        calendar: Calendar = .current
+    ) -> Bool {
+        let nights = nights(from: checkIn, to: checkOut, calendar: calendar)
+        guard !nights.isEmpty else { return false }
+        return !nights.contains(where: unavailableDays.contains)
+    }
+
     /// The next `monthCount` months starting with the one containing `from`, which
     /// is how far ahead the grid lets a host or guest look.
     static func months(from: Date = Date(), count: Int, calendar: Calendar = .current) -> [Date] {

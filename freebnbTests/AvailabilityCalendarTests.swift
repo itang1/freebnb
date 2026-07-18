@@ -145,6 +145,53 @@ struct BlockedDayRoundTripTests {
 
 /// `merging` is what "apply to all my homes" runs against each other listing, so
 /// its one job is to be additive: never drop a date a home already had.
+/// The rules behind the guest's tappable grid: which spans it will draw at all.
+struct StaySelectabilityTests {
+    /// The nights a stay occupies stop before the check-out day, which is why a
+    /// three-night stay from the 5th ends on the 8th.
+    @Test func nightsExcludeTheCheckOutDay() {
+        let nights = AvailabilityCalendar.nights(from: date(2026, 3, 5), to: date(2026, 3, 8), calendar: utc)
+        #expect(nights == [date(2026, 3, 5), date(2026, 3, 6), date(2026, 3, 7)])
+    }
+
+    @Test func spanCoveringOnlyFreeNightsIsSelectable() {
+        let blocked: Set<Date> = [date(2026, 3, 12)]
+        #expect(AvailabilityCalendar.isStaySelectable(
+            checkIn: date(2026, 3, 5), checkOut: date(2026, 3, 8),
+            unavailableDays: blocked, calendar: utc
+        ))
+    }
+
+    /// The whole point of the grid: a guest cannot draw a stay straight through a
+    /// week the host blocked, however far apart the two taps are.
+    @Test func spanCrossingABlockedNightIsRejected() {
+        let blocked: Set<Date> = [date(2026, 3, 6)]
+        #expect(!AvailabilityCalendar.isStaySelectable(
+            checkIn: date(2026, 3, 5), checkOut: date(2026, 3, 8),
+            unavailableDays: blocked, calendar: utc
+        ))
+    }
+
+    /// A blocked check-out day is fine: the guest leaves that morning without
+    /// spending the night, so the host's first blocked day can still be a
+    /// departure date.
+    @Test func blockedCheckOutDayIsStillSelectable() {
+        let blocked: Set<Date> = [date(2026, 3, 8)]
+        #expect(AvailabilityCalendar.isStaySelectable(
+            checkIn: date(2026, 3, 5), checkOut: date(2026, 3, 8),
+            unavailableDays: blocked, calendar: utc
+        ))
+    }
+
+    /// Zero nights is not a stay, so tapping the same day twice can't close a span.
+    @Test func sameDayIsNotAStay() {
+        #expect(!AvailabilityCalendar.isStaySelectable(
+            checkIn: date(2026, 3, 5), checkOut: date(2026, 3, 5),
+            unavailableDays: [], calendar: utc
+        ))
+    }
+}
+
 struct MergeBlockedRangesTests {
     /// A home's own blocked stretch survives the dates stamped across from another.
     @Test func mergeKeepsExistingAndAddsNew() {

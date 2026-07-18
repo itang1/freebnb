@@ -475,6 +475,28 @@ function daysFromNow(n) {
   return Timestamp.fromDate(new Date(Date.now() + n * 86_400_000));
 }
 
+// How many months of blocked first weeks every seeded listing carries.
+const BLOCKED_FIRST_WEEK_MONTHS = 12;
+
+// The 1st through the 7th of each of the next `BLOCKED_FIRST_WEEK_MONTHS`
+// months, starting with the current one. Uniform across the cast on purpose:
+// whichever character you sign in as, the home you try to book has the same
+// stretch greyed out, so the request sheet's conflict path is one tap away
+// instead of something you have to set up by hand first.
+//
+// Half-open [start, end) to match DateRange in Swift, so an end of the 8th at
+// midnight blocks the 7th and leaves the 8th bookable.
+function firstWeekBlocks() {
+  const ranges = [];
+  const today = new Date();
+  for (let i = 0; i < BLOCKED_FIRST_WEEK_MONTHS; i += 1) {
+    const start = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const end = new Date(today.getFullYear(), today.getMonth() + i, 8);
+    ranges.push({ start: Timestamp.fromDate(start), end: Timestamp.fromDate(end) });
+  }
+  return ranges;
+}
+
 async function seedUsers() {
   for (const u of users) {
     await auth.createUser({ uid: u.uid, email: u.email, password: castPassword, displayName: u.displayName })
@@ -560,6 +582,9 @@ async function seedHomes() {
     publicListing.latitude = approximate(location.latitude);
     publicListing.longitude = approximate(location.longitude);
     publicListing.geohash = geohashEncode(publicListing.latitude, publicListing.longitude);
+    // Host-blocked, not booked: bookedDateRanges is server-owned and recomputed
+    // from accepted stays, so seeding into it would just be overwritten.
+    publicListing.blockedDateRanges = firstWeekBlocks();
     // The feed orders by createdAt, and an order-by excludes docs missing the
     // field, so a seeded listing without one never shows. Stamp it (L3).
     publicListing.createdAt = now;

@@ -94,23 +94,21 @@ struct HomeCard: View {
         let color: Color
     }
 
-    /// One chip, most-specific-first: a hard "not tonight" outranks a general note
-    /// that some dates are spoken for. Two chips would compete for the same glance
-    /// and the card has no room. A listing with nothing blocked earns no chip: the
-    /// card says nothing rather than inventing a promise the host never made.
+    /// One chip, and only for a hard "not tonight". Almost every listing has some
+    /// future date spoken for, so a general "some dates unavailable" fires on all
+    /// of them and says nothing a glance can use; the calendar on the detail page
+    /// is where those dates belong. A listing free tonight earns no chip: the card
+    /// says nothing rather than inventing a promise the host never made.
     private var availabilityLabel: AvailabilityLabel? {
         let now = Date()
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now
         // Blocked and booked together, so a booked stretch shows "unavailable" the
         // same as a host-blocked one. The card never says which it is; a guest sees
         // a date is taken, not that the home is occupied.
-        let upcoming = listing.unavailableRanges.filter { $0.end > now }
-
-        if upcoming.contains(where: { $0.overlaps(checkIn: now, checkOut: tomorrow) }) {
-            return AvailabilityLabel(text: "Unavailable now", icon: "calendar.badge.minus", color: .red)
+        guard listing.unavailableRanges.contains(where: { $0.overlaps(checkIn: now, checkOut: tomorrow) }) else {
+            return nil
         }
-        guard !upcoming.isEmpty else { return nil }
-        return AvailabilityLabel(text: "Some dates unavailable", icon: "calendar.badge.exclamationmark", color: .orange)
+        return AvailabilityLabel(text: "Unavailable now", icon: "calendar.badge.minus", color: .red)
     }
 
     // MARK: - Header

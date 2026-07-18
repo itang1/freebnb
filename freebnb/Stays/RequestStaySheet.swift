@@ -13,12 +13,12 @@ struct RequestStaySheet: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
-    @State private var checkIn: Date = Calendar.current.startOfDay(
-        for: Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-    )
-    @State private var checkOut: Date = Calendar.current.startOfDay(
-        for: Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
-    )
+    // Nil until the guest taps. Nothing is pre-filled because the grid knows which
+    // days are gone and a default has no way to: tomorrow may be the middle of a
+    // week the host blocked, and opening on an error the guest didn't cause is a
+    // poor way to start.
+    @State private var checkIn: Date?
+    @State private var checkOut: Date?
     @State private var note = ""
     @State private var guestCount = 1
     @State private var arrivalWindow: ArrivalWindow = .flexible
@@ -26,24 +26,27 @@ struct RequestStaySheet: View {
     @State private var errorMessage: String?
 
     private var nights: Int {
-        max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
+        guard let checkIn, let checkOut else { return 0 }
+        return max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
     }
 
     // Any date the listing isn't free: the host's blocked ranges and the ranges an
-    // accepted stay has taken, together (`unavailableRanges`). The listing does not
-    // say which, so this can't either — the guest learns the date is taken, not
-    // that the home is occupied. This now catches other guests' bookings too, which
-    // used to be invisible to a client; the friendlier own-stay message below still
-    // wins when the overlap is the guest's own confirmed stay.
+    // accepted stay has taken, together (`unavailableRanges`). The grid already
+    // refuses to select across these, so this is the second lock on the same door:
+    // the listing can change under an open sheet.
     private var unavailableConflict: DateRange? {
-        listing.unavailableRanges.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
+        guard let checkIn, let checkOut else { return nil }
+        return listing.unavailableRanges.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
     }
 
-    // A stay this guest has already had accepted for this listing that overlaps the
-    // requested dates — the common self-inflicted double-booking (re-requesting
-    // dates you're already confirmed for), worth its own clearer message.
+    // The days the grid greys out, computed once per listing rather than per cell.
+    private var unavailableDays: Set<Date> {
+        AvailabilityCalendar.blockedDays(in: listing.unavailableRanges)
+    }
+
     private var acceptedConflict: StayRequest? {
-        requestStore.outgoingRequests.first { req in
+        guard let checkIn, let checkOut else { return nil }
+        return requestStore.outgoingRequests.first { req in
             req.listingID == listing.id
                 && req.status == .accepted
                 && req.overlaps(checkIn: checkIn, checkOut: checkOut)
@@ -51,7 +54,8 @@ struct RequestStaySheet: View {
     }
 
     private var canSend: Bool {
-        !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays
+        guard let checkIn, let checkOut else { return false }
+        return !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays
             && unavailableConflict == nil && acceptedConflict == nil
     }
 
@@ -77,8 +81,22 @@ struct RequestStaySheet: View {
                 }
 
                 Section("Dates") {
-                    DatePicker("Check in", selection: $checkIn, in: Date()..., displayedComponents: .date)
-                    DatePicker("Check out", selection: $checkOut, in: (Calendar.current.date(byAdding: .day, value: 1, to: checkIn) ?? checkIn)..., displayedComponents: .date)
+                    StayDateGrid(unavailableDays: unavailableDays, checkIn: $checkIn, checkOut: $checkOut)
+                        .padding(.vertical, 4)
+
+                    HStack {
+                        Text(selectionPrompt)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        if checkIn != nil {
+                            Button("Clear") {
+                                checkIn = nil
+                                checkOut = nil
+                            }
+                            .font(.caption)
+                        }
+                    }
 
                     if nights > 0 {
                         HStack {
@@ -160,7 +178,16 @@ struct RequestStaySheet: View {
         }
     }
 
+    /// What the grid is waiting for, so the two taps it takes are never a guess.
+    private var selectionPrompt: String {
+        let formatter = AppDateFormatters.shortDay
+        guard let checkIn else { return "Tap a day to set your check in" }
+        guard let checkOut else { return "Check in \(formatter.string(from: checkIn)) · tap a later day to check out" }
+        return "\(formatter.string(from: checkIn)) – \(formatter.string(from: checkOut))"
+    }
+
     private func send() async {
+        guard let checkIn, let checkOut else { return }
         isSending = true
         errorMessage = nil
         defer { isSending = false }
