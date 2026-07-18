@@ -136,7 +136,7 @@ struct FriendsPage: View {
                     NavigationLink {
                         UserProfilePage(userID: otherID, fallbackName: name)
                     } label: {
-                        FriendRow(name: name, homeCount: counts[otherID] ?? 0)
+                        FriendRow(name: name, userID: otherID, homeCount: counts[otherID] ?? 0)
                     }
                 }
             }
@@ -280,11 +280,12 @@ struct FriendsPage: View {
 
 private struct FriendRow: View {
     let name: String
+    let userID: String
     let homeCount: Int
 
     var body: some View {
         HStack(spacing: 12) {
-            InitialsAvatar(name: name)
+            GeneratedAvatar(seed: userID)
             Text(name)
                 .font(.body)
             Spacer()
@@ -310,7 +311,7 @@ private struct SuggestionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            InitialsAvatar(name: suggestion.displayName)
+            GeneratedAvatar(seed: suggestion.userID)
             VStack(alignment: .leading, spacing: 2) {
                 Text(suggestion.displayName)
                     .font(.body)
@@ -349,7 +350,7 @@ private struct FriendRequestRow: View {
         let name = userProfileStore.displayName(for: otherID) ?? "FreeBNB User"
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                InitialsAvatar(name: name, tint: .orange)
+                GeneratedAvatar(seed: otherID)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
                         .font(.body)
@@ -394,7 +395,7 @@ private struct PendingOutgoingRow: View {
         let otherID = edge.otherUserID(relativeTo: authManager.userID)
         let name = userProfileStore.displayName(for: otherID) ?? "FreeBNB User"
         HStack(spacing: 12) {
-            InitialsAvatar(name: name)
+            GeneratedAvatar(seed: otherID)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .font(.body)
@@ -422,7 +423,12 @@ private struct SearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            InitialsAvatar(name: profile.displayName)
+            // Seeded by ID only. Falling back to the display name would draw this
+            // person one way in search and another way on their own profile,
+            // which is worse than the neutral placeholder an ID-less document
+            // gets — and such a document can't be friended anyway (`sendSearchRequest`
+            // requires the id), so it is already a broken record, not a person.
+            GeneratedAvatar(seed: profile.id ?? "")
             Text(profile.displayName)
                 .font(.body)
             Spacer()

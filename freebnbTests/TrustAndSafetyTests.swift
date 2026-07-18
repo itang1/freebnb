@@ -187,6 +187,28 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
     #expect(MutualFriends(count: 3, names: ["Priya", "Sam"]).countSummary == "3 mutual friends")
 }
 
+/// A suggestion row is shown *before* any relationship exists, so it says how
+/// close someone is without saying through whom. The names stay on the model for
+/// the profile page, which is somewhere the viewer chose to go.
+@Test func aFriendSuggestionCountsMutualsWithoutNamingThem() {
+    let suggestion = FriendSuggestion(
+        userID: "u1",
+        displayName: "Priya",
+        mutualCount: 3,
+        mutualNames: ["Sam", "Alex"]
+    )
+    #expect(suggestion.mutualText == "3 mutual friends")
+    #expect(suggestion.mutualText?.contains("Sam") == false)
+    #expect(suggestion.mutualText?.contains("Alex") == false)
+
+    let singular = FriendSuggestion(userID: "u2", displayName: "Sam", mutualCount: 1, mutualNames: ["Priya"])
+    #expect(singular.mutualText == "1 mutual friend")
+
+    // Nothing in common is nothing to say, not "0 mutual friends".
+    let none = FriendSuggestion(userID: "u3", displayName: "Alex", mutualCount: 0, mutualNames: [])
+    #expect(none.mutualText == nil)
+}
+
 // MARK: - Friends-only visibility (feature 7)
 
 @Test func feedChecksTheFriendshipNotJustTheACL() {

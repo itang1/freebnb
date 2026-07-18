@@ -63,20 +63,6 @@ struct HomeCard: View {
                 }
                 .accessibilityElement(children: .combine)
 
-                if let avail = availabilityLabel {
-                    HStack(spacing: 4) {
-                        Image(systemName: avail.icon)
-                            .font(.caption2)
-                        Text(avail.text)
-                            .font(.caption)
-                    }
-                    .foregroundColor(avail.color)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(avail.color.opacity(0.12))
-                    .clipShape(Capsule())
-                    .accessibilityLabel(avail.text)
-                }
             }
             .padding(14)
         }
@@ -86,32 +72,12 @@ struct HomeCard: View {
         .shadow(color: Color.accent.opacity(0.15), radius: 8, x: 0, y: 5)
     }
 
-    // MARK: - Availability
-
-    private struct AvailabilityLabel {
-        let text: String
-        let icon: String
-        let color: Color
-    }
-
-    /// One chip, and only for a hard "not tonight". Almost every listing has some
-    /// future date spoken for, so a general "some dates unavailable" fires on all
-    /// of them and says nothing a glance can use; the calendar on the detail page
-    /// is where those dates belong. A listing free tonight earns no chip: the card
-    /// says nothing rather than inventing a promise the host never made.
-    private var availabilityLabel: AvailabilityLabel? {
-        let now = Date()
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now
-        // Blocked and booked together, so a booked stretch shows "unavailable" the
-        // same as a host-blocked one. The card never says which it is; a guest sees
-        // a date is taken, not that the home is occupied.
-        guard listing.unavailableRanges.contains(where: { $0.overlaps(checkIn: now, checkOut: tomorrow) }) else {
-            return nil
-        }
-        return AvailabilityLabel(text: "Unavailable now", icon: "calendar.badge.minus", color: .red)
-    }
-
     // MARK: - Header
+    //
+    // The card carries no availability chip at all. Which dates are free is a
+    // calendar's job — the detail page and the request sheet both draw one — and a
+    // chip summarizing it either fires on every listing (most have some future
+    // date spoken for) or promises a vacancy the host never offered.
 
     @ViewBuilder
     private var header: some View {
@@ -159,7 +125,12 @@ struct HomeCard: View {
     }
 
     private var photoHeaderLabel: some View {
-        HStack {
+        HStack(spacing: 10) {
+            // A white ring so the avatar holds its shape against a busy photo.
+            GeneratedAvatar(seed: listing.hostUserID, size: 36)
+                .background(Circle().fill(.thinMaterial))
+                .overlay(Circle().stroke(.white.opacity(0.7), lineWidth: 1.5))
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(listing.hostName)
                     .font(.headline)
@@ -183,10 +154,14 @@ struct HomeCard: View {
     }
 
     private var tealHeaderContent: some View {
-        HStack {
-            Image(systemName: "house.fill")
-                .font(.subheadline)
-                .accessibilityHidden(true)
+        HStack(spacing: 10) {
+            // The photo-less card used to be a flat teal strip with the same house
+            // icon on every one, so a feed of them read as one long block. The
+            // host's avatar is the thing that differs card to card, so it goes
+            // here — on a light disc, since the generated tints are tuned for the
+            // page background rather than for solid teal.
+            GeneratedAvatar(seed: listing.hostUserID, size: 36)
+                .background(Circle().fill(Color.primaryBackground))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(listing.hostName)

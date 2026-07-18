@@ -10,14 +10,20 @@ import SwiftUI
 
 struct ConversationRow: View {
     let otherName: String
+    /// Seeds the avatar. The ID rather than the name, so the person keeps the
+    /// same avatar here as everywhere else even if they rename themselves.
+    let otherUserID: String
     let lastMessage: Message
     let currentUserID: String
     var isMuted: Bool = false
     var isUnread: Bool = false
+    /// The live stay between these two, if any. Nil for a plain friend chat,
+    /// which keeps its row exactly as it was.
+    var stayContext: ConversationStayContext?
 
     var body: some View {
         HStack(spacing: 12) {
-            InitialsAvatar(name: otherName, size: 44)
+            GeneratedAvatar(seed: otherUserID, size: 44)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -41,6 +47,24 @@ struct ConversationRow: View {
                         .foregroundColor(isUnread ? .primary : .secondary)
                         .fontWeight(isUnread ? .medium : .regular)
                         .lineLimit(1)
+                }
+
+                if let stayContext {
+                    HStack(spacing: 4) {
+                        Image(systemName: stayContext.systemImage)
+                            .font(.caption2)
+                        Text(stayContext.label)
+                            .font(.caption)
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(stayContext.isActionable ? Color.accent : .secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        (stayContext.isActionable ? Color.accent : Color.secondary).opacity(0.12),
+                        in: Capsule()
+                    )
+                    .padding(.top, 2)
                 }
             }
 
@@ -72,6 +96,7 @@ struct ConversationRow: View {
             : lastMessage.text
         parts.append(preview)
         if isUnread { parts.append("unread") }
+        if let stayContext { parts.append(stayContext.label) }
         return parts.joined(separator: ", ")
     }
 }
@@ -80,12 +105,14 @@ struct ConversationRow: View {
     List {
         ConversationRow(
             otherName: "Maya",
+            otherUserID: PreviewData.friendID,
             lastMessage: PreviewData.message,
             currentUserID: PreviewData.viewerID,
             isUnread: true
         )
         ConversationRow(
             otherName: "Sam",
+            otherUserID: PreviewData.viewerID,
             lastMessage: PreviewData.message,
             currentUserID: PreviewData.friendID,
             isMuted: true

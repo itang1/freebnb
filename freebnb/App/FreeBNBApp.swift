@@ -35,6 +35,10 @@ struct FreeBNBApp: App {
     @State private var friendStore: FriendStore
     @State private var reviewStore: ReviewStore
     @State private var networkMonitor = NetworkMonitor()
+    /// Reads its kits off disk during init, so a guest who opens the app offline
+    /// at the door finds them already loaded rather than after a fetch that
+    /// cannot complete.
+    @State private var checkInKitStore = CheckInKitStore()
 
     init() {
         // App Check must be registered before FirebaseApp.configure() so the
@@ -80,6 +84,7 @@ struct FreeBNBApp: App {
                 .environment(reviewStore)
                 .environment(networkMonitor)
                 .environment(router)
+                .environment(checkInKitStore)
                 .onAppear {
                     appDelegate.userProfileStore = userProfileStore
                     appDelegate.router = router

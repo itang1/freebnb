@@ -221,7 +221,7 @@ struct UserProfilePage: View {
 
     private var header: some View {
         HStack(spacing: 16) {
-            PersonAvatar()
+            GeneratedAvatar(seed: userID, size: 72, accessibilityName: displayName)
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayName)
                     .font(.title2.weight(.semibold))

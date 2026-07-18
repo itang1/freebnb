@@ -35,6 +35,13 @@ struct ReviewsSection: View {
                 }
             }
 
+            // Spells out what a review *is*, so it can't be confused with the
+            // references below it: only a completed stay produces one, and it
+            // runs in both directions (a host reviews their guest too).
+            Text("From people who have actually stayed, in either direction: guests review their host, hosts review their guest.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
             if !reviewStore.hasLoadedReviews(about: subjectUserID) {
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -169,6 +176,13 @@ struct ReferencesSection: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("References from friends")
                 .font(.headline)
+
+            // The counterpart to the reviews caption above: a reference is a
+            // vouch from someone who *hasn't* stayed, which is why it carries no
+            // rating and can speak to either side of a future stay.
+            Text("Vouches from friends who haven't stayed with \(subjectName), speaking to them as a guest, a host, or both.")
+                .font(.caption)
+                .foregroundColor(.secondary)
 
             if !reviewStore.hasLoadedReferences(about: subjectUserID) {
                 ProgressView()

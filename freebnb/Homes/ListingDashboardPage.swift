@@ -70,6 +70,10 @@ struct ListingDashboardPage: View {
         List {
             listingSummarySection
 
+            // Above co-hosts and offers: blocking dates is the routine upkeep a
+            // host comes back to do, where the others are occasional.
+            availabilitySection
+
             if isHost {
                 coHostSection
             }
@@ -273,6 +277,54 @@ struct ListingDashboardPage: View {
         }
     }
 
+    // MARK: - Availability
+
+    /// The blocked calendar, as a row on the page rather than only as a toolbar
+    /// button.
+    ///
+    /// The editor was reachable the whole time, but only from `.secondaryAction`,
+    /// which iOS folds into the "..." overflow menu — so the one control a host
+    /// needs most was the one control with no presence on the page. It keeps its
+    /// toolbar entry; this adds the visible route, and states the current position
+    /// so a host can see whether anything is blocked without opening anything.
+    private var availabilitySection: some View {
+        Section("Availability") {
+            Button {
+                showAvailability = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar")
+                        .frame(width: 28)
+                        .foregroundColor(Color.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Blocked dates")
+                            .foregroundColor(.primary)
+                        Text(availabilitySummary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+            }
+        }
+    }
+
+    /// Counts upcoming blocked days, not ranges: "2 periods" means nothing to
+    /// someone deciding whether they have room for a guest next week, and a range
+    /// that started last month would inflate it either way.
+    private var availabilitySummary: String {
+        let blockedDays = AvailabilityCalendar.blockedDays(
+            in: AvailabilityCalendar.upcoming(listing.unavailableRanges)
+        )
+        guard !blockedDays.isEmpty else {
+            return "Nothing blocked. Tap to mark dates you can't host."
+        }
+        return "\(blockedDays.count) upcoming day\(blockedDays.count == 1 ? "" : "s") blocked or booked"
+    }
+
     // MARK: - Co-hosts (feature 14)
 
     @ViewBuilder
@@ -288,11 +340,11 @@ struct ListingDashboardPage: View {
                 }
             } else {
                 ForEach(listing.coHosts, id: \.self) { userID in
-                    Label(
-                        userProfileStore.displayName(for: userID) ?? "FreeBNB User",
-                        systemImage: "person.fill"
-                    )
-                    .font(.subheadline)
+                    HStack(spacing: 10) {
+                        GeneratedAvatar(seed: userID, size: 28)
+                        Text(userProfileStore.displayName(for: userID) ?? "FreeBNB User")
+                            .font(.subheadline)
+                    }
                 }
                 Button {
                     showCoHosts = true
@@ -309,7 +361,7 @@ struct ListingDashboardPage: View {
 
     private func conversationRow(name: String, summary: ConversationSummary) -> some View {
         HStack(spacing: 12) {
-            InitialsAvatar(name: name, size: 36, font: .subheadline.weight(.semibold))
+            GeneratedAvatar(seed: summary.otherUserID, size: 36)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -353,7 +405,9 @@ struct ListingDashboardPage: View {
 
     // MARK: - Actions
 
-    private func accept(_ request: StayRequest, hostNote: String?) async {
+    /// Returns nil on success, or the failure message for `AcceptSheet` to show.
+    /// The sheet dismisses itself once this returns nil.
+    private func accept(_ request: StayRequest, hostNote: String?) async -> String? {
         actionError = nil
         do {
             try await requestStore.accept(request, hostNote: hostNote)
@@ -363,9 +417,9 @@ struct ListingDashboardPage: View {
                 senderUserID: authManager.userID,
                 recipientUserID: request.guestUserID
             )
-            respondingTo = nil
+            return nil
         } catch {
-            actionError = error.localizedDescription
+            return error.localizedDescription
         }
     }
 

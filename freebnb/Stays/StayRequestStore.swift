@@ -13,6 +13,10 @@ import os
 final class StayRequestStore {
     private(set) var incomingRequests: [StayRequest] = []
     private(set) var outgoingRequests: [StayRequest] = []
+    /// Who the requests above belong to. Observed rather than ignored: the tab
+    /// badge is derived from it, so it has to invalidate the view when it changes.
+    /// Empty while signed out.
+    private(set) var viewerID: String = ""
     /// Set when a Firestore listener fails — most commonly because security
     /// rules haven't been deployed yet. Cleared when the listener recovers.
     private(set) var listenerError: String?
@@ -52,6 +56,7 @@ final class StayRequestStore {
         incomingListener?.cancel(); incomingListener = nil
         outgoingListener?.cancel(); outgoingListener = nil
         incomingRequests = []; outgoingRequests = []
+        viewerID = userID ?? ""
         guard let userID else {
             // Signed out: take down the widgets and any running Live Activity so
             // the last user's stay doesn't linger on the Lock Screen.
@@ -324,11 +329,14 @@ final class StayRequestStore {
         outgoingRequests.filter { $0.status.isAwaitingReply }.count
     }
 
-    /// Total shown as the Stays tab badge: unresolved stays in either direction,
-    /// which is what it has always meant — the badge counts what is in flight, not
-    /// only what this user owes a reply to.
+    /// The Stays tab badge: stays waiting on *this user's* answer, and nothing
+    /// else. A badge is a claim that someone is blocked on you, so a request you
+    /// sent and are waiting to hear back on doesn't earn one — you can't clear it,
+    /// and a number that won't go down however much you tap it teaches people to
+    /// ignore the badge entirely. Both directions still count: a host owes an
+    /// answer on an incoming request, and a guest owes one on an offer.
     var pendingStaysTabCount: Int {
-        pendingIncomingCount + pendingOutgoingCount
+        (incomingRequests + outgoingRequests).awaitingReplyCount(from: viewerID)
     }
 
     /// Offers a host made this user that they haven't answered. The host-initiated

@@ -35,9 +35,16 @@ struct TrustChip: View {
     }
 }
 
-/// Every trust signal we have for one user, in a wrapping row.
+/// Every trust signal we have for one user.
 ///
-/// Chips are omitted rather than zeroed: "0 stays hosted" reads as a warning
+/// Two tiers, because the old single row of seven chips ate most of a phone's
+/// first screen before the profile said anything. The *earned* signals — the
+/// ones a person had to do something to get — keep their chips and their colour.
+/// The plain counts drop to one quiet line of text underneath: still every
+/// number, still exact, just no longer seven capsules competing with each other.
+/// Nothing is hidden or collapsed behind a tap.
+///
+/// Signals are omitted rather than zeroed: "0 stays hosted" reads as a warning
 /// about a new host, when it only means the platform has nothing to say yet.
 /// A number that isn't there is honest; a zero is an accusation.
 struct TrustBadgeRow: View {
@@ -51,38 +58,66 @@ struct TrustBadgeRow: View {
     private var stats: TrustStats { profile?.effectiveTrustStats ?? TrustStats() }
 
     var body: some View {
-        FlowRow(spacing: 6) {
-            if stats.isVerified {
-                // Green, not brand teal: identity assurance is a safety signal, and
-                // keeping it distinct from the teal "mutual friends" chip means the
-                // two never blur into one "trusted" colour.
-                TrustChip(text: "ID verified", systemImage: "checkmark.seal.fill", tint: .success)
+        VStack(alignment: .leading, spacing: 8) {
+            if hasEarnedChips {
+                FlowRow(spacing: 6) {
+                    if stats.isVerified {
+                        // Green, not brand teal: identity assurance is a safety
+                        // signal, and keeping it distinct from the teal "mutual
+                        // friends" chip means the two never blur into one
+                        // "trusted" colour.
+                        TrustChip(text: "ID verified", systemImage: "checkmark.seal.fill", tint: .success)
+                    }
+                    if let rating = stats.ratingText {
+                        TrustChip(text: rating, systemImage: "star.fill", tint: .orange)
+                    }
+                    if !isSelf, let summary = mutualFriends?.countSummary {
+                        TrustChip(text: summary, systemImage: "person.2.fill", tint: Color.accent)
+                    }
+                }
             }
 
-            if let rating = stats.ratingText {
-                TrustChip(text: rating, systemImage: "star.fill", tint: .orange)
-            }
-
-            if let hosted = stats.staysHosted, hosted > 0 {
-                TrustChip(text: "\(hosted) stay\(hosted == 1 ? "" : "s") hosted", systemImage: "house")
-            }
-
-            if let taken = stats.staysTaken, taken > 0 {
-                TrustChip(text: "\(taken) stay\(taken == 1 ? "" : "s") taken", systemImage: "suitcase")
-            }
-
-            if let rate = stats.responseRateText {
-                TrustChip(text: rate, systemImage: "clock.arrow.circlepath")
-            }
-
-            if let tenure = profile?.tenureText {
-                TrustChip(text: tenure, systemImage: "calendar")
-            }
-
-            if !isSelf, let summary = mutualFriends?.countSummary {
-                TrustChip(text: summary, systemImage: "person.2.fill", tint: Color.accent)
+            if let strip = statsStrip {
+                Text(strip)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .accessibilityLabel(statsAccessibilityLabel)
             }
         }
+    }
+
+    private var hasEarnedChips: Bool {
+        stats.isVerified
+            || stats.ratingText != nil
+            || (!isSelf && mutualFriends?.countSummary != nil)
+    }
+
+    /// The plain counts, middot-separated: "12 hosted · 3 taken · 92% response ·
+    /// 3 years on FreeBNB". Nil when we know none of them, so a brand-new profile
+    /// renders no empty line.
+    private var statsStrip: String? {
+        var parts: [String] = []
+        if let hosted = stats.staysHosted, hosted > 0 { parts.append("\(hosted) hosted") }
+        if let taken = stats.staysTaken, taken > 0 { parts.append("\(taken) taken") }
+        if let rate = stats.responseRate { parts.append("\(Int((rate * 100).rounded()))% response") }
+        if let tenure = profile?.tenureText { parts.append(tenure) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The strip read aloud as words. "12 hosted · 3 taken" is compact enough to
+    /// scan but announces as run-together fragments, so VoiceOver gets the
+    /// unabbreviated phrasing the chips used to carry.
+    private var statsAccessibilityLabel: String {
+        var parts: [String] = []
+        if let hosted = stats.staysHosted, hosted > 0 {
+            parts.append("\(hosted) stay\(hosted == 1 ? "" : "s") hosted")
+        }
+        if let taken = stats.staysTaken, taken > 0 {
+            parts.append("\(taken) stay\(taken == 1 ? "" : "s") taken")
+        }
+        if let rate = stats.responseRateText { parts.append(rate) }
+        if let tenure = profile?.tenureText { parts.append(tenure) }
+        return parts.joined(separator: ", ")
     }
 }
 

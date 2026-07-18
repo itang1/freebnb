@@ -43,6 +43,17 @@ struct MessagesTab: View {
         return "FreeBNB User"
     }
 
+    /// The live stay between this user and their correspondent, for the row's
+    /// chip. Both directions are searched, since the same person can be a host in
+    /// one stay and a guest in another.
+    private func stayContext(with otherUserID: String) -> ConversationStayContext? {
+        ConversationStay.context(
+            between: authManager.userID,
+            and: otherUserID,
+            stays: requestStore.incomingRequests + requestStore.outgoingRequests
+        )
+    }
+
     /// Finds the listing associated with this conversation by looking at stay
     /// requests. Used to pass listing context into the thread.
     ///
@@ -113,10 +124,12 @@ struct MessagesTab: View {
                             NavigationLink(value: route) {
                                 ConversationRow(
                                     otherName: name,
+                                    otherUserID: summary.otherUserID,
                                     lastMessage: summary.lastMessage,
                                     currentUserID: authManager.userID,
                                     isMuted: messageStore.isMuted(summary.id),
-                                    isUnread: messageStore.isUnread(summary.id, currentUserID: authManager.userID)
+                                    isUnread: messageStore.isUnread(summary.id, currentUserID: authManager.userID),
+                                    stayContext: stayContext(with: summary.otherUserID)
                                 )
                             }
                         }

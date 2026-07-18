@@ -47,11 +47,16 @@ struct FriendSuggestion: Identifiable, Hashable, Sendable {
     let mutualNames: [String]
     var id: String { userID }
 
-    /// "Friends with Priya and Sam", "Friends with Priya, Sam and 3 others", or
-    /// a bare count when no names resolved.
+    /// "3 mutual friends", or nil when none resolved.
+    ///
+    /// Deliberately the count and not the names. Naming the people who connect
+    /// you to a stranger tells that stranger's row more about your friends than
+    /// the suggestion needs, and the number alone is enough to answer the only
+    /// question being asked here: is this person actually near me in the graph?
+    /// `mutualNames` is still carried for the profile page, which is a place the
+    /// viewer chose to go.
     var mutualText: String? {
-        guard let summary = MutualFriends(count: mutualCount, names: mutualNames).summary else { return nil }
-        return mutualNames.isEmpty ? summary : "Friends with \(summary)"
+        MutualFriends(count: mutualCount, names: mutualNames).countSummary
     }
 }
 

@@ -18,10 +18,15 @@ struct StayLogisticsCard: View {
     let manual: HouseManual?
     let location: ListingLocation?
 
+    @Environment(CheckInKitStore.self) private var checkInKitStore
+
     private var manualContent: HouseManual? {
         guard let manual, !manual.isEmpty else { return nil }
         return manual
     }
+
+    /// The saved-to-disk copy of this stay's arrival essentials (feature 44).
+    private var kit: CheckInKit? { checkInKitStore.kit(for: stay.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -63,6 +68,18 @@ struct StayLogisticsCard: View {
             if let manual = manualContent {
                 Divider()
                 manualRows(manual)
+            } else if let kit, kit.hasContent {
+                // The live manual didn't load — most likely there is no network.
+                // The saved copy is exactly what this feature exists for, so show
+                // it rather than an empty card.
+                Divider()
+                savedKitRows(kit)
+            }
+
+            if kit?.hasContent == true {
+                Label("Saved on this phone, so it works without a signal", systemImage: "arrow.down.circle")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
         .padding()
@@ -106,6 +123,31 @@ struct StayLogisticsCard: View {
                     }
                 }
             }
+        }
+    }
+
+    /// The same rows as `manualRows`, read from the on-disk kit instead of the
+    /// live document, for when the live one couldn't be fetched.
+    @ViewBuilder
+    private func savedKitRows(_ kit: CheckInKit) -> some View {
+        Text("House manual")
+            .font(.subheadline).fontWeight(.semibold)
+
+        if let street = kit.street {
+            manualRow(icon: "mappin.and.ellipse", title: "Address", value: street)
+        }
+        if let instructions = kit.checkInInstructions {
+            manualRow(icon: "key", title: "Check-in", value: instructions)
+        }
+        if let keys = kit.keyHandoff {
+            manualRow(icon: "hand.raised", title: "Keys", value: keys)
+        }
+        let wifi = [kit.wifiNetwork, kit.wifiPassword].compactMap { $0 }.joined(separator: " · ")
+        if !wifi.isEmpty {
+            manualRow(icon: "wifi", title: "Wifi", value: wifi)
+        }
+        if let phone = kit.hostPhone {
+            manualRow(icon: "phone", title: "Host phone", value: phone)
         }
     }
 

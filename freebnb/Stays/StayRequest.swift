@@ -269,6 +269,16 @@ extension StayRequest {
 }
 
 extension [StayRequest] {
+    /// How many of these are waiting on `userID` to answer. Backs the Stays tab
+    /// badge, which means "someone is blocked on you" and nothing looser. Pure,
+    /// so the badge rule is testable without standing up a store and an auth
+    /// session.
+    func awaitingReplyCount(from userID: String) -> Int {
+        // An empty userID is a signed-out viewer; `awaitsReply` already refuses
+        // to match one, so this reduces to zero without a special case.
+        filter { $0.awaitsReply(from: userID) }.count
+    }
+
     /// Newest first. Requests without a server timestamp yet sort to the front
     /// so newly created pending items appear immediately.
     func sortedByDate() -> [StayRequest] {

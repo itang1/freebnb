@@ -33,5 +33,13 @@ extension View {
             .environment(ReviewStore(repository: InMemoryReviewsRepository()))
             .environment(NetworkMonitor(start: false))
             .environment(DeepLinkRouter())
+            // A temporary directory, so a preview never reads or writes the real
+            // kits (and so several previews can't fight over the same files).
+            .environment(CheckInKitStore(
+                files: CheckInKitFileStore(
+                    directory: URL.temporaryDirectory
+                        .appendingPathComponent("PreviewCheckInKits-\(UUID().uuidString)", isDirectory: true)
+                )
+            ))
     }
 }

@@ -334,10 +334,17 @@ struct ProfilePage: View {
 
     private var profileHeader: some View {
         VStack(spacing: 6) {
-            PersonAvatar(
-                systemImage: authManager.authMethod == .guest ? "person.slash" : "person.fill",
-                size: 100
-            )
+            Group {
+                // A guest has no account, so there is no stable identity to
+                // generate an avatar from — the crossed-out person says "not
+                // signed in" plainly, where a generated symbol would imply an
+                // account that doesn't exist.
+                if authManager.authMethod == .guest {
+                    PersonAvatar(systemImage: "person.slash", size: 100)
+                } else {
+                    GeneratedAvatar(seed: authManager.userID, size: 100)
+                }
+            }
             .padding(.top, 16)
 
             VStack(spacing: 4) {

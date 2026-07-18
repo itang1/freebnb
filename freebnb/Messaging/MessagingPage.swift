@@ -23,6 +23,7 @@ struct MessagingPage: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(NetworkMonitor.self) private var networkMonitor
+    @Environment(CheckInKitStore.self) private var checkInKitStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft = ""
@@ -75,6 +76,19 @@ struct MessagingPage: View {
         }
     }
 
+    /// The saved arrival kit for a stay at this person's place, when one is close
+    /// enough to matter. Only the guest's own stays produce a kit, so this is
+    /// naturally absent when the roles are the other way round.
+    private var arrivalKit: CheckInKit? {
+        let staysWithThem = requestStore.outgoingRequests.filter {
+            $0.hostUserID == otherUserID && $0.status == .accepted
+        }
+        return staysWithThem
+            .compactMap { checkInKitStore.kit(for: $0.id) }
+            .filter { $0.hasContent && CheckInKitBanner.isRelevant($0) }
+            .min { $0.checkIn < $1.checkIn }
+    }
+
     private var actions: MessagingRequestActions {
         MessagingRequestActions(requestStore: requestStore,
                                 messageStore: messageStore,
@@ -88,6 +102,13 @@ struct MessagingPage: View {
             // Listing context — shown when a specific listing is associated.
             if let listing {
                 ListingContextBanner(listing: listing, isMuted: isMuted)
+                Divider()
+            }
+
+            // Above the request banners: on arrival day this is the only thing on
+            // screen the guest is actually trying to reach.
+            if let arrivalKit {
+                CheckInKitBanner(kit: arrivalKit)
                 Divider()
             }
 
@@ -294,9 +315,17 @@ struct MessagingPage: View {
         }
     }
 
-    private func accept(_ request: StayRequest, hostNote: String?) async {
-        let succeeded = await perform { try await actions.accept(request, hostNote: hostNote) }
-        if succeeded { respondingTo = nil }
+    /// Returns nil on success, or the failure message for `AcceptSheet` to show.
+    /// Routed to the sheet rather than through `perform`, whose alert would be
+    /// swallowed behind the presented sheet. The sheet self-dismisses on success.
+    private func accept(_ request: StayRequest, hostNote: String?) async -> String? {
+        do {
+            try await actions.accept(request, hostNote: hostNote)
+            return nil
+        } catch {
+            log.error("stay request accept failed: \(error.localizedDescription, privacy: .public)")
+            return error.localizedDescription
+        }
     }
 
     /// Returns whether the action completed; on failure it logs and raises the alert.

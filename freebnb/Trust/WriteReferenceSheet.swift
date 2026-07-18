@@ -40,6 +40,9 @@ struct WriteReferenceSheet: View {
                     Text("Your reference")
                 } footer: {
                     VStack(alignment: .leading, spacing: 4) {
+                        // Says which of the two trust surfaces this is, at the
+                        // moment somebody is writing one.
+                        Text("A reference vouches for \(subjectName) as a guest, a host, or both. It carries no rating: reviews come from stays that actually happened.")
                         Text("Shown publicly on \(subjectName)'s profile, with your name.")
                         Text("\(trimmed.count) / \(CharacterReference.maxLength)")
                             .foregroundColor(trimmed.count > CharacterReference.maxLength ? .red : .secondary)

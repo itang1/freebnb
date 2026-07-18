@@ -14,13 +14,11 @@ struct ContentView: View {
     @Environment(FriendStore.self) private var friendStore
     @Environment(DeepLinkRouter.self) private var router
     @Environment(NetworkMonitor.self) private var networkMonitor
+    @Environment(CheckInKitStore.self) private var checkInKitStore
     @AppStorage(UserDefaultsKey.hasSeenOnboarding) private var hasSeenOnboarding = false
     @AppStorage(UserDefaultsKey.ageGateAccepted) private var ageGateAccepted = false
     @AppStorage(UserDefaultsKey.lastSeenWhatsNewVersion) private var lastSeenWhatsNewVersion = ""
     @State private var showOnboarding = false
-    // Set when the user answers onboarding's hosting step with "List My Place".
-    // The create-listing sheet can only present after the onboarding sheet has
-    // fully dismissed, so the intent is parked here and consumed in onDismiss.
     @State private var pendingHostListing = false
     @State private var showCreateListing = false
     @State private var showWhatsNew = false
@@ -47,6 +45,15 @@ struct ContentView: View {
         let saved = Set(userProfileStore.currentProfile?.savedListingIDs ?? [])
         guard !saved.isEmpty else { return [] }
         return homeStore.listings.filter { saved.contains($0.id) }
+    }
+
+    /// Cheap change key for the check-in kit sync: the guest's accepted stays and
+    /// their dates. Changes when one is accepted, moved, or cancelled, and stays
+    /// still when an unrelated snapshot arrives.
+    private var acceptedStayKey: [String] {
+        stayRequestStore.outgoingRequests
+            .filter { $0.status == .accepted }
+            .map { "\($0.id)-\($0.checkIn.timeIntervalSince1970)-\($0.checkOut.timeIntervalSince1970)" }
     }
 
     // Cheap change key for the Spotlight sync: the saved-and-loaded listing ids.
@@ -182,6 +189,28 @@ struct ContentView: View {
                     guard pending else { return }
                     selectedTab = 3
                     router.pendingFriendsTab = false
+                }
+                // Write the arrival essentials to disk while there is still a
+                // network to fetch them with (feature 44). Driven from here rather
+                // than from StayRequestStore because building a kit needs the
+                // listing's address and manual, which only HomeStore can fetch.
+                // Keyed on the accepted stays themselves, so a new acceptance, a
+                // date change, or a cancellation each re-reconcile.
+                .onChange(of: acceptedStayKey, initial: true) { _, _ in
+                    Task {
+                        await checkInKitStore.sync(
+                            stays: stayRequestStore.outgoingRequests,
+                            viewerID: authManager.userID
+                        ) { listingID in
+                            guard let home = homeStore.listings.first(where: { $0.id == listingID })
+                            else { return nil }
+                            // Both are cached after the first call, so a repeat
+                            // reconcile costs nothing.
+                            async let location = homeStore.location(for: listingID)
+                            async let manual = homeStore.manual(for: listingID)
+                            return await (home, location, manual)
+                        }
+                    }
                 }
                 // Keep the Spotlight index in step with the saved set (feature 40).
                 // Fires on appear and whenever a listing is saved/unsaved or the
