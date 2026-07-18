@@ -579,6 +579,9 @@ function stayRequest({ id, listingID, guestUserID, checkInDays, checkOutDays, st
     id,
     listingID,
     listingCity: home.address.city,
+    // Snapshotted like the city so a host thread, which is shared across all of
+    // their listings, can say which home the request is for.
+    listingTitle: home.title ?? null,
     listingHostName: home.hostName,
     hostUserID: home.hostUserID,
     guestUserID,

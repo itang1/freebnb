@@ -550,7 +550,11 @@ struct Home: Identifiable, Hashable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, hostUserID, hostName, address, description
+        // `title` belongs here or it is dropped in both directions: an explicit
+        // CodingKeys drives the synthesized encoder too, so leaving it out meant
+        // a host could name their listing and have the name silently discarded
+        // on save, and every listing decoded with a nil title.
+        case id, hostUserID, hostName, title, address, description
         case contactPreference, hostContactInfo, hostMotivation
         case sleeping, guestPolicy, amenities
         case cancellationPolicy
@@ -577,6 +581,7 @@ extension Home {
         id                 = try c.decodeIfPresent(String.self,               forKey: .id)                ?? UUID().uuidString
         hostUserID         = try c.decode(String.self,                         forKey: .hostUserID)
         hostName           = try c.decode(String.self,                         forKey: .hostName)
+        title              = try c.decodeIfPresent(String.self,               forKey: .title)
         address            = try c.decode(Address.self,                        forKey: .address)
         description        = try c.decodeIfPresent(String.self,               forKey: .description)
         contactPreference  = try c.decodeIfPresent(HostContactPreference.self, forKey: .contactPreference) ?? .inApp

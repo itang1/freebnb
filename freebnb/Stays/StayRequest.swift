@@ -8,20 +8,8 @@ import Foundation
 
 enum StayRequestStatus: String, Codable, Hashable, CaseIterable, Sendable {
     case pending   = "pending"
-    /// A host offered their place to a friend, and the friend hasn't answered yet
-    /// (feature 43). The mirror of `pending`: same document, same two parties,
-    /// same dates, but the host originated it and the *guest* is the one who
-    /// replies. This exists because every other host action in the app is a reply,
-    /// so a host with an empty week had nothing to do but wait to be asked.
-    ///
-    /// Reaches `accepted` through the same `acceptStayRequest` callable a pending
-    /// request does, because the double-booking guard has to be the same one.
     case offered   = "offered"
     case accepted  = "accepted"
-    /// The stay happened and is over. Reached either by a party tapping "Mark
-    /// complete" once the stay has begun, or by the nightly `expireCompletedStays`
-    /// sweep after checkout. This is the status that unlocks reviews and that
-    /// `trustStats` counts (feature 4).
     case completed = "completed"
     case declined  = "declined"
     case cancelled = "cancelled"
@@ -105,15 +93,8 @@ enum StayRequestError: LocalizedError {
 struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let listingID: String
-    // Denormalized so the request row is displayable without fetching the listing.
     let listingCity: String
-    // The listing's display title at request time, snapshotted like listingCity
-    // so a shared host thread can say which of their homes a request is for.
-    // Optional: requests created before the field, and listings with no custom
-    // title, decode cleanly as nil. Read through `listingLabel`.
     let listingTitle: String?
-    // Denormalized copy of the host's display name, rewritten in place when the
-    // host renames (L7); `var` so the in-memory repository can update it.
     var listingHostName: String
     let hostUserID: String
     let guestUserID: String
@@ -121,35 +102,11 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
     var checkOut: Date
     var guestNote: String?
     var hostNote: String?
-    // Number of guests and rough arrival time, captured on the request so the
-    // host isn't left guessing (feature 20). Optional so requests created before
-    // these fields decode cleanly; nil renders as "not specified".
     var guestCount: Int?
     var arrivalWindow: ArrivalWindow?
     var status: StayRequestStatus
-    /// Who started this — the guest asking, or the host offering (feature 43).
-    /// Written once at create and never rewritten.
-    ///
-    /// Needed because `status` stops being able to answer the question the moment
-    /// the stay moves on: an offer the guest accepted and a request the host
-    /// accepted are both just `accepted`, and a declined document could be a host
-    /// turning down a request or a guest turning down an offer. That is exactly
-    /// the hole `cancelledBy` was added to plug for cancellations, and the push
-    /// trigger has the same problem here — it cannot tell whom to notify without
-    /// knowing which way the stay was pointing.
-    ///
-    /// Nil on every request written before offers existed, which can only mean the
-    /// guest asked, since that was the only thing the app could do. Read through
-    /// `initiator`, never directly.
     var initiatedBy: String?
-    /// When the stay was marked complete. Nil for every other status; written
-    /// alongside `status == .completed` and never rewritten.
     var completedAt: Date?
-    /// Who called the stay off — the guest's or the host's user ID, written in
-    /// the same update as `status == .cancelled`. Both parties can cancel, and
-    /// the resulting document used to look identical either way, so the push
-    /// trigger could not tell whom to notify. Nil for every other status, and on
-    /// cancellations written before this field existed.
     var cancelledBy: String?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
@@ -200,8 +157,6 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
     }
 
-    /// Compact "2 guests · Morning arrival" line for request rows, or nil when
-    /// neither field was captured (older requests).
     var partySummary: String? {
         var parts: [String] = []
         if let guestCount { parts.append("\(guestCount) guest\(guestCount == 1 ? "" : "s")") }
@@ -209,9 +164,6 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// Half-open interval overlap: `[checkIn, checkOut)` against another window.
-    /// The one definition of "these dates collide" shared by stay acceptance
-    /// (the double-booking guard) and the request sheet's conflict warning.
     func overlaps(checkIn otherCheckIn: Date, checkOut otherCheckOut: Date) -> Bool {
         checkIn < otherCheckOut && otherCheckIn < checkOut
     }
@@ -224,11 +176,16 @@ extension StayRequest {
     /// How the requested home names itself in trip rows and the chat banner: the
     /// snapshotted title if there was one, otherwise the city. Mirrors
     /// `Home.displayTitle`'s intent for the denormalized copy.
-    var listingLabel: String {
-        if let listingTitle, !listingTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return listingTitle
-        }
-        return listingCity
+    var listingLabel: String { namedListingTitle ?? listingCity }
+
+    /// The snapshotted title only when the host actually set one (trimmed,
+    /// non-empty), the denormalized twin of `Home.customTitle`. Surfaces that
+    /// have their own fallback wording, like the chat banner's "your place",
+    /// need to know the difference; `listingLabel` is for the ones that don't.
+    var namedListingTitle: String? {
+        guard let listingTitle else { return nil }
+        let trimmed = listingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// "Mar 5 – Mar 9", the form used by every stay row and chat banner.

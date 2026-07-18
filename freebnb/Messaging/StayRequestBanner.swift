@@ -27,22 +27,29 @@ struct StayRequestBanner: View {
     private var viewerIsHost: Bool { request.role(of: viewerID) == .host }
     private var tint: Color { request.status == .accepted ? .green : .orange }
 
+    /// How the headline names the home. A thread is shared across all of a host's
+    /// listings, so an unnamed "your place" leaves a host with two homes guessing
+    /// which one a request is for. The title answers that when the host set one,
+    /// and hosts with a second listing now have to (see CreateListingPage).
+    private var hostPlace: String { request.namedListingTitle ?? "your place" }
+    private var guestPlace: String { request.namedListingTitle ?? "\(otherName)'s place" }
+
     /// Says which way the stay points, because status, dates, and a home name
     /// alone read identically from both sides.
     private var headline: String {
         switch request.status {
         case .offered:
-            return viewerIsHost
-                ? "Your offer to host \(otherName)"
-                : "\(otherName) offered you a place to stay"
+            if viewerIsHost { return "Your offer to host \(otherName) at \(hostPlace)" }
+            return request.namedListingTitle.map { "\(otherName) offered you \($0)" }
+                ?? "\(otherName) offered you a place to stay"
         case .accepted:
             return viewerIsHost
-                ? "\(otherName)'s stay at your place"
-                : "Your stay at \(otherName)'s place"
+                ? "\(otherName)'s stay at \(hostPlace)"
+                : "Your stay at \(guestPlace)"
         default:
             return viewerIsHost
-                ? "\(otherName) asked to stay at your place"
-                : "Your request to stay at \(otherName)'s place"
+                ? "\(otherName) asked to stay at \(hostPlace)"
+                : "Your request to stay at \(guestPlace)"
         }
     }
 
@@ -56,16 +63,19 @@ struct StayRequestBanner: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(headline)
                     .font(.subheadline.weight(.semibold))
+                    // Naming the home made the headline long enough to be
+                    // truncated by the action buttons beside it, which cut off
+                    // the very part that says which home. Let it wrap instead.
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
                     StatusBadge(status: request.status)
                     Text(request.dateRangeText)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                // Names the home this request is for. The thread is shared across
-                // all of a host's listings, so this (title if set, else city) is
-                // what tells two of them apart here.
-                Label(request.listingLabel, systemImage: "house.fill")
+                // Where the home is. Naming which home is the headline's job now,
+                // so this stays the city rather than repeating the title back.
+                Label(request.listingCity, systemImage: "house.fill")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .labelStyle(.titleAndIcon)

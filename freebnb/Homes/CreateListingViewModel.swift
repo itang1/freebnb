@@ -256,10 +256,21 @@ final class CreateListingViewModel {
     /// client checks the same bound so a save never round-trips only to bounce.
     static let titleMaxLength = 60
 
-    func canSave(displayName: String) -> Bool {
+    /// The title, trimmed, or nil when the host left it blank.
+    var trimmedTitle: String? {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// `titleRequired` comes from the view, which knows whether this host already
+    /// has another listing. A second home makes the "<hostName>'s place" fallback
+    /// ambiguous — both homes answer to it in the request sheet and the chat
+    /// banner — so the title stops being optional at that point.
+    func canSave(displayName: String, titleRequired: Bool) -> Bool {
         guard !isSaving else { return false }
         guard !displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard title.trimmingCharacters(in: .whitespacesAndNewlines).count <= Self.titleMaxLength else { return false }
+        guard !titleRequired || trimmedTitle != nil else { return false }
         guard !street.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !city.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !stateField.trimmingCharacters(in: .whitespaces).isEmpty else { return false }

@@ -84,7 +84,8 @@ struct CreateListingPage: View {
                     Button("Save") {
                         Task { if await saveListing() { dismiss() } }
                     }
-                    .disabled(!vm.canSave(displayName: userProfileStore.displayName ?? ""))
+                    .disabled(!vm.canSave(displayName: userProfileStore.displayName ?? "",
+                                          titleRequired: titleIsRequired))
                 }
             }
             .disabled(vm.isSaving)
@@ -302,14 +303,34 @@ struct CreateListingPage: View {
         }
     }
 
+    /// True when the host has another listing besides the one this form saves, so
+    /// the untitled "<hostName>'s place" fallback would name two homes at once.
+    /// `managedListings` also holds homes they only co-host, hence `isHostedBy`;
+    /// the target is excluded so editing your only listing never demands a title.
+    private var titleIsRequired: Bool {
+        let hostID = authManager.userID
+        guard !hostID.isEmpty else { return false }
+        return homeStore.managedListings.contains {
+            $0.isHostedBy(hostID) && $0.id != vm.mode.target?.id
+        }
+    }
+
     private var titleSection: some View {
-        Section("Listing name (optional)") {
+        Section(titleIsRequired ? "Listing name" : "Listing name (optional)") {
             TextField("e.g. Guest room by the Rose Bowl", text: $vm.title)
                 .textInputAutocapitalization(.words)
             if vm.title.trimmingCharacters(in: .whitespacesAndNewlines).count > CreateListingViewModel.titleMaxLength {
                 Text("Keep it under \(CreateListingViewModel.titleMaxLength) characters.")
                     .font(.caption)
                     .foregroundColor(.orange)
+            } else if titleIsRequired && vm.trimmedTitle == nil {
+                Text("You already have a listing, so this one needs a name. Without it both homes show as your name's place and guests can't tell which they're asking for.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            } else if titleIsRequired {
+                Text("Names this home wherever it stands alone: the request sheet, your stays, and the chat banner.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             } else {
                 Text("Helps people tell your homes apart if you list more than one. Left blank, guests see your name's place.")
                     .font(.caption)

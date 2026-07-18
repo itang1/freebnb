@@ -116,7 +116,29 @@ struct DuplicationTests {
     @Test func duplicateStartsWithNoStreetAndCannotBeSavedYet() {
         let vm = CreateListingViewModel(mode: .duplicate(makeHome()))
         #expect(vm.street.isEmpty)
-        #expect(!vm.canSave(displayName: "Host"))
+        #expect(!vm.canSave(displayName: "Host", titleRequired: false))
+    }
+
+    /// A host's second listing has to carry a title: without one both homes fall
+    /// back to "<hostName>'s place" and neither the request sheet nor the chat
+    /// banner can say which is which.
+    @Test func aSecondListingCannotBeSavedWithoutATitle() {
+        let vm = CreateListingViewModel(mode: .create)
+        vm.street = "1 Main St"
+        vm.city = "Pasadena"
+        vm.stateField = "CA"
+        vm.zip = "91101"
+        vm.sleepingCounts = [.bed: 1]
+
+        #expect(vm.canSave(displayName: "Host", titleRequired: false))
+        #expect(!vm.canSave(displayName: "Host", titleRequired: true))
+
+        // Whitespace is not a name.
+        vm.title = "   "
+        #expect(!vm.canSave(displayName: "Host", titleRequired: true))
+
+        vm.title = "The Clarinet Suite"
+        #expect(vm.canSave(displayName: "Host", titleRequired: true))
     }
 
     @Test func aFreshCreateFormMatchesAPristineDraft() {
@@ -282,6 +304,32 @@ struct ListingDraftPersistenceTests {
 
         vm.persistDraft(to: store, userID: userID)
         #expect(store.load(userID: userID)?.city == "Portland")
+    }
+
+    /// `Home` declares an explicit CodingKeys, which drives the encoder as well as
+    /// the decoder, and `title` was missing from it. So a host could name their
+    /// listing and have the name dropped on save, and every stored title decoded
+    /// as nil — which took the name out of the request sheet, the chat banner, and
+    /// the listing card all at once.
+    @Test func aListingTitleSurvivesARoundTrip() throws {
+        var home = HomeFixture.make()
+        home.title = "The Clarinet Suite"
+
+        let restored = try JSONDecoder().decode(Home.self, from: JSONEncoder().encode(home))
+
+        #expect(restored.title == "The Clarinet Suite")
+        #expect(restored.displayTitle == "The Clarinet Suite")
+    }
+
+    /// An untitled listing still has to name itself somehow.
+    @Test func anUntitledListingFallsBackToTheHostName() throws {
+        var home = HomeFixture.make()
+        home.title = nil
+
+        let restored = try JSONDecoder().decode(Home.self, from: JSONEncoder().encode(home))
+
+        #expect(restored.customTitle == nil)
+        #expect(restored.displayTitle == "\(home.hostName)'s place")
     }
 
     /// A draft is a convenience. If its stored form no longer decodes, the right
