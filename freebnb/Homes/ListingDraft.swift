@@ -63,6 +63,12 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var foodProvision: FoodProvision = .none
 
     var title = ""
+    /// Whether `title` is the host's own wording or just the name the form
+    /// suggested. Restoring a draft has to tell them apart: a suggested name
+    /// should keep tracking the city, and a typed one must never be overwritten.
+    /// Defaults to false, so drafts stored before this field decode as suggested,
+    /// which is the recoverable direction to be wrong in.
+    var titleWasEdited = false
     var description = ""
     var contactPreference: HostContactPreference = .inApp
     var hostContactInfo = ""
@@ -71,7 +77,15 @@ struct ListingDraft: Codable, Equatable, Sendable {
 
     /// True when the host has typed nothing. Such a draft is not worth storing,
     /// and restoring one would announce a "draft" that says nothing.
-    var isPristine: Bool { self == ListingDraft() }
+    ///
+    /// A suggested listing name doesn't count as typing: the form fills one in
+    /// the moment it opens, and without this exception simply opening the sheet
+    /// and closing it would leave a draft claiming work was in progress.
+    var isPristine: Bool {
+        var baseline = ListingDraft()
+        if !titleWasEdited { baseline.title = title }
+        return self == baseline
+    }
 
     /// Typed view of the sleeping arrangements. Both directions drop raw values
     /// that no longer name a surface and counts that aren't positive, so that

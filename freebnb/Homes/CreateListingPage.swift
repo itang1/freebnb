@@ -85,7 +85,7 @@ struct CreateListingPage: View {
                         Task { if await saveListing() { dismiss() } }
                     }
                     .disabled(!vm.canSave(displayName: userProfileStore.displayName ?? "",
-                                          titleRequired: titleIsRequired))
+                                          takenTitles: takenTitles))
                 }
             }
             .disabled(vm.isSaving)
@@ -93,7 +93,12 @@ struct CreateListingPage: View {
                 // Before loadStreet, which no-ops on a street the draft restored.
                 vm.restoreDraft(from: draftStore, userID: authManager.userID)
                 await vm.loadStreet(homeStore: homeStore)
+                suggestTitle()
             }
+            // The suggested name carries the city, so it follows the address until
+            // the host types a name of their own.
+            .onChange(of: vm.city) { _, _ in suggestTitle() }
+            .onChange(of: userProfileStore.displayName) { _, _ in suggestTitle() }
             // Autosave rather than prompting on Cancel: the sheet can also leave by
             // a swipe down, which no confirmation dialog gets to intercept.
             .onChange(of: vm.draft) { _, _ in
@@ -103,6 +108,14 @@ struct CreateListingPage: View {
     }
 
     // MARK: - Actions
+
+    /// Offers a name for this listing, unless the host has already typed one.
+    private func suggestTitle() {
+        vm.applySuggestedTitleIfUntouched(
+            hostName: userProfileStore.displayName ?? "",
+            taken: takenTitles
+        )
+    }
 
     /// Bridges the toolbar and the "save without map location" button to the
     /// view model. Returns `true` when the sheet should dismiss.
@@ -303,36 +316,31 @@ struct CreateListingPage: View {
         }
     }
 
-    /// True when the host has another listing besides the one this form saves, so
-    /// the untitled "<hostName>'s place" fallback would name two homes at once.
-    /// `managedListings` also holds homes they only co-host, hence `isHostedBy`;
-    /// the target is excluded so editing your only listing never demands a title.
-    private var titleIsRequired: Bool {
+    /// The names the host's other listings already use, which this one may not
+    /// reuse. `managedListings` also holds homes they only co-host, hence
+    /// `isHostedBy`; the listing being edited is excluded so saving an edit
+    /// doesn't collide with itself.
+    private var takenTitles: Set<String> {
         let hostID = authManager.userID
-        guard !hostID.isEmpty else { return false }
-        return homeStore.managedListings.contains {
-            $0.isHostedBy(hostID) && $0.id != vm.mode.target?.id
-        }
+        guard !hostID.isEmpty else { return [] }
+        return Set(homeStore.managedListings
+            .filter { $0.isHostedBy(hostID) && $0.id != vm.mode.target?.id }
+            .compactMap(\.customTitle))
     }
 
     private var titleSection: some View {
-        Section(titleIsRequired ? "Listing name" : "Listing name (optional)") {
+        Section("Listing name") {
             TextField("e.g. Guest room by the Rose Bowl", text: $vm.title)
                 .textInputAutocapitalization(.words)
-            if vm.title.trimmingCharacters(in: .whitespacesAndNewlines).count > CreateListingViewModel.titleMaxLength {
-                Text("Keep it under \(CreateListingViewModel.titleMaxLength) characters.")
+                // Latches on the first keystroke so the suggestion stops
+                // following the city once the host has made the name their own.
+                .onChange(of: vm.title) { _, _ in vm.noteTitleChanged() }
+            if let problem = vm.titleProblem(taken: takenTitles) {
+                Text(problem)
                     .font(.caption)
                     .foregroundColor(.orange)
-            } else if titleIsRequired && vm.trimmedTitle == nil {
-                Text("You already have a listing, so this one needs a name. Without it both homes show as your name's place and guests can't tell which they're asking for.")
-                    .font(.caption)
-                    .foregroundColor(.orange)
-            } else if titleIsRequired {
-                Text("Names this home wherever it stands alone: the request sheet, your stays, and the chat banner.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             } else {
-                Text("Helps people tell your homes apart if you list more than one. Left blank, guests see your name's place.")
+                Text("Names this home wherever it stands alone: the request sheet, your stays, and the chat banner.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

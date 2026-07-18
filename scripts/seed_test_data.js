@@ -8,10 +8,11 @@
 // the real freebnb-6814a project unless you pass --prod AND set
 // SEED_CONFIRM_PROD=1.
 //
-// Prod additionally requires SEED_PROD_PASSWORD (see EMULATOR_PASSWORD below):
+// --prod seeds data only and never touches an existing Auth password, so
+// editing prod's demo content needs no secret. Pass --rotate-passwords (with
+// SEED_PROD_PASSWORD) on the rare run that should reset the cast's sign-in:
 // the cast is real in prod, this file is public, and a password committed here
-// would be an open door to every listing the cast can see. Re-running --prod
-// with a new SEED_PROD_PASSWORD rotates the whole cast.
+// would be an open door to every listing the cast can see.
 //
 // Usage:
 //   1. firebase emulators:start --only auth,firestore
@@ -60,23 +61,33 @@ if (useProd && process.env.SEED_CONFIRM_PROD !== "1") {
 // manager, or `read -s`), and note that anyone who learns it gets whatever the
 // cast can see.
 const EMULATOR_PASSWORD = "emulator-only";
+
+// Editing prod's demo data is routine; rotating the cast's password is not.
+// Those used to be the same operation, so every content fix demanded the
+// secret and reset 16 real accounts as a side effect. They're split now:
+// --prod alone leaves Auth passwords untouched, and --rotate-passwords is the
+// explicit opt-in that changes them.
+const rotatePasswords = process.argv.includes("--rotate-passwords");
 const prodPassword = process.env.SEED_PROD_PASSWORD;
-if (useProd && !prodPassword) {
+if (useProd && rotatePasswords && !prodPassword) {
   console.error(
-    "Refusing to seed production without SEED_PROD_PASSWORD. The cast's prod\n" +
-    "password must not live in this repo — the repo is public. Set it to\n" +
-    "something only you know:\n" +
-    "  SEED_PROD_PASSWORD='...' SEED_CONFIRM_PROD=1 node scripts/seed_test_data.js --prod\n" +
-    "Re-running with a new value rotates every cast account's password."
+    "--rotate-passwords needs SEED_PROD_PASSWORD. The cast's prod password must\n" +
+    "not live in this repo — the repo is public. Set it to something only you\n" +
+    "know:\n" +
+    "  SEED_PROD_PASSWORD='...' SEED_CONFIRM_PROD=1 node scripts/seed_test_data.js --prod --rotate-passwords\n" +
+    "Drop --rotate-passwords to seed data without touching any password."
   );
   process.exit(1);
 }
-if (useProd && prodPassword.length < 6) {
+if (useProd && rotatePasswords && prodPassword.length < 6) {
   // Firebase's own floor; failing here beats failing halfway through the cast.
   console.error("SEED_PROD_PASSWORD must be at least 6 characters.");
   process.exit(1);
 }
+// Emulator accounts protect nothing, so they always get the shared throwaway.
+// In prod a password is only ever written on an explicit rotation.
 const castPassword = useProd ? prodPassword : EMULATOR_PASSWORD;
+const writesPasswords = !useProd || rotatePasswords;
 
 if (!useProd) {
   process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "localhost:8080";
@@ -259,6 +270,7 @@ const homes = [
     id: "seed-home-pearl-1",
     hostUserID: "seed-host-pearl",
     hostName: "Pearl Krabs",
+    title: "The Hollywood Loft",
     address: { city: "Los Angeles", state: "CA", zip: "90028" },
     location: { street: "6801 Hollywood Boulevard", latitude: 34.1026902, longitude: -118.3404676 },
     description: "Bright loft steps from the mall, perfect for a shopping weekend. Comes with unlimited playlists and a walk-in closet you are welcome to be jealous of. Squad sleepovers encouraged.",
@@ -274,6 +286,7 @@ const homes = [
     id: "seed-home-larry-1",
     hostUserID: "seed-host-larry",
     hostName: "Larry the Lobster",
+    title: "The Mission Beach Crash Pad",
     address: { city: "San Diego", state: "CA", zip: "92109" },
     location: { street: "3146 Mission Boulevard", latitude: 32.7708880, longitude: -117.2520465 },
     description: "Beachfront crash pad for active guests. Home gym, protein bar, and a paddleboard rack by the door. We lift at sunrise, no excuses. Towels provided, gains not guaranteed.",
@@ -289,6 +302,7 @@ const homes = [
     id: "seed-home-puff-1",
     hostUserID: "seed-host-puff",
     hostName: "Mrs. Puff",
+    title: "The Harborside Room",
     address: { city: "Annapolis", state: "MD", zip: "21401" },
     location: { street: "80 Compromise Street", latitude: 38.9757572, longitude: -76.4855636 },
     description: "Calm harborside room near the boating school. Quiet, tidy, and absolutely no driving lessons on the premises, thank you. A cup of tea and an early bedtime await.",
@@ -304,6 +318,7 @@ const homes = [
     id: "seed-home-plankton-1",
     hostUserID: "seed-host-plankton",
     hostName: "Sheldon Plankton",
+    title: "The Peninsula Studio",
     address: { city: "Menlo Park", state: "CA", zip: "94025" },
     location: { street: "1 Hacker Way", latitude: 37.4846680, longitude: -122.1483655 },
     description: "A very small but very smart studio in the heart of the peninsula. Wired for a home lab and late-night scheming. Friends only, because I do not trust the general public with the secret formula.",
@@ -387,6 +402,7 @@ const homes = [
     id: "seed-home-karen-1",
     hostUserID: "seed-host-karen",
     hostName: "Karen Plankton",
+    title: "The Downtown Unit",
     address: { city: "San Jose", state: "CA", zip: "95113" },
     location: { street: "201 South Market Street", latitude: 37.3314040, longitude: -121.8901566 },
     description: "A sleek, fully-automated smart loft downtown. Lights, blinds, and coffee all voice-controlled by yours truly. I will remind you of checkout precisely on time. Sarcasm included at no extra charge.",
@@ -402,6 +418,7 @@ const homes = [
     id: "seed-home-neptune-1",
     hostUserID: "seed-host-neptune",
     hostName: "King Neptune",
+    title: "The Newport Suite",
     address: { city: "Newport", state: "RI", zip: "02840" },
     location: { street: "367 Bellevue Avenue", latitude: 41.4777971, longitude: -71.3088718 },
     description: "A gilded seaside mansion for guests of impeccable taste. Ballroom, private beach, and a trident collection you may look at but not touch. I am a king, so do mind your manners.",
@@ -417,6 +434,7 @@ const homes = [
     id: "seed-home-mermaidman-1",
     hostUserID: "seed-host-mermaidman",
     hostName: "Mermaid Man",
+    title: "The Conch Fortress",
     address: { city: "Sarasota", state: "FL", zip: "34236" },
     location: { street: "1565 1st Street", latitude: 27.3373443, longitude: -82.5393616 },
     description: "A cozy room at the Shady Shoals rest home for retired heroes. Early dinners, afternoon naps, and the occasional crime-fighting drill. EVIL is not permitted on the premises. Barnacle Boy may or may not be around.",
@@ -475,41 +493,52 @@ function daysFromNow(n) {
   return Timestamp.fromDate(new Date(Date.now() + n * 86_400_000));
 }
 
-// How many months of blocked first weeks every seeded listing carries.
-const BLOCKED_FIRST_WEEK_MONTHS = 12;
+// How many months of blocked second weeks every seeded listing carries.
+const BLOCKED_SECOND_WEEK_MONTHS = 12;
 
-// The 1st through the 7th of each of the next `BLOCKED_FIRST_WEEK_MONTHS`
+// The 8th through the 14th of each of the next `BLOCKED_SECOND_WEEK_MONTHS`
 // months, starting with the current one. Uniform across the cast on purpose:
 // whichever character you sign in as, the home you try to book has the same
 // stretch greyed out, so the request sheet's conflict path is one tap away
-// instead of something you have to set up by hand first.
+// instead of something you have to set up by hand first. Sitting in the second
+// week rather than the first leaves bookable days on both sides of the block.
 //
-// Half-open [start, end) to match DateRange in Swift, so an end of the 8th at
-// midnight blocks the 7th and leaves the 8th bookable.
-function firstWeekBlocks() {
+// Half-open [start, end) to match DateRange in Swift, so an end of the 15th at
+// midnight blocks the 14th and leaves the 15th bookable.
+function secondWeekBlocks() {
   const ranges = [];
   const today = new Date();
-  for (let i = 0; i < BLOCKED_FIRST_WEEK_MONTHS; i += 1) {
-    const start = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    const end = new Date(today.getFullYear(), today.getMonth() + i, 8);
+  for (let i = 0; i < BLOCKED_SECOND_WEEK_MONTHS; i += 1) {
+    const start = new Date(today.getFullYear(), today.getMonth() + i, 8);
+    const end = new Date(today.getFullYear(), today.getMonth() + i, 15);
     ranges.push({ start: Timestamp.fromDate(start), end: Timestamp.fromDate(end) });
   }
   return ranges;
 }
 
 async function seedUsers() {
+  const strandedUIDs = [];
   for (const u of users) {
-    await auth.createUser({ uid: u.uid, email: u.email, password: castPassword, displayName: u.displayName })
+    // A brand-new account needs some password at creation time. On a run that
+    // isn't rotating, use an unguessable throwaway nobody records rather than
+    // inventing a shared one: the doc gets seeded, and the account waits for a
+    // real --rotate-passwords run before anyone can sign into it.
+    const born = writesPasswords ? castPassword : require("crypto").randomUUID();
+    await auth.createUser({ uid: u.uid, email: u.email, password: born, displayName: u.displayName })
+      .then(() => {
+        if (!writesPasswords) strandedUIDs.push(u.email);
+      })
       .catch(async (err) => {
         if (err.code !== "auth/uid-already-exists") throw err;
         // createUser sets a password; it never resets one. Without this, an
         // account that already exists keeps whatever password it was born with
         // forever — which is how the cast went on answering to a committed
-        // password in prod. Updating here makes a re-run a rotation.
+        // password in prod. Passing `password` here makes a re-run a rotation,
+        // so it's included only when that's what was asked for.
         await auth.updateUser(u.uid, {
           email: u.email,
-          password: castPassword,
           displayName: u.displayName,
+          ...(writesPasswords ? { password: castPassword } : {}),
         });
       });
     await db.collection("users").doc(u.uid).set({
@@ -528,6 +557,16 @@ async function seedUsers() {
     }, { merge: true });
   }
   console.log(`Seeded ${users.length} users:`, users.map((u) => u.email).join(", "));
+  if (!writesPasswords) {
+    console.log("Left every existing password alone (no --rotate-passwords).");
+  }
+  if (strandedUIDs.length) {
+    console.log(
+      `Created ${strandedUIDs.length} new account(s) with a random password nobody has: ` +
+      `${strandedUIDs.join(", ")}\n` +
+      "Re-run with --rotate-passwords when you want to be able to sign in as them."
+    );
+  }
 }
 
 // Recursively deletes a whole collection (documents plus any subcollections).
@@ -584,7 +623,7 @@ async function seedHomes() {
     publicListing.geohash = geohashEncode(publicListing.latitude, publicListing.longitude);
     // Host-blocked, not booked: bookedDateRanges is server-owned and recomputed
     // from accepted stays, so seeding into it would just be overwritten.
-    publicListing.blockedDateRanges = firstWeekBlocks();
+    publicListing.blockedDateRanges = secondWeekBlocks();
     // The feed orders by createdAt, and an order-by excludes docs missing the
     // field, so a seeded listing without one never shows. Stamp it (L3).
     publicListing.createdAt = now;
@@ -993,7 +1032,9 @@ async function main() {
   await seedTrustStats();
   console.log(
     useProd
-      ? "Done. The cast now answers to SEED_PROD_PASSWORD; nothing in this repo unlocks them."
+      ? (rotatePasswords
+        ? "Done. The cast now answers to SEED_PROD_PASSWORD; nothing in this repo unlocks them."
+        : "Done. Data only — every cast password is unchanged.")
       : `Done. Sign in with any seed-*@seed.freebnb.test / ${EMULATOR_PASSWORD} account (or the dev@freebnb.test button in DEBUG builds) to explore.`
   );
   process.exit(0);

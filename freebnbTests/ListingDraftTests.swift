@@ -116,29 +116,170 @@ struct DuplicationTests {
     @Test func duplicateStartsWithNoStreetAndCannotBeSavedYet() {
         let vm = CreateListingViewModel(mode: .duplicate(makeHome()))
         #expect(vm.street.isEmpty)
-        #expect(!vm.canSave(displayName: "Host", titleRequired: false))
+        #expect(!vm.canSave(displayName: "Host"))
     }
 
-    /// A host's second listing has to carry a title: without one both homes fall
-    /// back to "<hostName>'s place" and neither the request sheet nor the chat
-    /// banner can say which is which.
-    @Test func aSecondListingCannotBeSavedWithoutATitle() {
-        let vm = CreateListingViewModel(mode: .create)
+    /// A fillable form, save-ready except for whatever the caller changes.
+    private func readyToSave(mode: ListingFormMode = .create) -> CreateListingViewModel {
+        let vm = CreateListingViewModel(mode: mode)
         vm.street = "1 Main St"
         vm.city = "Pasadena"
         vm.stateField = "CA"
         vm.zip = "91101"
         vm.sleepingCounts = [.bed: 1]
+        vm.title = "The Attic Room"
+        return vm
+    }
 
-        #expect(vm.canSave(displayName: "Host", titleRequired: false))
-        #expect(!vm.canSave(displayName: "Host", titleRequired: true))
+    /// Every listing carries a name now. Without one the request sheet and the
+    /// chat banner fall back to "<hostName>'s place", which says nothing once a
+    /// host has a second home.
+    @Test func aListingCannotBeSavedWithoutATitle() {
+        let vm = readyToSave()
+        #expect(vm.canSave(displayName: "Host"))
+
+        vm.title = ""
+        #expect(!vm.canSave(displayName: "Host"))
 
         // Whitespace is not a name.
         vm.title = "   "
-        #expect(!vm.canSave(displayName: "Host", titleRequired: true))
+        #expect(!vm.canSave(displayName: "Host"))
+    }
 
-        vm.title = "The Clarinet Suite"
-        #expect(vm.canSave(displayName: "Host", titleRequired: true))
+    /// Two homes sharing a name leaves every surface that names one of them
+    /// unable to say which, which is the whole point of the field.
+    @Test func aListingCannotReuseAnotherListingsTitle() {
+        let vm = readyToSave()
+        #expect(!vm.canSave(displayName: "Host", takenTitles: ["The Attic Room"]))
+        // Case and surrounding space don't make it a different name.
+        #expect(!vm.canSave(displayName: "Host", takenTitles: ["the attic room"]))
+        vm.title = "  The Attic Room  "
+        #expect(!vm.canSave(displayName: "Host", takenTitles: ["The Attic Room"]))
+
+        vm.title = "The Garden Studio"
+        #expect(vm.canSave(displayName: "Host", takenTitles: ["The Attic Room"]))
+    }
+
+    /// The host shouldn't have to name their first listing at all.
+    @Test func aFirstListingIsNamedAfterTheHostAndCity() {
+        let vm = CreateListingViewModel(mode: .create)
+        vm.city = "Pasadena"
+        vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
+        #expect(vm.title == "Devna's Place in Pasadena")
+    }
+
+    /// A second home in the same city can't take the same suggestion as the
+    /// first, so the suggestion counts instead.
+    @Test func laterListingsInOneCityGetOrdinalSuggestions() {
+        let vm = CreateListingViewModel(mode: .create)
+        vm.city = "Pasadena"
+
+        vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: ["Devna's Place in Pasadena"])
+        #expect(vm.title == "Devna's Second Place in Pasadena")
+
+        vm.applySuggestedTitleIfUntouched(
+            hostName: "Devna",
+            taken: ["Devna's Place in Pasadena", "Devna's Second Place in Pasadena"]
+        )
+        #expect(vm.title == "Devna's Third Place in Pasadena")
+    }
+
+    /// A second home in a different city is already distinct, so it keeps the
+    /// plain form rather than being counted.
+    @Test func aListingInANewCityKeepsThePlainSuggestion() {
+        let vm = CreateListingViewModel(mode: .create)
+        vm.city = "Ojai"
+        vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: ["Devna's Place in Pasadena"])
+        #expect(vm.title == "Devna's Place in Ojai")
+    }
+
+    /// The suggestion follows the city while the field is untouched, and stops
+    /// the moment the host makes the name their own.
+    @Test func aTypedTitleIsNeverOverwrittenByASuggestion() {
+        let vm = CreateListingViewModel(mode: .create)
+        vm.city = "Pasadena"
+        vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
+        vm.noteTitleChanged()
+        #expect(!vm.titleWasEdited, "applying a suggestion is not the host editing it")
+
+        // The address changes; the untouched suggestion follows it.
+        vm.city = "Ojai"
+        vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
+        #expect(vm.title == "Devna's Place in Ojai")
+
+        // Now the host types, and nothing overwrites them again.
+        vm.title = "The Attic Room"
+        vm.noteTitleChanged()
+        #expect(vm.titleWasEdited)
+        vm.city = "Ventura"
+        vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
+        #expect(vm.title == "The Attic Room")
+    }
+
+    /// The form names the listing the moment it opens. That must not count as
+    /// work in progress, or opening the sheet and closing it would leave a draft
+    /// claiming the host had started one.
+    @Test func aSuggestedNameAloneLeavesTheDraftPristine() {
+        let vm = CreateListingViewModel(mode: .create)
+        vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
+        #expect(!vm.title.isEmpty)
+        #expect(vm.draft.isPristine)
+
+        vm.title = "The Attic Room"
+        vm.noteTitleChanged()
+        #expect(!vm.draft.isPristine)
+    }
+
+    /// Restoring a draft has to remember whether the host wrote the name or the
+    /// form suggested it. Inferring it from "the title isn't empty" made every
+    /// restored draft look host-written, which froze the suggestion so it stopped
+    /// following the city.
+    @Test func aRestoredDraftRemembersWhoWroteTheTitle() {
+        let userID = "host"
+        let store = ListingDraftStore(defaults: makeDefaults())
+
+        var suggested = ListingDraft()
+        suggested.city = "Pasadena"
+        suggested.title = "Devna's Place in Pasadena"
+        suggested.titleWasEdited = false
+        store.save(suggested, userID: userID)
+
+        let vm = CreateListingViewModel(mode: .create)
+        vm.restoreDraft(from: store, userID: userID)
+        #expect(!vm.titleWasEdited)
+        vm.city = "Ojai"
+        vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
+        #expect(vm.title == "Devna's Place in Ojai")
+
+        var typed = suggested
+        typed.title = "The Attic Room"
+        typed.titleWasEdited = true
+        store.save(typed, userID: userID)
+
+        let second = CreateListingViewModel(mode: .create)
+        second.restoreDraft(from: store, userID: userID)
+        #expect(second.titleWasEdited)
+        second.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
+        #expect(second.title == "The Attic Room")
+    }
+
+    /// A duplicate copies the source listing's name, which is exactly the one
+    /// name it may not keep. It starts untouched so a fresh suggestion replaces
+    /// it; an edit keeps the name the host already chose.
+    @Test func aDuplicateTakesAFreshNameButAnEditKeepsItsOwn() {
+        var home = makeHome()
+        home.title = "The Attic Room"
+
+        let duplicate = CreateListingViewModel(mode: .duplicate(home))
+        #expect(!duplicate.titleWasEdited)
+        duplicate.city = "Pasadena"
+        duplicate.applySuggestedTitleIfUntouched(hostName: "Devna", taken: ["The Attic Room"])
+        #expect(duplicate.title == "Devna's Place in Pasadena")
+
+        let edit = CreateListingViewModel(mode: .edit(home))
+        #expect(edit.titleWasEdited)
+        edit.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
+        #expect(edit.title == "The Attic Room")
     }
 
     @Test func aFreshCreateFormMatchesAPristineDraft() {

@@ -124,6 +124,12 @@ final class CreateListingViewModel {
         providesToiletries = source?.amenities.providesToiletries ?? false
         foodProvision = source?.amenities.foodProvision ?? .none
         title = source?.title ?? ""
+        // An edit keeps the name the host already chose. A duplicate must not:
+        // the copy would collide with the listing it came from, so it starts
+        // untouched and takes a fresh suggestion instead.
+        if case .edit = mode, source?.title?.isEmpty == false {
+            titleWasEdited = true
+        }
         description = source?.description ?? ""
         contactPreference = source?.contactPreference ?? .inApp
         hostContactInfo = source?.hostContactInfo ?? ""
@@ -182,6 +188,7 @@ final class CreateListingViewModel {
             draft.providesToiletries = providesToiletries
             draft.foodProvision = foodProvision
             draft.title = title
+            draft.titleWasEdited = titleWasEdited
             draft.description = description
             draft.contactPreference = contactPreference
             draft.hostContactInfo = hostContactInfo
@@ -223,6 +230,7 @@ final class CreateListingViewModel {
             providesToiletries = newValue.providesToiletries
             foodProvision = newValue.foodProvision
             title = newValue.title
+            titleWasEdited = newValue.titleWasEdited
             description = newValue.description
             contactPreference = newValue.contactPreference
             hostContactInfo = newValue.hostContactInfo
@@ -262,15 +270,86 @@ final class CreateListingViewModel {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// `titleRequired` comes from the view, which knows whether this host already
-    /// has another listing. A second home makes the "<hostName>'s place" fallback
-    /// ambiguous — both homes answer to it in the request sheet and the chat
-    /// banner — so the title stops being optional at that point.
-    func canSave(displayName: String, titleRequired: Bool) -> Bool {
+    /// Every listing needs a name, so the form fills one in and the host only
+    /// types if they want something better. Suggestions stop the moment they do:
+    /// `titleWasEdited` latches on the first keystroke and never unlatches, so
+    /// nothing the form computes later overwrites what they wrote.
+    var titleWasEdited = false
+
+    /// The suggested name for this listing: "<Host>'s Place in <City>", made
+    /// distinct when the host already used that name for another home. A second
+    /// place in a new city is distinct on the city alone; a second place in the
+    /// same city takes an ordinal ("<Host>'s Second Place in Pasadena").
+    ///
+    /// `taken` is the host's other listing titles, which is why this can't be a
+    /// plain computed property: only the view can see them.
+    func suggestedTitle(hostName: String, taken: Set<String>) -> String {
+        let name = hostName.trimmingCharacters(in: .whitespaces)
+        let place = city.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return "" }
+        let suffix = place.isEmpty ? "" : " in \(place)"
+        let lowercasedTaken = Set(taken.map { $0.lowercased() })
+
+        let plain = "\(name)'s Place\(suffix)"
+        if !lowercasedTaken.contains(plain.lowercased()) { return plain }
+
+        // Ordinals read better than "(2)" for the handful of homes anyone
+        // realistically lists; past that, fall back to counting.
+        let ordinals = ["Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth"]
+        for ordinal in ordinals {
+            let candidate = "\(name)'s \(ordinal) Place\(suffix)"
+            if !lowercasedTaken.contains(candidate.lowercased()) { return candidate }
+        }
+        var n = ordinals.count + 2
+        while lowercasedTaken.contains("\(plain) (\(n))".lowercased()) { n += 1 }
+        return "\(plain) (\(n))"
+    }
+
+    /// The last value this form wrote into `title` itself, so `noteTitleChanged`
+    /// can tell the host's typing apart from its own suggestion.
+    private var lastSuggestion: String?
+
+    /// Fills in a suggested title, unless the host has already typed one. Called
+    /// as the form loads and as the city changes, so the suggestion tracks the
+    /// address until the moment the host takes the field over.
+    func applySuggestedTitleIfUntouched(hostName: String, taken: Set<String>) {
+        guard !titleWasEdited else { return }
+        let suggestion = suggestedTitle(hostName: hostName, taken: taken)
+        guard suggestion != title else { return }
+        title = suggestion
+        lastSuggestion = suggestion
+    }
+
+    /// Call when the title field changes. Latches `titleWasEdited` only for a
+    /// change this form didn't make, so applying a suggestion doesn't count as
+    /// the host editing it and stop later suggestions.
+    func noteTitleChanged() {
+        if title != lastSuggestion { titleWasEdited = true }
+    }
+
+    /// Why a title is not acceptable, or nil when it is. `taken` is the host's
+    /// other listings' titles; two homes sharing a name would leave the request
+    /// sheet and the chat banner unable to say which is which, which is the whole
+    /// point of the field.
+    func titleProblem(taken: Set<String>) -> String? {
+        guard let trimmed = trimmedTitle else {
+            return "Give this listing a name so you and your guests can tell it from your other homes."
+        }
+        if trimmed.count > Self.titleMaxLength {
+            return "Keep it under \(Self.titleMaxLength) characters."
+        }
+        if taken.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return "You already have a listing called that. Give this one a different name."
+        }
+        return nil
+    }
+
+    /// `taken` comes from the view, which is the only side that can see the
+    /// host's other listings.
+    func canSave(displayName: String, takenTitles: Set<String> = []) -> Bool {
         guard !isSaving else { return false }
         guard !displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
-        guard title.trimmingCharacters(in: .whitespacesAndNewlines).count <= Self.titleMaxLength else { return false }
-        guard !titleRequired || trimmedTitle != nil else { return false }
+        guard titleProblem(taken: takenTitles) == nil else { return false }
         guard !street.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !city.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard !stateField.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
