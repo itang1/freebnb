@@ -60,35 +60,6 @@ struct HomeDetailPage: View {
         }
     }
 
-    /// The guest's read-only view of the same grid the host fills in (feature 16).
-    /// Three months of grid is what fits before the page turns into a calendar
-    /// app; a guest planning further out will be asking the host anyway.
-    ///
-    /// Shown only when the host has actually marked something unavailable. A
-    /// listing with nothing blocked says nothing here rather than opening with
-    /// "every upcoming date is open" — a promise no host made, and the reason a
-    /// friend asking a friend is still the way to settle a date.
-    @ViewBuilder
-    private var availabilitySection: some View {
-        // Blocked and booked merged: a guest sees one "unavailable" grid and can't
-        // tell a host-blocked day from one an accepted stay has taken.
-        let blocked = AvailabilityCalendar.blockedDays(
-            in: AvailabilityCalendar.upcoming(home.unavailableRanges)
-        )
-        if !blocked.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                Spacer(minLength: 10)
-                Text("Availability")
-                    .font(.headline)
-
-                AvailabilityLegend()
-                ForEach(AvailabilityCalendar.months(count: 3), id: \.self) { month in
-                    AvailabilityMonthGrid(month: month, markedDays: blocked)
-                }
-            }
-        }
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -140,10 +111,13 @@ struct HomeDetailPage: View {
                 mapSection
 
                 Button(action: openInMaps) {
+                    // Teal, not coral: opening Maps is a utility, and coral is
+                    // reserved for the one action this screen exists for
+                    // (messaging the host below).
                     Text("Open in Apple Maps")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.callToAction)
+                        .background(Color.accent)
                         .foregroundColor(.onAccent)
                         .cornerRadius(10)
                 }
@@ -259,9 +233,6 @@ struct HomeDetailPage: View {
                     .accessibilityElement(children: .combine)
                 }
                 .font(.subheadline)
-
-                // MARK: Availability
-                availabilitySection
 
                 // MARK: Cancellation Policy
                 let policy = home.cancellationPolicy ?? .flexible
@@ -592,7 +563,9 @@ extension HomeDetailPage {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accent)
+                        // Coral marks the screen's one primary action; everything
+                        // else on the page stays in brand teal.
+                        .background(Color.callToAction)
                         .foregroundColor(.onAccent)
                         .cornerRadius(10)
                     }
