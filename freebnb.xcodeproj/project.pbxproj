@@ -13,10 +13,8 @@
 		FCA1F5762F94741C00045A12 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F5752F94741C00045A12 /* FirebaseCore */; };
 		FCA1F5782F94742D00045A12 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F5772F94742D00045A12 /* FirebaseAuth */; };
 		FCA1F5802F960DE000045A12 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F57F2F960DE000045A12 /* FirebaseFirestore */; };
-		FCA1F5902F97273B00045A12 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = FCA1F58F2F97273B00045A12 /* FirebaseStorage */; };
 		FCAA00022FA000000000AA01 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00012FA000000000AA01 /* FirebaseCrashlytics */; };
 		FCAA00042FA000000000AA01 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00032FA000000000AA01 /* FirebaseAnalytics */; };
-		FCAA00062FA000000000AA01 /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00052FA000000000AA01 /* FirebasePerformance */; };
 		FCAA00082FA000000000AA01 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = FCAA00072FA000000000AA01 /* FirebaseFunctions */; };
 		FCDFEB2A300770A1002BD75D /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = FCDFEB29300770A1002BD75D /* FirebaseAppCheck */; };
 		FCDFEC6F3008B8EB002BD75D /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FCDFEC6E3008B8EB002BD75D /* WidgetKit.framework */; };
@@ -139,13 +137,11 @@
 			files = (
 				FCDFEC943008F48E002BD75D /* FirebaseMessaging in Frameworks */,
 				FCA1F5762F94741C00045A12 /* FirebaseCore in Frameworks */,
-				FCA1F5902F97273B00045A12 /* FirebaseStorage in Frameworks */,
 				FCA1F5782F94742D00045A12 /* FirebaseAuth in Frameworks */,
 				FCA1F5802F960DE000045A12 /* FirebaseFirestore in Frameworks */,
 				FCAA00022FA000000000AA01 /* FirebaseCrashlytics in Frameworks */,
 				FC18543A3002A4C6006C621E /* GoogleSignInSwift in Frameworks */,
 				FCAA00042FA000000000AA01 /* FirebaseAnalytics in Frameworks */,
-				FCAA00062FA000000000AA01 /* FirebasePerformance in Frameworks */,
 				FCAA00082FA000000000AA01 /* FirebaseFunctions in Frameworks */,
 				FC1854383002A4C6006C621E /* GoogleSignIn in Frameworks */,
 				FCDFEB2A300770A1002BD75D /* FirebaseAppCheck in Frameworks */,
@@ -239,10 +235,8 @@
 				FCA1F5752F94741C00045A12 /* FirebaseCore */,
 				FCA1F5772F94742D00045A12 /* FirebaseAuth */,
 				FCA1F57F2F960DE000045A12 /* FirebaseFirestore */,
-				FCA1F58F2F97273B00045A12 /* FirebaseStorage */,
 				FCAA00012FA000000000AA01 /* FirebaseCrashlytics */,
 				FCAA00032FA000000000AA01 /* FirebaseAnalytics */,
-				FCAA00052FA000000000AA01 /* FirebasePerformance */,
 				FCAA00072FA000000000AA01 /* FirebaseFunctions */,
 				FC1854373002A4C6006C621E /* GoogleSignIn */,
 				FC1854393002A4C6006C621E /* GoogleSignInSwift */,
@@ -414,8 +408,7 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(SRCROOT)/config/GoogleService-Info.Debug.plist",
-				"$(SRCROOT)/config/GoogleService-Info.Release.plist",
+				"$(SRCROOT)/config/select_google_services.sh",
 			);
 			outputFileListPaths = (
 			);
@@ -918,11 +911,6 @@
 			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
 		};
-		FCA1F58F2F97273B00045A12 /* FirebaseStorage */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseStorage;
-		};
 		FCAA00012FA000000000AA01 /* FirebaseCrashlytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
@@ -932,11 +920,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAnalytics;
-		};
-		FCAA00052FA000000000AA01 /* FirebasePerformance */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FCA1F5382F9427C600045A12 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebasePerformance;
 		};
 		FCAA00072FA000000000AA01 /* FirebaseFunctions */ = {
 			isa = XCSwiftPackageProductDependency;

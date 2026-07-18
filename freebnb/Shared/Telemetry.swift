@@ -9,9 +9,9 @@
 //
 //  Collection is suppressed when the process is pointed at the emulator or is a
 //  UI-test run, so automated and local sessions never ship telemetry to a real
-//  project. Firebase auto-initialises Crashlytics, Analytics, and Performance
-//  Monitoring at FirebaseApp.configure(); `configure()` below only flips
-//  collection on or off.
+//  project. Firebase auto-initialises Crashlytics and Analytics at
+//  FirebaseApp.configure(); `configure()` below only flips collection on
+//  or off.
 //
 
 import FirebaseAnalytics

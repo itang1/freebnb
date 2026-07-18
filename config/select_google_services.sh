@@ -9,6 +9,11 @@
 #
 # If the env-specific plist is absent the script falls back to the
 # checked-in freebnb/GoogleService-Info.plist so the build still succeeds.
+#
+# The build phase lists only this script as an input file so a no-change
+# build can skip the phase entirely. If you add the env-specific plists
+# above, also add them to the phase's Input Files in Xcode so edits to
+# them re-trigger the copy.
 
 set -euo pipefail
 
