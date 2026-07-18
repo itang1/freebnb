@@ -119,13 +119,15 @@ struct HomeCard: View {
     private var header: some View {
         if let firstPhoto = listing.photos.first, let url = URL(string: firstPhoto) {
             ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: url) { phase in
+                // Downsampled to roughly the card's drawn width; a full-size
+                // photo decoded mid-scroll is what makes the feed stutter.
+                CachedAsyncImage(url: url, maxPointSize: 700) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()
                     case .failure:
                         tealHeaderContent
-                    default:
+                    case .empty:
                         Color.accent.opacity(0.3)
                             .overlay(ProgressView().tint(.white))
                     }
