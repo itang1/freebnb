@@ -11,6 +11,9 @@ import SwiftUI
 struct MessageBubble: View {
     let message: Message
     let currentUserID: String
+    /// The other participant's display name, so a centered stay event card can
+    /// name who acted; a card has no left/right side to say it.
+    let otherName: String
     let state: MessageState
     let onRetry: () -> Void
     let onDiscard: () -> Void
@@ -23,7 +26,8 @@ struct MessageBubble: View {
         if let event = message.event {
             // Structured stay events render as a centered system card, not a
             // left/right chat bubble (item 29).
-            StayEventCard(event: event, timestamp: message.timestamp, state: state)
+            StayEventCard(event: event, timestamp: message.timestamp,
+                          isFromMe: isFromMe, otherName: otherName, state: state)
         } else {
             textBubble
         }
@@ -101,6 +105,7 @@ struct MessageBubble: View {
         MessageBubble(
             message: PreviewData.message,
             currentUserID: PreviewData.viewerID,
+            otherName: "Maya",
             state: .sent,
             onRetry: {},
             onDiscard: {}
@@ -108,6 +113,7 @@ struct MessageBubble: View {
         MessageBubble(
             message: PreviewData.message,
             currentUserID: PreviewData.friendID,
+            otherName: "Maya",
             state: .failed,
             onRetry: {},
             onDiscard: {}

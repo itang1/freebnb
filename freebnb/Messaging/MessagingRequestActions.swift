@@ -2,9 +2,10 @@
 //  MessagingRequestActions.swift
 //  freebnb
 //
-//  Accept / decline / cancel from inside a chat thread. Each action mutates the
-//  request and then posts the matching system message into the conversation, so
-//  the two always travel together. Split out of MessagingPage.swift (A2).
+//  Accept / decline / cancel / withdraw from inside a chat thread. Each action
+//  mutates the request and then posts the matching system message into the
+//  conversation, so the two always travel together. Split out of
+//  MessagingPage.swift (A2).
 //
 
 import Foundation
@@ -19,24 +20,47 @@ struct MessagingRequestActions {
     @MainActor
     func cancel(_ request: StayRequest) async throws {
         try await requestStore.cancel(request)
-        post(StayEvent(kind: .cancelled, dateRange: request.dateRangeText), to: request.hostUserID)
+        post(StayEvent(kind: .cancelled, dateRange: request.dateRangeText), for: request)
     }
 
+    /// A host takes back an offer the guest hasn't answered (feature 43).
+    @MainActor
+    func withdraw(_ request: StayRequest) async throws {
+        try await requestStore.withdrawOffer(request)
+        post(StayEvent(kind: .cancelled, dateRange: request.dateRangeText), for: request)
+    }
+
+    /// Says yes from either side: the host accepting a guest's request, or the
+    /// guest accepting a host's offer.
     @MainActor
     func accept(_ request: StayRequest, hostNote: String?) async throws {
         try await requestStore.accept(request, hostNote: hostNote)
         let note = (hostNote?.isEmpty ?? true) ? nil : hostNote
-        post(StayEvent(kind: .accepted, dateRange: request.dateRangeText, note: note), to: request.guestUserID)
+        post(StayEvent(kind: .accepted, dateRange: request.dateRangeText, note: note), for: request)
     }
 
     @MainActor
     func decline(_ request: StayRequest) async throws {
         try await requestStore.decline(request)
-        post(StayEvent(kind: .declined, dateRange: request.dateRangeText), to: request.guestUserID)
+        post(StayEvent(kind: .declined, dateRange: request.dateRangeText), for: request)
     }
 
+    /// A guest turns down a host's offer (feature 43).
     @MainActor
-    private func post(_ event: StayEvent, to recipientUserID: String) {
-        messageStore.sendStayEvent(event, senderUserID: currentUserID, recipientUserID: recipientUserID)
+    func declineOffer(_ request: StayRequest) async throws {
+        try await requestStore.declineOffer(request)
+        post(StayEvent(kind: .declined, dateRange: request.dateRangeText), for: request)
+    }
+
+    /// The event always goes to the other side of the stay, whichever side the
+    /// actor is on. Requests and offers point opposite ways, so neither party's
+    /// ID can be hardcoded here.
+    @MainActor
+    private func post(_ event: StayEvent, for request: StayRequest) {
+        messageStore.sendStayEvent(
+            event,
+            senderUserID: currentUserID,
+            recipientUserID: request.otherParty(from: currentUserID)
+        )
     }
 }

@@ -19,6 +19,7 @@ struct MessagingPage: View {
 
     @Environment(MessageStore.self) private var messageStore
     @Environment(StayRequestStore.self) private var requestStore
+    @Environment(HomeStore.self) private var homeStore
     @Environment(AuthManager.self) private var authManager
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(NetworkMonitor.self) private var networkMonitor
@@ -26,7 +27,10 @@ struct MessagingPage: View {
 
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
-    @State private var showRequestSheet = false
+    /// The listing a new stay request is being composed for. Set directly when
+    /// the other person has one requestable home, or by the picker when several.
+    @State private var requestTarget: Home?
+    @State private var showListingChoice = false
     @State private var respondingTo: StayRequest?
     @State private var errorMessage: String?
     @State private var bannerBusy = false
@@ -43,12 +47,33 @@ struct MessagingPage: View {
     private var isMuted: Bool { messageStore.isMuted(conversationID) }
     private var isBlocked: Bool { userProfileStore.isBlocked(otherUserID) }
 
-    private var activeRequest: StayRequest? {
-        requestStore.outgoingRequests.first(where: { $0.hostUserID == otherUserID && $0.status.isActive })
-        ?? requestStore.incomingRequests.first(where: { $0.guestUserID == otherUserID && $0.status.isActive })
+    /// Every active stay between the two participants, in both directions. Their
+    /// request for my place and my request for theirs can be open at once, and
+    /// each gets its own banner; picking one would hide the other.
+    private var activeRequests: [StayRequest] {
+        let outgoing = requestStore.outgoingRequests.filter {
+            $0.hostUserID == otherUserID && $0.status.isActive
+        }
+        let incoming = requestStore.incomingRequests.filter {
+            $0.guestUserID == otherUserID && $0.status.isActive
+        }
+        return (outgoing + incoming).sortedByDate()
     }
 
-    private var iAmGuest: Bool { activeRequest?.guestUserID == currentUserID }
+    /// The other person's homes I could send a stay request for right now: their
+    /// listings visible to me (plus the one this thread was opened from), minus
+    /// any I already have an active request on. Same per-listing rule the
+    /// listing page applies; their requests for my place don't block anything.
+    private var requestableListings: [Home] {
+        var candidates = homeStore.visibleListings.filter { $0.hostUserID == otherUserID }
+        if let listing, listing.hostUserID == otherUserID,
+           !candidates.contains(where: { $0.id == listing.id }) {
+            candidates.append(listing)
+        }
+        return candidates.filter {
+            requestStore.activeRequest(for: $0.id, guestUserID: currentUserID) == nil
+        }
+    }
 
     private var actions: MessagingRequestActions {
         MessagingRequestActions(requestStore: requestStore,
@@ -66,14 +91,15 @@ struct MessagingPage: View {
                 Divider()
             }
 
-            if let request = activeRequest {
+            ForEach(activeRequests) { request in
                 StayRequestBanner(
                     request: request,
-                    iAmGuest: iAmGuest,
+                    viewerID: currentUserID,
+                    otherName: otherName,
                     isBusy: bannerBusy,
-                    onCancel: { run { try await actions.cancel(request) } },
-                    onDecline: { run { try await actions.decline(request) } },
-                    onAccept: { respondingTo = request }
+                    onCancel: { run { try await cancelOrWithdraw(request) } },
+                    onDecline: { run { try await decline(request) } },
+                    onAccept: { accept(request) }
                 )
                 Divider()
             }
@@ -95,12 +121,20 @@ struct MessagingPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search messages")
         .toolbar {
-            // Primary action: Request a Stay (only when a listing is known and no active request)
-            if listing != nil, activeRequest == nil {
+            // Primary action: Request a Stay, whenever the other person has a
+            // home this user could request. Their open request for this user's
+            // place is a different stay and doesn't take the button away.
+            if !requestableListings.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Request a Stay") { showRequestSheet = true }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(Color.accent)
+                    Button("Request a Stay") {
+                        if requestableListings.count == 1 {
+                            requestTarget = requestableListings[0]
+                        } else {
+                            showListingChoice = true
+                        }
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(Color.accent)
                 }
             }
             // Tapping the name opens the profile — the thread's bridge to the
@@ -145,9 +179,16 @@ struct MessagingPage: View {
         .onDisappear {
             messageStore.closeConversation(conversationID)
         }
-        .sheet(isPresented: $showRequestSheet) {
-            if let listing {
-                RequestStaySheet(listing: listing)
+        .sheet(item: $requestTarget) { home in
+            RequestStaySheet(listing: home)
+        }
+        .confirmationDialog(
+            "Which of \(otherName)'s places?",
+            isPresented: $showListingChoice,
+            titleVisibility: .visible
+        ) {
+            ForEach(requestableListings) { home in
+                Button(home.displayTitle) { requestTarget = home }
             }
         }
         .sheet(item: $respondingTo) { request in
@@ -220,6 +261,36 @@ struct MessagingPage: View {
         Task {
             await perform(action)
             bannerBusy = false
+        }
+    }
+
+    /// The banner's cancel slot: a host taking back their own offer withdraws
+    /// it; everything else (a guest's request, an accepted stay) is a cancel.
+    private func cancelOrWithdraw(_ request: StayRequest) async throws {
+        if request.status == .offered {
+            try await actions.withdraw(request)
+        } else {
+            try await actions.cancel(request)
+        }
+    }
+
+    /// The banner's decline slot: a guest turning down an offer and a host
+    /// turning down a request are different writes with the same button.
+    private func decline(_ request: StayRequest) async throws {
+        if request.status == .offered {
+            try await actions.declineOffer(request)
+        } else {
+            try await actions.decline(request)
+        }
+    }
+
+    /// The banner's accept slot. A host accepting a request gets the note sheet;
+    /// a guest saying yes to an offer accepts directly, like the Stays tab.
+    private func accept(_ request: StayRequest) {
+        if request.status == .offered {
+            run { try await actions.accept(request, hostNote: nil) }
+        } else {
+            respondingTo = request
         }
     }
 

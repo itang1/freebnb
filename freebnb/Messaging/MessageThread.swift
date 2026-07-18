@@ -48,6 +48,7 @@ struct MessageThread: View {
                         MessageBubble(
                             message: message,
                             currentUserID: currentUserID,
+                            otherName: otherName,
                             state: messageStore.state(of: message.id),
                             onRetry: { messageStore.retry(message.id) },
                             onDiscard: { messageStore.discardFailed(message.id) },

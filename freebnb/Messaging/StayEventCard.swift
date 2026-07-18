@@ -13,6 +13,11 @@ import SwiftUI
 struct StayEventCard: View {
     let event: StayEvent
     let timestamp: Date?
+    /// Whether the signed-in user is the one who did this, and who the other
+    /// person is. The card is centered with no left/right side, so its title is
+    /// the only thing that can say which of the two people acted.
+    let isFromMe: Bool
+    let otherName: String
     /// Pending while the send is in flight, failed if it never committed. Ordinary
     /// events resolve to `.sent` almost immediately.
     var state: MessageState = .sent
@@ -79,13 +84,14 @@ struct StayEventCard: View {
     }
 
     private var title: String {
+        let actor = isFromMe ? "You" : otherName
         switch event.kind {
-        case .requested: return "Requested to stay"
-        case .offered:   return "Offered their place"
-        case .accepted:  return "Stay accepted"
-        case .declined:  return "Stay request declined"
-        case .cancelled: return "Request cancelled"
-        case .modified:  return "Dates changed"
+        case .requested: return "\(actor) requested to stay"
+        case .offered:   return isFromMe ? "You offered your place" : "\(otherName) offered their place"
+        case .accepted:  return "\(actor) accepted the stay"
+        case .declined:  return "\(actor) declined the stay"
+        case .cancelled: return "\(actor) cancelled the stay"
+        case .modified:  return "\(actor) changed the dates"
         }
     }
 
@@ -115,11 +121,15 @@ struct StayEventCard: View {
 
 #Preview {
     VStack(spacing: 12) {
-        StayEventCard(event: StayEvent(kind: .requested, dateRange: "Mar 3 – Mar 6 · 3 nights"), timestamp: Date())
+        StayEventCard(event: StayEvent(kind: .requested, dateRange: "Mar 3 – Mar 6 · 3 nights"),
+                      timestamp: Date(), isFromMe: true, otherName: "Maya")
         StayEventCard(event: StayEvent(kind: .accepted, dateRange: "Mar 3 – Mar 6 · 3 nights",
-                                       note: "Door code is 1988, see you then!"), timestamp: Date())
-        StayEventCard(event: StayEvent(kind: .declined, dateRange: "Mar 3 – Mar 6 · 3 nights"), timestamp: Date())
-        StayEventCard(event: StayEvent(kind: .cancelled, dateRange: "Mar 3 – Mar 6 · 3 nights"), timestamp: nil, state: .pending)
+                                       note: "Door code is 1988, see you then!"),
+                      timestamp: Date(), isFromMe: false, otherName: "Maya")
+        StayEventCard(event: StayEvent(kind: .declined, dateRange: "Mar 3 – Mar 6 · 3 nights"),
+                      timestamp: Date(), isFromMe: false, otherName: "Maya")
+        StayEventCard(event: StayEvent(kind: .cancelled, dateRange: "Mar 3 – Mar 6 · 3 nights"),
+                      timestamp: nil, isFromMe: true, otherName: "Maya", state: .pending)
     }
     .padding(.vertical)
     .background(Color.primaryBackground)

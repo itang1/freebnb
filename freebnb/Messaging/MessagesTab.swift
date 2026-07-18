@@ -45,11 +45,16 @@ struct MessagesTab: View {
 
     /// Finds the listing associated with this conversation by looking at stay
     /// requests. Used to pass listing context into the thread.
+    ///
+    /// Only the other person's home qualifies: an incoming request points at one
+    /// of this user's own listings, and attaching that would caption the thread
+    /// with their own home. Active requests win over settled ones; within each,
+    /// the store's newest-first order decides.
     private func listing(for otherUserID: String) -> Home? {
-        let request = requestStore.outgoingRequests.first { $0.hostUserID == otherUserID }
-            ?? requestStore.incomingRequests.first { $0.guestUserID == otherUserID }
+        let theirs = requestStore.outgoingRequests.filter { $0.hostUserID == otherUserID }
+        let request = theirs.first { $0.status.isActive } ?? theirs.first
         guard let listingID = request?.listingID else { return nil }
-        return listings.first { $0.id == listingID }
+        return listings.first { $0.id == listingID && $0.hostUserID == otherUserID }
     }
 
     private var visibleSummaries: [ConversationSummary] {
