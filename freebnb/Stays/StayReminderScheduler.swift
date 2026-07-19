@@ -66,8 +66,8 @@ extension StayReminder {
                         fireDate: fire,
                         title: isHost ? "A guest arrives tomorrow" : "Check-in is tomorrow",
                         body: isHost
-                            ? "Your guest checks in tomorrow at \(city). A good time to sort out the key handoff."
-                            : "You check in tomorrow at \(city). Your host will appreciate a heads-up on your arrival time."
+                            ? "Your guest checks in tomorrow in \(city). A good time to sort out the key handoff."
+                            : "You check in tomorrow in \(city). A good time to let your host know when you'll arrive."
                     ))
                 }
 
@@ -80,7 +80,7 @@ extension StayReminder {
                         title: isHost ? "A stay ends today" : "Checkout is today",
                         body: isHost
                             ? "Your guest checks out of \(city) today."
-                            : "Your stay at \(city) ends today. Once you're out, a review is a nice way to say thanks."
+                            : "Your stay in \(city) ends today. Once you're out, you can leave your host a review."
                     ))
                 }
 

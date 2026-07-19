@@ -55,7 +55,7 @@ struct FAQPage: View {
         FAQItem(
             question: "Can I browse and message hosts without creating an account?",
             // swiftlint:disable:next line_length
-            answer: "No. Every host on FreeBNB is someone you know, so every guest needs to be someone identifiable too — FreeBNB uses Sign in with Apple for every account, with no anonymous browsing."
+            answer: "No. Every host on FreeBNB is someone you know, so every guest needs to be someone identifiable too: FreeBNB uses Sign in with Apple for every account, with no anonymous browsing."
         )
     ]
 

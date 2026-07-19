@@ -82,7 +82,7 @@ struct MessageBubble: View {
                         .accessibilityLabel("Sending")
                 case .failed:
                     Button(action: onRetry) {
-                        Label("Not delivered, tap to retry", systemImage: "exclamationmark.circle.fill")
+                        Label("Not delivered. Tap to retry", systemImage: "exclamationmark.circle.fill")
                             .font(.caption2)
                             .foregroundColor(.red)
                     }

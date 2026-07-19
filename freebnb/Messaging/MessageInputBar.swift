@@ -27,7 +27,7 @@ struct MessageInputBar: View {
             if isOffline {
                 HStack(spacing: 6) {
                     Image(systemName: "clock.arrow.circlepath")
-                    Text("Offline — this will send when you reconnect.")
+                    Text("Offline. This will send when you reconnect.")
                 }
                 .font(.caption2)
                 .foregroundColor(.secondary)

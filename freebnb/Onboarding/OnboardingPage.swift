@@ -42,7 +42,7 @@ struct OnboardingPage: View {
         Slide(
             icon: "calendar.badge.checkmark",
             title: "Request and go",
-            body: "Find a place, send a request with your dates, and your host confirms. Then pack your bags."
+            body: "Find a place and send a request with your dates. If your host says yes, pack your bags."
         )
     ]
 
@@ -123,7 +123,7 @@ struct OnboardingPage: View {
                     .font(.title)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
-                Text("To one of your friends, that's a free trip. Listing takes about two minutes, and only friends you approve can ever see your place.")
+                Text("To one of your friends, that's a free trip. Only friends you approve can ever see your place.")
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)

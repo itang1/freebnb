@@ -66,7 +66,7 @@ struct WriteReviewSheet: View {
                 } header: {
                     Text("Private note")
                 } footer: {
-                    Text("Only \(subjectName) sees this. Nobody else, ever — not on your profile, not on theirs.")
+                    Text("Only \(subjectName) sees this. Nobody else, ever: not on your profile, not on theirs.")
                 }
 
                 if let errorMessage {

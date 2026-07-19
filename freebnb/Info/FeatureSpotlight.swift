@@ -57,11 +57,11 @@ enum FeatureSpotlight {
             date: "July 2026",
             summary: "Blocked dates are visible before you ask, so you can pick times that actually work.",
             body: """
-            Every listing shows an availability calendar for the next few months. Hosts block off the dates they can't have guests, and you see those blocks before you send a single message.
+            When you pick dates for a stay request, the days a host can't have guests show up greyed out, right there in the date picker. You see them before you send anything, so the dates you ask for are dates that can actually work.
 
-            It's a small thing that saves an awkward back-and-forth. Instead of asking "are you free in June?" and waiting, you can glance at the calendar, see what's open, and request dates you already know might work.
+            It's a small thing that saves an awkward back-and-forth. Instead of asking "are you free in June?" and waiting, you can open the request sheet, see what's open, and pick from that.
 
-            Hosting? Keep your calendar current from your listing's settings. Blocking a week you'll be traveling, or that you simply want to yourself, is the easiest way to get requests for times you can actually say yes to.
+            Hosting? Keep your blocked dates current from your listing's settings. Blocking a week you'll be traveling, or that you simply want to yourself, is the easiest way to get requests for times you can actually say yes to.
             """
         )
     ]

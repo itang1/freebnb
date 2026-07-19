@@ -33,7 +33,7 @@ struct AgeGateView: View {
                 Button {
                     ageGateAccepted = true
                 } label: {
-                    Text("I am 18 or older — Continue")
+                    Text("I am 18 or older")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()

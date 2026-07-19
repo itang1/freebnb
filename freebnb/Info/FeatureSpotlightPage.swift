@@ -13,7 +13,7 @@ struct FeatureSpotlightPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Short reads on getting the most out of FreeBNB. A new one lands from time to time, so check back.")
+                Text("Short reads on getting the most out of FreeBNB. A new one lands from time to time.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .padding(.bottom, 4)

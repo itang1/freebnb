@@ -44,7 +44,7 @@ struct CoHostManagerView: View {
             List {
                 Section {
                     Text("Co-hosts can edit this listing's details and see its address and house manual. "
-                        + "They can't change who can see it, manage co-hosts, delete it, or respond to stay requests — those stay with you.")
+                        + "They can't change who can see it, manage co-hosts, delete it, or respond to stay requests; those stay with you.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -106,7 +106,7 @@ struct CoHostManagerView: View {
         } else if addableFriends.isEmpty {
             Section("Add a co-host") {
                 Text(friendStore.friendIDs.isEmpty
-                     ? "Add a friend first — a co-host has to be someone you're connected with."
+                     ? "Add a friend first; a co-host has to be someone you're connected with."
                      : "All of your friends already co-host this listing.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)

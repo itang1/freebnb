@@ -16,8 +16,8 @@ struct HowItWorksPage: View {
             "Send a stay request with your dates and a short message to the host."
         ),
         (
-            "Get Confirmed",
-            "The host reviews your request and confirms. You'll get all the details you need for your visit."
+            "Hear Back",
+            "The host accepts or declines. If it's a yes, you'll get all the details you need for your visit."
         ),
         (
             "Pack and Go",

@@ -210,7 +210,7 @@ struct AvailabilityEditorView: View {
             events: blockedRanges.enumerated().map { index, range in
                 CalendarInvite.Event(
                     uid: "\(listing.id)-blocked-\(index)",
-                    title: "Unavailable — \(listing.address.city)",
+                    title: "Unavailable: \(listing.address.city)",
                     location: "\(listing.address.city), \(listing.address.state)",
                     notes: nil,
                     startDay: range.start,

@@ -453,13 +453,13 @@ private extension HomesPage {
         citySearch.trimmingCharacters(in: .whitespaces)
     }
 
-    /// "3 people you may know are already here", grammatical at one. Bridges an
+    /// "3 people you may know are on FreeBNB", grammatical at one. Bridges an
     /// empty feed to the friend suggestions that would fill it.
     var suggestionBridgeLabel: String {
         let count = friendStore.suggestions.count
         return count == 1
-            ? "1 person you may know is already here"
-            : "\(count) people you may know are already here"
+            ? "1 person you may know is on FreeBNB"
+            : "\(count) people you may know are on FreeBNB"
     }
 
     var emptyStateTitle: String {

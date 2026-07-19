@@ -124,7 +124,7 @@ struct StayEventCard: View {
         StayEventCard(event: StayEvent(kind: .requested, dateRange: "Mar 3 – Mar 6 · 3 nights"),
                       timestamp: Date(), isFromMe: true, otherName: "Maya")
         StayEventCard(event: StayEvent(kind: .accepted, dateRange: "Mar 3 – Mar 6 · 3 nights",
-                                       note: "Door code is 1988, see you then!"),
+                                       note: "Door code is 1988. See you then!"),
                       timestamp: Date(), isFromMe: false, otherName: "Maya")
         StayEventCard(event: StayEvent(kind: .declined, dateRange: "Mar 3 – Mar 6 · 3 nights"),
                       timestamp: Date(), isFromMe: false, otherName: "Maya")

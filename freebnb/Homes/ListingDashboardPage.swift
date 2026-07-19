@@ -95,7 +95,7 @@ struct ListingDashboardPage: View {
 
             if !hasContent {
                 Section {
-                    Text("No requests yet. Friends who can see this listing can ask to stay — or you can offer it to someone.")
+                    Text("No requests yet. Friends who can see this listing can ask to stay, or you can offer it to someone.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .padding(.vertical, 4)

@@ -202,7 +202,7 @@ struct ThankYouSheet: View {
     init(hostName: String, onContinue: @escaping (String?) async -> Void) {
         self.hostName = hostName
         self.onContinue = onContinue
-        _note = State(initialValue: "Thank you so much for hosting me — I had a wonderful stay!")
+        _note = State(initialValue: "Thank you so much for hosting me. I had a wonderful stay!")
     }
 
     private var trimmedNote: String {

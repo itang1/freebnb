@@ -97,7 +97,7 @@ enum PreviewData {
     static let message = Message(
         id: "preview-message",
         senderUserID: friendID,
-        text: "Sounds great, see you Friday!",
+        text: "Sounds great! See you Friday!",
         timestamp: Date(),
         participants: [friendID, viewerID].sorted()
     )
