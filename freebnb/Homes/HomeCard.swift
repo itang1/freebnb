@@ -67,7 +67,7 @@ struct HomeCard: View {
             .padding(14)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondaryBackground.opacity(0.35))
+        .background(Color.secondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: Color.accent.opacity(0.15), radius: 8, x: 0, y: 5)
     }
@@ -205,7 +205,10 @@ struct FeedReasonChip: View {
         .foregroundColor(Color.accent)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.accent.opacity(0.15))
+        // Shell pink under teal text: the one warm fill on the card, so the
+        // social "why you're seeing this" signal reads at a glance instead of
+        // blending into the teal spec pills beside it.
+        .background(Color.tertiaryBackground)
         .clipShape(Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Why you're seeing this: \(reason.label)")

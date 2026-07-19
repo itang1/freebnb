@@ -70,6 +70,8 @@ struct WriteReferenceSheet: View {
                         ProgressView()
                     } else {
                         Button("Post") { Task { await submit() } }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color.callToAction)
                             .disabled(!canSubmit)
                     }
                 }

@@ -136,6 +136,8 @@ struct OfferStaySheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Send Offer") { Task { await send() } }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.callToAction)
                         .disabled(!canSend)
                 }
             }

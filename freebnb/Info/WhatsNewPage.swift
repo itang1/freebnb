@@ -79,7 +79,7 @@ struct WhatsNewPage: View {
             }
         }
         .padding(16)
-        .background(Color.secondaryBackground.opacity(0.35))
+        .background(Color.secondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 }

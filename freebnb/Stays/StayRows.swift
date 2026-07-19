@@ -108,10 +108,12 @@ struct OutgoingRequestRow: View {
                     .buttonStyle(.pressable)
 
                     Button(action: { onAccept?() }) {
+                        // Coral: accepting is the commit action the row is
+                        // asking for, so it takes the call-to-action color.
                         Text("Yes please")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(Color.accent)
+                            .background(Color.callToAction)
                             .foregroundColor(.onAccent)
                             .cornerRadius(8)
                     }
@@ -340,7 +342,7 @@ struct IncomingRequestRow: View {
                         Text("Accept")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(Color.accent)
+                            .background(Color.callToAction)
                             .foregroundColor(.onAccent)
                             .cornerRadius(8)
                     }

@@ -160,7 +160,7 @@ private struct InfoCard: View {
                 .foregroundColor(Color.accent.opacity(0.6))
         }
         .padding(14)
-        .background(Color.secondaryBackground.opacity(0.35))
+        .background(Color.secondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: Color.accent.opacity(0.25), radius: 10, x: 0, y: 5)
     }

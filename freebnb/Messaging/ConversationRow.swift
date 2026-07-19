@@ -75,8 +75,11 @@ struct ConversationRow: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 if isUnread {
+                    // Coral rather than teal: teal is everywhere as chrome, so
+                    // an attention marker needs the palette's warm color to
+                    // register as "needs you".
                     Circle()
-                        .fill(Color.accent)
+                        .fill(Color.callToAction)
                         .frame(width: 8, height: 8)
                         .accessibilityLabel("Unread")
                 }

@@ -154,8 +154,10 @@ struct MessagingPage: View {
                             showListingChoice = true
                         }
                     }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(Color.accent)
+                    .font(.subheadline.weight(.semibold))
+                    // Coral, the palette's call-to-action color: this is the
+                    // thread's primary action and the only coral in the toolbar.
+                    .foregroundColor(Color.callToAction)
                 }
             }
             // Tapping the name opens the profile — the thread's bridge to the

@@ -371,10 +371,13 @@ private struct FriendRequestRow: View {
                 }
                 .buttonStyle(.pressable)
                 Button(action: onAccept) {
+                    // Coral for the answer a pending request is waiting on;
+                    // "Add" and "Share Invite" elsewhere stay teal so coral
+                    // keeps meaning "someone is waiting on you".
                     Text("Accept")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
-                        .background(Color.accent)
+                        .background(Color.callToAction)
                         .foregroundColor(.onAccent)
                         .cornerRadius(8)
                 }

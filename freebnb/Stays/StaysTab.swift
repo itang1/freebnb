@@ -760,7 +760,7 @@ private struct StaysModeSwitcher: View {
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
-                        .background(isSelected ? Color.onAccent.opacity(0.3) : Color.red, in: Capsule())
+                        .background(isSelected ? Color.onAccent.opacity(0.3) : Color.callToAction, in: Capsule())
                         .foregroundColor(isSelected ? Color.onAccent : .white)
                 }
             }
@@ -769,7 +769,7 @@ private struct StaysModeSwitcher: View {
             .padding(.vertical, 10)
             .foregroundColor(isSelected ? Color.onAccent : .primary)
             .background(
-                isSelected ? Color.accent : Color.secondaryBackground.opacity(0.5),
+                isSelected ? Color.accent : Color.secondaryBackground,
                 in: Capsule()
             )
         }

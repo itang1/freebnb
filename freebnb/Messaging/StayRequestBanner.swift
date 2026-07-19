@@ -141,7 +141,7 @@ struct StayRequestBanner: View {
                 .foregroundColor(.onAccent)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
-                .background(Color.accent)
+                .background(Color.callToAction)
                 .clipShape(Capsule())
                 .disabled(isBusy)
         }

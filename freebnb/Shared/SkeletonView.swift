@@ -66,7 +66,7 @@ struct SkeletonHomeCard: View {
             .padding(16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondaryBackground.opacity(0.35))
+        .background(Color.secondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: Color.accent.opacity(0.10), radius: 8, x: 0, y: 5)
     }

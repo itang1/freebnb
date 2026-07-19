@@ -171,6 +171,8 @@ struct RequestStaySheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Send") { Task { await send() } }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.callToAction)
                         .disabled(!canSend)
                 }
             }
