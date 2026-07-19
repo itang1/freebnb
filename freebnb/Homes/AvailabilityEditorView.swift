@@ -110,9 +110,12 @@ struct AvailabilityEditorView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            AvailabilityLegend()
-
             let booked = bookedDays
+
+            // The host's own calendar is the one place the two are told apart, so
+            // the booked key only appears once there is a booking to explain.
+            AvailabilityLegend(showsBooked: !booked.isEmpty)
+
             ForEach(AvailabilityCalendar.months(count: Self.monthsAhead), id: \.self) { month in
                 AvailabilityMonthGrid(month: month, markedDays: blockedDays, lockedDays: booked) { day in
                     blockedDays = AvailabilityCalendar.toggling(day, in: blockedDays)

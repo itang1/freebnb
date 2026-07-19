@@ -484,7 +484,9 @@ extension StaysTab {
         }
     }
 
-    private func accept(_ request: StayRequest, hostNote: String?) async {
+    /// Returns nil on success, or the failure message for `AcceptSheet` to show.
+    /// The sheet dismisses itself once this returns nil.
+    private func accept(_ request: StayRequest, hostNote: String?) async -> String? {
         actionError = nil
         do {
             try await requestStore.accept(request, hostNote: hostNote)
@@ -494,9 +496,9 @@ extension StaysTab {
                 senderUserID: authManager.userID,
                 recipientUserID: request.guestUserID
             )
-            respondingTo = nil
+            return nil
         } catch {
-            actionError = error.localizedDescription
+            return error.localizedDescription
         }
     }
 

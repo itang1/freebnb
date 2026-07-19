@@ -51,6 +51,19 @@ final class freebnbUITests: XCTestCase {
         return true
     }
 
+    /// Taps a field and types, re-tapping once if the first tap didn't take
+    /// focus — simulators drop the first tap's focus often enough (hardware
+    /// keyboard attach, in-flight scroll) that typing straight away is the
+    /// single biggest source of flakes in this suite.
+    private func focusAndType(_ text: String, into field: XCUIElement) {
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        if (field.value(forKey: "hasKeyboardFocus") as? Bool) != true {
+            field.tap()
+        }
+        field.typeText(text)
+    }
+
     /// Dismisses the onboarding sheet that follows a sign-in. `-UITesting` clears
     /// `hasSeenOnboarding` on every launch, so it always shows, and it covers the
     /// tab bar: taps land on nothing until it's gone. No-op if it isn't showing.
@@ -132,16 +145,10 @@ final class freebnbUITests: XCTestCase {
         waitAndTap(app.buttons["My Listings"])
         waitAndTap(app.buttons["Create listing"])
 
-        let streetField = app.textFields["Street"]
-        XCTAssertTrue(streetField.waitForExistence(timeout: 10))
-        streetField.tap()
-        streetField.typeText("1 Infinite Loop")
-        app.textFields["City"].tap()
-        app.textFields["City"].typeText("Cupertino")
-        app.textFields["State"].tap()
-        app.textFields["State"].typeText("CA")
-        app.textFields["ZIP"].tap()
-        app.textFields["ZIP"].typeText("95014")
+        focusAndType("1 Infinite Loop", into: app.textFields["Street"])
+        focusAndType("Cupertino", into: app.textFields["City"])
+        focusAndType("CA", into: app.textFields["State"])
+        focusAndType("95014", into: app.textFields["ZIP"])
 
         // Sleeping arrangements: canSave() needs a sleeping surface, and only
         // these steppers populate sleepingCounts. Match the bed one by label —
@@ -199,7 +206,24 @@ final class freebnbUITests: XCTestCase {
 
         if app.buttons["Request a Stay"].waitForExistence(timeout: 5) {
             app.buttons["Request a Stay"].tap()
-            app.buttons["Send"].tap()
+            // A host with more than one visible place gets a "which place?"
+            // dialog before the sheet; the seeded SpongeBob has two. Take the
+            // first.
+            let listingChoice = app.sheets.firstMatch
+            if listingChoice.waitForExistence(timeout: 3) {
+                listingChoice.buttons.element(boundBy: 0).tap()
+            }
+            // Send stays disabled until the sheet's grid holds a whole stay, so
+            // pick one night: the first available day, then the next. Tapping
+            // the first re-labels it "selected as check in", which conveniently
+            // makes firstMatch resolve to the following available day.
+            let availableDay = app.buttons.matching(
+                NSPredicate(format: "label ENDSWITH %@", ", available")
+            ).firstMatch
+            XCTAssertTrue(availableDay.waitForExistence(timeout: 10), "No available day to tap in the stay grid")
+            availableDay.tap()
+            availableDay.tap()
+            waitAndTap(app.buttons["Send"])
         }
 
         let draft = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH %@", "Message ")).firstMatch

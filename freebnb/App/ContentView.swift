@@ -191,7 +191,7 @@ struct ContentView: View {
                     router.pendingFriendsTab = false
                 }
                 // Write the arrival essentials to disk while there is still a
-                // network to fetch them with (feature 44). Driven from here rather
+                // network to fetch them with. Driven from here rather
                 // than from StayRequestStore because building a kit needs the
                 // listing's address and manual, which only HomeStore can fetch.
                 // Keyed on the accepted stays themselves, so a new acceptance, a

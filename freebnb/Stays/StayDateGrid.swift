@@ -28,6 +28,12 @@ struct StayDateGrid: View {
 
     @State private var visibleMonth: Date = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
 
+    /// Set when a second tap was turned into a new check-in because the span
+    /// between would have crossed an unavailable day. Without it the grid just
+    /// silently moves the selection, which reads as a bug: the guest tapped a
+    /// check-out and got a check-in.
+    @State private var restartedOnUnavailableDays = false
+
     private let calendar = Calendar.current
 
     private static let monthTitle: DateFormatter = {
@@ -54,6 +60,24 @@ struct StayDateGrid: View {
             }
 
             legend
+
+            if restartedOnUnavailableDays {
+                Label(
+                    "Those dates run through days the host isn't available, so your check in moved to the day you tapped. Pick a check out that doesn't cross a greyed-out day.",
+                    systemImage: "info.circle"
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        // Nothing here is worth animating except this line arriving, which a
+        // guest needs to notice landing under their tap.
+        .animation(.default, value: restartedOnUnavailableDays)
+        // Clearing the dates from outside the grid clears the explanation too;
+        // it describes a selection that no longer exists.
+        .onChange(of: checkIn) { _, new in
+            if new == nil { restartedOnUnavailableDays = false }
         }
     }
 
@@ -219,6 +243,7 @@ struct StayDateGrid: View {
     /// Tapping the check-in day again, or any earlier day, also restarts.
     private func select(_ day: Date) {
         guard let start = checkIn, checkOut == nil, day > start else {
+            restartedOnUnavailableDays = false
             checkIn = day
             checkOut = nil
             return
@@ -229,10 +254,12 @@ struct StayDateGrid: View {
             unavailableDays: unavailableDays,
             calendar: calendar
         ) else {
+            restartedOnUnavailableDays = true
             checkIn = day
             checkOut = nil
             return
         }
+        restartedOnUnavailableDays = false
         checkOut = day
     }
 }

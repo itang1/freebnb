@@ -389,10 +389,15 @@ struct StatusBadge: View {
 
 struct AcceptSheet: View {
     let request: StayRequest
-    let onConfirm: (String?) async -> Void
+    /// Performs the accept. Returns nil on success, or the message to show the
+    /// host on failure. The message has to come back here rather than onto the
+    /// presenting page: that page sits behind this sheet, so an error raised
+    /// there is invisible and the Accept button looks inert.
+    let onConfirm: (String?) async -> String?
 
     @State private var note = ""
     @State private var isConfirming = false
+    @State private var errorMessage: String?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -401,6 +406,10 @@ struct AcceptSheet: View {
                 Section("Add a note (optional)") {
                     TextField("Anything the guest should know...", text: $note, axis: .vertical)
                         .lineLimit(2...6)
+                }
+
+                if let errorMessage {
+                    Section { InlineErrorLabel(message: errorMessage) }
                 }
             }
             .navigationTitle("Accept Request")
@@ -412,10 +421,15 @@ struct AcceptSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Accept") {
                         isConfirming = true
+                        errorMessage = nil
                         Task {
                             let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                            await onConfirm(trimmed.isEmpty ? nil : trimmed)
+                            errorMessage = await onConfirm(trimmed.isEmpty ? nil : trimmed)
                             isConfirming = false
+                            // The sheet owns its own dismissal now, so every
+                            // caller gets the same behaviour: stay open on
+                            // failure with the reason showing, close on success.
+                            if errorMessage == nil { dismiss() }
                         }
                     }
                     .disabled(isConfirming)
@@ -544,7 +558,7 @@ struct ModifyStaySheet: View {
 }
 
 #Preview("Accept sheet") {
-    AcceptSheet(request: PreviewData.pendingStay) { _ in }
+    AcceptSheet(request: PreviewData.pendingStay) { _ in nil }
 }
 
 #Preview("Modify sheet") {
