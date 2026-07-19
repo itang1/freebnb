@@ -15,6 +15,7 @@ import {
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import { doc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
+import { swiftStayEventKinds } from "./sources.mjs";
 
 const rulesPath = fileURLToPath(new URL("../firestore.rules", import.meta.url));
 
@@ -127,14 +128,21 @@ describe("messages/{id} create — stay event", () => {
 
   beforeEach(() => testEnv.clearFirestore());
 
-  it("allows a message with a well-formed event", async () => {
-    await assertSucceeds(
-      sendMessageWithEvent(asSender(), SENDER, "e1", {
-        kind: "requested",
-        dateRange: "Mar 3 – Mar 6 · 3 nights",
-      })
-    );
-  });
+  // Every kind the Swift client can send, read from StayEvent.Kind in
+  // MessageStore.swift rather than listed here by hand. The 'offered' and
+  // 'modified' kinds shipped in the client while the rules whitelist still held
+  // the original four, so both courtesy notes failed silently in the thread;
+  // parsing the enum is what keeps a seventh kind from repeating that.
+  for (const kind of swiftStayEventKinds()) {
+    it(`allows an event of kind '${kind}'`, async () => {
+      await assertSucceeds(
+        sendMessageWithEvent(asSender(), SENDER, `e-${kind}`, {
+          kind,
+          dateRange: "Mar 3 – Mar 6 · 3 nights",
+        })
+      );
+    });
+  }
 
   it("allows an accepted event carrying a host note", async () => {
     await assertSucceeds(

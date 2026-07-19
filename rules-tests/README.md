@@ -25,6 +25,14 @@ firebase emulators:exec --only firestore --project freebnb-rules-tests \
 test file loads `../firestore.rules` into its own project namespace and clears
 Firestore between cases, so the files are independent and order does not matter.
 
+One file is different: `mirrors.test.mjs` needs no emulator at all. It parses
+the values that are deliberately duplicated across firestore.rules, the Swift
+app, the Cloud Functions, `admin/app.js`, and the seed scripts (caps, enum
+whitelists, id formats) and asserts the copies still agree. It runs standalone
+with `node --test mirrors.test.mjs`; the shared parsers live in `sources.mjs`,
+which `messages.test.mjs` also uses to drive the rules with the exact event
+kinds the Swift client can send.
+
 Node is invoked by absolute path on purpose. A standalone `firebase-tools` build
 puts its own bundled Node ahead of yours on `PATH` for the duration of the
 command, and that build cannot load ES modules — a bare `node --test` dies with
