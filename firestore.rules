@@ -148,12 +148,14 @@ service cloud.firestore {
     // fine (an ordinary chat message); when present it must be a well-formed map
     // with a known kind, so a modified client cannot smuggle arbitrary data onto
     // a message the recipient's UI will render as a trusted system card.
+    // The kind list mirrors StayEvent.Kind in MessageStore.swift; a kind the
+    // client sends but this list omits makes the courtesy note silently fail.
     function validMessageEvent(data) {
       return isUnset(data, 'event')
           || (data.event is map
               && data.event.keys().hasOnly(['kind', 'dateRange', 'note'])
               && data.event.kind is string
-              && data.event.kind in ['requested', 'accepted', 'declined', 'cancelled']
+              && data.event.kind in ['requested', 'offered', 'accepted', 'declined', 'cancelled', 'modified']
               && data.event.dateRange is string
               && data.event.dateRange.size() > 0
               && data.event.dateRange.size() < 200
