@@ -23,6 +23,7 @@ struct UserProfilePage: View {
     @State private var showWriteReference = false
     @State private var showReport = false
     @State private var showBlockConfirm = false
+    @State private var blockError: String?
 
     private var isBlocked: Bool { userProfileStore.isBlocked(userID) }
 
@@ -183,17 +184,31 @@ struct UserProfilePage: View {
         ) {
             if isBlocked {
                 Button("Unblock") {
-                    Task { try? await userProfileStore.unblockUser(userID) }
+                    Task {
+                        do { try await userProfileStore.unblockUser(userID) }
+                        catch { blockError = error.localizedDescription }
+                    }
                 }
             } else {
                 Button("Block", role: .destructive) {
-                    Task { try? await userProfileStore.blockUser(userID) }
+                    Task {
+                        do { try await userProfileStore.blockUser(userID) }
+                        catch { blockError = error.localizedDescription }
+                    }
                 }
             }
         } message: {
             if !isBlocked {
                 Text("You won't see messages or listings from \(displayName). You can unblock them any time.")
             }
+        }
+        .alert("Error", isPresented: Binding(
+            get: { blockError != nil },
+            set: { if !$0 { blockError = nil } }
+        )) {
+            Button("OK", role: .cancel) { blockError = nil }
+        } message: {
+            if let blockError { Text(blockError) }
         }
     }
 

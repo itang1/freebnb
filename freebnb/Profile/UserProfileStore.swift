@@ -119,12 +119,26 @@ final class UserProfileStore {
         }
     }
 
+    /// Creates the first profile document. A failure here used to be logged and
+    /// never retried, which left the account wedged: signed in, no profile, and
+    /// no snapshot coming that would trigger another attempt. Retries with
+    /// backoff while this user is still signed in and the listener still hasn't
+    /// delivered a profile; if every attempt fails, the guard flag resets so the
+    /// next listener restart tries again.
     private func createInitialProfile(userID: String, displayName: String, email: String?) async {
-        do {
-            try await repository.createInitialProfile(userID: userID, displayName: displayName, email: email)
-        } catch {
-            log.error("profile create error: \(error.localizedDescription, privacy: .public)")
+        for attempt in 0..<5 {
+            if attempt > 0 {
+                try? await Task.sleep(for: .seconds(pow(2.0, Double(attempt))))
+                guard Auth.auth().currentUser?.uid == userID, currentProfile == nil else { return }
+            }
+            do {
+                try await repository.createInitialProfile(userID: userID, displayName: displayName, email: email)
+                return
+            } catch {
+                log.error("profile create error (attempt \(attempt + 1)): \(error.localizedDescription, privacy: .public)")
+            }
         }
+        hasAttemptedProfileCreation = false
     }
 
     // MARK: - Writes
@@ -185,17 +199,32 @@ final class UserProfileStore {
     }
 
     func blockUser(_ userID: String) async throws {
-        guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
-        var ids = currentProfile?.blockedIDs ?? []
-        ids.insert(userID)
-        try await repository.updateBlockedUsers(userID: myID, blockedUserIDs: Array(ids))
+        try await setBlocked(userID, blocked: true)
     }
 
     func unblockUser(_ userID: String) async throws {
+        try await setBlocked(userID, blocked: false)
+    }
+
+    /// Optimistic like the saved-listings toggle: the feed and the block menus
+    /// flip immediately, and a failed write puts them back so the UI never
+    /// claims a block that didn't land.
+    private func setBlocked(_ userID: String, blocked: Bool) async throws {
         guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         var ids = currentProfile?.blockedIDs ?? []
-        ids.remove(userID)
-        try await repository.updateBlockedUsers(userID: myID, blockedUserIDs: Array(ids))
+        if blocked { ids.insert(userID) } else { ids.remove(userID) }
+        let newIDs = Array(ids)
+
+        let snapshot = currentProfile
+        currentProfile?.blockedUserIDs = newIDs
+
+        do {
+            try await repository.updateBlockedUsers(userID: myID, blockedUserIDs: newIDs)
+        } catch {
+            currentProfile = snapshot          // revert on failure
+            log.error("blocked users update error: \(error.localizedDescription, privacy: .public)")
+            throw ProfileUpdateError.underlying(error)
+        }
     }
 
     func submitReport(targetType: String, targetID: String, reason: String) async throws {

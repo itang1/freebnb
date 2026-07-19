@@ -32,6 +32,7 @@ struct HomeDetailPage: View {
     // Bridge @Observable → @State so the toolbar re-renders reliably.
     @State private var isListingSaved = false
     @State private var saveError: String?
+    @State private var blockError: String?
 
     private enum MapState: Equatable {
         case loading
@@ -387,9 +388,19 @@ struct HomeDetailPage: View {
             titleVisibility: .visible
         ) {
             if userProfileStore.isBlocked(home.hostUserID) {
-                Button("Unblock") { Task { try? await userProfileStore.unblockUser(home.hostUserID) } }
+                Button("Unblock") {
+                    Task {
+                        do { try await userProfileStore.unblockUser(home.hostUserID) }
+                        catch { blockError = error.localizedDescription }
+                    }
+                }
             } else {
-                Button("Block", role: .destructive) { Task { try? await userProfileStore.blockUser(home.hostUserID) } }
+                Button("Block", role: .destructive) {
+                    Task {
+                        do { try await userProfileStore.blockUser(home.hostUserID) }
+                        catch { blockError = error.localizedDescription }
+                    }
+                }
             }
         } message: {
             if userProfileStore.isBlocked(home.hostUserID) {
@@ -406,6 +417,14 @@ struct HomeDetailPage: View {
             Button("OK", role: .cancel) { saveError = nil }
         } message: {
             if let saveError { Text(saveError) }
+        }
+        .alert("Error", isPresented: Binding(
+            get: { blockError != nil },
+            set: { if !$0 { blockError = nil } }
+        )) {
+            Button("OK", role: .cancel) { blockError = nil }
+        } message: {
+            if let blockError { Text(blockError) }
         }
     }
 }
@@ -460,7 +479,7 @@ extension HomeDetailPage {
                 HStack(spacing: 8) {
                     Image(systemName: "location.slash")
                         .foregroundColor(.secondary)
-                    Text("Map unavailable — address shown above")
+                    Text("Map unavailable. Address shown above")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }

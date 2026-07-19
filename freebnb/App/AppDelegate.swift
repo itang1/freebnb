@@ -22,6 +22,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     weak var userProfileStore: UserProfileStore?
     weak var router: DeepLinkRouter?
 
+    // The most recent FCM token delivered, so a retry of a failed save can
+    // stand down once a newer token has superseded it.
+    @MainActor private var latestFCMToken: String?
+
     private let log = AppLog.logger("apns")
 
     func application(
@@ -93,7 +97,28 @@ extension AppDelegate: MessagingDelegate {
         // Not guaranteed to arrive on the main thread, and userProfileStore is
         // main-actor isolated, so hop explicitly.
         Task { @MainActor in
-            try? await userProfileStore?.saveFCMToken(token)
+            await saveFCMToken(token)
+        }
+    }
+
+    /// Saves the token, retrying with backoff. A token whose save fails is gone
+    /// until FCM next rotates it, which can be weeks; every push in between
+    /// would silently not arrive. Retries stop once a newer token supersedes
+    /// this one.
+    @MainActor
+    private func saveFCMToken(_ token: String) async {
+        latestFCMToken = token
+        for attempt in 0..<5 {
+            if attempt > 0 {
+                try? await Task.sleep(for: .seconds(pow(2.0, Double(attempt))))
+                guard latestFCMToken == token else { return }
+            }
+            do {
+                try await userProfileStore?.saveFCMToken(token)
+                return
+            } catch {
+                log.error("FCM token save failed (attempt \(attempt + 1)): \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 }

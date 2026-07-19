@@ -241,14 +241,21 @@ struct MessagingPage: View {
             if isBlocked {
                 Button("Unblock") {
                     Task {
-                        try? await userProfileStore.unblockUser(otherUserID)
+                        do { try await userProfileStore.unblockUser(otherUserID) }
+                        catch { errorMessage = error.localizedDescription }
                     }
                 }
             } else {
                 Button("Block", role: .destructive) {
                     Task {
-                        try? await userProfileStore.blockUser(otherUserID)
-                        dismiss()
+                        // Dismiss only once the block has actually landed;
+                        // closing the thread is what tells the user it worked.
+                        do {
+                            try await userProfileStore.blockUser(otherUserID)
+                            dismiss()
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
                     }
                 }
             }

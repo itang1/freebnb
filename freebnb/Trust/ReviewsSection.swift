@@ -38,7 +38,7 @@ struct ReviewsSection: View {
             // Spells out what a review *is*, so it can't be confused with the
             // references below it: only a completed stay produces one, and it
             // runs in both directions (a host reviews their guest too).
-            Text("From people who have actually stayed, in either direction: guests review their host, hosts review their guest.")
+            Text("From people who have actually stayed, in either direction: guests review their host; hosts review their guest.")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
@@ -170,6 +170,8 @@ struct ReferencesSection: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(AuthManager.self) private var authManager
 
+    @State private var deleteError: String?
+
     private var references: [CharacterReference] { reviewStore.references(about: subjectUserID) }
 
     var body: some View {
@@ -200,12 +202,25 @@ struct ReferencesSection: View {
                         // didn't ask for, and its author may retract it.
                         canDelete: authManager.userID == reference.authorUserID
                             || authManager.userID == reference.subjectUserID,
-                        onDelete: { Task { try? await reviewStore.deleteReference(reference) } }
+                        onDelete: {
+                            Task {
+                                do { try await reviewStore.deleteReference(reference) }
+                                catch { deleteError = error.localizedDescription }
+                            }
+                        }
                     )
                 }
             }
         }
         .task { await reviewStore.loadReferences(about: subjectUserID) }
+        .alert("Couldn't remove reference", isPresented: Binding(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK", role: .cancel) { deleteError = nil }
+        } message: {
+            if let deleteError { Text(deleteError) }
+        }
     }
 }
 
