@@ -225,18 +225,18 @@ struct YourListingsPage<LeadingContent: View>: View {
     // MARK: - Empty state
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("No listings yet", systemImage: "house")
-                .foregroundStyle(Color.accent)
-        } description: {
-            Text("Create your first listing so friends can find a place to stay.")
-        } actions: {
+        EmptyStateView(
+            title: "No listings yet",
+            systemImage: "house",
+            message: "Create your first listing so friends can find a place to stay."
+        ) {
             Button("Create a Listing") {
                 sheet = ListingSheet(mode: .create)
             }
             .buttonStyle(.borderedProminent)
             .tint(Color.accent)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primaryBackground.ignoresSafeArea())
     }
 

@@ -231,12 +231,12 @@ struct StaysTab: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("No trips yet", systemImage: "suitcase")
-                .foregroundStyle(Color.accent)
-        } description: {
-            Text("Open a listing, message the host, and request to stay. Your trips appear here.")
-        }
+        EmptyStateView(
+            title: "No trips yet",
+            systemImage: "suitcase",
+            message: "Open a listing, message the host, and request to stay. Your trips appear here."
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primaryBackground.ignoresSafeArea())
     }
 

@@ -353,17 +353,7 @@ private extension HomesPage {
     var emptyStateView: some View {
         VStack(spacing: 16) {
             Spacer().frame(height: 40)
-            Image(systemName: "house.lodge.fill")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80, height: 80)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color.accent.opacity(0.4), Color.accent],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+            EmptyStateMedallion(systemImage: "house.lodge.fill")
             Text(emptyStateTitle)
                 .font(.title3)
                 .fontWeight(.semibold)

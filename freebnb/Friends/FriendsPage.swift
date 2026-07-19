@@ -158,12 +158,13 @@ struct FriendsPage: View {
 
         if friendStore.friendEdges.isEmpty && friendStore.pendingIncoming.isEmpty && friendStore.pendingOutgoing.isEmpty {
             Section {
-                ContentUnavailableView {
-                    Label("No friends yet", systemImage: "person.2")
-                        .foregroundStyle(Color.accent)
-                } description: {
-                    Text("Search by name above to find people, or add someone from People you may know.")
-                }
+                EmptyStateView(
+                    title: "No friends yet",
+                    systemImage: "person.2",
+                    message: "Search by name above to find people, or add someone from People you may know."
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
             }
             .listRowBackground(Color.clear)
         }

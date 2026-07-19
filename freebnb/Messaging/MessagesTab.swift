@@ -102,12 +102,12 @@ struct MessagesTab: View {
                     .accessibilityLabel("Loading conversations")
                     .transition(.opacity)
                 } else if visibleSummaries.isEmpty && searchQuery.isEmpty {
-                    ContentUnavailableView {
-                        Label("No conversations yet", systemImage: "message")
-                            .foregroundStyle(Color.accent)
-                    } description: {
-                        Text("Open a listing and message the host to get started.")
-                    }
+                    EmptyStateView(
+                        title: "No conversations yet",
+                        systemImage: "message",
+                        message: "Open a listing and message the host to get started."
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.primaryBackground.ignoresSafeArea())
                 } else if visibleSummaries.isEmpty {
                     ContentUnavailableView.search(text: searchQuery)

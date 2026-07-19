@@ -80,7 +80,17 @@ struct MessageThread: View {
                 .accessibilityElement()
                 .accessibilityLabel("Loading messages")
         } else {
-            emptyText("Send \(otherName) a message to get started.")
+            // The medallion only decorates a brand-new thread; a search miss
+            // stays plain text so it reads as a result, not a welcome.
+            VStack(spacing: 16) {
+                EmptyStateMedallion(systemImage: "bubble.left.and.bubble.right")
+                Text("Send \(otherName) a message to get started.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .padding(.top, 48)
         }
     }
 
