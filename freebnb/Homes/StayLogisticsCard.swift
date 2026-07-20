@@ -32,7 +32,7 @@ struct StayLogisticsCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.seal.fill")
-                    .foregroundColor(.green)
+                    .foregroundColor(.success)
                 Text("Your stay is confirmed")
                     .font(.headline)
             }
@@ -45,7 +45,7 @@ struct StayLogisticsCard: View {
                 Spacer()
                 Text("\(stay.nights) night\(stay.nights == 1 ? "" : "s")")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
 
             if let arrival = stay.arrivalWindow {
@@ -79,12 +79,12 @@ struct StayLogisticsCard: View {
             if kit?.hasContent == true {
                 Label("Saved on this phone, so it works without a signal", systemImage: "arrow.down.circle")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.green.opacity(0.08))
+        .background(Color.success.opacity(0.12))
         .cornerRadius(12)
     }
 
@@ -114,7 +114,7 @@ struct StayLogisticsCard: View {
                     .frame(width: 20)
                     .foregroundColor(Color.accent)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Host phone").font(.caption).foregroundColor(.secondary)
+                    Text("Host phone").font(.caption).foregroundColor(.secondaryText)
                     if let telURL = URL(string: "tel://\(manual.hostPhone.filter { $0.isNumber || $0 == "+" })") {
                         Link(manual.hostPhone, destination: telURL)
                             .font(.subheadline)
@@ -157,7 +157,7 @@ struct StayLogisticsCard: View {
                 .frame(width: 20)
                 .foregroundColor(Color.accent)
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.caption).foregroundColor(.secondary)
+                Text(title).font(.caption).foregroundColor(.secondaryText)
                 Text(value).font(.subheadline)
             }
         }
@@ -203,7 +203,7 @@ struct HouseManualHostCard: View {
                  ? "Add check-in instructions, wifi, and house notes. Accepted guests see them here."
                  : "Your check-in guide is set. Accepted guests can see it on this listing.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
 
             Button(action: onEdit) {
                 Label(isEmpty ? "Add house manual" : "Edit house manual", systemImage: "pencil")
@@ -217,7 +217,7 @@ struct HouseManualHostCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.07))
+        .background(Color.secondaryText.opacity(0.07))
         .cornerRadius(12)
     }
 }

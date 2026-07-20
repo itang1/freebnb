@@ -135,7 +135,7 @@ private struct InfoCard: View {
             Image(systemName: icon)
                 .font(.title3)
                 .fontWeight(.semibold)
-                .foregroundColor(.white)
+                .foregroundColor(.onAccent)
                 .frame(width: 46, height: 46)
                 .background(
                     Circle()
@@ -148,7 +148,7 @@ private struct InfoCard: View {
                     .foregroundColor(.primary)
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.leading)
             }
 

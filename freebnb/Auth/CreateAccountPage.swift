@@ -32,7 +32,7 @@ struct CreateAccountPage: View {
 
                     Text("Save your info so it's there next time. Everything from your guest session (messages, bookmarks, and more) carries over.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
@@ -54,7 +54,7 @@ struct CreateAccountPage: View {
                         .font(.caption)
                         .multilineTextAlignment(.center)
                 }
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .padding(.horizontal, 32)
 
                 if authManager.isLoading {
@@ -66,7 +66,7 @@ struct CreateAccountPage: View {
                    let description = error.errorDescription {
                     Text(description)
                         .font(.caption)
-                        .foregroundColor(.red)
+                        .foregroundColor(.danger)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }

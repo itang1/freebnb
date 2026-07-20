@@ -97,7 +97,7 @@ struct ListingDashboardPage: View {
                 Section {
                     Text("No requests yet. Friends who can see this listing can ask to stay, or you can offer it to someone.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .padding(.vertical, 4)
                 }
             }
@@ -166,7 +166,7 @@ struct ListingDashboardPage: View {
                             systemImage: showPast ? "chevron.up" : "chevron.down"
                         )
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                     }
                 }
                 if showPast {
@@ -253,7 +253,7 @@ struct ListingDashboardPage: View {
                 // the honest fallback while it loads.
                 Text(homeStore.listingLocations[listing.id]?.street ?? listing.address.zip)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
 
                 HStack(spacing: 14) {
                     Label(
@@ -270,7 +270,7 @@ struct ListingDashboardPage: View {
                     )
                 }
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .labelStyle(.titleAndIcon)
             }
             .padding(.vertical, 4)
@@ -301,12 +301,12 @@ struct ListingDashboardPage: View {
                             .foregroundColor(.primary)
                         Text(availabilitySummary)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .foregroundColor(.secondaryText.opacity(0.5))
                 }
             }
         }
@@ -368,11 +368,11 @@ struct ListingDashboardPage: View {
                     .font(.subheadline).fontWeight(.semibold)
                 HStack(spacing: 2) {
                     if summary.lastMessage.senderUserID == authManager.userID {
-                        Text("You: ").font(.caption).foregroundColor(.secondary)
+                        Text("You: ").font(.caption).foregroundColor(.secondaryText)
                     }
                     Text(summary.lastMessage.text)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .lineLimit(1)
                 }
             }
@@ -381,7 +381,7 @@ struct ListingDashboardPage: View {
 
             Text(summary.lastMessage.timestamp ?? Date(), style: .time)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
         }
         .padding(.vertical, 2)
     }

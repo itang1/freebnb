@@ -45,7 +45,7 @@ struct WriteReferenceSheet: View {
                         Text("A reference vouches for \(subjectName) as a guest, a host, or both. It carries no rating: reviews come from stays that actually happened.")
                         Text("Shown publicly on \(subjectName)'s profile, with your name.")
                         Text("\(trimmed.count) / \(CharacterReference.maxLength)")
-                            .foregroundColor(trimmed.count > CharacterReference.maxLength ? .red : .secondary)
+                            .foregroundColor(trimmed.count > CharacterReference.maxLength ? .danger : .secondaryText)
                     }
                 }
 
@@ -53,7 +53,7 @@ struct WriteReferenceSheet: View {
                     Section {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     }
                 }
             }

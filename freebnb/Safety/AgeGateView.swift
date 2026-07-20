@@ -24,7 +24,7 @@ struct AgeGateView: View {
 
                 Text("FreeBNB connects trusted adults for free home stays. By continuing, you confirm that you are at least 18 years old.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
@@ -45,7 +45,7 @@ struct AgeGateView: View {
 
                 Text("If you are under 18, please close the app.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, 32)

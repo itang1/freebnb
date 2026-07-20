@@ -28,12 +28,12 @@ struct DataExportShareSheet: View {
             VStack(spacing: 20) {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 48))
-                    .foregroundColor(.green)
+                    .foregroundColor(.success)
                 Text("Your data is ready")
                     .font(.title3.weight(.semibold))
                 Text("A JSON file with your profile, listings, stays, messages, and connections.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
                 ShareLink(item: url) {
                     Label("Share or save", systemImage: "square.and.arrow.up")
@@ -67,7 +67,7 @@ struct DataExportShareSheet: View {
 extension View {
     func sectionCard() -> some View {
         self
-            .background(Color.secondary.opacity(0.07))
+            .background(Color.secondaryText.opacity(0.07))
             .cornerRadius(14)
             .padding(.horizontal)
     }
@@ -97,13 +97,13 @@ struct SettingsRow: View {
                 if let text = trailingText {
                     Text(text)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .lineLimit(1)
                 }
                 if chevron {
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .foregroundColor(.secondaryText.opacity(0.5))
                 }
             }
             .padding(.horizontal, 16)

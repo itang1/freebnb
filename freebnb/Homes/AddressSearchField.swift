@@ -44,7 +44,7 @@ struct AddressSearchField: View {
                             if !suggestion.subtitle.isEmpty {
                                 Text(suggestion.subtitle)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.secondaryText)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

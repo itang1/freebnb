@@ -32,7 +32,7 @@ struct ConversationRow: View {
                     if isMuted {
                         Image(systemName: "bell.slash.fill")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                             .accessibilityLabel("Muted")
                     }
                 }
@@ -40,7 +40,7 @@ struct ConversationRow: View {
                     if lastMessage.senderUserID == currentUserID {
                         Text("You: ")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                     }
                     Text(lastMessage.text)
                         .font(.subheadline)
@@ -73,7 +73,7 @@ struct ConversationRow: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(lastMessage.timestamp ?? Date(), style: .time)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                 if isUnread {
                     // Coral rather than teal: teal is everywhere as chrome, so
                     // an attention marker needs the palette's warm color to

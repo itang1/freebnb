@@ -35,6 +35,18 @@ enum AppColor: String, CaseIterable {
     /// Pine sage. Positive states and greenery accents.
     case success = "Color/success"
 
+    /// Failures and destructive actions. Replaces system `.red`, which sat at
+    /// 3.2:1 on the sand background in light mode.
+    case danger = "Color/danger"
+
+    /// Cautions the user can proceed past. Replaces system `.orange` (2.0:1 on
+    /// sand in light mode).
+    case warning = "Color/warning"
+
+    /// Supporting text. Replaces system `.secondary`, which never reaches
+    /// 4.5:1 — not even on white — and fell to 2.6:1 on the sky-blue card wash.
+    case secondaryText = "Color/secondaryText"
+
     /// Text and icons placed on `accent` or `callToAction` fills.
     case onAccent = "Color/onAccent"
 }
@@ -53,6 +65,9 @@ extension Color {
     static let secondaryBackground = Color(AppColor.secondaryBackground)
     static let tertiaryBackground = Color(AppColor.tertiaryBackground)
     static let success = Color(AppColor.success)
+    static let danger = Color(AppColor.danger)
+    static let warning = Color(AppColor.warning)
+    static let secondaryText = Color(AppColor.secondaryText)
     static let onAccent = Color(AppColor.onAccent)
 }
 
@@ -67,6 +82,9 @@ extension ShapeStyle where Self == Color {
     static var secondaryBackground: Color { Color(AppColor.secondaryBackground) }
     static var tertiaryBackground: Color { Color(AppColor.tertiaryBackground) }
     static var success: Color { Color(AppColor.success) }
+    static var danger: Color { Color(AppColor.danger) }
+    static var warning: Color { Color(AppColor.warning) }
+    static var secondaryText: Color { Color(AppColor.secondaryText) }
     static var onAccent: Color { Color(AppColor.onAccent) }
 }
 
@@ -91,5 +109,8 @@ extension UIColor {
     static let secondaryBackground = UIColor.app(.secondaryBackground)
     static let tertiaryBackground = UIColor.app(.tertiaryBackground)
     static let success = UIColor.app(.success)
+    static let danger = UIColor.app(.danger)
+    static let warning = UIColor.app(.warning)
+    static let secondaryText = UIColor.app(.secondaryText)
     static let onAccent = UIColor.app(.onAccent)
 }

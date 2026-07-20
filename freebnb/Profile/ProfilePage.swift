@@ -50,7 +50,7 @@ struct ProfilePage: View {
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
-                                    .foregroundColor(.secondary.opacity(0.5))
+                                    .foregroundColor(.secondaryText.opacity(0.5))
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
@@ -107,7 +107,7 @@ struct ProfilePage: View {
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption)
-                                .foregroundColor(.secondary.opacity(0.5))
+                                .foregroundColor(.secondaryText.opacity(0.5))
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
@@ -150,7 +150,7 @@ struct ProfilePage: View {
                                         .foregroundColor(.primary)
                                     Text("Download everything we store about you as JSON.")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.secondaryText)
                                 }
                                 Spacer()
                                 if isExporting {
@@ -158,7 +158,7 @@ struct ProfilePage: View {
                                 } else {
                                     Image(systemName: "chevron.right")
                                         .font(.caption)
-                                        .foregroundColor(.secondary.opacity(0.5))
+                                        .foregroundColor(.secondaryText.opacity(0.5))
                                 }
                             }
                             .padding(.horizontal, 16)
@@ -223,8 +223,8 @@ struct ProfilePage: View {
                         )
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.red.opacity(0.08))
-                        .foregroundColor(.red)
+                        .background(Color.danger.opacity(0.12))
+                        .foregroundColor(.danger)
                         .cornerRadius(12)
                     }
 
@@ -352,14 +352,14 @@ struct ProfilePage: View {
                     Text("Guest")
                         .font(.title2).fontWeight(.semibold)
                     Text("Browsing without an account")
-                        .font(.subheadline).foregroundColor(.secondary)
+                        .font(.subheadline).foregroundColor(.secondaryText)
                 } else {
                     Text(userProfileStore.displayName ?? "No Name")
                         .font(.title2).fontWeight(.semibold)
                         .foregroundColor(userProfileStore.displayName == nil ? .secondary : .primary)
                     if !authManager.userEmail.isEmpty {
                         Text(authManager.userEmail)
-                            .font(.subheadline).foregroundColor(.secondary)
+                            .font(.subheadline).foregroundColor(.secondaryText)
                     }
                 }
                 Label(authMethodLabel, systemImage: authMethodIcon)
@@ -389,12 +389,12 @@ struct ProfilePage: View {
                         .foregroundColor(.primary)
                     Text("Save your info so it's there next time.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundColor(.secondaryText.opacity(0.5))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -413,7 +413,7 @@ struct ProfilePage: View {
         Text(title.uppercased())
             .font(.caption)
             .fontWeight(.semibold)
-            .foregroundColor(.secondary)
+            .foregroundColor(.secondaryText)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 32)
             .padding(.bottom, 4)
@@ -469,12 +469,12 @@ extension ProfilePage {
                                 .foregroundColor(.primary)
                             Text("List your home so friends can request to stay.")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondaryText)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundColor(.secondary.opacity(0.5))
+                            .foregroundColor(.secondaryText.opacity(0.5))
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
@@ -503,12 +503,12 @@ extension ProfilePage {
                         .foregroundColor(.primary)
                     Text("Guides, FAQ, safety, and what's new.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundColor(.secondaryText.opacity(0.5))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)

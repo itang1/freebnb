@@ -166,13 +166,13 @@ struct ListingsMapView: View {
                     .foregroundColor(.primary)
                 Text("\(home.address.city), \(home.address.state)")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                 HStack(spacing: 12) {
                     Label("\(home.guestPolicy.maxGuests) guest\(home.guestPolicy.maxGuests == 1 ? "" : "s")", systemImage: "person.2")
                     Label("\(home.guestPolicy.maxStayDays) night max", systemImage: "moon")
                 }
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()

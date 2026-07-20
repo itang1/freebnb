@@ -41,25 +41,25 @@ struct OutgoingRequestRow: View {
 
             Text("\(request.listingCity) · \(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
 
             Text("\(request.nights) night\(request.nights == 1 ? "" : "s")")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
 
             if let summary = request.partySummary {
                 Label(summary, systemImage: "person.2")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.caption).foregroundColor(.secondaryText)
             }
 
             if let note = request.guestNote, !note.isEmpty {
                 Text("\"\(note)\"")
-                    .font(.caption).foregroundColor(.secondary).italic().lineLimit(2)
+                    .font(.caption).foregroundColor(.secondaryText).italic().lineLimit(2)
             }
 
             if let note = request.hostNote, !note.isEmpty {
                 Text("Host note: \(note)")
-                    .font(.caption).foregroundColor(.secondary).lineLimit(2)
+                    .font(.caption).foregroundColor(.secondaryText).lineLimit(2)
             }
 
             if onModify != nil || onShare != nil || onComplete != nil {
@@ -84,8 +84,8 @@ struct OutgoingRequestRow: View {
                     Text(request.status == .accepted ? "Cancel stay" : "Cancel request")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(Color.secondary.opacity(0.1))
-                        .foregroundColor(.red)
+                        .background(Color.secondaryText.opacity(0.1))
+                        .foregroundColor(.danger)
                         .cornerRadius(8)
                 }
                 .buttonStyle(.pressable)
@@ -101,7 +101,7 @@ struct OutgoingRequestRow: View {
                         Text("No thanks")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(Color.secondary.opacity(0.1))
+                            .background(Color.secondaryText.opacity(0.1))
                             .foregroundColor(.primary)
                             .cornerRadius(8)
                     }
@@ -138,7 +138,7 @@ struct StayActionButton: View {
                 .font(.subheadline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(Color.secondary.opacity(0.1))
+                .background(Color.secondaryText.opacity(0.1))
                 .foregroundColor(.primary)
                 .cornerRadius(8)
         }
@@ -164,7 +164,7 @@ struct ReviewPromptRow: View {
                 .font(.headline)
             Text("\(request.listingCity) · \(request.dateRangeText)")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
 
             Button(action: onThank ?? onReview) {
                 Label(onThank == nil ? "Leave a review" : "Say thanks",
@@ -279,33 +279,33 @@ struct IncomingRequestRow: View {
             if let listingAddress {
                 Text("\(request.listingCity) · \(listingAddress)")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                 Text("\(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             } else {
                 Text("\(request.listingCity) · \(AppDateFormatters.mediumDate.string(from: request.checkIn)) – \(AppDateFormatters.mediumDate.string(from: request.checkOut))")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
 
             Text("\(request.nights) night\(request.nights == 1 ? "" : "s")")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
 
             if let summary = request.partySummary {
                 Label(summary, systemImage: "person.2")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.caption).foregroundColor(.secondaryText)
             }
 
             if let note = request.guestNote, !note.isEmpty {
                 Text("\"\(note)\"")
-                    .font(.caption).foregroundColor(.secondary).italic().lineLimit(2)
+                    .font(.caption).foregroundColor(.secondaryText).italic().lineLimit(2)
             }
 
             if let note = request.hostNote, !note.isEmpty {
                 Text("Your note: \(note)")
-                    .font(.caption).foregroundColor(.secondary).lineLimit(2)
+                    .font(.caption).foregroundColor(.secondaryText).lineLimit(2)
             }
 
             if let onComplete, !showActions {
@@ -318,8 +318,8 @@ struct IncomingRequestRow: View {
                     Text("Cancel stay")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(Color.secondary.opacity(0.1))
-                        .foregroundColor(.red)
+                        .background(Color.secondaryText.opacity(0.1))
+                        .foregroundColor(.danger)
                         .cornerRadius(8)
                 }
                 .buttonStyle(.pressable)
@@ -332,7 +332,7 @@ struct IncomingRequestRow: View {
                         Text("Decline")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(Color.secondary.opacity(0.1))
+                            .background(Color.secondaryText.opacity(0.1))
                             .foregroundColor(.primary)
                             .cornerRadius(8)
                     }
@@ -373,14 +373,14 @@ struct StatusBadge: View {
 
     private var badgeColor: Color {
         switch status {
-        case .pending:   return .orange
-        // Same orange as pending: both mean "somebody owes an answer", and the
+        case .pending:   return .warning
+        // Same amber as pending: both mean "somebody owes an answer", and the
         // badge's job is to say the stay is unresolved, not which way it points.
-        case .offered:   return .orange
-        case .accepted:  return .green
+        case .offered:   return .warning
+        case .accepted:  return .success
         case .completed: return Color.accent
-        case .declined:  return .secondary
-        case .cancelled: return .secondary
+        case .declined:  return .secondaryText
+        case .cancelled: return .secondaryText
         }
     }
 }
@@ -495,23 +495,23 @@ struct ModifyStaySheet: View {
                             Text("Duration")
                             Spacer()
                             Text("\(nights) night\(nights == 1 ? "" : "s")")
-                                .foregroundColor(maxStay.map { nights > $0 } == true ? .red : .secondary)
+                                .foregroundColor(maxStay.map { nights > $0 } == true ? .danger : .secondaryText)
                         }
                     }
                     if let maxStay, nights > maxStay {
                         Label("Max stay is \(maxStay) nights", systemImage: "exclamationmark.circle")
-                            .font(.caption).foregroundColor(.red)
+                            .font(.caption).foregroundColor(.danger)
                     }
                     if let conflict = blockedConflict {
                         let f = AppDateFormatters.shortDay
                         Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
-                            .font(.caption).foregroundColor(.red)
+                            .font(.caption).foregroundColor(.danger)
                     }
                 }
 
                 Section {
                     Text("Your host will see the updated dates in your chat. The request stays pending until they respond.")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.caption).foregroundColor(.secondaryText)
                 }
             }
             .navigationTitle("Change Dates")

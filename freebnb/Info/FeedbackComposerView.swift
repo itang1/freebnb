@@ -67,7 +67,7 @@ struct FeedbackComposerView: View {
                     Spacer()
                     Text("\(draft.remainingCharacters)")
                         .monospacedDigit()
-                        .foregroundColor(draft.remainingCharacters < 0 ? .red : .secondary)
+                        .foregroundColor(draft.remainingCharacters < 0 ? .danger : .secondaryText)
                 }
             }
 
@@ -75,7 +75,7 @@ struct FeedbackComposerView: View {
                 Section {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(.subheadline)
-                        .foregroundColor(.red)
+                        .foregroundColor(.danger)
                     Button("Open the feedback form in your browser") {
                         openURL(FeedbackForm.webURL)
                     }
@@ -90,12 +90,12 @@ struct FeedbackComposerView: View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 48))
-                .foregroundColor(.green)
+                .foregroundColor(.success)
             Text("Thanks for the feedback")
                 .font(.title3.weight(.semibold))
             Text("We read every note. If it needs a reply, we'll be in touch.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
             Button {
                 dismiss()

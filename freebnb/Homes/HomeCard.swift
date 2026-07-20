@@ -93,7 +93,7 @@ struct HomeCard: View {
                         tealHeaderContent
                     case .empty:
                         Color.accent.opacity(0.3)
-                            .overlay(ProgressView().tint(.white))
+                            .overlay(ProgressView().tint(.accent))
                     }
                 }
                 .frame(height: cardImageHeight)

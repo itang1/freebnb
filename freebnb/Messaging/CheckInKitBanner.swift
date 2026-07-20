@@ -42,12 +42,12 @@ struct CheckInKitBanner: View {
                             .foregroundColor(.primary)
                         Text(isExpanded ? "Saved on this phone" : "Door code, wifi, and address")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                     }
                     Spacer()
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
             }
             .buttonStyle(.plain)
@@ -88,7 +88,7 @@ struct CheckInKitBanner: View {
                 .foregroundColor(Color.accent)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.caption).foregroundColor(.secondary)
+                Text(title).font(.caption).foregroundColor(.secondaryText)
                 Text(value)
                     .font(.subheadline)
                     // The guest is copying this into a keypad or a wifi sheet.

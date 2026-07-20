@@ -136,7 +136,7 @@ struct UserProfilePage: View {
                         } label: {
                             Label("Report \(displayName)", systemImage: "flag")
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondaryText)
                         }
                         .buttonStyle(.plain)
 
@@ -146,7 +146,7 @@ struct UserProfilePage: View {
                             Label(isBlocked ? "Unblock \(displayName)" : "Block \(displayName)",
                                   systemImage: isBlocked ? "person.fill.checkmark" : "person.fill.xmark")
                                 .font(.subheadline)
-                                .foregroundColor(isBlocked ? .secondary : .red)
+                                .foregroundColor(isBlocked ? .secondaryText : .danger)
                         }
                         .buttonStyle(.plain)
                     }
@@ -243,7 +243,7 @@ struct UserProfilePage: View {
                 if let tenure = profile?.tenureText {
                     Text(tenure)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
             }
             Spacer()

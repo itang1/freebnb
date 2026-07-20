@@ -32,7 +32,7 @@ struct ReportSheet: View {
                 Section {
                     Text("Reporting: \(targetName)")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
 
                 Section("What's the issue?") {
@@ -48,7 +48,7 @@ struct ReportSheet: View {
                 if submitted {
                     Section {
                         Label("Report submitted. Thank you.", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                            .foregroundColor(.success)
                     }
                 }
             }

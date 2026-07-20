@@ -86,7 +86,7 @@ struct MessageThread: View {
                 EmptyStateMedallion(systemImage: "bubble.left.and.bubble.right")
                 Text("Send \(otherName) a message to get started.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
             }
@@ -97,7 +97,7 @@ struct MessageThread: View {
     private func emptyText(_ text: String) -> some View {
         Text(text)
             .font(.subheadline)
-            .foregroundColor(.secondary)
+            .foregroundColor(.secondaryText)
             .multilineTextAlignment(.center)
             .padding(.top, 48)
             .padding(.horizontal, 24)

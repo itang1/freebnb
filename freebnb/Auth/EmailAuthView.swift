@@ -89,7 +89,7 @@ struct EmailAuthView: View {
                     Section {
                         Text(description)
                             .font(.footnote)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     }
                 }
 
@@ -98,7 +98,7 @@ struct EmailAuthView: View {
                         HStack {
                             Spacer()
                             if authManager.isLoading {
-                                ProgressView().tint(.white)
+                                ProgressView().tint(.onAccent)
                             } else {
                                 Text(isRegistering ? "Create Account" : "Sign In")
                                     .fontWeight(.semibold)
@@ -108,7 +108,7 @@ struct EmailAuthView: View {
                     }
                     .disabled(!canSubmit)
                     .listRowBackground(canSubmit ? Color.accent : Color.accent.opacity(0.4))
-                    .foregroundColor(.white)
+                    .foregroundColor(.onAccent)
                     .accessibilityIdentifier("emailAuth.submitButton")
                 }
             }

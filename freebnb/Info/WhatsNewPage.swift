@@ -47,13 +47,13 @@ struct WhatsNewPage: View {
                 Spacer()
                 Text(release.date)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
 
             if let intro = release.intro {
                 Text(intro)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -61,7 +61,7 @@ struct WhatsNewPage: View {
                 HStack(alignment: .top, spacing: 14) {
                     Image(systemName: highlight.icon)
                         .font(.title3)
-                        .foregroundColor(.white)
+                        .foregroundColor(.onAccent)
                         .frame(width: 40, height: 40)
                         .background(Circle().fill(Color.accent.opacity(0.85)))
                         .accessibilityHidden(true)
@@ -71,7 +71,7 @@ struct WhatsNewPage: View {
                             .foregroundColor(.primary)
                         Text(highlight.detail)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

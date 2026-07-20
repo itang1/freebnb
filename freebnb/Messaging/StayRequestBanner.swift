@@ -25,7 +25,7 @@ struct StayRequestBanner: View {
     let onAccept: () -> Void
 
     private var viewerIsHost: Bool { request.role(of: viewerID) == .host }
-    private var tint: Color { request.status == .accepted ? .green : .orange }
+    private var tint: Color { request.status == .accepted ? .success : .warning }
 
     /// How the headline names the home. A thread is shared across all of a host's
     /// listings, so an unnamed "your place" leaves a host with two homes guessing
@@ -71,18 +71,18 @@ struct StayRequestBanner: View {
                     StatusBadge(status: request.status)
                     Text(request.dateRangeText)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
                 // Where the home is. Naming which home is the headline's job now,
                 // so this stays the city rather than repeating the title back.
                 Label(request.listingCity, systemImage: "house.fill")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .labelStyle(.titleAndIcon)
                 if let note = initiatorNote, !note.isEmpty {
                     Text("\"\(note)\"")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .lineLimit(1)
                 }
             }
@@ -126,7 +126,7 @@ struct StayRequestBanner: View {
     private func cancelButton(title: String) -> some View {
         Button(title, action: onCancel)
             .font(.caption)
-            .foregroundColor(.red)
+            .foregroundColor(.danger)
             .disabled(isBusy)
     }
 
@@ -134,7 +134,7 @@ struct StayRequestBanner: View {
         HStack(spacing: 8) {
             Button(declineTitle, action: onDecline)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .disabled(isBusy)
             Button(acceptTitle, action: onAccept)
                 .font(.caption.weight(.semibold))

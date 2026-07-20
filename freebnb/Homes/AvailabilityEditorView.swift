@@ -108,7 +108,7 @@ struct AvailabilityEditorView: View {
 
             Text("Tap the days your listing is unavailable. Friends cannot request stays that overlap a blocked day, and accepted stays block themselves.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
 
             let booked = bookedDays
 
@@ -125,7 +125,7 @@ struct AvailabilityEditorView: View {
             if !booked.isEmpty {
                 Label("Dates a guest has booked are filled in for you and can't be changed here. Cancel the stay to free them.", systemImage: "lock.fill")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
 
             summary
@@ -150,7 +150,7 @@ struct AvailabilityEditorView: View {
                 }
                 Text("Adds them to your other \(others.count) listing\(others.count == 1 ? "" : "s"). Each home keeps its own blocked dates, and they don't stay linked afterward.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }
@@ -170,7 +170,7 @@ struct AvailabilityEditorView: View {
                 // promise that every date is free. A friend still asks.
                 Label("No blocked dates.", systemImage: "checkmark.circle")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             } else {
                 ForEach(ranges) { range in
                     rangeRow(range)
@@ -200,7 +200,7 @@ struct AvailabilityEditorView: View {
                     .font(.subheadline)
                 Text(durationLabel(range))
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
         .accessibilityElement(children: .combine)

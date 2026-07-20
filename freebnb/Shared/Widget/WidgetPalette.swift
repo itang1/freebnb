@@ -12,11 +12,11 @@ import SwiftUI
 import UIKit
 
 enum WidgetPalette {
-    /// The teal brand accent: 0B7382 in light, 5CC1CD in dark — the same values
+    /// The teal brand accent: 0A6774 in light, 5CC1CD in dark — the same values
     /// as the app's `accent` colour set.
     static let accent = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0x5C / 255, green: 0xC1 / 255, blue: 0xCD / 255, alpha: 1)
-            : UIColor(red: 0x0B / 255, green: 0x73 / 255, blue: 0x82 / 255, alpha: 1)
+            : UIColor(red: 0x0A / 255, green: 0x67 / 255, blue: 0x74 / 255, alpha: 1)
     })
 }

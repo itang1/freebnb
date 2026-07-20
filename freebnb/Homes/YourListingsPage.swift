@@ -281,7 +281,7 @@ private struct ListingRow: View {
                 }
                 Text(street ?? listing.address.zip)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     Label("\(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s")", systemImage: "person.fill")
@@ -289,7 +289,7 @@ private struct ListingRow: View {
                     Label("\(listing.guestPolicy.maxStayDays) night\(listing.guestPolicy.maxStayDays == 1 ? "" : "s") max", systemImage: "calendar")
                 }
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .labelStyle(.titleAndIcon)
             }
 

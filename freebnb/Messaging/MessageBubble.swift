@@ -42,11 +42,11 @@ struct MessageBubble: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(bubbleBackground)
-                    .foregroundColor(isFromMe ? .white : .primary)
+                    .foregroundColor(isFromMe ? .onAccent : .primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(isFailed ? Color.red.opacity(0.5) : .clear, lineWidth: 1)
+                            .stroke(isFailed ? Color.danger.opacity(0.6) : .clear, lineWidth: 1)
                     )
                     .contextMenu {
                         if isFailed {
@@ -66,8 +66,8 @@ struct MessageBubble: View {
     }
 
     private var bubbleBackground: Color {
-        if isFailed { return Color.red.opacity(0.15) }
-        return isFromMe ? Color.accent : Color.secondary.opacity(0.15)
+        if isFailed { return Color.danger.opacity(0.15) }
+        return isFromMe ? Color.accent : Color.secondaryText.opacity(0.15)
     }
 
     @ViewBuilder
@@ -78,13 +78,13 @@ struct MessageBubble: View {
                 case .pending:
                     Image(systemName: "clock")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .accessibilityLabel("Sending")
                 case .failed:
                     Button(action: onRetry) {
                         Label("Not delivered. Tap to retry", systemImage: "exclamationmark.circle.fill")
                             .font(.caption2)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     }
                     .buttonStyle(.plain)
                 case .sent:
@@ -94,7 +94,7 @@ struct MessageBubble: View {
             if state != .failed {
                 Text(message.timestamp ?? Date(), style: .time)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }

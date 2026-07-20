@@ -75,7 +75,7 @@ struct RequestStaySheet: View {
                                 .font(.subheadline.weight(.semibold))
                             Text("\(listing.address.city), \(listing.address.state)")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondaryText)
                         }
                     }
                 }
@@ -87,7 +87,7 @@ struct RequestStaySheet: View {
                     HStack {
                         Text(selectionPrompt)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                         Spacer()
                         if checkIn != nil {
                             Button("Clear") {
@@ -103,13 +103,13 @@ struct RequestStaySheet: View {
                             Text("Duration")
                             Spacer()
                             Text("\(nights) night\(nights == 1 ? "" : "s")")
-                                .foregroundColor(nights > listing.guestPolicy.maxStayDays ? .red : .secondary)
+                                .foregroundColor(nights > listing.guestPolicy.maxStayDays ? .danger : .secondaryText)
                         }
                     }
                     if nights > listing.guestPolicy.maxStayDays {
                         Label("Max stay is \(listing.guestPolicy.maxStayDays) nights", systemImage: "exclamationmark.circle")
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     }
                     // The own-stay message is more specific, so it wins: an overlap
                     // that is the guest's own confirmed stay shows only that, not
@@ -118,12 +118,12 @@ struct RequestStaySheet: View {
                         let f = AppDateFormatters.shortDay
                         Label("You already have an accepted stay here \(f.string(from: conflict.checkIn)) – \(f.string(from: conflict.checkOut))", systemImage: "calendar.badge.exclamationmark")
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     } else if let conflict = unavailableConflict {
                         let f = AppDateFormatters.shortDay
                         Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     }
                 }
 
@@ -133,12 +133,12 @@ struct RequestStaySheet: View {
                             Text("Guests")
                             Spacer()
                             Text("\(guestCount)")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondaryText)
                         }
                     }
                     Text("This place hosts up to \(listing.guestPolicy.maxGuests) guest\(listing.guestPolicy.maxGuests == 1 ? "" : "s").")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
 
                 Section("Arrival") {
@@ -158,7 +158,7 @@ struct RequestStaySheet: View {
                     Section {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     }
                 }
             }

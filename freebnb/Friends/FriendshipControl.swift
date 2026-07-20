@@ -87,8 +87,8 @@ struct FriendshipControl: View {
                 .font(.subheadline.weight(.medium))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.secondary.opacity(0.12))
-                .foregroundColor(.secondary)
+                .background(Color.secondaryText.opacity(0.12))
+                .foregroundColor(.secondaryText)
                 .cornerRadius(10)
             Button("Cancel") {
                 perform { try await friendStore.remove(edge) }
@@ -103,7 +103,7 @@ struct FriendshipControl: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("\(displayName) sent you a friend request. Accepting lets you see each other's places and request stays.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
             HStack(spacing: 10) {
                 Button {
                     perform { try await friendStore.decline(edge) }
@@ -111,7 +111,7 @@ struct FriendshipControl: View {
                     Text("Decline")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.secondary.opacity(0.12))
+                        .background(Color.secondaryText.opacity(0.12))
                         .foregroundColor(.primary)
                         .cornerRadius(8)
                 }

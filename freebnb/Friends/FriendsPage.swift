@@ -89,7 +89,7 @@ struct FriendsPage: View {
             Section {
                 Text("No people found.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }
@@ -293,7 +293,7 @@ private struct FriendRow: View {
             if homeCount > 0 {
                 Text("\(homeCount) home\(homeCount == 1 ? "" : "s")")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
         .accessibilityElement(children: .combine)
@@ -319,7 +319,7 @@ private struct SuggestionRow: View {
                 if let mutualText = suggestion.mutualText {
                     Text(mutualText)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
             }
             Spacer()
@@ -358,7 +358,7 @@ private struct FriendRequestRow: View {
                     // Accepting is the grant: spell out what it shares.
                     Text("Accepting lets you see each other's places and request stays")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
             }
             HStack(spacing: 10) {
@@ -366,7 +366,7 @@ private struct FriendRequestRow: View {
                     Text("Decline")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
-                        .background(Color.secondary.opacity(0.12))
+                        .background(Color.secondaryText.opacity(0.12))
                         .foregroundColor(.primary)
                         .cornerRadius(8)
                 }
@@ -405,13 +405,13 @@ private struct PendingOutgoingRow: View {
                     .font(.body)
                 Text("Request sent")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
             Spacer()
             Button("Cancel", role: .destructive, action: onCancel)
                 .font(.subheadline)
                 .buttonStyle(.pressable)
-                .foregroundColor(.red)
+                .foregroundColor(.danger)
         }
     }
 }
@@ -451,7 +451,7 @@ private struct SearchResultRow: View {
             case .sent:
                 Text("Sent")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             case .friends:
                 Label("Friends", systemImage: "checkmark")
                     .font(.subheadline)
@@ -488,7 +488,7 @@ struct InviteSheet: View {
                         .font(.title2.weight(.semibold))
                     Text("FreeBNB only shows people places from their own friends, so your invite is what unlocks the app for them. Share the link; once they're in, search for each other to connect.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
@@ -496,7 +496,7 @@ struct InviteSheet: View {
                 ShareLink(item: inviteMessage) {
                     Label("Share Invite", systemImage: "square.and.arrow.up")
                         .font(.body.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.onAccent)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 14)
                         .background(Color.accent, in: Capsule())
@@ -514,7 +514,7 @@ struct InviteSheet: View {
                             .accessibilityLabel("QR code that opens FreeBNB")
                         Text("Or have a friend scan this with their Camera app.")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                     }
@@ -523,12 +523,12 @@ struct InviteSheet: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Your invite link")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                     Text(InviteCopy.inviteURL.absoluteString)
                         .font(.caption.monospaced())
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .padding(10)
-                        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                        .background(Color.secondaryText.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                 }
                 .padding(.horizontal, 24)
                 }

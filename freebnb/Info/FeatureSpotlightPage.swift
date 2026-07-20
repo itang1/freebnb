@@ -15,7 +15,7 @@ struct FeatureSpotlightPage: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Short reads on getting the most out of FreeBNB. A new one lands from time to time.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .padding(.bottom, 4)
 
                 ForEach(FeatureSpotlight.articles) { article in
@@ -40,14 +40,14 @@ struct FeatureSpotlightPage: View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: article.icon)
                 .font(.title3)
-                .foregroundColor(.white)
+                .foregroundColor(.onAccent)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(Color.accent.opacity(0.85)))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(article.date)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                 Text(article.title)
                     .font(.headline)
                     .foregroundColor(.primary)
@@ -55,7 +55,7 @@ struct FeatureSpotlightPage: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text(article.summary)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -80,14 +80,14 @@ struct SpotlightArticlePage: View {
             VStack(alignment: .leading, spacing: 16) {
                 Image(systemName: article.icon)
                     .font(.title)
-                    .foregroundColor(.white)
+                    .foregroundColor(.onAccent)
                     .frame(width: 56, height: 56)
                     .background(Circle().fill(Color.accent.opacity(0.85)))
                     .accessibilityHidden(true)
 
                 Text(article.date)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
 
                 Text(article.title)
                     .font(.title2.weight(.bold))

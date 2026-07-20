@@ -22,13 +22,13 @@ struct ListingContextBanner: View {
                 Text("Re: \(listing.displayTitle)")
                     .font(.subheadline).fontWeight(.semibold)
                 Text("\(listing.address.city), \(listing.address.state)")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.caption).foregroundColor(.secondaryText)
             }
             Spacer()
             if isMuted {
                 Image(systemName: "bell.slash.fill")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .accessibilityLabel("Muted")
             }
         }

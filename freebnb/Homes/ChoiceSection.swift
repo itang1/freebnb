@@ -23,13 +23,15 @@ struct ChoiceSection<Option: Hashable>: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Image(systemName: selection == option ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(selection == option ? .accent : .secondary.opacity(0.5))
+                                // Full strength: the empty circle is the only mark
+                                // saying "not chosen", so it can't be a ghost.
+                                .foregroundColor(selection == option ? .accent : .secondaryText)
                             Text(name(option))
                                 .font(.body)
                         }
                         Text(detail(option))
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                             .padding(.leading, 28)
                     }
                     .contentShape(Rectangle())

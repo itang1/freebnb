@@ -84,7 +84,7 @@ struct WelcomePage: View {
                        let description = error.errorDescription {
                         Text(description)
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
@@ -137,7 +137,7 @@ struct WelcomePage: View {
                     .fontWeight(.semibold)
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
             Spacer(minLength: 0)
         }
@@ -154,7 +154,7 @@ struct WelcomePage: View {
             Text("Debug quick sign-in")
                 .font(.caption2)
                 .fontWeight(.semibold)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .textCase(.uppercase)
                 .tracking(0.5)
 
@@ -185,7 +185,7 @@ struct WelcomePage: View {
             VStack { Divider() }
             Text("or")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
             VStack { Divider() }
         }
         .padding(.horizontal)

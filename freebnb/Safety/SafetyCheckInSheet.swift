@@ -49,7 +49,7 @@ struct SafetyCheckInSheet: View {
                 Section {
                     Text("Send one person your dates and address. They'll get it from you directly; FreeBNB doesn't message them.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
 
                 Section {
@@ -70,7 +70,7 @@ struct SafetyCheckInSheet: View {
                 Section("What they'll receive") {
                     Text(message)
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .textSelection(.enabled)
                 }
 
@@ -81,7 +81,7 @@ struct SafetyCheckInSheet: View {
                             systemImage: "lock.fill"
                         )
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                     }
                 }
 

@@ -46,7 +46,7 @@ struct CoHostManagerView: View {
                     Text("Co-hosts can edit this listing's details and see its address and house manual. "
                         + "They can't change who can see it, manage co-hosts, delete it, or respond to stay requests; those stay with you.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
 
                 currentRoster
@@ -72,7 +72,7 @@ struct CoHostManagerView: View {
             Section("Current co-hosts") {
                 Text("No co-hosts yet.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         } else {
             Section("Current co-hosts") {
@@ -101,7 +101,7 @@ struct CoHostManagerView: View {
             Section {
                 Text("This listing has the maximum of \(Home.maxCoHosts) co-hosts.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         } else if addableFriends.isEmpty {
             Section("Add a co-host") {
@@ -109,7 +109,7 @@ struct CoHostManagerView: View {
                      ? "Add a friend first; a co-host has to be someone you're connected with."
                      : "All of your friends already co-host this listing.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         } else {
             Section("Add a co-host") {

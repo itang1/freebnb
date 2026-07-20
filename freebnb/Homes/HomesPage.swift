@@ -141,7 +141,7 @@ struct HomesPage: View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .accessibilityHidden(true)
                 TextField("Search by city or state", text: $citySearch)
                     .autocorrectionDisabled()
@@ -150,26 +150,26 @@ struct HomesPage: View {
                         citySearch = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                     }
                     .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            .background(Color.secondaryText.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
 
             if let error {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.warning)
                     Text(error)
                         .font(.subheadline)
                         .foregroundColor(.primary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                .background(Color.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal)
             }
 
@@ -199,7 +199,7 @@ struct HomesPage: View {
                         Label("Reset", systemImage: "arrow.counterclockwise")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                     }
                 }
 
@@ -209,7 +209,7 @@ struct HomesPage: View {
                 Text("\(count)\(canLoadMore ? "+" : "") home\(count == 1 ? "" : "s")")
                     .font(.subheadline)
                     .fontWeight(.medium)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
 
             if !selectedFilters.isEmpty {
@@ -223,7 +223,7 @@ struct HomesPage: View {
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.secondaryText)
                             }
                             .accessibilityLabel("Remove \(filter.label) filter")
                         }
@@ -260,7 +260,7 @@ struct HomesPage: View {
                                     ProgressView()
                                     Text("Searching all listings…")
                                         .font(.subheadline)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.secondaryText)
                                 }
                                 .padding(.vertical, 24)
                             } else if isLoadingMore {
@@ -464,7 +464,7 @@ private extension HomesPage {
         if showSavedOnly {
             Text("You haven't saved any listings yet. Open a listing and tap \"Save listing\" to bookmark it for later.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
             Button("Show all listings") { showSavedOnly = false }
                 .capsuleChip()
@@ -473,7 +473,7 @@ private extension HomesPage {
             // FreeBNB is friends-only, so the fix lives on the Friends page.
             Text("Your feed shows your friends' places, and only they can see yours. Add your first friend to get started.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
             Button {
                 router.pendingFriendsTab = true
@@ -484,7 +484,7 @@ private extension HomesPage {
         } else if isUnfilteredEmptyFeed {
             Text("None of your friends have listed a place yet. Know someone with a couch or a guest room? Ask if they'd like to share it.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
             ShareLink(
                 item: InviteCopy.askToHost(inviterName: userProfileStore.displayName),
@@ -506,7 +506,7 @@ private extension HomesPage {
             // the user already knows whose couch they want in that city.
             Text("No friends with a place near \"\(trimmedCityQuery)\" yet. Who would you normally text for a couch there? If they join, their place shows up here.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
             ShareLink(
                 item: InviteCopy.tripIntent(city: trimmedCityQuery, inviterName: userProfileStore.displayName),
@@ -518,7 +518,7 @@ private extension HomesPage {
         } else {
             Text("Try removing some filters to see more results.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
             Button("Clear All Filters") { selectedFilters.removeAll() }
                 .buttonStyle(.borderedProminent)

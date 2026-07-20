@@ -33,7 +33,7 @@ struct CreateListingPage: View {
                     Section {
                         Label("We kept the listing you started. Pick up where you left off.", systemImage: "arrow.uturn.backward.circle")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                         Button("Start over", role: .destructive) {
                             vm.discardDraft(from: draftStore, userID: authManager.userID)
                         }
@@ -60,7 +60,7 @@ struct CreateListingPage: View {
                     Section {
                         Label("We couldn't place that address on the map. Fix it and tap Save to retry, or save without a map location.", systemImage: "mappin.slash")
                             .font(.subheadline)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.warning)
                         Button("Save without map location") {
                             Task { if await saveListing(allowMissingCoordinates: true) { dismiss() } }
                         }
@@ -182,7 +182,7 @@ struct CreateListingPage: View {
             if vm.sleepingCounts.isEmpty {
                 Text("Add at least one sleeping surface so guests know where they'll sleep.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }
@@ -208,7 +208,7 @@ struct CreateListingPage: View {
                 }
                 Text("Guests filtering for a queen or king won't see listings that leave this blank.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }
@@ -220,7 +220,7 @@ struct CreateListingPage: View {
             Toggle("Accessible bathroom", isOn: $vm.hasAccessibleBathroom)
             Text("Only turn these on if you're confident. A guest may be relying on them to get through the door.")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
         }
     }
 
@@ -308,10 +308,10 @@ struct CreateListingPage: View {
             Label {
                 Text("Only your FreeBNB friends can see and request to book this listing. It is never public.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             } icon: {
                 Image(systemName: "lock.fill")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }
@@ -338,11 +338,11 @@ struct CreateListingPage: View {
             if let problem = vm.titleProblem(taken: takenTitles) {
                 Text(problem)
                     .font(.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(.warning)
             } else {
                 Text("Names this home wherever it stands alone: the request sheet, your stays, and the chat banner.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }
@@ -354,7 +354,7 @@ struct CreateListingPage: View {
             if !vm.description.isEmpty {
                 Text("\(vm.description.count) characters")
                     .font(.caption)
-                    .foregroundColor(vm.description.count > 500 ? .orange : .secondary)
+                    .foregroundColor(vm.description.count > 500 ? .warning : .secondaryText)
             }
         }
     }

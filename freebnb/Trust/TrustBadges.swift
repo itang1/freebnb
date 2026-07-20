@@ -80,7 +80,7 @@ struct TrustBadgeRow: View {
             if let strip = statsStrip {
                 Text(strip)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .accessibilityLabel(statsAccessibilityLabel)
             }
         }

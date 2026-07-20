@@ -30,7 +30,7 @@ struct MessageInputBar: View {
                     Text("Offline. This will send when you reconnect.")
                 }
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)
             }
@@ -40,7 +40,7 @@ struct MessageInputBar: View {
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color.secondary.opacity(0.1))
+                    .background(Color.secondaryText.opacity(0.1))
                     .cornerRadius(20)
                     .focused($isFocused)
                     .lineLimit(1...5)
@@ -48,7 +48,7 @@ struct MessageInputBar: View {
                 Button(action: onSend) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
-                        .foregroundColor(isEmpty ? .secondary.opacity(0.4) : .accent)
+                        .foregroundColor(isEmpty ? .secondaryText.opacity(0.4) : .accent)
                 }
                 .disabled(isEmpty)
                 .accessibilityLabel("Send message")

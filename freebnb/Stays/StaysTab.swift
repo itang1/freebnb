@@ -218,7 +218,7 @@ struct StaysTab: View {
     private func listenerErrorState(_ error: String) -> some View {
         ContentUnavailableView {
             Label("Couldn't load stays", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
+                .foregroundStyle(.danger)
         } description: {
             Text(error)
                 .font(.caption)
@@ -246,7 +246,7 @@ struct StaysTab: View {
                 Section {
                     Label(actionError, systemImage: "exclamationmark.triangle.fill")
                         .font(.subheadline)
-                        .foregroundColor(.red)
+                        .foregroundColor(.danger)
                 }
             }
             reviewSection(awaitingReviewAsGuest)
@@ -396,7 +396,7 @@ struct StaysTab: View {
                 Label(isShown.wrappedValue ? "Hide \(label)" : "Show \(label)",
                       systemImage: isShown.wrappedValue ? "chevron.up" : "chevron.down")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }

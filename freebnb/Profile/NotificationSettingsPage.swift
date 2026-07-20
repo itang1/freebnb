@@ -31,7 +31,7 @@ struct NotificationSettingsPage: View {
                                 Text(category.title)
                                 Text(category.subtitle)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.secondaryText)
                             }
                         }
                     }
@@ -45,7 +45,7 @@ struct NotificationSettingsPage: View {
                 Section {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(.subheadline)
-                        .foregroundColor(.red)
+                        .foregroundColor(.danger)
                 }
             }
         }

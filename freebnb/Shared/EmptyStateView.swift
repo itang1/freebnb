@@ -72,7 +72,7 @@ struct EmptyStateView<Actions: View>: View {
                 .accessibilityAddTraits(.isHeader)
             Text(message)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             actions

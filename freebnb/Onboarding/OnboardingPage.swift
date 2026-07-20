@@ -86,11 +86,11 @@ struct OnboardingPage: View {
                         if isHostStep {
                             Button("I'm just looking for now") { isPresented = false }
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondaryText)
                         } else {
                             Button("Skip") { isPresented = false }
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondaryText)
                         }
                     }
                     .frame(height: 20)
@@ -125,7 +125,7 @@ struct OnboardingPage: View {
                     .multilineTextAlignment(.center)
                 Text("To one of your friends, that's a free trip. Only friends you approve can ever see your place.")
                     .font(.body)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
             }
@@ -159,7 +159,7 @@ struct OnboardingPage: View {
                     .multilineTextAlignment(.center)
                 Text(slide.body)
                     .font(.body)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
             }

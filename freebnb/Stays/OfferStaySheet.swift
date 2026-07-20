@@ -100,7 +100,7 @@ struct OfferStaySheet: View {
                                 .font(.subheadline.weight(.semibold))
                             Text("\(listing.address.city), \(listing.address.state)")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondaryText)
                         }
                     }
                 }
@@ -116,14 +116,14 @@ struct OfferStaySheet: View {
                 Section {
                     Text("They'll get one notification and can say yes or no. Nothing is booked until they accept.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
 
                 if let errorMessage {
                     Section {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     }
                 }
             }
@@ -153,7 +153,7 @@ struct OfferStaySheet: View {
             if offerableFriends.isEmpty {
                 Text("None of your friends can see this listing yet. Add friends, and they'll show up here.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             } else {
                 Picker("Friend", selection: $guestUserID) {
                     Text("Choose a friend").tag(String?.none)
@@ -176,30 +176,30 @@ struct OfferStaySheet: View {
                     Text("Duration")
                     Spacer()
                     Text("\(nights) night\(nights == 1 ? "" : "s")")
-                        .foregroundColor(nights > listing.guestPolicy.maxStayDays ? .red : .secondary)
+                        .foregroundColor(nights > listing.guestPolicy.maxStayDays ? .danger : .secondaryText)
                 }
             }
             if nights > listing.guestPolicy.maxStayDays {
                 Label("Your max stay for this place is \(listing.guestPolicy.maxStayDays) nights", systemImage: "exclamationmark.circle")
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(.danger)
             }
             if let conflict = blockedConflict {
                 let f = AppDateFormatters.shortDay
                 Label("You've blocked \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(.danger)
             }
             if let conflict = acceptedConflict {
                 let f = AppDateFormatters.shortDay
                 Label("You've already accepted a stay here \(f.string(from: conflict.checkIn)) – \(f.string(from: conflict.checkOut))", systemImage: "calendar.badge.exclamationmark")
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(.danger)
             }
             if duplicateOffer != nil {
                 Label("You've already offered these dates to them, and they haven't answered yet.", systemImage: "clock.badge.questionmark")
                     .font(.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(.warning)
             }
         }
     }

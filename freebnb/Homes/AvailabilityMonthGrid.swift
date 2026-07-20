@@ -92,7 +92,7 @@ struct AvailabilityMonthGrid: View {
                 ForEach(Array(AvailabilityCalendar.weekdayInitials(calendar: calendar).enumerated()), id: \.offset) { _, initial in
                     Text(initial)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -138,12 +138,12 @@ struct AvailabilityMonthGrid: View {
     }
 
     private func background(marked: Bool, past: Bool, marking: DayMarking) -> Color {
-        if past { return Color.secondary.opacity(0.06) }
+        if past { return Color.secondaryText.opacity(0.06) }
         return marked ? marking.tint.opacity(marking.fillOpacity) : Color.accent.opacity(0.12)
     }
 
     private func foreground(marked: Bool, past: Bool, marking: DayMarking) -> Color {
-        if past { return .secondary.opacity(0.4) }
+        if past { return .secondaryText.opacity(0.4) }
         return marked ? marking.tint : .primary
     }
 
@@ -178,7 +178,7 @@ struct AvailabilityLegend: View {
             }
         }
         .font(.caption)
-        .foregroundColor(.secondary)
+        .foregroundColor(.secondaryText)
         .accessibilityElement(children: .combine)
     }
 

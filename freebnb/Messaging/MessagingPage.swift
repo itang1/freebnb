@@ -175,7 +175,7 @@ struct MessagingPage: View {
                             .foregroundColor(.primary)
                         Image(systemName: "chevron.right")
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                     }
                 }
                 .accessibilityLabel("\(otherName), view profile")

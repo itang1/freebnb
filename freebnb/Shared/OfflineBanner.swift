@@ -17,11 +17,13 @@ struct OfflineBanner: View {
                 .font(.footnote.weight(.medium))
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundColor(.white)
+        // Theme surface + full-strength label, not white-on-grey: the grey fill
+        // left the text at 3.5:1 and ignored the palette in both appearances.
+        .foregroundColor(.primary)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(Color.secondary)
+        .background(Color.secondaryBackground)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("You are offline. Changes will sync when you reconnect.")
         .transition(.move(edge: .top).combined(with: .opacity))

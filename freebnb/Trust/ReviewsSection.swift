@@ -31,7 +31,7 @@ struct ReviewsSection: View {
                 if let average = reviews.averageRating {
                     Text(String(format: "%.1f ★ · %d", average, reviews.count))
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
             }
 
@@ -40,7 +40,7 @@ struct ReviewsSection: View {
             // runs in both directions (a host reviews their guest too).
             Text("From people who have actually stayed, in either direction: guests review their host; hosts review their guest.")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
 
             if !reviewStore.hasLoadedReviews(about: subjectUserID) {
                 ProgressView()
@@ -48,7 +48,7 @@ struct ReviewsSection: View {
             } else if reviews.isEmpty {
                 Text("No reviews yet. \(subjectName) hasn't finished a stay on FreeBNB.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             } else {
                 ForEach(shown) { review in
                     ReviewRow(review: review, authorName: authorName(review))
@@ -56,7 +56,7 @@ struct ReviewsSection: View {
                 if reviews.count > shown.count {
                     Text("Showing \(shown.count) of \(reviews.count). See them all on \(subjectName)'s profile.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
             }
         }
@@ -82,7 +82,7 @@ struct ReviewRow: View {
                 if let createdAt = review.createdAt {
                     Text(AppDateFormatters.mediumDate.string(from: createdAt))
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
             }
             if let comment = review.publicComment, !comment.isEmpty {
@@ -95,13 +95,13 @@ struct ReviewRow: View {
             if review.publicComment?.isEmpty ?? true {
                 Text("Rated, no comment left.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .italic()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.secondary.opacity(0.06))
+        .background(Color.secondaryText.opacity(0.06))
         .cornerRadius(10)
     }
 }
@@ -131,7 +131,7 @@ struct PrivateFeedbackSection: View {
                         .font(.headline)
                     Text("Only you can see these. They aren't on your profile.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
 
                     ForEach(notes, id: \.review.id) { note in
                         VStack(alignment: .leading, spacing: 6) {
@@ -140,13 +140,13 @@ struct PrivateFeedbackSection: View {
                                 systemImage: "lock.fill"
                             )
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                             Text(note.feedback.text)
                                 .font(.subheadline)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
-                        .background(Color.secondary.opacity(0.06))
+                        .background(Color.secondaryText.opacity(0.06))
                         .cornerRadius(10)
                     }
                 }
@@ -184,7 +184,7 @@ struct ReferencesSection: View {
             // rating and can speak to either side of a future stay.
             Text("Vouches from friends who haven't stayed with \(subjectName), speaking to them as a guest, a host, or both.")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
 
             if !reviewStore.hasLoadedReferences(about: subjectUserID) {
                 ProgressView()
@@ -192,7 +192,7 @@ struct ReferencesSection: View {
             } else if references.isEmpty {
                 Text("No references yet. Friends of \(subjectName) can vouch for them here.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             } else {
                 ForEach(references) { reference in
                     ReferenceRow(
@@ -247,7 +247,7 @@ struct ReferenceRow: View {
                     } label: {
                         Image(systemName: "trash")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Remove reference from \(authorName)")

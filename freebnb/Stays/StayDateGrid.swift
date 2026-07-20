@@ -67,7 +67,7 @@ struct StayDateGrid: View {
                     systemImage: "info.circle"
                 )
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .accessibilityAddTraits(.updatesFrequently)
             }
         }
@@ -117,7 +117,7 @@ struct StayDateGrid: View {
             ForEach(Array(AvailabilityCalendar.weekdayInitials(calendar: calendar).enumerated()), id: \.offset) { _, initial in
                 Text(initial)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -127,10 +127,10 @@ struct StayDateGrid: View {
     private var legend: some View {
         HStack(spacing: 16) {
             swatch(Color.accent, "Your stay")
-            swatch(Color.secondary.opacity(0.12), "Unavailable")
+            swatch(Color.secondaryText.opacity(0.12), "Unavailable")
         }
         .font(.caption)
-        .foregroundColor(.secondary)
+        .foregroundColor(.secondaryText)
         .accessibilityElement(children: .combine)
     }
 
@@ -200,7 +200,7 @@ struct StayDateGrid: View {
 
     private func background(_ state: CellState) -> Color {
         switch state {
-        case .unavailable: return Color.secondary.opacity(0.12)
+        case .unavailable: return Color.secondaryText.opacity(0.12)
         case .endpoint: return .accent
         case .inStay: return Color.accent.opacity(0.25)
         case .available: return Color.accent.opacity(0.10)
@@ -209,8 +209,8 @@ struct StayDateGrid: View {
 
     private func foreground(_ state: CellState) -> Color {
         switch state {
-        case .unavailable: return .secondary.opacity(0.4)
-        case .endpoint: return .white
+        case .unavailable: return .secondaryText.opacity(0.4)
+        case .endpoint: return .onAccent
         case .inStay, .available: return .primary
         }
     }

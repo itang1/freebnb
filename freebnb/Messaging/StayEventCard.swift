@@ -35,13 +35,13 @@ struct StayEventCard: View {
 
             Text(event.dateRange)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
 
             if let note = event.note, !note.isEmpty {
                 Text("\"\(note)\"")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
             }
 
@@ -67,18 +67,18 @@ struct StayEventCard: View {
         case .pending:
             Label("Sending", systemImage: "clock")
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(.secondaryText)
                 .labelStyle(.iconOnly)
                 .accessibilityLabel("Sending")
         case .failed:
             Label("Not delivered", systemImage: "exclamationmark.circle.fill")
                 .font(.caption2)
-                .foregroundColor(.red)
+                .foregroundColor(.danger)
         case .sent:
             if let timestamp {
                 Text(timestamp, style: .time)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
     }

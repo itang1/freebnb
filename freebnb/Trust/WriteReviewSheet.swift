@@ -40,7 +40,7 @@ struct WriteReviewSheet: View {
                             .font(.headline)
                         Text("\(stay.listingCity) · \(stay.dateRangeText)")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondaryText)
                     }
                 }
 
@@ -73,7 +73,7 @@ struct WriteReviewSheet: View {
                     Section {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline)
-                            .foregroundColor(.red)
+                            .foregroundColor(.danger)
                     }
                 }
             }
@@ -136,7 +136,7 @@ struct StarRatingPicker: View {
                 } label: {
                     Image(systemName: star <= rating ? "star.fill" : "star")
                         .font(.title2)
-                        .foregroundColor(star <= rating ? .orange : .secondary.opacity(0.4))
+                        .foregroundColor(star <= rating ? .warning : .secondaryText.opacity(0.4))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(star) star\(star == 1 ? "" : "s")")
@@ -146,7 +146,7 @@ struct StarRatingPicker: View {
             if rating > 0 {
                 Text("\(rating) / 5")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
             }
         }
         .accessibilityElement(children: .contain)
@@ -162,7 +162,7 @@ struct StarRatingView: View {
             ForEach(Review.ratingRange, id: \.self) { star in
                 Image(systemName: star <= rating ? "star.fill" : "star")
                     .font(.caption)
-                    .foregroundColor(star <= rating ? .orange : .secondary.opacity(0.4))
+                    .foregroundColor(star <= rating ? .warning : .secondaryText.opacity(0.4))
             }
         }
         .accessibilityElement(children: .ignore)

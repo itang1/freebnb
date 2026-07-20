@@ -10,8 +10,8 @@ import SwiftUI
 
 struct InlineErrorLabel: View {
     let message: String
-    /// `.orange` for warnings the user can proceed past, `.red` for failures.
-    var tint: Color = .red
+    /// `.warning` for cautions the user can proceed past, `.danger` for failures.
+    var tint: Color = .danger
 
     var body: some View {
         Label(message, systemImage: "exclamationmark.triangle.fill")
@@ -26,7 +26,7 @@ struct InlineErrorLabel: View {
             InlineErrorLabel(message: "Something went wrong. Try again.")
         }
         Section {
-            InlineErrorLabel(message: "Add your name before creating a listing.", tint: .orange)
+            InlineErrorLabel(message: "Add your name before creating a listing.", tint: .warning)
         }
     }
 }
