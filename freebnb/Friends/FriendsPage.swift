@@ -502,7 +502,7 @@ struct InviteSheet: View {
                         .background(Color.accent, in: Capsule())
                 }
 
-                if let qr = QRCode.image(for: InviteCopy.inviteURL.absoluteString) {
+                if let qr = QRCode.image(for: InviteCopy.inviteURL().absoluteString) {
                     VStack(spacing: 8) {
                         Image(uiImage: qr)
                             .interpolation(.none)
@@ -524,7 +524,7 @@ struct InviteSheet: View {
                     Text("Your invite link")
                         .font(.caption)
                         .foregroundColor(.secondaryText)
-                    Text(InviteCopy.inviteURL.absoluteString)
+                    Text(InviteCopy.inviteURL().absoluteString)
                         .font(.caption.monospaced())
                         .foregroundColor(.secondaryText)
                         .padding(10)

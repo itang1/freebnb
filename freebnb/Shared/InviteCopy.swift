@@ -11,14 +11,30 @@
 import Foundation
 
 enum InviteCopy {
-    /// A plain link that just opens the app. It carries no identity and takes no
-    /// action: opening it never creates a friend connection. Once both people are
-    /// on FreeBNB they add each other in-app, through search and an accepted
-    /// request, so there is nothing here to spoof or act on.
-    static var inviteURL: URL {
+    /// The query item naming who sent an invite. Read by `DeepLinkRouter` and
+    /// mirrored in `FreeBNBApp.handleIncomingURL`.
+    static let inviterQueryItem = "from"
+
+    /// A link that opens the app on the Friends tab with the sender's own card
+    /// already on screen, ready to add.
+    ///
+    /// It carries the sender's user ID and nothing else, and it still takes no
+    /// action: opening it never creates a friend connection, it only saves the
+    /// recipient from having to remember and spell a display name. The graph is
+    /// still only ever changed by an explicit tap on "Add", answered by an
+    /// explicit "Accept" at the other end, so a forged or forwarded link buys a
+    /// sender nothing they could not get by being searched for by name.
+    ///
+    /// `senderID` is nil until the signed-in user's profile loads; the link then
+    /// degrades to the plain one, which lands on Friends with the search bar
+    /// empty.
+    static func inviteURL(senderID: String? = nil) -> URL {
         var components = URLComponents()
         components.scheme = "freebnb"
         components.host = "invite"
+        if let senderID, !senderID.isEmpty {
+            components.queryItems = [URLQueryItem(name: inviterQueryItem, value: senderID)]
+        }
         // Force-unwrap is safe: compile-time constant URL.
         return components.url ?? URL(string: "freebnb://invite")!
     }
@@ -26,12 +42,12 @@ enum InviteCopy {
     /// The general "join me" invite, framed as vouching. On a friends-only app
     /// the feed is empty until a friend shows up, so a personal invite genuinely
     /// is what unlocks it; the copy says so as an offer, never as pressure.
-    static func vouch(inviterName: String?) -> String {
+    static func vouch(inviterName: String?, senderID: String? = nil) -> String {
         intro(inviterName)
             + "FreeBNB is a free home-sharing app that only ever shows you places from your own friends. "
             + "No strangers, no fees, and it never touches your contacts. "
             + "I'm vouching for you; if you'd like in, install the app and search for \(searchTarget(inviterName)) so we can connect: "
-            + inviteURL.absoluteString
+            + inviteURL(senderID: senderID).absoluteString
     }
 
     /// Sent from an empty city search. The moment someone plans a trip and has
@@ -42,7 +58,7 @@ enum InviteCopy {
             + "I'm planning a trip to \(city) and I'd love to crash with you. "
             + "FreeBNB is a free, friends-only home-sharing app; if you join, I can send a real request with dates instead of a vague text. "
             + "Search for \(searchTarget(inviterName)) if you're up for it: "
-            + inviteURL.absoluteString
+            + inviteURL().absoluteString
     }
 
     /// Sent from a feed that has friends but no listings: an open question about
@@ -53,7 +69,7 @@ enum InviteCopy {
             + "Got a couch or a guest room? If you put it on FreeBNB, friends like me could stay with you without the group-chat scramble. "
             + "It's free, always, and only friends you approve can ever see it. "
             + "Search for \(searchTarget(inviterName)) if you're curious: "
-            + inviteURL.absoluteString
+            + inviteURL().absoluteString
     }
 
     /// "It's Maya. " when the profile has loaded, nothing otherwise: the message

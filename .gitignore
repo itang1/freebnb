@@ -36,6 +36,10 @@ ui-debug.log
 # Local Firebase emulator runtime logs/pids (dev_emulator.sh)
 .emulator/
 
+# Firebase deploy caches (hosting.*.cache is a local record of what was last
+# uploaded; it rewrites itself on every deploy and means nothing to anyone else)
+.firebase/
+
 # Documentation
 docs/internal/
 
