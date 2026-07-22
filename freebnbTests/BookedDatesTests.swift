@@ -82,4 +82,71 @@ struct BookedDatesTests {
         blockedOnly.blockedDateRanges = [DateRange(start: day(1), end: day(3))]
         #expect(blockedOnly.unavailableRanges.count == 1)
     }
+
+    // MARK: - The invariant, enforced rather than asked for politely
+
+    /// The files allowed to name the split fields at all. Everything here is the
+    /// host's own side of the calendar, where booked and blocked legitimately
+    /// differ, plus the model that defines them and the save path that round-trips
+    /// them. Adding a file to this list is a claim that no guest can see it.
+    private static let mayReadRawRanges: Set<String> = [
+        "freebnb/Homes/Home.swift",                    // defines both fields
+        "freebnb/Homes/AvailabilityEditorView.swift",  // host's editor; booked is read-only there
+        "freebnb/Homes/CreateListingViewModel.swift",  // carries both across an edit
+        "freebnb/Homes/HomeStore.swift",               // "block these dates on all my homes"
+        "freebnb/Stays/OfferStaySheet.swift",          // host offering; pairs with its own accepted-stay check
+    ]
+
+    /// Everything from `//` to end of line, removed. The rule is about what the
+    /// code reads, not what the comments discuss: this very file, and the fix that
+    /// prompted it, both name the split fields in prose to explain why not to touch
+    /// them. Block comments aren't stripped because this codebase doesn't use them.
+    private static func strippingComments(_ source: String) -> String {
+        source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                guard let marker = line.range(of: "//") else { return line }
+                return line[line.startIndex..<marker.lowerBound]
+            }
+            .joined(separator: "\n")
+    }
+
+    /// `Home.bookedDateRanges` asks callers to "go through `unavailableRanges`,
+    /// never this", and for a while a comment was the only thing enforcing it —
+    /// which is exactly how `ModifyStaySheet`, a guest-facing sheet, ended up
+    /// validating against `blockedDateRanges` alone and telling any guest which of
+    /// a host's unavailable days were bookings. A comment can't fail a build; this
+    /// can.
+    @Test func onlyHostSurfacesNameTheSplitRanges() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // freebnbTests
+            .deletingLastPathComponent()  // repo root
+        let sources = root.appendingPathComponent("freebnb")
+
+        let enumerator = try #require(
+            FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil),
+            "couldn't walk \(sources.path)"
+        )
+
+        var offenders: [String] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            guard !Self.mayReadRawRanges.contains(relative) else { continue }
+            let code = try Self.strippingComments(String(contentsOf: url, encoding: .utf8))
+            if code.contains("bookedDateRanges") || code.contains("blockedDateRanges") {
+                offenders.append(relative)
+            }
+        }
+
+        #expect(
+            offenders.isEmpty,
+            """
+            These files name `bookedDateRanges`/`blockedDateRanges` directly: \
+            \(offenders.sorted().joined(separator: ", ")). \
+            Guest-facing code must read `Home.unavailableRanges`, so a booked day and \
+            a host-blocked day stay indistinguishable. If the file is host-only, add it \
+            to `mayReadRawRanges` above.
+            """
+        )
+    }
 }

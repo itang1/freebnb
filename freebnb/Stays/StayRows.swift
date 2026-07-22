@@ -469,8 +469,15 @@ struct ModifyStaySheet: View {
 
     private var maxStay: Int? { listing?.guestPolicy.maxStayDays }
 
-    private var blockedConflict: DateRange? {
-        listing?.blockedDateRanges?.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
+    /// Whether the proposed dates cross a day this listing can't take. Reads the
+    /// merged `unavailableRanges`, never `blockedDateRanges` alone: this sheet is
+    /// guest-facing, and validating against the host's blocks by themselves made it
+    /// an oracle — dates over a block were refused by name while dates over a
+    /// booking sailed through, which told the guest exactly which nights the home
+    /// was occupied. A Bool rather than the range, because naming the span is the
+    /// other half of the same leak.
+    private var hasUnavailableConflict: Bool {
+        listing?.unavailableRanges.contains { $0.overlaps(checkIn: checkIn, checkOut: checkOut) } ?? false
     }
 
     private var hasChanges: Bool {
@@ -480,7 +487,7 @@ struct ModifyStaySheet: View {
     private var canSave: Bool {
         !isSaving && hasChanges && checkOut > checkIn
             && (maxStay == nil || nights <= maxStay!)
-            && blockedConflict == nil
+            && !hasUnavailableConflict
     }
 
     var body: some View {
@@ -502,9 +509,8 @@ struct ModifyStaySheet: View {
                         Label("Max stay is \(maxStay) nights", systemImage: "exclamationmark.circle")
                             .font(.caption).foregroundColor(.danger)
                     }
-                    if let conflict = blockedConflict {
-                        let f = AppDateFormatters.shortDay
-                        Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
+                    if hasUnavailableConflict {
+                        Label("Those dates aren't available", systemImage: "calendar.badge.minus")
                             .font(.caption).foregroundColor(.danger)
                     }
                 }
