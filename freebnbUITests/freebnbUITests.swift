@@ -55,11 +55,22 @@ final class freebnbUITests: XCTestCase {
     /// focus — simulators drop the first tap's focus often enough (hardware
     /// keyboard attach, in-flight scroll) that typing straight away is the
     /// single biggest source of flakes in this suite.
+    /// Clears first, because `typeText` appends. A form that arrives already
+    /// populated — a re-run against a live emulator, a draft the sheet restored,
+    /// a step that ran twice — silently produced concatenated values instead of
+    /// the ones written here, and the test still passed: "Cupertino" typed into a
+    /// field holding "Pasadena Heights" is a listing in "Pasadena HeightsCupertino"
+    /// that no assertion here looks at. Every address in the emulator that reads
+    /// like two strings run together was written this way.
     private func focusAndType(_ text: String, into field: XCUIElement) {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
         if (field.value(forKey: "hasKeyboardFocus") as? Bool) != true {
             field.tap()
+        }
+        if let existing = field.value as? String, !existing.isEmpty,
+           existing != (field.placeholderValue ?? "") {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
         }
         field.typeText(text)
     }
