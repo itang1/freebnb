@@ -87,6 +87,43 @@ struct StayRequestStoreTests {
         #expect(boxAfterDecline.value.first?.status == .declined)
     }
 
+    /// A co-host's inbox is queried by listing, not by party, because a stay
+    /// request names only the listing's owner (feature 14). The security boundary
+    /// is proven against the emulator in rules-tests/cohosts.test.mjs; this pins
+    /// the query contract the client depends on.
+    @Test func coHostedListenerReturnsOnlyTheNamedListingsRequests() async throws {
+        let repo = InMemoryStayRequestsRepository()
+        let store = StayRequestStore(repository: repo)
+        let mine = HomeFixture.make(id: "L1", hostUserID: "host1")
+        let other = HomeFixture.make(id: "L2", hostUserID: "host2")
+        try await store.send(listing: mine, guestUserID: "guest1", checkIn: day(1), checkOut: day(3), guestNote: nil)
+        try await store.send(listing: other, guestUserID: "guest2", checkIn: day(1), checkOut: day(3), guestNote: nil)
+
+        let box = Box<[StayRequest]>([])
+        _ = repo.listenToCoHostedRequests(listingIDs: ["L1"]) { result in
+            if case .success(let requests) = result { box.value = requests }
+        }
+        #expect(box.value.map(\.listingID) == ["L1"])
+    }
+
+    /// An empty roster must not degenerate into "every request": a user who
+    /// co-hosts nothing has to get nothing, not an unfiltered query.
+    @Test func coHostedListenerWithNoListingsEmitsNothing() async throws {
+        let repo = InMemoryStayRequestsRepository()
+        let store = StayRequestStore(repository: repo)
+        let listing = HomeFixture.make(id: "L1", hostUserID: "host1")
+        try await store.send(listing: listing, guestUserID: "guest1", checkIn: day(1), checkOut: day(3), guestNote: nil)
+
+        let box = Box<[StayRequest]>([StayRequest]())
+        let sentinel = Box<Bool>(false)
+        _ = repo.listenToCoHostedRequests(listingIDs: []) { result in
+            sentinel.value = true
+            if case .success(let requests) = result { box.value = requests }
+        }
+        #expect(sentinel.value == false)
+        #expect(box.value.isEmpty)
+    }
+
     @Test func modifyDatesRewritesTheStayInPlace() async throws {
         let repo = InMemoryStayRequestsRepository()
         let store = StayRequestStore(repository: repo)

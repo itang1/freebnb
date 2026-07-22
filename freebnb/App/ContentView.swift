@@ -62,6 +62,17 @@ struct ContentView: View {
         savedHomesForSpotlight.map(\.id)
     }
 
+    /// The listings this user co-hosts rather than owns (feature 14). A stay
+    /// request names only the owner, so this is the handle the request store
+    /// needs to find the ones aimed at a co-hosted home.
+    private var coHostedListingIDs: [String] {
+        let myID = authManager.userID
+        return homeStore.managedListings
+            .filter { !$0.isHostedBy(myID) }
+            .map(\.id)
+            .sorted()
+    }
+
     var body: some View {
         Group {
             if !ageGateAccepted {
@@ -233,6 +244,15 @@ struct ContentView: View {
                     WelcomePage()
                 }
             }
+        }
+        // Point the request store at the listings this user co-hosts, so requests
+        // aimed at a co-hosted home reach the person managing it (feature 14).
+        // Driven from here for the same reason the check-in kit sync is: only
+        // HomeStore knows the roster, and the alternative is a second copy of
+        // that listener inside StayRequestStore. On the outer chain rather than
+        // the signed-in branch's, which the type-checker already finds long.
+        .onChange(of: coHostedListingIDs, initial: true) { _, listingIDs in
+            stayRequestStore.setCoHostedListingIDs(listingIDs)
         }
         // Land on the Listings tab after signing in. selectedTab is persisted,
         // so without this a returning user would reopen on whatever tab they

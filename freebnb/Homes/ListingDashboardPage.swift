@@ -93,7 +93,21 @@ struct ListingDashboardPage: View {
                 }
             }
 
-            if !hasContent {
+            // "None came in" and "still arriving" are different answers, and this
+            // screen gave the first one to both. On a cold start or an account
+            // switch the inbox is empty for a round trip, which read to a host as
+            // being told nobody had asked.
+            if requestStore.isLoadingIncoming && !hasContent {
+                Section {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Loading requests…")
+                            .font(.subheadline)
+                            .foregroundColor(.secondaryText)
+                    }
+                    .padding(.vertical, 4)
+                }
+            } else if !hasContent {
                 Section {
                     Text("No requests yet. Friends who can see this listing can ask to stay, or you can offer it to someone.")
                         .font(.subheadline)

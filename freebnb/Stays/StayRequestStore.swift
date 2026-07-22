@@ -11,8 +11,38 @@ import os
 @MainActor
 @Observable
 final class StayRequestStore {
-    private(set) var incomingRequests: [StayRequest] = []
+    /// Requests awaiting this user as a host: the ones aimed at listings they own,
+    /// merged with the ones aimed at listings they co-host (feature 14).
+    var incomingRequests: [StayRequest] {
+        var seen = Set<String>()
+        return (hostedRequests + coHostedRequests)
+            .filter { seen.insert($0.id).inserted }
+            .sortedByDate()
+    }
+
+    /// Requests naming this user in `hostUserID` — the listings they own.
+    private(set) var hostedRequests: [StayRequest] = []
+    /// Requests for listings this user co-hosts. Kept apart from `hostedRequests`
+    /// because they arrive from a different query keyed on the listing, and the
+    /// two listeners settle independently.
+    private(set) var coHostedRequests: [StayRequest] = []
     private(set) var outgoingRequests: [StayRequest] = []
+
+    /// True until every listener feeding `incomingRequests` has delivered its
+    /// first snapshot for the current user. Host surfaces read this to tell
+    /// "still arriving" from "none came in": on an account switch the lists above
+    /// are cleared synchronously and refill a round trip later, and an empty
+    /// inbox rendered during that window reads as though a request that exists
+    /// never arrived.
+    ///
+    /// Both halves count, not just the owned one. A pure co-host owns no
+    /// listings, so the hosted listener answers "none" instantly while the
+    /// listing-scoped query is still in flight — exactly the person for whom a
+    /// premature "no requests yet" is the whole bug.
+    var isLoadingIncoming: Bool { isLoadingHosted || isLoadingCoHosted }
+
+    private var isLoadingHosted = false
+    private var isLoadingCoHosted = false
     /// Who the requests above belong to. Observed rather than ignored: the tab
     /// badge is derived from it, so it has to invalidate the view when it changes.
     /// Empty while signed out.
@@ -32,6 +62,10 @@ final class StayRequestStore {
     @ObservationIgnored private let liveActivityController = StayLiveActivityController()
     @ObservationIgnored nonisolated(unsafe) private var incomingListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var outgoingListener: RepositoryListener?
+    @ObservationIgnored nonisolated(unsafe) private var coHostedListener: RepositoryListener?
+    /// The co-hosted listing ids the listener above is currently bound to. Held so
+    /// a repeat of the same set is a no-op rather than a listener churn.
+    @ObservationIgnored private var coHostedListingIDs: [String] = []
     // `nonisolated(unsafe)` for the same reason as other stores: deinit is
     // nonisolated but must tear down these handles, which are thread-safe.
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
@@ -47,6 +81,7 @@ final class StayRequestStore {
     deinit {
         incomingListener?.cancel()
         outgoingListener?.cancel()
+        coHostedListener?.cancel()
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
@@ -55,14 +90,24 @@ final class StayRequestStore {
     private func restartListeners(userID: String?) {
         incomingListener?.cancel(); incomingListener = nil
         outgoingListener?.cancel(); outgoingListener = nil
-        incomingRequests = []; outgoingRequests = []
+        coHostedListener?.cancel(); coHostedListener = nil
+        hostedRequests = []; coHostedRequests = []; outgoingRequests = []
+        // The co-hosted set belongs to the user who just left; the next user's
+        // arrives from HomeStore once their managed listings load.
+        coHostedListingIDs = []
         viewerID = userID ?? ""
         guard let userID else {
+            isLoadingHosted = false
+            isLoadingCoHosted = false
             // Signed out: take down the widgets and any running Live Activity so
             // the last user's stay doesn't linger on the Lock Screen.
             publishToWidgetsAndActivities(viewerID: "")
             return
         }
+        isLoadingHosted = true
+        // No co-hosted listener is bound yet; ContentView supplies the roster
+        // once HomeStore has it, and binding flips this back on.
+        isLoadingCoHosted = false
 
         incomingListener = repository.listenToRequests(userID: userID, role: .host) { [weak self] result in
             Task { @MainActor [weak self] in
@@ -70,9 +115,13 @@ final class StayRequestStore {
                 case .failure(let error):
                     self?.log.error("incoming snapshot error: \(error.localizedDescription, privacy: .public)")
                     self?.listenerError = error.localizedDescription
+                    // The inbox is no longer loading; it failed. Leaving the flag
+                    // set would spin a skeleton forever over an error nobody sees.
+                    self?.isLoadingHosted = false
                 case .success(let requests):
                     self?.listenerError = nil
-                    self?.incomingRequests = requests.sortedByDate()
+                    self?.hostedRequests = requests.sortedByDate()
+                    self?.isLoadingHosted = false
                     self?.syncReminders(viewerID: userID)
                     self?.publishToWidgetsAndActivities(viewerID: userID)
                 }
@@ -88,6 +137,55 @@ final class StayRequestStore {
                 case .success(let requests):
                     self?.listenerError = nil
                     self?.outgoingRequests = requests.sortedByDate()
+                    self?.syncReminders(viewerID: userID)
+                    self?.publishToWidgetsAndActivities(viewerID: userID)
+                }
+            }
+        }
+    }
+
+    // MARK: - Co-hosted listings (feature 14)
+
+    /// Points the co-hosted listener at the listings this user co-hosts.
+    ///
+    /// Driven from `ContentView` rather than from here, for the same reason the
+    /// check-in kit sync is: which listings a user co-hosts is `HomeStore`'s
+    /// question, and a store that answered it itself would need a second copy of
+    /// that listener. Idempotent — an unchanged set rebinds nothing.
+    func setCoHostedListingIDs(_ listingIDs: [String]) {
+        let sorted = listingIDs.sorted()
+        guard sorted != coHostedListingIDs else { return }
+        coHostedListingIDs = sorted
+
+        coHostedListener?.cancel(); coHostedListener = nil
+        guard !sorted.isEmpty else {
+            coHostedRequests = []
+            isLoadingCoHosted = false
+            return
+        }
+        let userID = viewerID
+        guard !userID.isEmpty else {
+            isLoadingCoHosted = false
+            return
+        }
+        isLoadingCoHosted = true
+
+        coHostedListener = repository.listenToCoHostedRequests(listingIDs: sorted) { [weak self] result in
+            Task { @MainActor [weak self] in
+                switch result {
+                case .failure(let error):
+                    self?.log.error("co-hosted snapshot error: \(error.localizedDescription, privacy: .public)")
+                    self?.listenerError = error.localizedDescription
+                    self?.isLoadingCoHosted = false
+                case .success(let requests):
+                    self?.listenerError = nil
+                    // A co-host is not a party to the stay, so their own outgoing
+                    // request for the listing they co-host must not double back
+                    // into their host inbox as something to answer.
+                    self?.coHostedRequests = requests
+                        .filter { $0.guestUserID != userID }
+                        .sortedByDate()
+                    self?.isLoadingCoHosted = false
                     self?.syncReminders(viewerID: userID)
                     self?.publishToWidgetsAndActivities(viewerID: userID)
                 }

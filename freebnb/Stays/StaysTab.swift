@@ -208,6 +208,12 @@ struct StaysTab: View {
     private var tripsView: some View {
         if let error = requestStore.listenerError {
             listenerErrorState(error)
+        } else if requestStore.isLoadingIncoming && !hasTripsContent {
+            // Not the same as having none: the listener clears the lists on an
+            // account switch and refills them a round trip later, and "No trips
+            // yet" shown in that gap tells a host their inbox is empty when it
+            // isn't.
+            loadingState
         } else if !hasTripsContent {
             emptyState
         } else {

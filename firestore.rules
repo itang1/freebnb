@@ -81,6 +81,29 @@ service cloud.firestore {
                    .data.get('coHostUserIDs', []).hasAny([request.auth.uid]));
     }
 
+    // True when the caller may answer a stay request with the host's authority:
+    // the host named on the request, or a co-host of the listing it targets
+    // (feature 14).
+    //
+    // Co-hosts were deliberately excluded from stay requests when co-hosting
+    // landed, on the reasoning that managing a listing is not becoming its host.
+    // That left a co-host able to read the street address and block dates on the
+    // calendar while blind to the bookings filling it, which is the half of the
+    // job that made the other half incoherent. A co-host now answers requests for
+    // the listings they manage; naming one is the act of delegating that.
+    //
+    // `isOwner` is checked first so the common path (the host themselves) costs
+    // no extra document read — rules short-circuit, and only the co-host branch
+    // pays for the get() inside isListingManager.
+    //
+    // Takes the document rather than the listing id because both callers already
+    // hold `resource.data`, and the owner check needs `hostUserID` off the same
+    // map. Safe on a create, where `resource` is null: the update rule is not
+    // reached, and rules-tests/requests.test.mjs covers that path.
+    function isHostSide(data) {
+      return isOwner(data.hostUserID) || isListingManager(data.listingID);
+    }
+
     // True when `homeID` is a live listing (exists, not soft-deleted) whose host
     // is exactly `claimedHostID`. Used to stop a guest from fabricating a stay
     // request that names an arbitrary victim as host or targets a dead listing
@@ -510,9 +533,14 @@ service cloud.firestore {
     // No edits once a request reaches a terminal state (declined / cancelled).
     // -------------------------------------------------------------------------
     match /stayRequests/{requestID} {
+      // The two parties, plus any co-host of the listing being asked about — the
+      // co-host branch is what makes the client's `listingID in [...]` inbox
+      // query legal (feature 14). Listed last so the parties' reads short-circuit
+      // before the listing lookup.
       allow read: if isSignedIn()
           && (request.auth.uid == resource.data.guestUserID
-              || request.auth.uid == resource.data.hostUserID);
+              || request.auth.uid == resource.data.hostUserID
+              || isListingManager(resource.data.listingID));
 
       allow create: if isFullMember()
           && request.resource.data.keys().hasOnly([
@@ -642,7 +670,7 @@ service cloud.firestore {
                   // Host declines a pending request. Acceptance is NOT a client
                   // write: it goes through the acceptStayRequest callable, whose
                   // admin transaction is the race-free double-booking guard (L1).
-                  (isOwner(resource.data.hostUserID)
+                  (isHostSide(resource.data)
                       && resource.data.status == "pending"
                       && request.resource.data.status == "declined"
                       && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
@@ -664,7 +692,11 @@ service cloud.firestore {
                   // rather than declined: the offer was the host's to retract, and
                   // "declined" would read on the guest's trip list as though they
                   // had turned it down.
-                  (isOwner(resource.data.hostUserID)
+                  // `cancelledBy` stays pinned to the listing's host even when a
+                  // co-host retracts: it records which *side* backed out, which is
+                  // what the push trigger branches on and what the guest's trip
+                  // row reads back.
+                  (isHostSide(resource.data)
                       && resource.data.status == "offered"
                       && request.resource.data.status == "cancelled"
                       && changedKeys().hasOnly(['status', 'hostNote', 'cancelledBy', 'updatedAt'])
@@ -686,7 +718,7 @@ service cloud.firestore {
                   // request is declined, an accepted stay is cancelled, so the
                   // trip rows read the same whichever side backed out. The note
                   // gives the guest a why, same as a decline's.
-                  (isOwner(resource.data.hostUserID)
+                  (isHostSide(resource.data)
                       && resource.data.status == "accepted"
                       && request.resource.data.status == "cancelled"
                       && changedKeys().hasOnly(['status', 'hostNote', 'cancelledBy', 'updatedAt'])
@@ -702,7 +734,7 @@ service cloud.firestore {
                   // and by the fact that no other branch may touch it.
                   (resource.data.status == "accepted"
                       && request.resource.data.status == "completed"
-                      && (isOwner(resource.data.hostUserID) || isOwner(resource.data.guestUserID))
+                      && (isHostSide(resource.data) || isOwner(resource.data.guestUserID))
                       && changedKeys().hasOnly(['status', 'completedAt', 'updatedAt'])
                       && request.resource.data.completedAt == request.time
                       && request.time >= resource.data.checkIn)

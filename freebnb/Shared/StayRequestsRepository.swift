@@ -15,10 +15,61 @@ import os
 // Upper bound for the stay-requests snapshot listener.
 private let stayRequestsListenerLimit = 200
 
+/// Firestore caps an `in` filter's value list. Chunked to ten so the query stays
+/// legal on every SDK version this app has shipped against, rather than riding
+/// the current thirty-value ceiling.
+private let listingIDChunkSize = 10
+
+/// Merges the per-chunk co-hosted listeners into one `[StayRequest]` emission.
+/// Each chunk reports independently and the newest snapshot of each is kept, so
+/// one chunk updating doesn't drop the others.
+private final class CoHostedRequestsMerger: @unchecked Sendable {
+    private let handler: @Sendable (Result<[StayRequest], Error>) -> Void
+    private let chunkCount: Int
+    private var chunks: [Int: [StayRequest]] = [:]
+    private let lock = NSLock()
+
+    init(chunkCount: Int, handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void) {
+        self.chunkCount = chunkCount
+        self.handler = handler
+    }
+
+    func set(_ requests: [StayRequest], at index: Int) {
+        lock.lock()
+        chunks[index] = requests
+        // Emit as soon as every chunk has reported once; after that, on each
+        // update. Waiting for all of them first keeps the host from seeing a
+        // half-populated inbox flicker past on launch.
+        guard chunks.count == chunkCount else { lock.unlock(); return }
+        var seen = Set<String>()
+        let merged = chunks.keys.sorted()
+            .flatMap { chunks[$0] ?? [] }
+            .filter { seen.insert($0.id).inserted }
+        lock.unlock()
+        handler(.success(merged))
+    }
+
+    func fail(_ error: Error) { handler(.failure(error)) }
+}
+
 protocol StayRequestsRepository: Sendable {
     func listenToRequests(
         userID: String,
         role: StayRequestRole,
+        handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
+    ) -> RepositoryListener
+
+    /// Requests aimed at listings this user co-hosts rather than owns (feature 14).
+    ///
+    /// A stay request names only the listing's owner in `hostUserID`, so the
+    /// `role: .host` listener above — which matches on that field — cannot see a
+    /// co-host's inbox at all. Co-hosts manage the listing, so they need the same
+    /// view of who is asking to stay in it; this is queried by listing instead of
+    /// by party, which is the only handle a co-host has on it.
+    ///
+    /// Returns a listener that emits nothing when `listingIDs` is empty.
+    func listenToCoHostedRequests(
+        listingIDs: [String],
         handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
     ) -> RepositoryListener
 
@@ -104,6 +155,38 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
                 handler(.success(requests))
             }
         return FirestoreListenerBox(reg)
+    }
+
+    func listenToCoHostedRequests(
+        listingIDs: [String],
+        handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
+    ) -> RepositoryListener {
+        guard !listingIDs.isEmpty else { return CompositeListener(listeners: []) }
+
+        let chunks = stride(from: 0, to: listingIDs.count, by: listingIDChunkSize).map {
+            Array(listingIDs[$0..<min($0 + listingIDChunkSize, listingIDs.count)])
+        }
+        let merger = CoHostedRequestsMerger(chunkCount: chunks.count, handler: handler)
+
+        let registrations = chunks.enumerated().map { index, chunk in
+            let reg = db.collection(FirestorePaths.stayRequests)
+                .whereField("listingID", in: chunk)
+                .order(by: "createdAt", descending: true)
+                .limit(to: stayRequestsListenerLimit)
+                .addSnapshotListener { snapshot, error in
+                    if let error { merger.fail(error); return }
+                    let requests: [StayRequest] = (snapshot?.documents ?? []).compactMap { doc in
+                        do { return try doc.data(as: StayRequest.self) }
+                        catch {
+                            Telemetry.decodeFailure(collection: FirestorePaths.stayRequests, documentID: doc.documentID, error: error)
+                            return nil
+                        }
+                    }
+                    merger.set(requests, at: index)
+                }
+            return FirestoreListenerBox(reg) as RepositoryListener
+        }
+        return CompositeListener(listeners: registrations)
     }
 
     func create(_ request: StayRequest) async throws {

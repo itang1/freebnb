@@ -805,13 +805,33 @@ export const acceptStayRequest = onCall(async (request) => {
       checkIn: admin.firestore.Timestamp;
       checkOut: admin.firestore.Timestamp;
     };
-    // Whoever is owed the answer is the one who may say yes: the host on a
+    // Read before the authorization check, because the host side now includes the
+    // listing's co-hosts and that roster lives on the listing (feature 14). The
+    // read itself is not observable to the caller; the *checks* below still run in
+    // the original order, so an unauthorized caller is refused before learning
+    // anything about the listing's state.
+    const listingSnap = await t.get(db.collection(Collections.homes).doc(req.listingID));
+    const coHostUserIDs = (listingSnap.data()?.coHostUserIDs ?? []) as string[];
+    // Mirrors isHostSide() in firestore.rules: the named host, or a co-host of the
+    // listing. Kept in step with that rule — the two are one policy in two places.
+    const isHostSide = req.hostUserID === uid || coHostUserIDs.includes(uid);
+
+    // Whoever is owed the answer is the one who may say yes: the host side on a
     // guest's request, the guest on a host's offer. Anyone else — including the
     // party who *sent* it — is refused, so a host cannot accept their own offer
     // on the guest's behalf and book them into a stay they never agreed to.
     if (req.status === "pending") {
-      if (req.hostUserID !== uid) {
-        throw new HttpsError("permission-denied", "Only the host can accept this request.");
+      if (!isHostSide) {
+        throw new HttpsError("permission-denied", "Only the host or a co-host can accept this request.");
+      }
+      // A co-host may ask to stay at the listing they help run, which would
+      // otherwise leave them on both sides of the same document: the guest who
+      // asked and a host who may answer. Self-acceptance is what the create rule
+      // spends its "pinned together" branch preventing on the other path, and it
+      // would mint a completed stay, and the trust stats that follow, out of one
+      // person agreeing with themselves.
+      if (req.guestUserID === uid) {
+        throw new HttpsError("permission-denied", "You cannot accept your own request.");
       }
     } else if (req.status === "offered") {
       if (req.guestUserID !== uid) {

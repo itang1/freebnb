@@ -207,6 +207,15 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         return NoopListener()
     }
 
+    func listenToCoHostedRequests(
+        listingIDs: [String],
+        handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
+    ) -> RepositoryListener {
+        guard !listingIDs.isEmpty else { return NoopListener() }
+        handler(.success(requests.filter { listingIDs.contains($0.listingID) }))
+        return NoopListener()
+    }
+
     func create(_ request: StayRequest) async throws {
         requests.append(request)
     }

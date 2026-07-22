@@ -313,3 +313,153 @@ describe("homes/{id}/private — the address and the house manual", () => {
     await assertFails(getDoc(locationDoc(asCoHost())));
   });
 });
+
+// A co-host answers stay requests for the listings they manage. This was the
+// one piece of the delegation that was withheld, which left a co-host able to
+// block dates on a calendar while blind to the bookings filling it. The
+// boundaries that matter now are the ones separating "acts with the host's
+// authority" from "is the host": a co-host answers requests, and still cannot
+// rename the host, offer the place, or answer a request they themselves sent.
+describe("stayRequests — the co-host's half of the inbox", () => {
+  const REQUEST = "request-1";
+  const asGuest = () => testEnv.authenticatedContext(FRIEND).firestore();
+  const requestDoc = (db, id = REQUEST) => doc(db, "stayRequests", id);
+
+  function requestBody(extra = {}) {
+    return {
+      id: REQUEST,
+      listingID: LISTING,
+      listingCity: "Portland",
+      hostUserID: HOST,
+      guestUserID: FRIEND,
+      checkIn: Timestamp.fromMillis(Date.now() + 86400000),
+      checkOut: Timestamp.fromMillis(Date.now() + 3 * 86400000),
+      status: "pending",
+      createdAt: Timestamp.now(),
+      ...extra,
+    };
+  }
+
+  async function seedRequest(extra = {}) {
+    await seedCoHostedListing();
+    await seed((db) => setDoc(requestDoc(db), requestBody(extra)));
+  }
+
+  it("lets a co-host read a request for the listing they manage", async () => {
+    await seedRequest();
+    await assertSucceeds(getDoc(requestDoc(asCoHost())));
+  });
+
+  it("still hides that request from a stranger", async () => {
+    await seedRequest();
+    await assertFails(getDoc(requestDoc(asStranger())));
+  });
+
+  it("lets a co-host decline a pending request", async () => {
+    await seedRequest();
+    await assertSucceeds(updateDoc(requestDoc(asCoHost()), {
+      status: "declined",
+      hostNote: "Sorry, we're full that week.",
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it("refuses a stranger declining it", async () => {
+    await seedRequest();
+    await assertFails(updateDoc(requestDoc(asStranger()), {
+      status: "declined",
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it("lets a co-host cancel an accepted stay", async () => {
+    await seedRequest({ status: "accepted" });
+    await assertSucceeds(updateDoc(requestDoc(asCoHost()), {
+      status: "cancelled",
+      cancelledBy: HOST,
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  // `cancelledBy` names the side, not the individual: the push trigger branches
+  // on it and the guest's trip row reads it back.
+  it("refuses a co-host stamping cancelledBy with their own id", async () => {
+    await seedRequest({ status: "accepted" });
+    await assertFails(updateDoc(requestDoc(asCoHost()), {
+      status: "cancelled",
+      cancelledBy: COHOST,
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  // Acceptance is the callable's job, not a client write, for either party.
+  it("refuses a co-host accepting by writing the status directly", async () => {
+    await seedRequest();
+    await assertFails(updateDoc(requestDoc(asCoHost()), {
+      status: "accepted",
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  // The name is the host's own, and a rename propagating from a co-host would
+  // rewrite trip rows to say something the host never chose.
+  it("refuses a co-host rewriting the denormalized host name", async () => {
+    await seedRequest();
+    await assertFails(updateDoc(requestDoc(asCoHost()), { listingHostName: "Not The Host" }));
+  });
+
+  // Offering is the host's to extend: the create rule pins hostUserID to the
+  // caller, so a co-host cannot mint one even for the listing they manage.
+  it("refuses a co-host offering the place to a friend", async () => {
+    await seedCoHostedListing();
+    await seedFriendship(COHOST, FRIEND);
+    await assertFails(setDoc(requestDoc(asCoHost(), "request-offer"), requestBody({
+      id: "request-offer",
+      status: "offered",
+      initiatedBy: COHOST,
+      createdAt: serverTimestamp(),
+    })));
+  });
+
+  // The listing a co-host manages is one they may also ask to stay at, which
+  // puts them on both sides of the document. They may send it; the callable is
+  // what refuses to let them answer it (see acceptStayRequest).
+  it("lets a co-host decline a request from someone else, not their own", async () => {
+    await seedCoHostedListing();
+    await seed((db) => setDoc(requestDoc(db, "request-own"), requestBody({
+      id: "request-own",
+      guestUserID: COHOST,
+    })));
+    // Declining their own request is indistinguishable from cancelling it, which
+    // they may already do as the guest, so the rule need not single it out.
+    await assertSucceeds(updateDoc(requestDoc(asCoHost(), "request-own"), {
+      status: "declined",
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it("still lets the host do all of it", async () => {
+    await seedRequest();
+    await assertSucceeds(getDoc(requestDoc(asHost())));
+    await assertSucceeds(updateDoc(requestDoc(asHost()), {
+      status: "declined",
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it("still lets the guest read their own request", async () => {
+    await seedRequest();
+    await assertSucceeds(getDoc(requestDoc(asGuest())));
+  });
+
+  // Removal revokes this the same way it revokes the address.
+  it("locks a removed co-host out of the inbox again", async () => {
+    await seedListing({ coHostUserIDs: [] });
+    await seed((db) => setDoc(requestDoc(db), requestBody()));
+    await assertFails(getDoc(requestDoc(asCoHost())));
+    await assertFails(updateDoc(requestDoc(asCoHost()), {
+      status: "declined",
+      updatedAt: serverTimestamp(),
+    }));
+  });
+});

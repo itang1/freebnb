@@ -72,6 +72,14 @@
       "collectionGroup": "stayRequests",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "listingID", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stayRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "checkOut", "order": "ASCENDING" }
       ]

@@ -9,8 +9,8 @@
 //     is declined, never host-cancelled.
 //   - a friend request is refused when either party has blocked the other, and
 //     the edge carries only its known keys.
-//   - a stay request is readable only to its own two parties, which is why no
-//     client can run the accept-time overlap query.
+//   - a stay request is readable to its own two parties and to anyone managing
+//     the listing it targets, and to nobody else.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -299,13 +299,21 @@ describe("friendEdges/{id} create — blocks stop friend requests", () => {
 });
 
 // The overlap question — "is any accepted stay on this listing in my dates?" —
-// cannot be asked from the client, and this pins why. A `list` is evaluated
-// against its potential result set, so a query that does not constrain
-// guestUserID or hostUserID is denied even for the host, whose own listing it
-// is. `StayRequestsRepository.accept()` therefore asks the acceptStayRequest
-// callable instead; a fast-path guard here would throw permission-denied on
-// every accept.
-describe("stayRequests — the overlap query the client cannot run", () => {
+// used to be unaskable from the client by anyone, because the read rule named
+// only the two parties and a `list` is evaluated against its potential result
+// set. Co-hosts changed that: their inbox is a listing-scoped query
+// (`listingID in [...]`), which the rule can only admit by making listing scope
+// provable, so the same shape is now legal for anyone managing the listing.
+//
+// What that does *not* change is where the double-booking guard lives. It was
+// never this denial — it is the transaction inside the acceptStayRequest
+// callable, which is also the only thing that can read across both parties'
+// requests. A client that now runs the query still cannot act on it: the update
+// rule refuses a client-written "accepted" from either side.
+//
+// The boundary that still holds is who may ask: a manager of the listing, and
+// nobody else. The guest's denial below is the control proving that.
+describe("stayRequests — the listing-scoped overlap query", () => {
   const acceptedOnListing = (uid) =>
     getDocs(
       query(
@@ -320,11 +328,24 @@ describe("stayRequests — the overlap query the client cannot run", () => {
     await seedStay("accepted");
   });
 
-  it("denies the unconstrained overlap query to the host", async () => {
-    await assertFails(acceptedOnListing(HOST));
+  // The host manages their own listing, so the scope is provable for them. They
+  // could already read every one of these requests via `hostUserID == uid`; this
+  // is a second shape on the same data, not new reach.
+  it("allows the listing-scoped query to the host", async () => {
+    await assertSucceeds(acceptedOnListing(HOST));
   });
 
-  it("denies it to the guest", async () => {
+  // ...but reading is still not accepting. The guard that matters survives.
+  it("still refuses the host writing an acceptance directly", async () => {
+    await assertFails(
+      updateDoc(doc(as(HOST), "stayRequests", STAY), {
+        status: "accepted",
+        updatedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it("denies it to the guest, who manages nothing", async () => {
     await assertFails(acceptedOnListing(FRIEND));
   });
 
