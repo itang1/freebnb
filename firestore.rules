@@ -546,20 +546,29 @@ service cloud.firestore {
 
       // -----------------------------------------------------------------------
       // Accepted-guest markers. Existence is the capability: the private location
-      // rule above checks for `accepted/{callerUID}`. The host writes one when
+      // rule above checks for `accepted/{callerUID}`. A manager writes one when
       // accepting a stay and removes it if the stay is later declined or
       // cancelled; the guest may remove their own to give the address back.
       //
-      // `isListingHost`, not `isListingManager`: admitting a stranger into
-      // someone's home, and handing them its street address, is the host's
-      // decision. A co-host keeps the listing accurate; they do not decide who
-      // sleeps in it. Stay requests are addressed to `hostUserID` for the same
-      // reason (see `listingHasActiveHost`), so a co-host never sees the request
-      // either. If that ever changes, these two must change together.
+      // This block used to ask `isListingHost` throughout, on the reasoning that
+      // admitting a stranger into someone's home is the host's decision and not a
+      // co-host's. It said so, and it said that if stay requests ever reached a
+      // co-host, "these two must change together". They have: `isHostSide` now
+      // lets a co-host answer requests for the listings they manage, and `create`
+      // below already moved to `isListingManager` so the grant could be written in
+      // the same commit as the acceptance.
+      //
+      // Read and delete had not moved with it, which left a co-host able to issue
+      // a grant they could not read back, and — worse — able to cancel an accepted
+      // stay while unable to revoke its address. That second one is not a
+      // theoretical asymmetry: `updateStatus` sends the status change and the
+      // marker delete as one batch, and a batch is atomic, so the cancel failed
+      // outright rather than leaving the address behind. All three now ask the
+      // same question.
       // -----------------------------------------------------------------------
       match /accepted/{guestID} {
         allow read: if isSignedIn()
-            && (request.auth.uid == guestID || isListingHost(homeID));
+            && (request.auth.uid == guestID || isListingManager(homeID));
 
         // The grant is issued alongside a real acceptance, by whichever side does
         // the accepting: a manager accepting a request, or the guest accepting the
@@ -595,8 +604,11 @@ service cloud.firestore {
         // A grant is not editable in place; revoke and re-issue.
         allow update: if false;
 
+        // Revoking is the safe half of the pair: taking an address back can be
+        // done by anyone entitled to have granted it, and by the guest handing it
+        // in. A co-host who may cancel the stay must be able to revoke with it.
         allow delete: if isSignedIn()
-            && (request.auth.uid == guestID || isListingHost(homeID));
+            && (request.auth.uid == guestID || isListingManager(homeID));
       }
     }
 

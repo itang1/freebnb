@@ -21,7 +21,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, setDoc, updateDoc, serverTimestamp, Timestamp, writeBatch } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, writeBatch } from "firebase/firestore";
 
 const rulesPath = fileURLToPath(new URL("../firestore.rules", import.meta.url));
 
@@ -260,6 +260,88 @@ describe("the address grant", () => {
     batch.update(doc(db, "stayRequests", REQUEST), acceptFields);
     batch.set(doc(db, "homes", LISTING, "accepted", GUEST), markerFields({ note: "smuggled" }));
     await assertFails(batch.commit());
+  });
+});
+
+// Read, create, and delete on the marker have to ask the same question. They
+// drifted once: `create` moved to `isListingManager` so the grant could ride
+// along with a client-side acceptance, while read and delete stayed on
+// `isListingHost`. A co-host could then issue a grant they could not read back,
+// and could cancel a stay whose address they could not revoke.
+describe("the address grant — revoking and reading it back", () => {
+  /** A stay already accepted, with the guest holding the address. */
+  async function seedAccepted() {
+    await seed(async (db) => {
+      await setDoc(doc(db, "stayRequests", REQUEST), requestBody({ status: "accepted" }));
+      await setDoc(doc(db, "homes", LISTING, "accepted", GUEST), {
+        requestID: REQUEST,
+        guestUserID: GUEST,
+        createdAt: Timestamp.now(),
+      });
+    });
+  }
+
+  const markerDoc = (db) => doc(db, "homes", LISTING, "accepted", GUEST);
+
+  it("lets the host read a grant they issued", async () => {
+    await seedAccepted();
+    await assertSucceeds(getDoc(markerDoc(as(HOST))));
+  });
+
+  it("lets a co-host read a grant they could have issued", async () => {
+    await seedAccepted();
+    await assertSucceeds(getDoc(markerDoc(as(COHOST))));
+  });
+
+  it("lets the guest read their own grant", async () => {
+    await seedAccepted();
+    await assertSucceeds(getDoc(markerDoc(as(GUEST))));
+  });
+
+  it("refuses a stranger reading someone else's grant", async () => {
+    await seedAccepted();
+    await assertFails(getDoc(markerDoc(as(STRANGER))));
+  });
+
+  it("lets the guest hand the address back", async () => {
+    await seedAccepted();
+    await assertSucceeds(deleteDoc(markerDoc(as(GUEST))));
+  });
+
+  it("refuses a stranger revoking a grant", async () => {
+    await seedAccepted();
+    await assertFails(deleteDoc(markerDoc(as(STRANGER))));
+  });
+
+  // The case the drift actually broke. `updateStatus` sends the cancellation and
+  // the revocation as one batch, and a batch is atomic — so when a co-host could
+  // cancel but not revoke, the cancel failed outright rather than leaving the
+  // address behind. Written as the batch the client sends, not as two writes,
+  // because two writes would pass on rules that this one dies on.
+  function cancelBatch(db) {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "stayRequests", REQUEST), {
+      status: "cancelled",
+      cancelledBy: HOST,
+      updatedAt: serverTimestamp(),
+    });
+    batch.delete(doc(db, "homes", LISTING, "accepted", GUEST));
+    return batch.commit();
+  }
+
+  it("lets the host cancel an accepted stay and revoke the address in one commit", async () => {
+    await seedAccepted();
+    await assertSucceeds(cancelBatch(as(HOST)));
+  });
+
+  it("lets a co-host do the same", async () => {
+    await seedAccepted();
+    await assertSucceeds(cancelBatch(as(COHOST)));
+  });
+
+  it("still refuses a stranger cancelling and revoking", async () => {
+    await seedAccepted();
+    await assertFails(cancelBatch(as(STRANGER)));
   });
 });
 
