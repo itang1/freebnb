@@ -79,6 +79,10 @@ enum ArrivalWindow: String, Codable, Hashable, CaseIterable, Sendable {
 enum StayRequestError: LocalizedError {
     case overlappingStay
     case notSignedIn
+    /// The request moved on between the row rendering and the tap landing:
+    /// cancelled by the guest, or already answered on another device.
+    case noLongerPending
+    case listingUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -86,6 +90,10 @@ enum StayRequestError: LocalizedError {
             return "Those dates overlap a stay you've already accepted for this listing."
         case .notSignedIn:
             return "You're signed out. Sign back in to change this stay."
+        case .noLongerPending:
+            return "This request has already been answered."
+        case .listingUnavailable:
+            return "This listing is no longer available."
         }
     }
 }
