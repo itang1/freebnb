@@ -98,6 +98,10 @@ struct MessagingPage: View {
     @ObservationIgnored private let log = AppLog.logger("messaging")
 
     var body: some View {
+        // Read once per body pass: the toolbar gate and the listing-choice dialog
+        // both read it, and each read filters the visible listings and asks the
+        // request store about every candidate.
+        let requestable = requestableListings
         VStack(spacing: 0) {
             // Listing context — shown when a specific listing is associated.
             if let listing {
@@ -145,11 +149,11 @@ struct MessagingPage: View {
             // Primary action: Request a Stay, whenever the other person has a
             // home this user could request. Their open request for this user's
             // place is a different stay and doesn't take the button away.
-            if !requestableListings.isEmpty {
+            if !requestable.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Request a Stay") {
-                        if requestableListings.count == 1 {
-                            requestTarget = requestableListings[0]
+                        if requestable.count == 1 {
+                            requestTarget = requestable[0]
                         } else {
                             showListingChoice = true
                         }
@@ -210,7 +214,7 @@ struct MessagingPage: View {
             isPresented: $showListingChoice,
             titleVisibility: .visible
         ) {
-            ForEach(requestableListings) { home in
+            ForEach(requestable) { home in
                 Button(home.displayTitle) { requestTarget = home }
             }
         }

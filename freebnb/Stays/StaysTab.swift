@@ -96,17 +96,15 @@ struct StaysTab: View {
         !pendingOut.isEmpty || !acceptedOut.isEmpty || !pastOut.isEmpty
     }
 
-    /// The signed-in user's own completed stays as a guest, not yet reviewed.
-    private var awaitingReviewAsGuest: [StayRequest] {
-        awaitingReview.filter { $0.guestUserID == authManager.userID }
-    }
-
-    /// Completed stays the signed-in user hosted, not yet reviewed.
-    private var awaitingReviewAsHost: [StayRequest] {
-        awaitingReview.filter { $0.hostUserID == authManager.userID }
-    }
-
     var body: some View {
+        // Resolved once per body pass and handed down to the panes. Each read of
+        // `awaitingReview` re-derives `completedStays` — concatenating both
+        // request lists, filtering, and sorting — and the two badges plus each
+        // pane's review section read it three times per render.
+        let awaiting = awaitingReview
+        let reviewsAsGuest = awaiting.filter { $0.guestUserID == authManager.userID }
+        let reviewsAsHost = awaiting.filter { $0.hostUserID == authManager.userID }
+        let pendingInCount = pendingIn.count
         VStack(spacing: 0) {
             // A big, filled pill per pane rather than the system segmented
             // control: that one sat quietly in the nav bar under a static
@@ -115,8 +113,8 @@ struct StaysTab: View {
             // owes you something makes the switch itself worth looking at.
             StaysModeSwitcher(
                 selection: $selectedTab,
-                tripsBadge: awaitingReviewAsGuest.count,
-                listingsBadge: pendingIn.count + awaitingReviewAsHost.count
+                tripsBadge: reviewsAsGuest.count,
+                listingsBadge: pendingInCount + reviewsAsHost.count
             )
 
             // Pinned above both panes: a stay you're in the middle of is the one
@@ -139,10 +137,10 @@ struct StaysTab: View {
                     // properties themselves — "My Listings" means everything tied
                     // to homes you host, not just the properties list.
                     YourListingsPage(title: "My Listings") {
-                        listingsRequestSections
+                        listingsRequestSections(awaitingReview: reviewsAsHost)
                     }
                 } else {
-                    tripsView
+                    tripsView(awaitingReview: reviewsAsGuest)
                 }
             }
         }
@@ -205,7 +203,7 @@ struct StaysTab: View {
     // MARK: - Trips view
 
     @ViewBuilder
-    private var tripsView: some View {
+    private func tripsView(awaitingReview: [StayRequest]) -> some View {
         if let error = requestStore.listenerError {
             listenerErrorState(error)
         } else if requestStore.isLoadingIncoming && !hasTripsContent {
@@ -217,7 +215,7 @@ struct StaysTab: View {
         } else if !hasTripsContent {
             emptyState
         } else {
-            staysList
+            staysList(awaitingReview: awaitingReview)
         }
     }
 
@@ -254,7 +252,7 @@ struct StaysTab: View {
         .background(Color.primaryBackground.ignoresSafeArea())
     }
 
-    private var staysList: some View {
+    private func staysList(awaitingReview: [StayRequest]) -> some View {
         List {
             if let actionError {
                 Section {
@@ -263,7 +261,7 @@ struct StaysTab: View {
                         .foregroundColor(.danger)
                 }
             }
-            reviewSection(awaitingReviewAsGuest)
+            reviewSection(awaitingReview)
             travelerSections
             pastTripsSection
         }
@@ -447,8 +445,8 @@ struct StaysTab: View {
     /// about your homes, requests included, rather than requests hiding under
     /// "My Trips" while this pane only manages listing settings.
     @ViewBuilder
-    private var listingsRequestSections: some View {
-        reviewSection(awaitingReviewAsHost)
+    private func listingsRequestSections(awaitingReview: [StayRequest]) -> some View {
+        reviewSection(awaitingReview)
         hostSections
         pastHostingSection
     }

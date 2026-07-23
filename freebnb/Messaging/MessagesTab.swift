@@ -43,15 +43,13 @@ struct MessagesTab: View {
         return "FreeBNB User"
     }
 
-    /// The live stay between this user and their correspondent, for the row's
-    /// chip. Both directions are searched, since the same person can be a host in
-    /// one stay and a guest in another.
-    private func stayContext(with otherUserID: String) -> ConversationStayContext? {
-        ConversationStay.context(
-            between: authManager.userID,
-            and: otherUserID,
-            stays: requestStore.incomingRequests + requestStore.outgoingRequests
-        )
+    /// Which of that person's listings a thread is about, given their outgoing
+    /// requests in the store's newest-first order. Active requests win over
+    /// settled ones. Pure, so the row builder and the deep-link path apply one
+    /// rule rather than two copies of it that can drift.
+    private static func listingID(fromTheirRequests requests: [StayRequest]) -> String? {
+        let request = requests.first { $0.status.isActive } ?? requests.first
+        return request?.listingID
     }
 
     /// Finds the listing associated with this conversation by looking at stay
@@ -59,13 +57,68 @@ struct MessagesTab: View {
     ///
     /// Only the other person's home qualifies: an incoming request points at one
     /// of this user's own listings, and attaching that would caption the thread
-    /// with their own home. Active requests win over settled ones; within each,
-    /// the store's newest-first order decides.
+    /// with their own home.
+    ///
+    /// The row list does not call this — it uses `rowModels(for:)`, which does
+    /// the same work for every row in one pass. This stays for the deep-link
+    /// path, which resolves a single conversation.
     private func listing(for otherUserID: String) -> Home? {
         let theirs = requestStore.outgoingRequests.filter { $0.hostUserID == otherUserID }
-        let request = theirs.first { $0.status.isActive } ?? theirs.first
-        guard let listingID = request?.listingID else { return nil }
+        guard let listingID = Self.listingID(fromTheirRequests: theirs) else { return nil }
         return listings.first { $0.id == listingID && $0.hostUserID == otherUserID }
+    }
+
+    /// Everything one conversation row displays, resolved up front.
+    private struct RowModel: Identifiable {
+        let summary: ConversationSummary
+        let name: String
+        let listing: Home?
+        let stayContext: ConversationStayContext?
+        var id: String { summary.id }
+    }
+
+    /// Builds every row's content in a single pass over the stores.
+    ///
+    /// Each row used to resolve its own listing and stay chip, and both of those
+    /// scanned the full request lists — one of them concatenating both lists
+    /// first, allocating a fresh array per row. That is O(rows x requests) per
+    /// render for data that changes only when a snapshot lands. Grouping once
+    /// and looking up per row makes it O(rows + requests).
+    private func rowModels(for summaries: [ConversationSummary]) -> [RowModel] {
+        let viewerID = authManager.userID
+
+        var staysByOther: [String: [StayRequest]] = [:]
+        for stay in requestStore.incomingRequests + requestStore.outgoingRequests {
+            let other = stay.hostUserID == viewerID ? stay.guestUserID : stay.hostUserID
+            staysByOther[other, default: []].append(stay)
+        }
+        var outgoingByHost: [String: [StayRequest]] = [:]
+        for stay in requestStore.outgoingRequests {
+            outgoingByHost[stay.hostUserID, default: []].append(stay)
+        }
+        let listingsByID = Dictionary(listings.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        return summaries.map { summary in
+            let other = summary.otherUserID
+            var home: Home?
+            if let listingID = Self.listingID(fromTheirRequests: outgoingByHost[other] ?? []),
+               let candidate = listingsByID[listingID], candidate.hostUserID == other {
+                home = candidate
+            }
+            return RowModel(
+                summary: summary,
+                name: displayName(for: other),
+                listing: home,
+                // The same pure derivation as before, handed the stays for this
+                // pair instead of every stay; it re-filters, so the chip is
+                // identical.
+                stayContext: ConversationStay.context(
+                    between: viewerID,
+                    and: other,
+                    stays: staysByOther[other] ?? []
+                )
+            )
+        }
     }
 
     private var visibleSummaries: [ConversationSummary] {
@@ -79,16 +132,19 @@ struct MessagesTab: View {
         }
     }
 
-    /// Skeletons stand in only for the not-yet-known empty state. Once any
-    /// conversation has arrived the real list is the better answer, and a search
-    /// that matches nothing is a result rather than a pending load.
-    private var showingSkeletons: Bool {
-        messageStore.isLoadingConversations && visibleSummaries.isEmpty && searchQuery.isEmpty
-    }
-
     // MARK: - Body
 
     var body: some View {
+        // Resolved once per body pass. `visibleSummaries` filters and searches
+        // the whole list on every read, and this body reads it from four places
+        // (the skeleton gate, both empty checks, and the list itself), so it ran
+        // four times per render before.
+        let summaries = visibleSummaries
+        // Skeletons stand in only for the not-yet-known empty state. Once any
+        // conversation has arrived the real list is the better answer, and a
+        // search that matches nothing is a result rather than a pending load.
+        let showingSkeletons = messageStore.isLoadingConversations
+            && summaries.isEmpty && searchQuery.isEmpty
         NavigationStack(path: $path) {
             Group {
                 if showingSkeletons {
@@ -101,7 +157,7 @@ struct MessagesTab: View {
                     .accessibilityElement()
                     .accessibilityLabel("Loading conversations")
                     .transition(.opacity)
-                } else if visibleSummaries.isEmpty && searchQuery.isEmpty {
+                } else if summaries.isEmpty && searchQuery.isEmpty {
                     EmptyStateView(
                         title: "No conversations yet",
                         systemImage: "message",
@@ -109,27 +165,29 @@ struct MessagesTab: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.primaryBackground.ignoresSafeArea())
-                } else if visibleSummaries.isEmpty {
+                } else if summaries.isEmpty {
                     ContentUnavailableView.search(text: searchQuery)
                         .background(Color.primaryBackground.ignoresSafeArea())
                 } else {
+                    // Built here rather than above so the empty and loading
+                    // states cost nothing.
+                    let rows = rowModels(for: summaries)
                     List {
-                        ForEach(visibleSummaries) { summary in
-                            let name = displayName(for: summary.otherUserID)
+                        ForEach(rows) { row in
                             let route = ConversationRoute(
-                                otherUserID: summary.otherUserID,
-                                otherName: name,
-                                listing: listing(for: summary.otherUserID)
+                                otherUserID: row.summary.otherUserID,
+                                otherName: row.name,
+                                listing: row.listing
                             )
                             NavigationLink(value: route) {
                                 ConversationRow(
-                                    otherName: name,
-                                    otherUserID: summary.otherUserID,
-                                    lastMessage: summary.lastMessage,
+                                    otherName: row.name,
+                                    otherUserID: row.summary.otherUserID,
+                                    lastMessage: row.summary.lastMessage,
                                     currentUserID: authManager.userID,
-                                    isMuted: messageStore.isMuted(summary.id),
-                                    isUnread: messageStore.isUnread(summary.id, currentUserID: authManager.userID),
-                                    stayContext: stayContext(with: summary.otherUserID)
+                                    isMuted: messageStore.isMuted(row.id),
+                                    isUnread: messageStore.isUnread(row.id, currentUserID: authManager.userID),
+                                    stayContext: row.stayContext
                                 )
                             }
                         }
@@ -137,7 +195,7 @@ struct MessagesTab: View {
                     .scrollContentBackground(.hidden)
                     .background(Color.primaryBackground.ignoresSafeArea())
                     .transition(.opacity)
-                    .animatesListChanges(on: visibleSummaries.map(\.id))
+                    .animatesListChanges(on: rows.map(\.id))
                 }
             }
             .animation(AppAnimation.contentSwap, value: showingSkeletons)

@@ -19,14 +19,20 @@ struct MessageThread: View {
 
     @Environment(MessageStore.self) private var messageStore
 
-    private var allMessages: [Message] { messageStore.messages(for: conversationID) }
-
-    private var messages: [Message] {
-        guard !searchQuery.isEmpty else { return allMessages }
-        return allMessages.filter { $0.text.localizedCaseInsensitiveContains(searchQuery) }
+    /// Applies the search filter. Takes the thread rather than reading it, so a
+    /// body pass sorts the messages once instead of once per read.
+    private func filtered(_ all: [Message]) -> [Message] {
+        guard !searchQuery.isEmpty else { return all }
+        return all.filter { $0.text.localizedCaseInsensitiveContains(searchQuery) }
     }
 
     var body: some View {
+        // Read once per body pass and pass it down. These were computed
+        // properties, and `messages(for:)` re-sorts the whole thread on every
+        // call — the empty check, the ForEach, and the onChange key made that
+        // three sorts per pass, on the longest collection on screen.
+        let allMessages = messageStore.messages(for: conversationID)
+        let messages = filtered(allMessages)
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 8) {

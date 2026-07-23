@@ -165,6 +165,13 @@ final class MessageStore {
     /// so the UI can show a "slow down" notice. Reset on the next allowed send.
     private(set) var isSendRateLimited = false
 
+    /// The conversation list, newest first. Derived from `conversationDocs` plus
+    /// the optimistic overlay by `rebuildConversationSummaries()`, which every
+    /// mutation of those inputs calls. Stored rather than computed so that
+    /// reading it — which the list does several times per body pass, on every
+    /// tab that is still resident — is a plain array read.
+    private(set) var conversationSummaries: [ConversationSummary] = []
+
     // The denormalized conversation summaries the list is built from, keyed by
     // conversationID. Maintained server-side by the onMessageCreated trigger.
     private var conversationDocs: [String: Conversation] = [:]
@@ -239,6 +246,7 @@ final class MessageStore {
     private func restartListener(userID: String?) {
         let previousUserID = currentUserID
         currentUserID = userID
+        rebuildConversationSummaries()
         activeListener?.cancel()
         activeListener = nil
         for (_, l) in threadListeners { l.cancel() }
@@ -261,6 +269,7 @@ final class MessageStore {
             failedIDs = []
             failedMessages = [:]
             pendingMessages = [:]
+            rebuildConversationSummaries()
             // Signed out: nothing is coming, so stop showing skeletons.
             isLoadingConversations = false
             return
@@ -283,6 +292,7 @@ final class MessageStore {
         case .success(let conversations):
             conversationDocs = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
             reconcileOptimistic()
+            rebuildConversationSummaries()
         }
     }
 
@@ -371,7 +381,13 @@ final class MessageStore {
     private func clearOptimistic(delivered: [Message]) {
         let ids = Set(delivered.map(\.id))
         pendingIDs.subtract(ids)
-        for id in ids { pendingMessages.removeValue(forKey: id) }
+        // Only rebuild when an optimistic entry actually went away. Every thread
+        // snapshot lands here, and most of them clear nothing.
+        var clearedAny = false
+        for id in ids where pendingMessages.removeValue(forKey: id) != nil {
+            clearedAny = true
+        }
+        if clearedAny { rebuildConversationSummaries() }
     }
 
     // MARK: - Unread tracking
@@ -450,8 +466,17 @@ final class MessageStore {
         }
     }
 
-    var conversationSummaries: [ConversationSummary] {
-        guard let currentUserID else { return [] }
+    /// Rebuilds `conversationSummaries` from the current server docs and the
+    /// optimistic overlay. Called at the few points those inputs change rather
+    /// than on every read: this was a computed property, so a single body pass
+    /// of the conversation list rebuilt the dictionary and re-sorted it four
+    /// times, and every tab still resident in the TabView paid that cost again
+    /// on each snapshot — including tabs nobody was looking at.
+    private func rebuildConversationSummaries() {
+        guard let currentUserID else {
+            conversationSummaries = []
+            return
+        }
         var summaries: [String: ConversationSummary] = [:]
 
         for (cid, conv) in conversationDocs {
@@ -480,7 +505,8 @@ final class MessageStore {
             summaries[cid] = ConversationSummary(id: cid, otherUserID: otherID, lastMessage: pending)
         }
 
-        return summaries.values.sorted { Self.sortKey($0.lastMessage) > Self.sortKey($1.lastMessage) }
+        conversationSummaries = summaries.values
+            .sorted { Self.sortKey($0.lastMessage) > Self.sortKey($1.lastMessage) }
     }
 
     func messages(for conversationID: String) -> [Message] {
@@ -547,6 +573,7 @@ final class MessageStore {
         var optimistic = msg
         optimistic.timestamp = Date()
         pendingMessages[msg.id] = optimistic
+        rebuildConversationSummaries()
         do {
             try repository.send(msg) { [weak self] error in
                 Task { @MainActor [weak self] in
@@ -582,6 +609,7 @@ final class MessageStore {
         log.error("write error \(msg.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
         pendingIDs.remove(msg.id)
         pendingMessages.removeValue(forKey: msg.id)
+        rebuildConversationSummaries()
         failedIDs.insert(msg.id)
         var stamped = msg
         stamped.timestamp = Date()
