@@ -63,232 +63,89 @@ struct HomeDetailPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // MARK: Host motivation + trust signals
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 5) {
-                        Image(systemName: home.hostMotivation.iconName)
-                            .font(.caption2)
-                        Text(home.hostMotivation.homeText)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(home.hostMotivation.tintColor)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(home.hostMotivation.tintColor.opacity(0.12))
-                    .clipShape(Capsule())
-                    .accessibilityLabel("Host motivation: \(home.hostMotivation.homeText)")
+            // Ordered the way someone actually decides: what is this place, what
+            // did the host say about it, what's in it, where is it, what happens
+            // if plans change, who is the host. The one action a guest can take
+            // is pinned below instead of sitting third from the top, where it
+            // interrupted the reading before there was anything to decide on.
+            VStack(alignment: .leading, spacing: 14) {
+                heroSection
 
-                    hostTrustSignals
-                }
-
+                // Anything already settled between these two people outranks the
+                // description: a confirmed stay's logistics, or the host's own
+                // manual when they're looking at their own listing.
                 stayLogisticsSection
 
-                if authManager.userID != home.hostUserID {
-                    Text("Contact Host")
-                        .font(.headline)
-                    contactSection
+                // Where a pending or accepted request stands, near the top where
+                // "is this already in motion?" gets answered before anything is
+                // read about the place.
+                if !isHost,
+                   let existing = requestStore.activeRequest(for: home.id, guestUserID: authManager.userID) {
+                    existingRequestBanner(existing)
                 }
 
-                Spacer(minLength: 10)
-
-                Text("View on Map")
-                    .font(.headline)
-
-                Text(formattedAddress)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                if exactLocation == nil {
-                    Label(
-                        "\(home.hostName) shares the exact address once they accept your stay.",
-                        systemImage: "lock.fill"
-                    )
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                }
-
-                mapSection
-
-                Button(action: openInMaps) {
-                    // Teal, not coral: opening Maps is a utility, and coral is
-                    // reserved for the one action this screen exists for
-                    // (messaging the host below).
-                    Text("Open in Apple Maps")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.accent)
-                        .foregroundColor(.onAccent)
-                        .cornerRadius(10)
-                }
-                .disabled(mapState != .loaded || exactLocation == nil)
-
-                Spacer(minLength: 10)
-
-                // MARK: Details
-                Text("Details")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Guest Rooms: \(home.sleeping.numGuestRooms)")
-                    // Omitted rather than shown as zero: an unanswered question,
-                    // not an answer of "none" (feature 17).
-                    if home.sleeping.numBathrooms > 0 {
-                        Text("Bathrooms: \(home.sleeping.numBathrooms)")
-                    }
-                    Text("Max Guests: \(home.guestPolicy.maxGuests)")
-                    Text("Max Stay: \(home.guestPolicy.maxStayDays) night\(home.guestPolicy.maxStayDays == 1 ? "" : "s")")
-                    if !home.sleeping.sleepingCounts.isEmpty {
-                        Text("Sleeping Arrangements: \(home.sleeping.arrangementsDescription)")
-                    }
-                    if !home.sleeping.bedSizeCounts.isEmpty {
-                        Text("Bed Sizes: \(home.sleeping.bedSizesDescription)")
+                // The host's own words, directly under the header, rather than
+                // next-to-last where "Memo" sat below every checklist.
+                if let description = home.description, !description.isEmpty {
+                    ListingSection("From \(home.hostName)", systemImage: "quote.bubble") {
+                        Text(description)
+                            .font(.subheadline)
                     }
                 }
-                .font(.subheadline)
 
-                // MARK: Guests & Space
-                Text("Guests & Space")
-                    .font(.headline)
+                spaceSection
+                whoCanComeSection
+                amenitiesSection
+                provisionsSection
 
-                VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Kids Allowed", available: home.guestPolicy.kidsAllowed)
-                    amenityRow("Guest Can Bring Pets", available: home.guestPolicy.guestPetsAllowed)
-                    amenityRow("Host Has Pets", available: home.amenities.hostHasPets)
-                }
-                .font(.subheadline)
-
-                // MARK: Accessibility
                 // Only rendered when the host claimed something. A grid of grey
                 // crosses would read as "this home is inaccessible", which is not
                 // what an unanswered question means.
                 if home.amenities.hasAnyAccessibility {
-                    Text("Accessibility")
-                        .font(.headline)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        if home.amenities.hasStepFreeEntry {
-                            amenityRow("Step-free Entry", available: true)
+                    ListingSection("Accessibility", systemImage: "figure.roll") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if home.amenities.hasStepFreeEntry {
+                                amenityRow("Step-free Entry", available: true)
+                            }
+                            if home.amenities.hasElevator {
+                                amenityRow("Elevator", available: true)
+                            }
+                            if home.amenities.hasAccessibleBathroom {
+                                amenityRow("Accessible Bathroom", available: true)
+                            }
                         }
-                        if home.amenities.hasElevator {
-                            amenityRow("Elevator", available: true)
-                        }
-                        if home.amenities.hasAccessibleBathroom {
-                            amenityRow("Accessible Bathroom", available: true)
-                        }
+                        .font(.subheadline)
                     }
-                    .font(.subheadline)
                 }
 
-                // MARK: Amenities
-                Text("Amenities")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Air Conditioning", available: home.amenities.hasAC)
-                    amenityRow("Heating", available: home.amenities.hasHeating)
-                    amenityRow("Kitchen", available: home.amenities.hasKitchen)
-                    amenityRow("Fridge Space", available: home.amenities.hasFridgeSpace)
-                    amenityRow("Microwave", available: home.amenities.hasMicrowave)
-                    amenityRow("TV", available: home.amenities.hasTV)
-                    amenityRow("Wifi", available: home.amenities.hasWifi)
-                }
-                .font(.subheadline)
-
-                // MARK: Rooms & Laundry
-                Text("Rooms & Laundry")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Private Guest Bathroom", available: home.amenities.hasPrivateGuestBathroom)
-                    amenityRow("In-unit Laundry", available: home.amenities.hasInUnitLaundry)
-                    amenityRow("Coin Laundry Nearby", available: home.amenities.hasCoinLaundryNearby)
-                }
-                .font(.subheadline)
-
-                // MARK: Parking
-                if !home.amenities.parkingDetails.isEmpty {
-                    Text("Parking")
-                        .font(.headline)
-                    Text(home.amenities.parkingDetails)
-                        .font(.subheadline)
+                // Only the off-app hosts land here; the in-app button is pinned.
+                if authManager.userID != home.hostUserID && !pinsContactAction {
+                    contactSection
                 }
 
-                // MARK: Provisions
-                Text("Provisions")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    amenityRow("Pillows", available: home.amenities.providesPillows)
-                    amenityRow("Blankets", available: home.amenities.providesBlankets)
-                    amenityRow("Towels", available: home.amenities.providesTowels)
-                    amenityRow("Toiletries", available: home.amenities.providesToiletries)
-                    HStack(spacing: 8) {
-                        Image(systemName: "fork.knife")
-                            .foregroundColor(home.amenities.foodProvision == .none ? .secondary.opacity(0.75) : .green)
-                            .accessibilityHidden(true)
-                        Text("Food: \(home.amenities.foodProvision.displayName)")
-                            .foregroundColor(home.amenities.foodProvision == .none ? .secondary.opacity(0.75) : .primary)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-                .font(.subheadline)
-
-                // MARK: Cancellation Policy
-                let policy = home.cancellationPolicy ?? .flexible
-                Spacer(minLength: 10)
-                Text("Cancellation Policy")
-                    .font(.headline)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(policy.displayName)
-                        .font(.subheadline).fontWeight(.medium)
-                    Text(policy.description)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-
-                if let description = home.description, !description.isEmpty {
-                    Spacer(minLength: 10)
-                    Text("Memo")
-                        .font(.headline)
-                    Text(description)
-                        .font(.subheadline)
-                }
-
-                Spacer(minLength: 10)
+                locationSection
+                cancellationSection
 
                 // What past guests said about this host (feature 1). Capped, with
                 // the full list one tap away on their profile.
                 ReviewsSection(subjectUserID: home.hostUserID, subjectName: home.hostName, limit: 3)
 
                 if authManager.userID != home.hostUserID {
-                    Divider().padding(.vertical, 8)
-                    HStack(spacing: 24) {
-                        Button {
-                            showReport = true
-                        } label: {
-                            Label("Report listing", systemImage: "flag")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            showBlockConfirm = true
-                        } label: {
-                            let blocked = userProfileStore.isBlocked(home.hostUserID)
-                            Label(blocked ? "Unblock \(home.hostName)" : "Block \(home.hostName)",
-                                  systemImage: blocked ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    reportFooter
                 }
             }
             .padding()
+        }
+        // Pinned so no amount of detail stands between a guest and the one thing
+        // this screen exists for.
+        .safeAreaInset(edge: .bottom) {
+            if pinsContactAction {
+                contactSection
+                    .padding(.horizontal)
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
+                    .background(.bar)
+            }
         }
         .onAppear {
             isListingSaved = userProfileStore.isSaved(home.id)
@@ -449,6 +306,254 @@ extension HomeDetailPage {
         )
     }
 
+    // MARK: - Hero
+
+    /// Photos, the listing's name, and the trust signals — the identity of the
+    /// place, before any of its specifics.
+    ///
+    /// The title is the point: `displayTitle` is what the feed card, the chat
+    /// banner, and the request sheet all call this listing, and the detail page
+    /// was the one surface that never said it. Tapping a card labelled "Guest
+    /// room by the Rose Bowl" landed on a page headed only by the host's name.
+    @ViewBuilder
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !home.photos.isEmpty {
+                photoCarousel
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(home.displayTitle)
+                    .font(.title2).fontWeight(.semibold)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+
+                Text("\(home.address.city), \(home.address.state)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondaryText)
+
+                HStack(spacing: 5) {
+                    Image(systemName: home.hostMotivation.iconName)
+                        .font(.caption2)
+                    Text(home.hostMotivation.homeText)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(home.hostMotivation.tintColor)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(home.hostMotivation.tintColor.opacity(0.12))
+                .clipShape(Capsule())
+                .accessibilityLabel("Host motivation: \(home.hostMotivation.homeText)")
+
+                hostTrustSignals
+            }
+        }
+    }
+
+    /// The listing's photos, which the detail page never showed at all: the feed
+    /// card drew the first one and tapping through lost it.
+    private var photoCarousel: some View {
+        TabView {
+            ForEach(Array(home.photos.enumerated()), id: \.offset) { _, urlString in
+                CachedAsyncImage(url: URL(string: urlString), maxPointSize: 900) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure:
+                        Color.accent.opacity(0.25)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .font(.title)
+                                    .foregroundColor(.onAccent.opacity(0.8))
+                            )
+                    case .empty:
+                        Color.accent.opacity(0.2)
+                            .overlay(ProgressView().tint(.white))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .clipped()
+            }
+        }
+        .tabViewStyle(.page)
+        .frame(height: 240)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .accessibilityLabel("\(home.photos.count) photo\(home.photos.count == 1 ? "" : "s") of \(home.displayTitle)")
+    }
+
+    // MARK: - The space
+
+    /// Rooms, beds, and capacity in one card. These were split across "Details"
+    /// and "Guests & Space" with no line between them: how many rooms and how
+    /// many guests are the same question asked twice.
+    private var spaceSection: some View {
+        ListingSection("The space", systemImage: "bed.double") {
+            VStack(alignment: .leading, spacing: 8) {
+                detailRow("Guest rooms", "\(home.sleeping.numGuestRooms)")
+                // Omitted rather than shown as zero: an unanswered question,
+                // not an answer of "none" (feature 17).
+                if home.sleeping.numBathrooms > 0 {
+                    detailRow("Bathrooms", "\(home.sleeping.numBathrooms)")
+                }
+                detailRow("Sleeps up to", "\(home.guestPolicy.maxGuests)")
+                detailRow(
+                    "Longest stay",
+                    "\(home.guestPolicy.maxStayDays) night\(home.guestPolicy.maxStayDays == 1 ? "" : "s")"
+                )
+                if !home.sleeping.sleepingCounts.isEmpty {
+                    detailRow("Sleeping arrangements", home.sleeping.arrangementsDescription)
+                }
+                if !home.sleeping.bedSizeCounts.isEmpty {
+                    detailRow("Bed sizes", home.sleeping.bedSizesDescription)
+                }
+            }
+        }
+    }
+
+    private var whoCanComeSection: some View {
+        ListingSection("Who can come", systemImage: "person.2") {
+            VStack(alignment: .leading, spacing: 6) {
+                amenityRow("Kids Allowed", available: home.guestPolicy.kidsAllowed)
+                amenityRow("Guest Can Bring Pets", available: home.guestPolicy.guestPetsAllowed)
+                amenityRow("Host Has Pets", available: home.amenities.hostHasPets)
+            }
+            .font(.subheadline)
+        }
+    }
+
+    /// "Amenities" and "Rooms & Laundry" were two headings over one list of
+    /// facilities, so they're one card now. Parking joins them as a footnote
+    /// rather than a heading of its own over a single line of text.
+    private var amenitiesSection: some View {
+        ListingSection("Amenities", systemImage: "sparkles") {
+            VStack(alignment: .leading, spacing: 6) {
+                amenityRow("Air Conditioning", available: home.amenities.hasAC)
+                amenityRow("Heating", available: home.amenities.hasHeating)
+                amenityRow("Kitchen", available: home.amenities.hasKitchen)
+                amenityRow("Fridge Space", available: home.amenities.hasFridgeSpace)
+                amenityRow("Microwave", available: home.amenities.hasMicrowave)
+                amenityRow("TV", available: home.amenities.hasTV)
+                amenityRow("Wifi", available: home.amenities.hasWifi)
+                amenityRow("Private Guest Bathroom", available: home.amenities.hasPrivateGuestBathroom)
+                amenityRow("In-unit Laundry", available: home.amenities.hasInUnitLaundry)
+                amenityRow("Coin Laundry Nearby", available: home.amenities.hasCoinLaundryNearby)
+
+                if !home.amenities.parkingDetails.isEmpty {
+                    Divider().padding(.vertical, 2)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "car")
+                            .foregroundColor(Color.accent)
+                            .accessibilityHidden(true)
+                        Text(home.amenities.parkingDetails)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Parking: \(home.amenities.parkingDetails)")
+                }
+            }
+            .font(.subheadline)
+        }
+    }
+
+    private var provisionsSection: some View {
+        ListingSection("What's provided", systemImage: "shippingbox") {
+            VStack(alignment: .leading, spacing: 6) {
+                amenityRow("Pillows", available: home.amenities.providesPillows)
+                amenityRow("Blankets", available: home.amenities.providesBlankets)
+                amenityRow("Towels", available: home.amenities.providesTowels)
+                amenityRow("Toiletries", available: home.amenities.providesToiletries)
+                HStack(spacing: 8) {
+                    Image(systemName: "fork.knife")
+                        .foregroundColor(home.amenities.foodProvision == .none ? .secondaryText.opacity(0.75) : .green)
+                        .accessibilityHidden(true)
+                    Text("Food: \(home.amenities.foodProvision.displayName)")
+                        .foregroundColor(home.amenities.foodProvision == .none ? .secondaryText.opacity(0.75) : .primary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            .font(.subheadline)
+        }
+    }
+
+    // MARK: - Location
+
+    /// The address, the disclosure notice, the map, and the Maps handoff, which
+    /// were four loose blocks taking the prime slot near the top of the page.
+    private var locationSection: some View {
+        ListingSection("Where you'll be", systemImage: "mappin.and.ellipse") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(formattedAddress)
+                    .font(.subheadline)
+                    .foregroundColor(.secondaryText)
+
+                if exactLocation == nil {
+                    Label(
+                        "\(home.hostName) shares the exact address once they accept your stay.",
+                        systemImage: "lock.fill"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondaryText)
+                }
+
+                mapSection
+
+                Button(action: openInMaps) {
+                    // Teal, not coral: opening Maps is a utility, and coral is
+                    // reserved for the one action this screen exists for
+                    // (messaging the host, pinned at the bottom).
+                    Text("Open in Apple Maps")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.accent)
+                        .foregroundColor(.onAccent)
+                        .cornerRadius(10)
+                }
+                .disabled(mapState != .loaded || exactLocation == nil)
+            }
+        }
+    }
+
+    private var cancellationSection: some View {
+        let policy = home.cancellationPolicy ?? .flexible
+        return ListingSection("If plans change", systemImage: "arrow.uturn.backward") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(policy.displayName)
+                    .font(.subheadline).fontWeight(.medium)
+                Text(policy.description)
+                    .font(.subheadline)
+                    .foregroundColor(.secondaryText)
+            }
+        }
+    }
+
+    // MARK: - Report / block footer
+
+    private var reportFooter: some View {
+        HStack(spacing: 24) {
+            Button {
+                showReport = true
+            } label: {
+                Label("Report listing", systemImage: "flag")
+                    .font(.subheadline)
+                    .foregroundColor(.secondaryText)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showBlockConfirm = true
+            } label: {
+                let blocked = userProfileStore.isBlocked(home.hostUserID)
+                Label(blocked ? "Unblock \(home.hostName)" : "Block \(home.hostName)",
+                      systemImage: blocked ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
+                    .font(.subheadline)
+                    .foregroundColor(.secondaryText)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+    }
+
     // MARK: - Map section
 
     /// Roughly the blur `Home.approximate(_:)` applies, so the circle honestly
@@ -478,14 +583,14 @@ extension HomeDetailPage {
             case .failed:
                 HStack(spacing: 8) {
                     Image(systemName: "location.slash")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                     Text("Map unavailable. Address shown above")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondaryText)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 60)
-                .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                .background(Color.secondaryText.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
             }
         }
         .crossFades(on: mapState)
@@ -546,6 +651,14 @@ extension HomeDetailPage {
 
     // MARK: - Contact section
 
+    /// True when the contact affordance is a single button worth pinning. A host
+    /// who takes contact off-app gets a card in the page flow instead: their
+    /// details are something to read, not a button, and pinning the box would
+    /// park a third of the screen behind a permanent bar.
+    var pinsContactAction: Bool {
+        home.contactPreference == .inApp && authManager.userID != home.hostUserID
+    }
+
     @ViewBuilder
     private var contactSection: some View {
         switch home.contactPreference {
@@ -553,7 +666,7 @@ extension HomeDetailPage {
             if authManager.authMethod == .guest {
                 Text("Create a free account to message \(home.hostName) and request a stay.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
             } else {
                 let existing = requestStore.activeRequest(for: home.id, guestUserID: authManager.userID)
@@ -561,10 +674,11 @@ extension HomeDetailPage {
                 // request does: sending a plain message already starts the chat, so
                 // the button shouldn't keep inviting a first message after one.
                 let hasThread = messageStore.hasConversation(with: home.hostUserID)
-                VStack(spacing: 10) {
-                    if let existing {
-                        existingRequestBanner(existing)
-                    }
+                // The banner that used to ride along here now sits in the page
+                // flow: pinning a status readout costs a quarter of the screen
+                // on every scroll, and it says the same thing whether or not it
+                // is on screen.
+                Group {
                     NavigationLink {
                         MessagingPage(
                             otherUserID: home.hostUserID,
@@ -592,21 +706,20 @@ extension HomeDetailPage {
                 }
             }
         case .contactInfo:
-            VStack(alignment: .leading, spacing: 8) {
-                Text("\(home.hostName) prefers to be contacted directly:")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                if let info = home.hostContactInfo, !info.isEmpty {
-                    HStack(spacing: 10) {
-                        Image(systemName: "person.crop.circle")
-                            .foregroundColor(Color.accent)
+            ListingSection("Contact \(home.hostName)", systemImage: "person.crop.circle") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(home.hostName) prefers to be contacted directly:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondaryText)
+                    if let info = home.hostContactInfo, !info.isEmpty {
                         Text(info)
                             .font(.subheadline)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.secondaryText.opacity(0.08))
+                            .cornerRadius(10)
+                            .textSelection(.enabled)
                     }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.secondary.opacity(0.08))
-                    .cornerRadius(10)
                 }
             }
         }
@@ -618,17 +731,17 @@ extension HomeDetailPage {
         let f = AppDateFormatters.mediumDate
         return HStack(spacing: 10) {
             Image(systemName: request.status == .accepted ? "checkmark.circle.fill" : "clock")
-                .foregroundColor(request.status == .accepted ? .green : .orange)
+                .foregroundColor(request.status == .accepted ? .success : .warning)
             VStack(alignment: .leading, spacing: 2) {
                 Text(request.status == .accepted ? "Stay accepted" : "Request pending")
                     .font(.subheadline).fontWeight(.semibold)
                 Text("\(f.string(from: request.checkIn)) – \(f.string(from: request.checkOut))")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.caption).foregroundColor(.secondaryText)
             }
             Spacer()
         }
         .padding()
-        .background((request.status == .accepted ? Color.green : Color.orange).opacity(0.1))
+        .background((request.status == .accepted ? Color.success : Color.warning).opacity(0.12))
         .cornerRadius(10)
     }
 
@@ -638,13 +751,27 @@ extension HomeDetailPage {
         mapItems.first?.openInMaps(launchOptions: nil)
     }
 
+    /// A label/value pair for facts that aren't yes-or-no, so they line up as a
+    /// table instead of reading as "Guest Rooms: 1" sentences.
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label)
+                .foregroundColor(.secondaryText)
+            Spacer(minLength: 8)
+            Text(value)
+                .multilineTextAlignment(.trailing)
+        }
+        .font(.subheadline)
+        .accessibilityElement(children: .combine)
+    }
+
     private func amenityRow(_ label: String, available: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle")
-                .foregroundColor(available ? .green : .secondary.opacity(0.75))
+                .foregroundColor(available ? .success : .secondaryText.opacity(0.75))
                 .accessibilityHidden(true)
             Text(available ? label : "\(label) (not available)")
-                .foregroundColor(available ? .primary : .secondary.opacity(0.75))
+                .foregroundColor(available ? .primary : .secondaryText.opacity(0.75))
         }
         .accessibilityElement(children: .combine)
     }
