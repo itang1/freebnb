@@ -237,12 +237,19 @@ final class MessageStore {
     // MARK: - Conversation-list listener
 
     private func restartListener(userID: String?) {
+        let previousUserID = currentUserID
         currentUserID = userID
         activeListener?.cancel()
         activeListener = nil
         for (_, l) in threadListeners { l.cancel() }
         threadListeners = [:]
         guard let userID else {
+            // Read/mute state now lives on the device, so signing out has to drop
+            // it here — otherwise the next account signed in on this phone inherits
+            // the last one's badges and mutes.
+            if let previousUserID {
+                ConversationLocalState.shared.clear(userID: previousUserID)
+            }
             conversationDocs = [:]
             threadMessages = [:]
             threadHasMore = [:]

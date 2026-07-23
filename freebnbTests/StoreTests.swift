@@ -372,3 +372,96 @@ struct MessageStoreTests {
         #expect(box.value.first?.mutedBy == ["alice"])
     }
 }
+
+/// The production path builds the thread list from the messages themselves,
+/// because the `conversations` summaries the trigger used to write don't exist
+/// here. These exercise that grouping directly, with an isolated local-state
+/// store so read/mute state doesn't leak between tests or into standard defaults.
+struct ConversationSummaryTests {
+    private func isolatedState() -> ConversationLocalState {
+        let suite = "test.\(UUID().uuidString)"
+        return ConversationLocalState(defaults: UserDefaults(suiteName: suite)!)
+    }
+
+    private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
+
+    @Test func oneRowPerCorrespondentNewestFirst() {
+        let messages = [
+            Message(senderUserID: "bob", text: "older", timestamp: at(100), participants: ["alice", "bob"]),
+            Message(senderUserID: "alice", text: "newest to bob", timestamp: at(300), participants: ["alice", "bob"]),
+            Message(senderUserID: "carol", text: "hi from carol", timestamp: at(200), participants: ["alice", "carol"]),
+        ]
+        let convs = FirestoreMessagesRepository.summarize(
+            messages: messages, userID: "alice", limit: 10, localState: isolatedState()
+        )
+        #expect(convs.map(\.id) == ["alice_bob", "alice_carol"])
+        // The row's preview is the newest message in the thread, not the newest overall.
+        #expect(convs.first?.lastMessage.text == "newest to bob")
+    }
+
+    @Test func unreadCountsOnlyTheirMessagesSinceLastRead() {
+        let state = isolatedState()
+        let messages = [
+            Message(senderUserID: "bob", text: "1", timestamp: at(100), participants: ["alice", "bob"]),
+            Message(senderUserID: "bob", text: "2", timestamp: at(200), participants: ["alice", "bob"]),
+            // Alice's own message never counts against her.
+            Message(senderUserID: "alice", text: "reply", timestamp: at(250), participants: ["alice", "bob"]),
+            Message(senderUserID: "bob", text: "3", timestamp: at(300), participants: ["alice", "bob"]),
+        ]
+        // Never opened on this device: everything bob sent is unread.
+        var convs = FirestoreMessagesRepository.summarize(
+            messages: messages, userID: "alice", limit: 10, localState: state
+        )
+        #expect(convs.first?.unreadCounts["alice"] == 3)
+
+        // Read at t=200: only bob's later message counts.
+        state.markRead(conversationID: "alice_bob", userID: "alice", at: at(200))
+        convs = FirestoreMessagesRepository.summarize(
+            messages: messages, userID: "alice", limit: 10, localState: state
+        )
+        #expect(convs.first?.unreadCounts["alice"] == 1)
+    }
+
+    @Test func muteStateIsPerUser() {
+        let state = isolatedState()
+        let messages = [
+            Message(senderUserID: "bob", text: "hi", timestamp: at(100), participants: ["alice", "bob"]),
+        ]
+        state.setMuted(conversationID: "alice_bob", userID: "alice", muted: true)
+
+        let aliceSees = FirestoreMessagesRepository.summarize(
+            messages: messages, userID: "alice", limit: 10, localState: state
+        )
+        #expect(aliceSees.first?.mutedBy == ["alice"])
+
+        // Bob, on his own device, inherits none of alice's mute.
+        let bobSees = FirestoreMessagesRepository.summarize(
+            messages: messages, userID: "bob", limit: 10, localState: state
+        )
+        #expect(bobSees.first?.mutedBy == [])
+    }
+
+    @Test func limitCapsRowsAfterSortingByRecency() {
+        let messages = (1...5).map { i in
+            Message(senderUserID: "u\(i)", text: "m\(i)", timestamp: at(Double(i) * 100),
+                    participants: ["alice", "u\(i)"].sorted())
+        }
+        let convs = FirestoreMessagesRepository.summarize(
+            messages: messages, userID: "alice", limit: 2, localState: isolatedState()
+        )
+        // The two most recent threads survive the cap, newest first.
+        #expect(convs.count == 2)
+        #expect(convs.first?.lastMessage.text == "m5")
+    }
+
+    @Test func clearDropsReadAndMuteForThatUser() {
+        let state = isolatedState()
+        state.markRead(conversationID: "alice_bob", userID: "alice", at: at(500))
+        state.setMuted(conversationID: "alice_bob", userID: "alice", muted: true)
+
+        state.clear(userID: "alice")
+
+        #expect(state.lastReadDates(userID: "alice").isEmpty)
+        #expect(state.mutedIDs(userID: "alice").isEmpty)
+    }
+}

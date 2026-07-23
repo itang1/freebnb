@@ -45,6 +45,27 @@ struct CompositeListener: RepositoryListener {
     func cancel() { listeners.forEach { $0.cancel() } }
 }
 
+/// Removes a `NotificationCenter` observer when the listener is cancelled, so a
+/// derived listener can subscribe to a local-state change the same way it
+/// subscribes to a Firestore snapshot.
+final class NotificationObserverListener: RepositoryListener, @unchecked Sendable {
+    private let observer: NSObjectProtocol
+    init(observer: NSObjectProtocol) { self.observer = observer }
+    func cancel() { NotificationCenter.default.removeObserver(observer) }
+}
+
+/// A mutable box for the latest message snapshot, so the snapshot callback and
+/// the local-state notification can both drive one emit without capturing a
+/// `var` across concurrency domains.
+final class MessagesSnapshotCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [Message] = []
+    var messages: [Message] {
+        get { lock.lock(); defer { lock.unlock() }; return storage }
+        set { lock.lock(); storage = newValue; lock.unlock() }
+    }
+}
+
 // MARK: - Retry helper
 
 /// Retries `operation` up to `maxAttempts` times using exponential backoff

@@ -56,28 +56,116 @@ struct FirestoreMessagesRepository: MessagesRepository {
     private let db: Firestore
     init(db: Firestore = .firestore()) { self.db = db }
 
+    /// How many recent messages to summarize the thread list from. The list shows
+    /// one row per correspondent, so this is a message budget, not a row budget:
+    /// enough that a busy thread cannot crowd a quiet one off the list, and
+    /// bounded so the tab does not download a mailbox to draw a list.
+    private static let conversationScanLimit = 500
+
+    /// Builds the thread list out of the messages themselves.
+    ///
+    /// It used to read `conversations`, a denormalized summary per thread that
+    /// `onMessageCreated` maintains. That trigger is a Cloud Function, this
+    /// project deploys none, and the collection's create rule is `if false` — so
+    /// in production the summaries do not exist, cannot be made, and the Messages
+    /// tab listed nothing at all while every thread in it was perfectly readable.
+    ///
+    /// A participant may read their own messages, and `(participants, timestamp)`
+    /// is already indexed for the thread view, so the same query answers "who have
+    /// I been talking to" once the rows are grouped by counterpart. That works
+    /// with or without the trigger, which is why it replaces the old path outright
+    /// rather than falling back to it: one code path that behaves the same in the
+    /// emulator and in production beats two that diverge.
     func listenToConversations(
         userID: String,
         limit: Int,
         handler: @escaping @Sendable (Result<[Conversation], Error>) -> Void
     ) -> RepositoryListener {
-        let reg = db.collection(FirestorePaths.conversations)
+        let cache = MessagesSnapshotCache()
+
+        func emit() {
+            handler(.success(Self.summarize(
+                messages: cache.messages,
+                userID: userID,
+                limit: limit
+            )))
+        }
+
+        let reg = db.collection(FirestorePaths.messages)
             .whereField("participants", arrayContains: userID)
-            .order(by: "updatedAt", descending: true)
-            .limit(to: limit)
+            .order(by: "timestamp", descending: true)
+            .limit(to: Self.conversationScanLimit)
             .addSnapshotListener { snapshot, error in
                 if let error { handler(.failure(error)); return }
-                let docs = snapshot?.documents ?? []
-                let conversations: [Conversation] = docs.compactMap { doc in
-                    guard let conv = Conversation(document: doc.documentID, data: doc.data()) else {
-                        Telemetry.decodeFailure(collection: FirestorePaths.conversations, documentID: doc.documentID)
+                cache.messages = (snapshot?.documents ?? []).compactMap { doc in
+                    do { return try doc.data(as: Message.self) }
+                    catch {
+                        Telemetry.decodeFailure(collection: FirestorePaths.messages, documentID: doc.documentID, error: error)
                         return nil
                     }
-                    return conv
                 }
-                handler(.success(conversations))
+                emit()
             }
-        return FirestoreListenerBox(reg)
+
+        // Reading a thread or muting it changes the list without any message
+        // moving, so the local state has to be able to nudge a redraw.
+        let observer = NotificationCenter.default.addObserver(
+            forName: ConversationLocalState.didChange,
+            object: nil,
+            queue: nil
+        ) { _ in emit() }
+
+        return CompositeListener(listeners: [
+            FirestoreListenerBox(reg),
+            NotificationObserverListener(observer: observer)
+        ])
+    }
+
+    /// Groups messages by counterpart into one summary each, newest thread first.
+    ///
+    /// Unread is counted rather than read off a server-maintained tally: the
+    /// messages that arrived from the other person since this device last opened
+    /// the thread. A thread never opened on this device counts everything they
+    /// sent, which is the right answer for a fresh install.
+    static func summarize(
+        messages: [Message],
+        userID: String,
+        limit: Int,
+        localState: ConversationLocalState = .shared
+    ) -> [Conversation] {
+        let lastRead = localState.lastReadDates(userID: userID)
+        let muted = localState.mutedIDs(userID: userID)
+
+        let grouped = Dictionary(grouping: messages) {
+            MessageStore.conversationID(userIDs: $0.participants)
+        }
+
+        return grouped.compactMap { conversationID, msgs -> Conversation? in
+            guard let newest = msgs.max(by: {
+                ($0.timestamp ?? .distantPast) < ($1.timestamp ?? .distantPast)
+            }) else { return nil }
+
+            let readAt = lastRead[conversationID] ?? .distantPast
+            let unread = msgs.filter {
+                $0.senderUserID != userID && ($0.timestamp ?? .distantPast) > readAt
+            }.count
+
+            return Conversation(
+                id: conversationID,
+                participants: newest.participants,
+                lastMessage: ConversationLastMessage(
+                    text: newest.text,
+                    senderUserID: newest.senderUserID,
+                    timestamp: newest.timestamp
+                ),
+                updatedAt: newest.timestamp,
+                unreadCounts: [userID: unread],
+                mutedBy: muted.contains(conversationID) ? [userID] : []
+            )
+        }
+        .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        .prefix(limit)
+        .map { $0 }
     }
 
     func markConversationRead(
@@ -85,9 +173,7 @@ struct FirestoreMessagesRepository: MessagesRepository {
         userID: String,
         onError: @escaping @Sendable (Error) -> Void
     ) {
-        db.collection(FirestorePaths.conversations).document(conversationID).updateData(
-            [FieldPath(["unreadCounts", userID]): 0]
-        ) { error in if let error { onError(error) } }
+        ConversationLocalState.shared.markRead(conversationID: conversationID, userID: userID)
     }
 
     func setConversationMuted(
@@ -96,12 +182,7 @@ struct FirestoreMessagesRepository: MessagesRepository {
         muted: Bool,
         onError: @escaping @Sendable (Error) -> Void
     ) {
-        let change = muted
-            ? FieldValue.arrayUnion([userID])
-            : FieldValue.arrayRemove([userID])
-        db.collection(FirestorePaths.conversations).document(conversationID).updateData(
-            ["mutedBy": change]
-        ) { error in if let error { onError(error) } }
+        ConversationLocalState.shared.setMuted(conversationID: conversationID, userID: userID, muted: muted)
     }
 
     func listenToConversation(
