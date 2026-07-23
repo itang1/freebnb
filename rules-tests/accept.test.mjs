@@ -90,7 +90,13 @@ const markerFields = (extra = {}) => ({
 before(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: "freebnb-accept-tests",
-    firestore: { rules: readFileSync(rulesPath, "utf8"), host: "127.0.0.1", port: 8099 },
+    // No host/port: every other file in this directory lets the emulator be
+    // discovered from FIRESTORE_EMULATOR_HOST, which `emulators:exec` sets to
+    // whatever port it actually booted on. Naming one here pinned this file to a
+    // port nothing was listening on, so `before` hung and the runner cancelled
+    // every test in the file with "did not finish before its parent" — which
+    // reads like a suite-wide breakage rather than a wrong address.
+    firestore: { rules: readFileSync(rulesPath, "utf8") },
   });
 });
 
