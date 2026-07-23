@@ -21,7 +21,16 @@ struct AvailabilityEditorView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
-    @State private var blockedDays: Set<Date>
+    @State private var blockedDays: Set<Date> = []
+    /// The server's half, loaded alongside the host's. Held rather than derived
+    /// from `listing` because the listing only carries the merged copy now, and
+    /// merged is exactly the thing this screen must not show.
+    @State private var bookedRanges: [DateRange] = []
+    /// The calendar lives in a separate document, so unlike every other field on
+    /// this screen it isn't in hand when the sheet opens. Nothing is editable
+    /// until it arrives: a grid that drew empty and accepted taps would let a host
+    /// "unblock" days by saving before their own blocks had loaded.
+    @State private var isLoading = true
     @State private var applyToAllHomes = false
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -35,8 +44,17 @@ struct AvailabilityEditorView: View {
 
     init(listing: Home) {
         self.listing = listing
-        let upcoming = AvailabilityCalendar.upcoming(listing.blockedDateRanges ?? [])
-        _blockedDays = State(initialValue: AvailabilityCalendar.blockedDays(in: upcoming))
+    }
+
+    /// Pulls the unmerged calendar. The host's half seeds the grid; the server's
+    /// half is kept aside so those days can be drawn locked.
+    private func load() async {
+        let availability = await homeStore.availability(for: listing.id)
+        blockedDays = AvailabilityCalendar.blockedDays(
+            in: AvailabilityCalendar.upcoming(availability.blockedDateRanges)
+        )
+        bookedRanges = availability.bookedDateRanges
+        isLoading = false
     }
 
     /// Derived on demand rather than mirrored into state, so the summary list can
@@ -50,9 +68,7 @@ struct AvailabilityEditorView: View {
     /// and locked. Not folded into `blockedDays`: those are the host's to edit and
     /// get written back on save, and a booking is neither.
     private var bookedDays: Set<Date> {
-        AvailabilityCalendar.blockedDays(
-            in: AvailabilityCalendar.upcoming(listing.bookedDateRanges ?? [])
-        )
+        AvailabilityCalendar.blockedDays(in: AvailabilityCalendar.upcoming(bookedRanges))
     }
 
     /// The host's other homes, the ones "apply to all" would reach. Only listings
@@ -90,10 +106,11 @@ struct AvailabilityEditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
-                        .disabled(isSaving)
+                        .disabled(isSaving || isLoading)
                 }
             }
-            .disabled(isSaving)
+            .disabled(isSaving || isLoading)
+            .task { await load() }
             .task(id: blockedDays) { refreshExport() }
         }
     }
@@ -230,11 +247,9 @@ struct AvailabilityEditorView: View {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
-        var updated = listing
         let ranges = blockedRanges
-        updated.blockedDateRanges = ranges.isEmpty ? nil : ranges
         do {
-            try await homeStore.save(updated)
+            try await homeStore.saveBlockedRanges(ranges, for: listing)
         } catch {
             // This listing didn't save, so don't fan out onto the others — the
             // host would be left with the change applied everywhere but here.

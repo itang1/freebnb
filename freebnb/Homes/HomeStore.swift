@@ -30,6 +30,10 @@ final class HomeStore {
     /// Cached on demand alongside `listingLocations`, gated by the same
     /// accepted-guest rule.
     private(set) var listingManuals: [String: HouseManual] = [:]
+    /// The unmerged calendars of listings this user manages, keyed by listing id.
+    /// Only ever populated for managed listings: a guest is not entitled to this
+    /// document and asking for it is a permission error, not a miss.
+    private(set) var listingAvailability: [String: ListingAvailability] = [:]
     private(set) var isLoading = true
     private(set) var isLoadingMore = false
     private(set) var canLoadMore = true
@@ -97,6 +101,7 @@ final class HomeStore {
             // Addresses are entitlements of the signed-in user, not of the device.
             listingLocations = [:]
             listingManuals = [:]
+            listingAvailability = [:]
             attemptedLocationIDs = []
             viewerID = ""
             canLoadMore = true
@@ -346,70 +351,6 @@ final class HomeStore {
         }
     }
 
-    /// Adds `ranges` to the blocked dates of every other listing this user hosts,
-    /// preserving each one's existing blocks — a union, never a replace, so a host
-    /// stamping travel dates across their homes can't wipe a home's own closures.
-    /// Co-hosted listings are left alone: they are someone else's to block.
-    ///
-    /// A one-time copy, not a link: the homes do not stay in step afterwards, so
-    /// editing a date on one leaves the others as they were. Returns the ids it
-    /// could not update, so a partial failure names the homes still to fix rather
-    /// than undoing the ones that took (re-running is safe — the union is
-    /// idempotent). `bookedDateRanges` rides through untouched: `save` round-trips
-    /// the whole listing, and this only rewrites the blocked half.
-    func applyBlockedRangesToOtherHostedListings(
-        _ ranges: [DateRange],
-        excludingID: String,
-        hostUserID: String
-    ) async -> [String] {
-        let others = managedListings.filter { $0.isHostedBy(hostUserID) && $0.id != excludingID }
-        let addedDays = AvailabilityCalendar.blockedDays(in: ranges)
-        var failed: [String] = []
-        for var home in others {
-            let merged = AvailabilityCalendar.merging(home.blockedDateRanges ?? [], adding: addedDays)
-            home.blockedDateRanges = merged.isEmpty ? nil : merged
-            do {
-                try await save(home)
-            } catch {
-                log.error("apply-to-all save failed for \(home.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                failed.append(home.id)
-            }
-        }
-        return failed
-    }
-
-    /// Uploads any attached images in parallel, then saves the listing with
-    /// the resulting URLs. If `images` is empty the upload step is skipped.
-    /// Errors from either step propagate so the caller can show them.
-    func createListing(home: Home, images: [Data]) async throws {
-        var updated = home
-        if !images.isEmpty {
-            let urls = try await uploadImages(images, for: home)
-            updated.photoURLs = urls.map(\.absoluteString)
-        }
-        try await save(updated)
-    }
-
-    /// Uploads in parallel but returns the URLs in the order the images were given.
-    /// A task group yields results as they finish, so appending them as they arrive
-    /// would order a listing's photos by upload speed — and `photoURLs[0]` is the
-    /// card's cover image, which the host chose deliberately.
-    private func uploadImages(_ images: [Data], for home: Home) async throws -> [URL] {
-        let uploader = photoUploader
-        let listingID = home.id
-        let hostUserID = home.hostUserID
-        return try await withThrowingTaskGroup(of: (offset: Int, url: URL).self) { group in
-            for (offset, data) in images.enumerated() {
-                group.addTask {
-                    (offset, try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID))
-                }
-            }
-            var urls = [URL?](repeating: nil, count: images.count)
-            for try await (offset, url) in group { urls[offset] = url }
-            return urls.compactMap { $0 }
-        }
-    }
-
     // MARK: - Read ACL upkeep
 
     /// Rewrites the viewer ACL on the listings this user hosts, so a listing is
@@ -450,6 +391,197 @@ final class HomeStore {
                 // leaves the listing exactly as visible as it already was.
                 log.error("ACL refresh failed for \(listing.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
+        }
+    }
+
+    // MARK: - Booked-range reconciliation (the client's onStayRequestWritten)
+
+    /// Recomputes each hosted listing's booked dates from its accepted stays and
+    /// republishes the calendar, so a booking becomes durably visible without the
+    /// trigger that used to do it.
+    ///
+    /// `acceptAsHost` records a booking in its own transaction, but that is the
+    /// only place a booking would ever land otherwise: a guest accepting an offer
+    /// cannot write the listing at all, and even the host path's write would be
+    /// undone the next time the host edited blocked dates, since that republish
+    /// unions blocked with a booked half nothing was maintaining. This maintains
+    /// it — from the one source that survives a lost callable, the accepted stays
+    /// themselves — and is idempotent, so the host-path transaction and this
+    /// converge rather than fight.
+    ///
+    /// Driven from the host's incoming-requests listener, so it runs whenever the
+    /// host's app sees a stay accepted (their own, or a guest accepting their
+    /// offer), and on launch to catch anything that changed while they were away.
+    /// Eventually consistent, like the ACL refresh: the durable booking, and the
+    /// double-booking guard for offers, land when the host is next online, which
+    /// is the strongest guarantee available without a server. Writes only on a
+    /// real change.
+    func reconcileBookedRanges(hostUserID: String, acceptedStays: [StayRequest]) async {
+        guard !hostUserID.isEmpty else { return }
+
+        let byListing = Dictionary(grouping: acceptedStays.filter { $0.status == .accepted }) {
+            $0.listingID
+        }
+
+        for listing in managedListings where listing.isHostedBy(hostUserID) {
+            let booked = Self.normalizedRanges(
+                (byListing[listing.id] ?? []).map { DateRange(start: $0.checkIn, end: $0.checkOut) }
+            )
+            // Read through the repository rather than any in-memory calendar cache:
+            // this runs off a snapshot the cache has not necessarily seen, and the
+            // blocked half has to be the stored one or republishing the union would
+            // drop a block the host just made.
+            guard let current = try? await repository.fetchAvailability(homeID: listing.id) else { continue }
+            guard Self.rangesDiffer(current.bookedDateRanges, booked) else { continue }
+
+            var updated = current
+            updated.bookedDateRanges = booked
+            do {
+                try await repository.saveBookedRanges(homeID: listing.id, booked: booked)
+
+                var published = listing
+                let union = updated.unavailableRanges
+                published.unavailableDateRanges = union.isEmpty ? nil : union
+                try await repository.save(published)
+            } catch {
+                // Best effort: the next accepted-stay change, or the next launch,
+                // recomputes the same value and tries again.
+                log.error("booked reconcile failed for \(listing.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Sorts by start and merges overlapping or touching ranges, so the stored
+    /// booked half is canonical and two runs over the same stays compare equal.
+    static func normalizedRanges(_ ranges: [DateRange]) -> [DateRange] {
+        let sorted = ranges.sorted { $0.start < $1.start }
+        var merged: [DateRange] = []
+        for range in sorted {
+            if let last = merged.last, range.start <= last.end {
+                merged[merged.count - 1] = DateRange(start: last.start, end: max(last.end, range.end))
+            } else {
+                merged.append(range)
+            }
+        }
+        return merged
+    }
+
+    /// Order-independent inequality, so a reshuffled-but-equal recompute doesn't
+    /// trigger a needless write. Both inputs are normalized before comparison.
+    private static func rangesDiffer(_ a: [DateRange], _ b: [DateRange]) -> Bool {
+        normalizedRanges(a) != normalizedRanges(b)
+    }
+
+    // MARK: - Availability
+
+    /// Fetches and caches a managed listing's calendar with blocked and booked
+    /// still apart. Returns an empty calendar when the caller isn't entitled to it
+    /// or nothing has been closed yet; the editor treats both the same way, since
+    /// neither is a state it can do anything about.
+    @discardableResult
+    func availability(for homeID: String) async -> ListingAvailability {
+        if let cached = listingAvailability[homeID] { return cached }
+        do {
+            let availability = try await repository.fetchAvailability(homeID: homeID)
+            listingAvailability[homeID] = availability
+            return availability
+        } catch {
+            log.info("availability unavailable for \(homeID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return ListingAvailability()
+        }
+    }
+
+    /// Writes the host's half of the calendar and republishes the merged copy the
+    /// public listing carries.
+    ///
+    /// Both writes, always, and in this order. The private half is the source of
+    /// truth, so it lands first; the public field is a cache of the union and is
+    /// worth nothing on its own. Skipping the second write would leave a host's
+    /// new blocks invisible to the friends they are hiding the dates from, which
+    /// is the entire job.
+    ///
+    /// The booked half rides through untouched here: it is maintained by
+    /// `reconcileBookedRanges`, and this republishes the union of both so a new
+    /// block doesn't drop a booking (nor the reverse).
+    func saveBlockedRanges(_ blocked: [DateRange], for home: Home) async throws {
+        let current = await availability(for: home.id)
+        do {
+            try await repository.saveBlockedRanges(homeID: home.id, blocked: blocked)
+            var updated = current
+            updated.blockedDateRanges = blocked
+            listingAvailability[home.id] = updated
+
+            var published = home
+            let union = updated.unavailableRanges
+            published.unavailableDateRanges = union.isEmpty ? nil : union
+            try await repository.save(published)
+        } catch {
+            log.error("availability save error for \(home.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
+    /// Adds `ranges` to the blocked dates of every other listing this user hosts,
+    /// preserving each one's existing blocks — a union, never a replace, so a host
+    /// stamping travel dates across their homes can't wipe a home's own closures.
+    /// Co-hosted listings are left alone: they are someone else's to block.
+    ///
+    /// A one-time copy, not a link: the homes do not stay in step afterwards, so
+    /// editing a date on one leaves the others as they were. Returns the ids it
+    /// could not update, so a partial failure names the homes still to fix rather
+    /// than undoing the ones that took (re-running is safe — the union is
+    /// idempotent). Each home's booked half rides through untouched: this reads
+    /// that home's own calendar and rewrites only the blocked side of it.
+    func applyBlockedRangesToOtherHostedListings(
+        _ ranges: [DateRange],
+        excludingID: String,
+        hostUserID: String
+    ) async -> [String] {
+        let others = managedListings.filter { $0.isHostedBy(hostUserID) && $0.id != excludingID }
+        let addedDays = AvailabilityCalendar.blockedDays(in: ranges)
+        var failed: [String] = []
+        for home in others {
+            let existing = await availability(for: home.id)
+            let merged = AvailabilityCalendar.merging(existing.blockedDateRanges, adding: addedDays)
+            do {
+                try await saveBlockedRanges(merged, for: home)
+            } catch {
+                log.error("apply-to-all save failed for \(home.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                failed.append(home.id)
+            }
+        }
+        return failed
+    }
+
+    /// Uploads any attached images in parallel, then saves the listing with
+    /// the resulting URLs. If `images` is empty the upload step is skipped.
+    /// Errors from either step propagate so the caller can show them.
+    func createListing(home: Home, images: [Data]) async throws {
+        var updated = home
+        if !images.isEmpty {
+            let urls = try await uploadImages(images, for: home)
+            updated.photoURLs = urls.map(\.absoluteString)
+        }
+        try await save(updated)
+    }
+
+    /// Uploads in parallel but returns the URLs in the order the images were given.
+    /// A task group yields results as they finish, so appending them as they arrive
+    /// would order a listing's photos by upload speed — and `photoURLs[0]` is the
+    /// card's cover image, which the host chose deliberately.
+    private func uploadImages(_ images: [Data], for home: Home) async throws -> [URL] {
+        let uploader = photoUploader
+        let listingID = home.id
+        let hostUserID = home.hostUserID
+        return try await withThrowingTaskGroup(of: (offset: Int, url: URL).self) { group in
+            for (offset, data) in images.enumerated() {
+                group.addTask {
+                    (offset, try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID))
+                }
+            }
+            var urls = [URL?](repeating: nil, count: images.count)
+            for try await (offset, url) in group { urls[offset] = url }
+            return urls.compactMap { $0 }
         }
     }
 

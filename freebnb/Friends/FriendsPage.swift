@@ -10,9 +10,14 @@ struct FriendsPage: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(AuthManager.self) private var authManager
     @Environment(HomeStore.self) private var homeStore
+    @Environment(DeepLinkRouter.self) private var router
 
     @State private var showInvite = false
     @State private var actionError: String?
+    /// The person whose invite link opened the app, resolved to a profile. Shown
+    /// as a card at the top of the list with an Add button; adding is still an
+    /// explicit tap, and it is the same request search would send.
+    @State private var inviter: UserProfile?
 
     // Finding new friends lives on the page itself: the search bar is always
     // present rather than hidden behind an "Add friend" sheet. An active query
@@ -42,6 +47,7 @@ struct FriendsPage: View {
         .autocorrectionDisabled()
         .task { await friendStore.loadSuggestions() }
         .task(id: trimmedQuery) { await performSearch() }
+        .task(id: router.pendingInviterID) { await resolveInviter() }
         .navigationTitle("Friends")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -100,6 +106,23 @@ struct FriendsPage: View {
     private var friendManagementContent: some View {
         if let error = actionError {
             Section { InlineErrorLabel(message: error) }
+        }
+
+        // Above Requests, because this is the one thing the person who just
+        // followed an invite came here to do.
+        if let inviter, let inviterID = inviter.id {
+            Section {
+                SearchResultRow(profile: inviter, state: rowState(for: inviter)) {
+                    Task { await sendSearchRequest(to: inviter) }
+                }
+            } header: {
+                Text("Your invite")
+            } footer: {
+                Text(rowState(for: inviter) == .friends
+                     ? "You're already connected."
+                     : "\(inviter.displayName) invited you to FreeBNB. Add them to see each other's places.")
+            }
+            .id(inviterID)
         }
 
         if !friendStore.pendingIncoming.isEmpty {
@@ -225,6 +248,16 @@ struct FriendsPage: View {
         }
 
         isSearching = false
+    }
+
+    /// Resolves the pending invite link to a profile, then clears the router so a
+    /// second tap on the same link resolves again. An invite naming the viewer,
+    /// or naming nobody the directory knows, simply leaves the card off.
+    private func resolveInviter() async {
+        guard let inviterID = router.pendingInviterID else { return }
+        router.pendingInviterID = nil
+        guard inviterID != authManager.userID else { return }
+        inviter = await userProfileStore.fetchProfileOnce(userID: inviterID)
     }
 
     private func rowState(for profile: UserProfile) -> SearchResultRow.State {
@@ -419,7 +452,7 @@ private struct PendingOutgoingRow: View {
 // MARK: - Search result row
 
 private struct SearchResultRow: View {
-    enum State { case add, sent, friends }
+    enum State: Equatable { case add, sent, friends }
 
     let profile: UserProfile
     let state: State
@@ -470,8 +503,15 @@ struct InviteSheet: View {
 
     // The message and link live in InviteCopy so every invite surface (this
     // sheet, the feed's empty states) sends the same vouching story.
+    /// The sender's own ID, so the link opens on their card at the other end.
+    private var senderID: String? { userProfileStore.currentProfile?.id }
+
     private var inviteMessage: String {
-        InviteCopy.vouch(inviterName: userProfileStore.displayName)
+        InviteCopy.vouch(inviterName: userProfileStore.displayName, senderID: senderID)
+    }
+
+    private var inviteLink: String {
+        InviteCopy.inviteURL(senderID: senderID).absoluteString
     }
 
     var body: some View {
@@ -502,7 +542,7 @@ struct InviteSheet: View {
                         .background(Color.accent, in: Capsule())
                 }
 
-                if let qr = QRCode.image(for: InviteCopy.inviteURL().absoluteString) {
+                if let qr = QRCode.image(for: inviteLink) {
                     VStack(spacing: 8) {
                         Image(uiImage: qr)
                             .interpolation(.none)
@@ -524,7 +564,7 @@ struct InviteSheet: View {
                     Text("Your invite link")
                         .font(.caption)
                         .foregroundColor(.secondaryText)
-                    Text(InviteCopy.inviteURL().absoluteString)
+                    Text(inviteLink)
                         .font(.caption.monospaced())
                         .foregroundColor(.secondaryText)
                         .padding(10)

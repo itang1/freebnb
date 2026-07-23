@@ -221,6 +221,14 @@ struct StaysTab: View {
         }
     }
 
+    private var loadingState: some View {
+        ProgressView()
+            .controlSize(.large)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.primaryBackground.ignoresSafeArea())
+            .accessibilityLabel("Loading stays")
+    }
+
     private func listenerErrorState(_ error: String) -> some View {
         ContentUnavailableView {
             Label("Couldn't load stays", systemImage: "exclamationmark.triangle")

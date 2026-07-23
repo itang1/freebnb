@@ -63,7 +63,7 @@ async function deleteStoragePrefix(prefix: string): Promise<void> {
 // the categories a user turns off (feature 37). The client mirror is
 // NotificationCategory in NotificationPreferences.swift; keep the keys in sync.
 // ---------------------------------------------------------------------------
-type NotificationCategory = "messages" | "stayRequests" | "stayUpdates";
+type NotificationCategory = "messages" | "stayRequests" | "stayUpdates" | "friendRequests";
 
 function notificationEnabled(
   privateData: FirebaseFirestore.DocumentData | undefined,
@@ -78,7 +78,7 @@ function notificationEnabled(
 // is a silent no-op. `senderID`, when given, suppresses the push if the
 // recipient has blocked that user. A missing/unreadable private profile is
 // treated as "opted in with no token", so it simply sends nothing.
-async function sendStayPush(opts: {
+async function sendPush(opts: {
   recipientID: string;
   category: NotificationCategory;
   senderID?: string;
@@ -303,7 +303,7 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
 // A legacy `visibility` field may still sit on old documents; it is ignored
 // here and stripped by scripts/migrate_friends_only.js.
 // ---------------------------------------------------------------------------
-type FriendEdgeData = { userA: string; userB: string; status?: string };
+type FriendEdgeData = { userA: string; userB: string; status?: string; initiator?: string };
 
 // The rules cap `allowedViewerIDs` at 1000 entries, and the whole array is
 // downloaded with every feed document, so a very well-connected host's
@@ -387,11 +387,19 @@ async function rebuildListingACLs(hostID: string, onlyHomeID?: string): Promise<
 // admits each user to the other's listings, unfriending revokes both. This is
 // the write that makes "accepting a friend request shares your listings with
 // them" true.
+//
+// It also carries the friend graph's two pushes. Both sit on the critical path
+// of a new user: the whole app is empty until someone accepts them, and neither
+// end of that wait used to be told anything. A request that nobody knows is
+// waiting is the longest stall in the funnel, and an acceptance the requester
+// never hears about is an app they have no reason to reopen.
 // ---------------------------------------------------------------------------
 export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async (event) => {
   const change = event.data;
   const before = change?.before.exists ? (change.before.data() as FriendEdgeData) : undefined;
   const after = change?.after.exists ? (change.after.data() as FriendEdgeData) : undefined;
+
+  await notifyFriendEdge(before, after);
 
   const wasFriends = before?.status === "accepted";
   const isFriends = after?.status === "accepted";
@@ -402,6 +410,56 @@ export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async
 
   await Promise.all([edge.userA, edge.userB].map((hostID) => rebuildListingACLs(hostID)));
 });
+
+/** The display name on a user's public doc, or a neutral stand-in. */
+async function displayNameOf(userID: string, fallback: string): Promise<string> {
+  const doc = await db.collection(Collections.users).doc(userID).get();
+  const name: unknown = doc.data()?.displayName;
+  return typeof name === "string" && name.length > 0 ? name : fallback;
+}
+
+// The two moments in the friend graph worth a push, and only those: a request
+// arriving, and a request being accepted. A decline or an unfriend is silence
+// on purpose — neither is news the other person is owed, and telling someone
+// they were turned down invites a second ask.
+async function notifyFriendEdge(
+  before: FriendEdgeData | undefined,
+  after: FriendEdgeData | undefined
+): Promise<void> {
+  if (!after?.userA || !after?.userB || !after.initiator) return;
+  const initiator = after.initiator;
+  const recipient = after.userA === initiator ? after.userB : after.userA;
+
+  // A new pending edge: the person who was asked has no other way to find out.
+  if (!before && after.status === "pending") {
+    const senderName = await displayNameOf(initiator, "Someone");
+    await sendPush({
+      recipientID: recipient,
+      category: "friendRequests",
+      senderID: initiator,
+      // An ask, not a claim on them: the answer is theirs, and declining is a
+      // perfectly good one.
+      title: "Friend request",
+      body: `${senderName} would like to connect on FreeBNB.`,
+      data: { type: "friend_request", senderUserID: initiator },
+    });
+    return;
+  }
+
+  // Accepted: tell whoever did the asking, because their feed just changed from
+  // empty to not, and nothing else in the app would tell them.
+  if (before?.status === "pending" && after.status === "accepted") {
+    const accepterName = await displayNameOf(recipient, "A friend");
+    await sendPush({
+      recipientID: initiator,
+      category: "friendRequests",
+      senderID: recipient,
+      title: `${accepterName} accepted your request`,
+      body: "You can see each other's places now.",
+      data: { type: "friend_accepted", senderUserID: recipient },
+    });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // onHomeWrittenACL
@@ -430,17 +488,11 @@ export const onHomeWrittenACL = onDocumentWritten(homeDocPattern, async (event) 
 // (writing with admin credentials) is the only thing that can move them.
 // ---------------------------------------------------------------------------
 
-/** Below this many received requests, a response rate is noise. Mirrors TrustStats.minimumResponses. */
-const MIN_RESPONSES_FOR_RATE = 3;
-
 type TrustStats = {
   staysHosted: number;
   staysTaken: number;
   reviewCount: number;
   averageRating: number | null;
-  responseRate: number | null;
-  respondedCount: number;
-  receivedCount: number;
 };
 
 async function recomputeTrustStats(userID: string): Promise<void> {
@@ -450,29 +502,8 @@ async function recomputeTrustStats(userID: string): Promise<void> {
     db.collection(Collections.reviews).where("subjectUserID", "==", userID).get(),
   ]);
 
-  let staysHosted = 0;
-  let receivedCount = 0;
-  let respondedCount = 0;
-  for (const doc of asHost.docs) {
-    const data = doc.data();
-    const status: string = data.status;
-    // A stay that happened is a stay hosted, whoever proposed it.
-    if (status === "completed") staysHosted++;
-    // Response rate measures how reliably this host answers people who ask them.
-    // A stay the host started by offering (feature 43) is not someone asking, so
-    // it belongs to neither count — and must not reach the branch below, where
-    // "offered" is not "pending" and would therefore score as a response. That
-    // would let a host inflate their own response rate by offering into the void,
-    // which is precisely the self-dealing the server-side recompute exists to
-    // prevent. Absent `initiatedBy` means the guest asked; it predates offers.
-    if (data.initiatedBy && data.initiatedBy === data.hostUserID) continue;
-    // A guest-cancelled request was withdrawn, not ignored, so it is neither
-    // asked nor answered. Everything else landed in the host's inbox.
-    if (status === "cancelled") continue;
-    receivedCount++;
-    if (status !== "pending") respondedCount++;
-  }
-
+  // A stay that happened is a stay hosted, whoever proposed it.
+  const staysHosted = asHost.docs.filter((d) => d.data().status === "completed").length;
   const staysTaken = asGuest.docs.filter((d) => d.data().status === "completed").length;
 
   const ratings = aboutThem.docs.map((d) => d.data().rating as number).filter((r) => typeof r === "number");
@@ -485,9 +516,6 @@ async function recomputeTrustStats(userID: string): Promise<void> {
     staysTaken,
     reviewCount: ratings.length,
     averageRating,
-    responseRate: receivedCount >= MIN_RESPONSES_FOR_RATE ? respondedCount / receivedCount : null,
-    respondedCount,
-    receivedCount,
   };
 
   // Never resurrect a deleted account as a stats-only document: the public user
@@ -849,7 +877,6 @@ export const acceptStayRequest = onCall(async (request) => {
     // The listing must still exist and still be live. Accepting a request for a
     // deleted listing would disclose a street address for a home that is no
     // longer offered, via a marker under a document nothing cleans up.
-    const listingSnap = await t.get(db.collection(Collections.homes).doc(req.listingID));
     if (!listingSnap.exists || listingSnap.data()?.deletedAt) {
       throw new HttpsError("failed-precondition", "This listing is no longer available.");
     }
@@ -922,8 +949,12 @@ function sameStoredRanges(a: StoredRange[], b: StoredRange[]): boolean {
 
 async function recomputeListingBookedRanges(listingID: string): Promise<void> {
   const listingRef = db.collection(Collections.homes).doc(listingID);
-  const [listingSnap, acceptedSnap] = await Promise.all([
+  const availabilityRef = listingRef
+    .collection(Subcollections.private)
+    .doc(Docs.availability);
+  const [listingSnap, availabilitySnap, acceptedSnap] = await Promise.all([
     listingRef.get(),
+    availabilityRef.get(),
     db
       .collection(Collections.stayRequests)
       .where("listingID", "==", listingID)
@@ -945,14 +976,34 @@ async function recomputeListingBookedRanges(listingID: string): Promise<void> {
     .sort((a, b) => a.start.toMillis() - b.start.toMillis())
     .slice(0, BOOKED_RANGES_CAP);
 
-  const existing = (listingSnap.data()?.bookedDateRanges ?? []) as StoredRange[];
+  const existing = (availabilitySnap.data()?.bookedDateRanges ?? []) as StoredRange[];
+  const blocked = (availabilitySnap.data()?.blockedDateRanges ?? []) as StoredRange[];
   if (sameStoredRanges(existing, ranges)) return;
+
+  // Two writes, because availability is stored twice on purpose: the two halves
+  // privately, where only the listing's managers can read them, and their union
+  // on the world-readable listing. Publishing the halves would let any viewer
+  // subtract one from the other and learn which nights the home was occupied,
+  // which is the one thing "unavailable" is meant never to say.
+  //
+  // Private first. It is the source of truth; the public field is a cache of the
+  // union and is worth nothing on its own, so the order that survives a crash
+  // between the two is the one that leaves the truth written and the cache stale.
+  // The next stay change or availability edit republishes it.
+  await availabilityRef.set({ bookedDateRanges: ranges }, { merge: true });
 
   // A field update, not a set: the listing's other fields and its ACL (which
   // rebuildListingACLs maintains with its own update) must survive this write.
   // This fires onHomeWrittenACL and moderateListingContent, but neither writes
-  // back for a booked-dates change, so there is no loop.
-  await listingRef.update({ bookedDateRanges: ranges });
+  // back for an availability change, so there is no loop.
+  //
+  // Sorted so the write is stable: the change-check above compares only the
+  // booked half, and an unstable order here would rewrite the public field on
+  // every trigger for no reason.
+  const union = [...blocked, ...ranges].sort(
+    (a, b) => a.start.toMillis() - b.start.toMillis()
+  );
+  await listingRef.update({ unavailableDateRanges: union });
 }
 
 // ---------------------------------------------------------------------------
@@ -996,11 +1047,11 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     ? ` in ${listingCity}`
     : "";
 
-  // Stays hosted, stays taken, and the host's response rate all move with a
-  // status change, so both parties' reputations are recomputed before anything
-  // else. A create counts too: it is the request that lands in the host's inbox
-  // and starts the response-rate clock.
-  if (beforeStatus !== afterStatus) {
+  // Stays hosted and stays taken both count completions and nothing else, so
+  // only a transition into or out of 'completed' can move either number. Every
+  // other status change (and every create) leaves both parties' stats identical,
+  // and a recompute is six collection queries, so it is not worth spending.
+  if (beforeStatus !== afterStatus && (beforeStatus === "completed" || afterStatus === "completed")) {
     await Promise.all([recomputeTrustStats(hostUserID), recomputeTrustStats(guestUserID)]);
   }
 
@@ -1008,7 +1059,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
   if (!before && afterStatus === "pending") {
     const guestName =
       (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Someone";
-    await sendStayPush({
+    await sendPush({
       recipientID: hostUserID,
       category: "stayRequests",
       senderID: guestUserID,
@@ -1028,7 +1079,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
   // that implies otherwise would make a friend's invitation feel like a booking.
   if (!before && afterStatus === "offered") {
     const hostName: string = after.listingHostName ?? "A friend";
-    await sendStayPush({
+    await sendPush({
       recipientID: guestUserID,
       category: "stayRequests",
       senderID: hostUserID,
@@ -1058,7 +1109,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     const hostName: string = after.listingHostName ?? "The host";
     const guestName =
       (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Your guest";
-    await sendStayPush({
+    await sendPush({
       recipientID,
       category: "stayUpdates",
       senderID: cancelledBy,
@@ -1075,7 +1126,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
   if (beforeStatus === "pending" && afterStatus !== "pending") {
     const hostName: string = after.listingHostName ?? "The host";
     if (afterStatus === "accepted") {
-      await sendStayPush({
+      await sendPush({
         recipientID: guestUserID,
         category: "stayUpdates",
         senderID: hostUserID,
@@ -1084,7 +1135,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
         data: { type: "stay_update", requestID, role: "guest", status: "accepted" },
       });
     } else if (afterStatus === "declined") {
-      await sendStayPush({
+      await sendPush({
         recipientID: guestUserID,
         category: "stayUpdates",
         senderID: hostUserID,
@@ -1103,7 +1154,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     const guestName =
       (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Your friend";
     if (afterStatus === "accepted") {
-      await sendStayPush({
+      await sendPush({
         recipientID: hostUserID,
         category: "stayUpdates",
         senderID: guestUserID,
@@ -1114,7 +1165,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     } else if (afterStatus === "declined") {
       // Neutral by design: a friend passing on an invitation is not a rejection,
       // and the push should not make it feel like one.
-      await sendStayPush({
+      await sendPush({
         recipientID: hostUserID,
         category: "stayUpdates",
         senderID: guestUserID,

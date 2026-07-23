@@ -76,6 +76,10 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
                 if let senderID = info["senderUserID"] as? String {
                     router?.pendingConversationUserID = senderID
                 }
+            case "friend_request", "friend_accepted":
+                // Both land on Friends: the request is answered there, and an
+                // acceptance is worth arriving next to the person who sent it.
+                router?.pendingFriendsTab = true
             case "stay_request", "stay_update", "stay_reminder":
                 // Stay pushes and the local check-in / checkout reminders (feature 22)
                 // all land the user on the Stays tab, where the relevant stay is

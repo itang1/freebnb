@@ -2,7 +2,7 @@
 //  WhatsNew.swift
 //  freebnb
 //
-//  The in-app changelog (feature 43). A static, hand-curated list of what shipped,
+//  A static, hand-curated list of what shipped,
 //  newest first. `WhatsNewPage` renders it, and `ContentView` auto-presents the
 //  latest entry once per version bump. Keeping it here (not fetched) means the
 //  changelog ships with the build it describes and needs no network or billing.

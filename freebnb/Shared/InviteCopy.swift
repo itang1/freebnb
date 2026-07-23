@@ -46,30 +46,30 @@ enum InviteCopy {
         intro(inviterName)
             + "FreeBNB is a free home-sharing app that only ever shows you places from your own friends. "
             + "No strangers, no fees, and it never touches your contacts. "
-            + "I'm vouching for you; if you'd like in, install the app and search for \(searchTarget(inviterName)) so we can connect: "
-            + inviteURL(senderID: senderID).absoluteString
+            + "I'm vouching for you; if you'd like in, install the app and "
+            + closing(inviterName, senderID: senderID)
     }
 
     /// Sent from an empty city search. The moment someone plans a trip and has
     /// no friend listed there yet is the highest-intent invite moment in the
     /// app: they already know exactly whose couch they want.
-    static func tripIntent(city: String, inviterName: String?) -> String {
+    static func tripIntent(city: String, inviterName: String?, senderID: String? = nil) -> String {
         intro(inviterName)
             + "I'm planning a trip to \(city) and I'd love to crash with you. "
             + "FreeBNB is a free, friends-only home-sharing app; if you join, I can send a real request with dates instead of a vague text. "
-            + "Search for \(searchTarget(inviterName)) if you're up for it: "
-            + inviteURL().absoluteString
+            + "If you're up for it, "
+            + closing(inviterName, senderID: senderID)
     }
 
     /// Sent from a feed that has friends but no listings: an open question about
     /// hosting, with the choice left entirely to the recipient. Works whether or
     /// not they are already on FreeBNB.
-    static func askToHost(inviterName: String?) -> String {
+    static func askToHost(inviterName: String?, senderID: String? = nil) -> String {
         intro(inviterName)
             + "Got a couch or a guest room? If you put it on FreeBNB, friends like me could stay with you without the group-chat scramble. "
             + "It's free, always, and only friends you approve can ever see it. "
-            + "Search for \(searchTarget(inviterName)) if you're curious: "
-            + inviteURL().absoluteString
+            + "If you're curious, "
+            + closing(inviterName, senderID: senderID)
     }
 
     /// "It's Maya. " when the profile has loaded, nothing otherwise: the message
@@ -77,6 +77,20 @@ enum InviteCopy {
     /// placeholder like "It's A friend" would not.
     private static func intro(_ inviterName: String?) -> String {
         inviterName.map { "It's \($0). " } ?? ""
+    }
+
+    /// How every invite ends: the link, and what tapping it does.
+    ///
+    /// An identified link opens on the sender's own card, so the recipient never
+    /// has to remember how the sender spells their name. Without an ID there is
+    /// nothing to open onto, so the message falls back to asking them to search.
+    private static func closing(_ inviterName: String?, senderID: String?) -> String {
+        guard senderID?.isEmpty == false else {
+            return "search for \(searchTarget(inviterName)) once you're in: "
+                + inviteURL().absoluteString
+        }
+        return "this link will open the app on my profile, where you can add me: "
+            + inviteURL(senderID: senderID).absoluteString
     }
 
     private static func searchTarget(_ inviterName: String?) -> String {

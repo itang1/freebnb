@@ -423,23 +423,23 @@ struct Home: Identifiable, Hashable, Codable {
     var photoURLs: [String]? = nil
 
     // MARK: Availability
-    // Nil or empty means no blocked dates. The host marks date ranges as blocked;
-    // guests cannot request stays that overlap any blocked range. Read reason-free
-    // on purpose: "unavailable" never says why, so a host's plans stay their own.
-    var blockedDateRanges: [DateRange]? = nil
-
-    // The dates an accepted stay has spoken for. Server-owned: recomputed from the
-    // listing's accepted stays by `onStayRequestWritten` and never authored here,
-    // so the client only decodes it and rides it back out on save (the repository
-    // replaces the whole document, so dropping it would wipe it). A tampered value
-    // changes nothing that matters — it is a display cache, and the real
-    // double-booking guard lives in the `acceptStayRequest` transaction.
+    // Every day a guest cannot have, already merged: the host's closed days and
+    // the days an accepted stay took, in one array with nothing marking which is
+    // which. Nil or empty means the whole calendar is open.
     //
-    // Guests see this merged with `blockedDateRanges` into one "unavailable", with
-    // no way to tell a booking from a host-blocked day. That is the point: a guest
-    // learns a date is taken, never that the home is occupied. Go through
-    // `unavailableRanges`, never this, so the two are never shown apart by mistake.
-    var bookedDateRanges: [DateRange]? = nil
+    // The two halves live in `homes/{id}/private/availability`, readable only by
+    // the people who manage the listing (`ListingAvailability`). They are merged
+    // *before* they are published because this document is world-readable to the
+    // host's friends and Firestore has no field-level read rules: publishing both
+    // halves let any guest subtract one from the other and learn which nights the
+    // home was occupied, however carefully the UI merged them on screen. A guest
+    // learns a date is taken; they never learn the home is full.
+    //
+    // Written by whoever last changed either half — the host's client on save,
+    // `onStayRequestWritten` when a stay is accepted or falls through. A tampered
+    // value changes nothing that matters: it is a display cache, and the real
+    // double-booking guard is the `acceptStayRequest` transaction.
+    var unavailableDateRanges: [DateRange]? = nil
 
     // MARK: Location coordinates
     // Geocoded at save time and then deliberately blurred: this document is
@@ -516,14 +516,11 @@ struct Home: Identifiable, Hashable, Codable {
     /// The single source of truth so those surfaces agree.
     var displayTitle: String { customTitle ?? "\(hostName)'s place" }
 
-    /// Every date a guest cannot have: the host's blocked ranges and the ranges
-    /// an accepted stay has taken, together. The one thing guest-facing surfaces
-    /// read, so a booked day and a blocked day render identically as "unavailable"
-    /// and neither betrays why. A host's own editor keeps them apart (booked is
-    /// read-only there), but nowhere a guest can see does.
-    var unavailableRanges: [DateRange] {
-        (blockedDateRanges ?? []) + (bookedDateRanges ?? [])
-    }
+    /// Every date a guest cannot have. Already merged on the wire, so unlike the
+    /// old version of this property there is nothing left here to merge and no
+    /// way for a caller to reach the halves. A host's own editor pulls them apart
+    /// by reading `ListingAvailability`; nowhere a guest can reach does.
+    var unavailableRanges: [DateRange] { unavailableDateRanges ?? [] }
 
     /// Non-optional view of the co-host roster.
     var coHosts: [String] { coHostUserIDs ?? [] }
@@ -576,8 +573,7 @@ struct Home: Identifiable, Hashable, Codable {
         case sleeping, guestPolicy, amenities
         case cancellationPolicy
         case photoURLs
-        case blockedDateRanges
-        case bookedDateRanges
+        case unavailableDateRanges
         case latitude, longitude
         case geohash
         case allowedViewerIDs
@@ -593,6 +589,37 @@ struct Home: Identifiable, Hashable, Codable {
 // after the initial schema use decodeIfPresent so existing Firestore documents
 // without those keys decode successfully instead of being silently dropped.
 extension Home {
+    /// The shape this document had before availability was split: two public
+    /// arrays instead of one merged one. Read only by `decodeUnavailable`, and
+    /// deliberately absent from `CodingKeys` so the encoder can never write them
+    /// back — a save is what migrates a listing off the old shape.
+    private enum LegacyAvailabilityKeys: String, CodingKey {
+        case blockedDateRanges, bookedDateRanges
+    }
+
+    /// `unavailableDateRanges` if the document has been migrated, otherwise the
+    /// union of the two fields it used to carry.
+    ///
+    /// The fallback is what makes the migration safe to run after the app ships
+    /// rather than in lockstep with it: an un-migrated listing keeps showing every
+    /// day it had closed instead of silently reading as wide open, which is the
+    /// failure mode that would actually hurt (a host's blocked week quietly
+    /// accepting requests). It costs one extra decode attempt on legacy documents
+    /// and nothing at all once the backfill has run.
+    fileprivate static func decodeUnavailable(
+        from decoder: Decoder,
+        container c: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [DateRange]? {
+        if let merged = try c.decodeIfPresent([DateRange].self, forKey: .unavailableDateRanges) {
+            return merged
+        }
+        let legacy = try decoder.container(keyedBy: LegacyAvailabilityKeys.self)
+        let blocked = try legacy.decodeIfPresent([DateRange].self, forKey: .blockedDateRanges) ?? []
+        let booked  = try legacy.decodeIfPresent([DateRange].self, forKey: .bookedDateRanges)  ?? []
+        let union = blocked + booked
+        return union.isEmpty ? nil : union
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id                 = try c.decodeIfPresent(String.self,               forKey: .id)                ?? UUID().uuidString
@@ -609,8 +636,7 @@ extension Home {
         amenities          = try c.decode(Amenities.self,                      forKey: .amenities)
         cancellationPolicy  = try c.decodeIfPresent(CancellationPolicy.self,  forKey: .cancellationPolicy)
         photoURLs           = try c.decodeIfPresent([String].self,            forKey: .photoURLs)
-        blockedDateRanges   = try c.decodeIfPresent([DateRange].self,         forKey: .blockedDateRanges)
-        bookedDateRanges    = try c.decodeIfPresent([DateRange].self,         forKey: .bookedDateRanges)
+        unavailableDateRanges = try Home.decodeUnavailable(from: decoder, container: c)
         latitude            = try c.decodeIfPresent(Double.self,              forKey: .latitude)
         longitude          = try c.decodeIfPresent(Double.self,               forKey: .longitude)
         geohash            = try c.decodeIfPresent(String.self,               forKey: .geohash)

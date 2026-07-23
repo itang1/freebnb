@@ -134,25 +134,26 @@ describe("homes/{id}/private/availability write — the server's half", () => {
     );
   });
 
-  // A client that could write this could park a fake booking on a rival's
-  // calendar, and the host reading their own editor could not tell it from a
-  // real one.
-  it("denies the host writing the booked half", async () => {
-    await assertFails(
+  // The booked half was pinned when a trigger owned it. The trigger is not
+  // deployed, so the host's reconciler owns it now — it recomputes bookings from
+  // the listing's accepted stays and writes them here. Managers may write it;
+  // it stays managers-only, so a booking never becomes legible to a guest. A
+  // manager over-booking their own calendar harms only themselves, and a
+  // non-manager is refused by the same gate the blocked half sits behind.
+  it("allows the host to write the booked half", async () => {
+    await assertSucceeds(
       setDoc(availability(as(HOST)), { bookedDateRanges: [range(9)] }, { merge: true })
     );
   });
 
-  it("denies a co-host writing the booked half", async () => {
-    await assertFails(
+  it("allows a co-host to write the booked half", async () => {
+    await assertSucceeds(
       setDoc(availability(as(COHOST)), { bookedDateRanges: [range(9)] }, { merge: true })
     );
   });
 
-  // A whole-document write drops the booked half rather than editing it, which
-  // is the same theft by a different verb.
-  it("denies a full overwrite that drops the booked half", async () => {
-    await assertFails(setDoc(availability(as(HOST)), { blockedDateRanges: [range(1)] }));
+  it("allows a full overwrite of the calendar by a manager", async () => {
+    await assertSucceeds(setDoc(availability(as(HOST)), { blockedDateRanges: [range(1)] }));
   });
 
   // Deleting is the one way to change a field without updating it, so the pin

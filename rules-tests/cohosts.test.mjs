@@ -23,7 +23,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc, Timestamp } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc, where, Timestamp } from "firebase/firestore";
 
 const rulesPath = fileURLToPath(new URL("../firestore.rules", import.meta.url));
 
@@ -352,6 +352,42 @@ describe("stayRequests — the co-host's half of the inbox", () => {
   it("lets a co-host read a request for the listing they manage", async () => {
     await seedRequest();
     await assertSucceeds(getDoc(requestDoc(asCoHost())));
+  });
+
+  // The app never reads one request by id — both the host inbox and the co-host
+  // inbox are snapshot *queries*, and a query is evaluated against the read rule
+  // differently than a getDoc. Adding `isListingManager()` (a get()) to that rule
+  // for co-hosts risked denying the whole query, including the host's own inbox
+  // that used only field comparisons before. These pin that the queries the app
+  // actually runs still resolve.
+  it("lets the host list their incoming requests by hostUserID", async () => {
+    await seedRequest();
+    const q = query(
+      collection(asHost(), "stayRequests"),
+      where("hostUserID", "==", HOST),
+      orderBy("createdAt", "desc")
+    );
+    await assertSucceeds(getDocs(q));
+  });
+
+  it("lets a co-host list a listing's requests by listingID", async () => {
+    await seedRequest();
+    const q = query(
+      collection(asCoHost(), "stayRequests"),
+      where("listingID", "in", [LISTING]),
+      orderBy("createdAt", "desc")
+    );
+    await assertSucceeds(getDocs(q));
+  });
+
+  it("still refuses a stranger listing a listing's requests", async () => {
+    await seedRequest();
+    const q = query(
+      collection(asStranger(), "stayRequests"),
+      where("listingID", "in", [LISTING]),
+      orderBy("createdAt", "desc")
+    );
+    await assertFails(getDocs(q));
   });
 
   it("still hides that request from a stranger", async () => {

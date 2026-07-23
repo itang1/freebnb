@@ -36,6 +36,11 @@ enum FirestorePaths {
     static let locationDocID = "location"
     /// The listing's private house manual: `homes/{id}/private/manual`.
     static let manualDocID = "manual"
+    /// The two halves of the listing's calendar, blocked and booked, kept apart
+    /// from the merged copy the public document publishes:
+    /// `homes/{id}/private/availability`. Managers only — unlike `location`, an
+    /// accepted guest has no business here.
+    static let availabilityDocID = "availability"
     /// The user's private profile: `users/{uid}/private/profile`.
     static let profileDocID = "profile"
     /// The reviewer's note to the reviewed, never public:

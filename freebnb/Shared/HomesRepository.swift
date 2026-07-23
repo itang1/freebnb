@@ -58,9 +58,11 @@ protocol HomesRepository: Sendable {
     /// the merged `Home.unavailableDateRanges` is all a guest ever gets. Returns
     /// an empty value when no day has been closed or booked yet.
     func fetchAvailability(homeID: String) async throws -> ListingAvailability
-    /// Writes the host-authored half only. `bookedDateRanges` is server-owned and
-    /// rejected from a client write by the rules.
+    /// Writes the host-authored blocked half.
     func saveBlockedRanges(homeID: String, blocked: [DateRange]) async throws
+    /// Writes the booked half. Authored by the host's reconciler now, not a
+    /// trigger, from the listing's accepted stays.
+    func saveBookedRanges(homeID: String, booked: [DateRange]) async throws
 }
 
 /// The feed's canonical order: newest first, with document id descending as a
@@ -384,6 +386,14 @@ struct FirestoreHomesRepository: HomesRepository {
             let encoded = try blocked.map { try Firestore.Encoder().encode($0) }
             try await FirestorePaths.listingAvailability(db, homeID: homeID)
                 .setData(["blockedDateRanges": encoded], merge: true)
+        }
+    }
+
+    func saveBookedRanges(homeID: String, booked: [DateRange]) async throws {
+        try await withRetry { [db] in
+            let encoded = try booked.map { try Firestore.Encoder().encode($0) }
+            try await FirestorePaths.listingAvailability(db, homeID: homeID)
+                .setData(["bookedDateRanges": encoded], merge: true)
         }
     }
 }

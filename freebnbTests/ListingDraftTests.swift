@@ -293,8 +293,8 @@ struct DuplicationTests {
     /// listing's photos.
     @Test func editingKeepsTheFieldsTheFormDoesNotManage() {
         var home = makeHome()
-        home.blockedDateRanges = [DateRange(start: Date(timeIntervalSince1970: 2_000_000),
-                                            end: Date(timeIntervalSince1970: 2_500_000))]
+        home.unavailableDateRanges = [DateRange(start: Date(timeIntervalSince1970: 2_000_000),
+                                                end: Date(timeIntervalSince1970: 2_500_000))]
         home.photoURLs = ["https://example.com/cover.jpg"]
         home.coHostUserIDs = ["cohost-1"]
         let vm = CreateListingViewModel(mode: .edit(home))
@@ -303,7 +303,7 @@ struct DuplicationTests {
 
         #expect(rebuilt.id == home.id)
         #expect(rebuilt.createdAt == home.createdAt)
-        #expect(rebuilt.blockedDateRanges == home.blockedDateRanges)
+        #expect(rebuilt.unavailableDateRanges == home.unavailableDateRanges)
         #expect(rebuilt.photoURLs == home.photoURLs)
         #expect(rebuilt.coHostUserIDs == home.coHostUserIDs)
         // The ACL is rebuilt from the saving host's current friends, not kept.
@@ -314,15 +314,15 @@ struct DuplicationTests {
     /// must not inherit the source's identity, photos, or blocked dates.
     @Test func duplicatingKeepsNoIdentityOrUnmanagedFields() {
         var home = makeHome()
-        home.blockedDateRanges = [DateRange(start: Date(timeIntervalSince1970: 2_000_000),
-                                            end: Date(timeIntervalSince1970: 2_500_000))]
+        home.unavailableDateRanges = [DateRange(start: Date(timeIntervalSince1970: 2_000_000),
+                                                end: Date(timeIntervalSince1970: 2_500_000))]
         home.photoURLs = ["https://example.com/cover.jpg"]
         let vm = CreateListingViewModel(mode: .duplicate(home))
 
         let rebuilt = vm.makeHome(hostUserID: home.hostUserID, hostName: home.hostName, friendIDs: [])
 
         #expect(rebuilt.id != home.id)
-        #expect(rebuilt.blockedDateRanges == nil)
+        #expect(rebuilt.unavailableDateRanges == nil)
         #expect(rebuilt.photoURLs == nil)
     }
 }

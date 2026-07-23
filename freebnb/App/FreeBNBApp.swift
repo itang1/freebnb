@@ -35,9 +35,6 @@ struct FreeBNBApp: App {
     @State private var friendStore: FriendStore
     @State private var reviewStore: ReviewStore
     @State private var networkMonitor = NetworkMonitor()
-    /// Reads its kits off disk during init, so a guest who opens the app offline
-    /// at the door finds them already loaded rather than after a fetch that
-    /// cannot complete.
     @State private var checkInKitStore = CheckInKitStore()
 
     init() {
@@ -146,12 +143,13 @@ struct FreeBNBApp: App {
     // Routes an incoming URL. The reversed-client-ID scheme is the Google
     // sign-in callback; our own `freebnb://stays` scheme is what the home-screen
     // widgets and the current-stay Live Activity open when tapped, and it simply
-    // switches to the Stays tab. Friend connections are still made only in-app,
-    // so a deep link never creates one.
+    // switches to the Stays tab. `freebnb://invite` is the shared invite link,
+    // which lands on Friends with the sender's card on screen when it names one.
+    // Friend connections are still made only in-app, so a deep link never
+    // creates one; the most an invite does is save the recipient a search.
     private func handleIncomingURL(_ url: URL) {
         if GIDSignIn.sharedInstance.handle(url) { return }
-        if url.scheme == "freebnb", url.host == "stays" {
-            router.pendingStayEvent = true
-        }
+        guard let route = DeepLinkRouter.route(for: url) else { return }
+        router.handle(route)
     }
 }

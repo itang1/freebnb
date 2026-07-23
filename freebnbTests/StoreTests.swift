@@ -93,6 +93,106 @@ struct HomeStoreTests {
         let friendSees = try await repo.fetchVisibleListings(viewerID: "friend1", after: nil, limit: 10)
         #expect(friendSees.isEmpty)
     }
+
+    // MARK: - Booked-range reconciliation
+
+    private func stay(listingID: String, hostUserID: String, inDay: Int, outDay: Int,
+                      status: StayRequestStatus = .accepted) -> StayRequest {
+        StayRequest(
+            listingID: listingID, listingCity: "Town", listingHostName: "Host",
+            hostUserID: hostUserID, guestUserID: "guest",
+            checkIn: Date(timeIntervalSince1970: 86_400 * Double(inDay)),
+            checkOut: Date(timeIntervalSince1970: 86_400 * Double(outDay)),
+            status: status
+        )
+    }
+
+    @Test func reconcileRecordsAcceptedStaysAsBookedAndPublishesTheUnion() async throws {
+        let repo = InMemoryHomesRepository()
+        let store = HomeStore(repository: repo)
+        let home = HomeFixture.make(id: "L1", hostUserID: "host1", allowedViewerIDs: ["host1"])
+        try await store.save(home)
+        store.setManagedListingsForTesting([home])
+
+        await store.reconcileBookedRanges(
+            hostUserID: "host1",
+            acceptedStays: [stay(listingID: "L1", hostUserID: "host1", inDay: 3, outDay: 6)]
+        )
+
+        let availability = try await repo.fetchAvailability(homeID: "L1")
+        #expect(availability.bookedDateRanges.count == 1)
+        // The public listing publishes the union guests read.
+        let published = try await repo.fetchVisibleListings(viewerID: "host1", after: nil, limit: 10).first
+        #expect(published?.unavailableRanges.count == 1)
+    }
+
+    @Test func reconcilePreservesBlockedDatesWhenPublishingBookings() async throws {
+        let repo = InMemoryHomesRepository()
+        let store = HomeStore(repository: repo)
+        let home = HomeFixture.make(id: "L1", hostUserID: "host1", allowedViewerIDs: ["host1"])
+        try await store.save(home)
+        store.setManagedListingsForTesting([home])
+        // A host-blocked week already on the calendar.
+        try await repo.saveBlockedRanges(homeID: "L1",
+            blocked: [DateRange(start: Date(timeIntervalSince1970: 86_400 * 20),
+                                end: Date(timeIntervalSince1970: 86_400 * 25))])
+
+        await store.reconcileBookedRanges(
+            hostUserID: "host1",
+            acceptedStays: [stay(listingID: "L1", hostUserID: "host1", inDay: 3, outDay: 6)]
+        )
+
+        let published = try await repo.fetchVisibleListings(viewerID: "host1", after: nil, limit: 10).first
+        // Blocked week + booked stay both survive in the published union.
+        #expect(published?.unavailableRanges.count == 2)
+    }
+
+    @Test func reconcileDropsBookingsForCancelledStays() async throws {
+        let repo = InMemoryHomesRepository()
+        let store = HomeStore(repository: repo)
+        let home = HomeFixture.make(id: "L1", hostUserID: "host1", allowedViewerIDs: ["host1"])
+        try await store.save(home)
+        store.setManagedListingsForTesting([home])
+        repo.setBookedRanges(homeID: "L1",
+            booked: [DateRange(start: Date(timeIntervalSince1970: 86_400 * 3),
+                               end: Date(timeIntervalSince1970: 86_400 * 6))])
+
+        // The stay that produced that booking is now cancelled: it should clear.
+        await store.reconcileBookedRanges(
+            hostUserID: "host1",
+            acceptedStays: [stay(listingID: "L1", hostUserID: "host1", inDay: 3, outDay: 6, status: .cancelled)]
+        )
+
+        let availability = try await repo.fetchAvailability(homeID: "L1")
+        #expect(availability.bookedDateRanges.isEmpty)
+    }
+
+    @Test func reconcileLeavesCoHostedListingsToTheirOwnHost() async throws {
+        let repo = InMemoryHomesRepository()
+        let store = HomeStore(repository: repo)
+        let theirs = HomeFixture.make(id: "L2", hostUserID: "host2", allowedViewerIDs: ["host2"])
+        try await store.save(theirs)
+        store.setManagedListingsForTesting([theirs])
+
+        await store.reconcileBookedRanges(
+            hostUserID: "host1",
+            acceptedStays: [stay(listingID: "L2", hostUserID: "host2", inDay: 3, outDay: 6)]
+        )
+
+        let availability = try await repo.fetchAvailability(homeID: "L2")
+        #expect(availability.bookedDateRanges.isEmpty)
+    }
+
+    @Test func normalizedRangesMergesOverlaps() {
+        let ranges = [
+            DateRange(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 100)),
+            DateRange(start: Date(timeIntervalSince1970: 50), end: Date(timeIntervalSince1970: 200)),
+            DateRange(start: Date(timeIntervalSince1970: 500), end: Date(timeIntervalSince1970: 600)),
+        ]
+        let merged = HomeStore.normalizedRanges(ranges)
+        #expect(merged.count == 2)
+        #expect(merged.first?.end == Date(timeIntervalSince1970: 200))
+    }
 }
 
 @MainActor

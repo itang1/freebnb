@@ -126,10 +126,11 @@ describe("accepting a pending request from the client", () => {
     await assertFails(updateDoc(doc(as(HOST), "stayRequests", REQUEST), acceptFields));
   });
 
-  it("refuses an offer — that path still belongs to the callable", async () => {
-    await seed((db) => setDoc(doc(db, "stayRequests", REQUEST), requestBody({ status: "offered" })));
+  it("refuses the host accepting their own offer on the guest's behalf", async () => {
+    // An offer is the guest's to accept. The host writing accepted here would be
+    // the self-approval hole on the offer path.
+    await seed((db) => setDoc(doc(db, "stayRequests", REQUEST), requestBody({ status: "offered", initiatedBy: HOST })));
     await assertFails(updateDoc(doc(as(HOST), "stayRequests", REQUEST), acceptFields));
-    await assertFails(updateDoc(doc(as(GUEST), "stayRequests", REQUEST), acceptFields));
   });
 
   it("refuses moving the dates while accepting", async () => {
@@ -148,6 +149,56 @@ describe("accepting a pending request from the client", () => {
     await assertFails(updateDoc(doc(as(HOST), "stayRequests", REQUEST), {
       ...acceptFields, listingID: "listing-2",
     }));
+  });
+});
+
+describe("accepting a host's offer from the guest's side", () => {
+  const offer = () =>
+    seed((db) => setDoc(doc(db, "stayRequests", REQUEST), requestBody({ status: "offered", initiatedBy: HOST })));
+
+  it("allows the guest to move their offer to accepted", async () => {
+    await offer();
+    await assertSucceeds(updateDoc(doc(as(GUEST), "stayRequests", REQUEST), acceptFields));
+  });
+
+  it("allows the guest to add their own note while accepting", async () => {
+    await offer();
+    await assertSucceeds(updateDoc(doc(as(GUEST), "stayRequests", REQUEST), {
+      ...acceptFields, guestNote: "can't wait",
+    }));
+  });
+
+  it("refuses a stranger accepting the offer", async () => {
+    await offer();
+    await assertFails(updateDoc(doc(as(STRANGER), "stayRequests", REQUEST), acceptFields));
+  });
+
+  it("refuses the guest writing the host's note while accepting", async () => {
+    await offer();
+    await assertFails(updateDoc(doc(as(GUEST), "stayRequests", REQUEST), {
+      ...acceptFields, hostNote: "words in the host's mouth",
+    }));
+  });
+
+  it("refuses the guest moving the dates while accepting", async () => {
+    await offer();
+    await assertFails(updateDoc(doc(as(GUEST), "stayRequests", REQUEST), {
+      ...acceptFields, checkIn: day(10), checkOut: day(14),
+    }));
+  });
+
+  it("lets the guest write their own address grant in the accepting commit", async () => {
+    await offer();
+    const db = as(GUEST);
+    const batch = writeBatch(db);
+    batch.update(doc(db, "stayRequests", REQUEST), acceptFields);
+    batch.set(doc(db, "homes", LISTING, "accepted", GUEST), markerFields());
+    await assertSucceeds(batch.commit());
+  });
+
+  it("refuses the guest granting an address without accepting", async () => {
+    await offer();
+    await assertFails(setDoc(doc(as(GUEST), "homes", LISTING, "accepted", GUEST), markerFields()));
   });
 });
 
@@ -225,14 +276,30 @@ describe("the listing's published calendar", () => {
     }));
   });
 
-  it("still pins the private booked half against the host", async () => {
+  it("lets the host reconcile the private booked half", async () => {
+    // Previously pinned against every client because the trigger owned it. The
+    // host's reconciler owns it now, so this must be allowed — and it is still
+    // managers-only, which is what keeps it off a guest's read.
     await seed((db) =>
       setDoc(doc(db, "homes", LISTING, "private", "availability"), {
         blockedDateRanges: [], bookedDateRanges: [],
       })
     );
-    await assertFails(updateDoc(doc(as(HOST), "homes", LISTING, "private", "availability"), {
+    await assertSucceeds(updateDoc(doc(as(HOST), "homes", LISTING, "private", "availability"), {
       bookedDateRanges: [{ start: day(3), end: day(6) }],
     }));
+  });
+
+  it("still refuses a guest reading the private availability document", async () => {
+    await seed((db) =>
+      setDoc(doc(db, "homes", LISTING, "private", "availability"), {
+        blockedDateRanges: [], bookedDateRanges: [{ start: day(3), end: day(6) }],
+      })
+    );
+    // Even an accepted guest: the split's whole purpose is that a booking never
+    // becomes legible as distinct from a blocked day.
+    await seed((db) => setDoc(doc(db, "homes", LISTING, "accepted", GUEST), markerFields()));
+    const { getDoc } = await import("firebase/firestore");
+    await assertFails(getDoc(doc(as(GUEST), "homes", LISTING, "private", "availability")));
   });
 });

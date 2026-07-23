@@ -487,7 +487,7 @@ private extension HomesPage {
                 .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
             ShareLink(
-                item: InviteCopy.askToHost(inviterName: userProfileStore.displayName),
+                item: InviteCopy.askToHost(inviterName: userProfileStore.displayName, senderID: userProfileStore.currentProfile?.id),
                 subject: Text("FreeBNB Invite")
             ) {
                 Label("Ask a Friend About Hosting", systemImage: "sofa")
@@ -509,7 +509,7 @@ private extension HomesPage {
                 .foregroundColor(.secondaryText)
                 .multilineTextAlignment(.center)
             ShareLink(
-                item: InviteCopy.tripIntent(city: trimmedCityQuery, inviterName: userProfileStore.displayName),
+                item: InviteCopy.tripIntent(city: trimmedCityQuery, inviterName: userProfileStore.displayName, senderID: userProfileStore.currentProfile?.id),
                 subject: Text("FreeBNB Invite")
             ) {
                 Label("Invite a Friend There", systemImage: "paperplane")

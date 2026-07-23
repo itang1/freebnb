@@ -92,14 +92,13 @@ struct TrustBadgeRow: View {
             || (!isSelf && mutualFriends?.countSummary != nil)
     }
 
-    /// The plain counts, middot-separated: "12 hosted · 3 taken · 92% response ·
-    /// 3 years on FreeBNB". Nil when we know none of them, so a brand-new profile
-    /// renders no empty line.
+    /// The plain counts, middot-separated: "12 hosted · 3 taken · 3 years on
+    /// FreeBNB". Nil when we know none of them, so a brand-new profile renders
+    /// no empty line.
     private var statsStrip: String? {
         var parts: [String] = []
         if let hosted = stats.staysHosted, hosted > 0 { parts.append("\(hosted) hosted") }
         if let taken = stats.staysTaken, taken > 0 { parts.append("\(taken) taken") }
-        if let rate = stats.responseRate { parts.append("\(Int((rate * 100).rounded()))% response") }
         if let tenure = profile?.tenureText { parts.append(tenure) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -115,7 +114,6 @@ struct TrustBadgeRow: View {
         if let taken = stats.staysTaken, taken > 0 {
             parts.append("\(taken) stay\(taken == 1 ? "" : "s") taken")
         }
-        if let rate = stats.responseRateText { parts.append(rate) }
         if let tenure = profile?.tenureText { parts.append(tenure) }
         return parts.joined(separator: ", ")
     }
@@ -184,9 +182,6 @@ struct FlowRow: Layout {
                 staysTaken: 3,
                 reviewCount: 9,
                 averageRating: 4.8,
-                responseRate: 0.92,
-                respondedCount: 12,
-                receivedCount: 13,
                 idVerified: true
             ),
             createdAt: Calendar.current.date(byAdding: .year, value: -3, to: Date())

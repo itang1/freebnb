@@ -512,11 +512,14 @@ final class CreateListingViewModel {
             // server had filled in (until the next stay change rewrote them), and
             // strip the listing's photos.
             home.photoURLs = existing.photoURLs
-            home.blockedDateRanges = existing.blockedDateRanges
-            // Server-owned, but it still has to survive a client overwrite: the
-            // trigger only rewrites it when a stay changes, so an edit that dropped
-            // it would leave the listing wrongly bookable until then.
-            home.bookedDateRanges = existing.bookedDateRanges
+            // The merged calendar the public document publishes. Its two halves
+            // live in `homes/{id}/private/availability` and this form never
+            // touches them, but the published union still has to survive a
+            // full-document overwrite: dropping it would silently reopen every day
+            // the host had closed and every night an accepted stay had taken, and
+            // nothing would rewrite it until the next stay change or availability
+            // edit.
+            home.unavailableDateRanges = existing.unavailableDateRanges
 
             // A co-host is editing (feature 14). Every field `firestore.rules`
             // pins to the host is carried over from the stored listing rather than

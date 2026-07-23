@@ -34,7 +34,6 @@ const notificationPreferences = read("freebnb/Shared/NotificationPreferences.swi
 const homeSwift = read("freebnb/Homes/Home.swift");
 const createListingViewModel = read("freebnb/Homes/CreateListingViewModel.swift");
 const stayRequestSwift = read("freebnb/Stays/StayRequest.swift");
-const trustStatsSwift = read("freebnb/Trust/TrustStats.swift");
 const reviewSwift = read("freebnb/Trust/Review.swift");
 const reportSheet = read("freebnb/Safety/ReportSheet.swift");
 
@@ -124,15 +123,6 @@ describe("listing caps", () => {
     for (const cap of rulesCaps) {
       assert.equal(cap, callableCap, "rules hostNote cap vs acceptStayRequest re-check");
     }
-  });
-});
-
-describe("trust stats", () => {
-  it("response-rate minimum: TrustStats.minimumResponses vs functions", () => {
-    assert.equal(
-      number(trustStatsSwift, /static let minimumResponses = (\d+)/, "TrustStats.minimumResponses"),
-      number(indexTs, /const MIN_RESPONSES_FOR_RATE = (\d+)/, "MIN_RESPONSES_FOR_RATE")
-    );
   });
 });
 

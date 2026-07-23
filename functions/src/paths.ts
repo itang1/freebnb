@@ -28,6 +28,10 @@ export const Subcollections = {
 export const Docs = {
   // The listing's private street address: homes/{id}/private/location.
   location: "location",
+  // The listing's calendar with blocked and booked still apart:
+  // homes/{id}/private/availability. The public listing document carries only
+  // their union, so no guest can tell one from the other.
+  availability: "availability",
   // The user's private profile: users/{uid}/private/profile.
   profile: "profile",
   // The reviewer's note to the reviewed: reviews/{reviewID}/private/feedback.

@@ -31,7 +31,7 @@ struct WelcomePage: View {
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
 
-                    Text("A free place to stay with people you actually trust.")
+                    Text("A free place to stay with people you know.")
                         .font(.headline)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
@@ -48,16 +48,8 @@ struct WelcomePage: View {
                 Spacer()
 
                 VStack(spacing: 16) {
-                    // The three-line pitch, sitting right above the sign-in
-                    // buttons: not strangers, no fees, no contacts-grab. Each
-                    // line is a claim the product actually keeps, so it reads as
-                    // a promise rather than marketing.
                     trustStrip
 
-                    // Quick sign-in into fixed, pre-seeded accounts for local
-                    // development — never a real user's path. Compile- and
-                    // emulator-gated so these credentials can never reach the
-                    // production project (see AuthManager.signInWithEmail).
                     #if DEBUG
                     if EmulatorEnvironment.isActive {
                         quickSignInSection
@@ -194,9 +186,6 @@ struct WelcomePage: View {
 }
 
 #if DEBUG
-/// A compact, capsule-shaped secondary button for the DEBUG-only quick
-/// sign-in accounts — visually distinct from the primary Sign in with Apple
-/// button below it, so it never reads as the "real" way to sign in.
 private struct QuickSignInButton: View {
     let label: String
     let systemImage: String

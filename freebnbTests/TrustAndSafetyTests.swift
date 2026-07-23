@@ -137,15 +137,8 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
 
 // MARK: - Trust stats (feature 2)
 
-@Test func responseRateTextRoundsToWholePercent() {
-    var stats = TrustStats()
-    stats.responseRate = 0.923
-    #expect(stats.responseRateText == "92% response rate")
-}
-
 @Test func absentStatsProduceNoText() {
     let stats = TrustStats()
-    #expect(stats.responseRateText == nil)
     #expect(stats.ratingText == nil)
     #expect(!stats.isVerified)
 }

@@ -315,12 +315,15 @@ describe("stayRequests/{id} update — answering an offer", () => {
     );
   });
 
-  // Acceptance is the callable's job (L1): it is the only path that can check for
-  // a double booking atomically, and a client write would skip that guard.
-  it("denies the guest accepting an offer directly", async () => {
+  // Acceptance used to be the callable's alone. The callable is not deployed, so
+  // the guest accepts their offer from the client; the double-booking guard for
+  // offers moved to the host's booked-range reconciler. The deny cases that
+  // matter now (host cannot self-accept, stranger cannot accept, dates and the
+  // host's note cannot be rewritten while accepting) live in accept.test.mjs.
+  it("allows the guest to accept their offer directly", async () => {
     await seedListing();
     await seedOffer();
-    await assertFails(patch(FRIEND, { status: "accepted", updatedAt: serverTimestamp() }));
+    await assertSucceeds(patch(FRIEND, { status: "accepted", updatedAt: serverTimestamp() }));
   });
 
   it("denies the host accepting their own offer on the guest's behalf", async () => {

@@ -621,15 +621,25 @@ async function seedHomes() {
     publicListing.latitude = approximate(location.latitude);
     publicListing.longitude = approximate(location.longitude);
     publicListing.geohash = geohashEncode(publicListing.latitude, publicListing.longitude);
-    // Host-blocked, not booked: bookedDateRanges is server-owned and recomputed
+    // Availability is stored twice on purpose: the halves privately, where only
+    // the listing's managers can read them, and their union on the public
+    // document. Seeding only the public field would leave the host's editor
+    // showing an empty calendar; seeding only the private one would leave guests
+    // seeing the listing as wide open.
+    //
+    // Host-blocked, not booked: the booked half is server-owned and recomputed
     // from accepted stays, so seeding into it would just be overwritten.
-    publicListing.blockedDateRanges = secondWeekBlocks();
+    const blocked = secondWeekBlocks();
+    publicListing.unavailableDateRanges = blocked;
     // The feed orders by createdAt, and an order-by excludes docs missing the
     // field, so a seeded listing without one never shows. Stamp it (L3).
     publicListing.createdAt = now;
     await db.collection("homes").doc(home.id).set(publicListing, { merge: true });
     await db.collection("homes").doc(home.id)
       .collection("private").doc("location").set(location, { merge: true });
+    await db.collection("homes").doc(home.id)
+      .collection("private").doc("availability")
+      .set({ blockedDateRanges: blocked }, { merge: true });
   }
   console.log(`Seeded ${homes.length} listings.`);
 }
@@ -980,23 +990,11 @@ async function seedReferences() {
 // emulator, so the seed computes the same numbers from the same documents —
 // otherwise every seeded profile shows no reputation at all.
 async function seedTrustStats() {
-  const MIN_RESPONSES_FOR_RATE = 3;
   for (const user of users) {
     const uid = user.uid;
-    const asHost = stayRequests.filter((r) => r.hostUserID === uid);
     const aboutThem = reviews.filter((r) => r.subjectUserID === uid);
 
-    let staysHosted = 0;
-    let receivedCount = 0;
-    let respondedCount = 0;
-    for (const request of asHost) {
-      if (request.status === "completed") staysHosted++;
-      // A guest-cancelled request was withdrawn, not ignored.
-      if (request.status === "cancelled") continue;
-      receivedCount++;
-      if (request.status !== "pending") respondedCount++;
-    }
-
+    const staysHosted = stayRequests.filter((r) => r.hostUserID === uid && r.status === "completed").length;
     const ratings = aboutThem.map((r) => r.rating);
     await db.collection("users").doc(uid).set({
       trustStats: {
@@ -1004,9 +1002,6 @@ async function seedTrustStats() {
         staysTaken: stayRequests.filter((r) => r.guestUserID === uid && r.status === "completed").length,
         reviewCount: ratings.length,
         averageRating: ratings.length ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length : null,
-        responseRate: receivedCount >= MIN_RESPONSES_FOR_RATE ? respondedCount / receivedCount : null,
-        respondedCount,
-        receivedCount,
         // Nothing verifies identity yet (feature 3 is unimplemented), so the badge
         // is off for everyone. Flipping one here would be a lie in the demo.
         idVerified: false

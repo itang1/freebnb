@@ -290,9 +290,8 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
     /// it, so Firestore serializes them: the second retries against the first's
     /// result and sees the overlap.
     ///
-    /// Only `pending`, and only the host side. An offer is the guest's to accept
-    /// and stays on the callable: the guest may not read this listing's calendar,
-    /// and the address grant below is not theirs to write.
+    /// Only `pending`, and only the host side. An offer takes `acceptAsGuest`,
+    /// which cannot serialize the same way and leans on the host's reconciler.
     private func acceptAsHost(_ request: StayRequest, hostNote: String?) async throws {
         let requestRef = db.collection(FirestorePaths.stayRequests).document(request.id)
         let listingRef = db.collection(FirestorePaths.homes).document(request.listingID)
@@ -300,7 +299,7 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
             .collection(FirestorePaths.accepted)
             .document(request.guestUserID)
 
-        try await db.runTransaction { transaction, errorPointer -> Any? in
+        _ = try await db.runTransaction { transaction, errorPointer -> Any? in
             let reqSnap: DocumentSnapshot
             let listingSnap: DocumentSnapshot
             do {
@@ -362,40 +361,95 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         }
     }
 
-    func accept(_ request: StayRequest, hostNote: String?) async throws {
-        // No client-side overlap pre-check, because the rules cannot admit one:
-        // they allow a stay-request read only to the document's own two parties,
-        // and a `list` is evaluated against its potential result set, so a query
-        // for every accepted request on a listing is denied for the host as well
-        // as the guest. Only the callable, reading as admin, can see the other
-        // bookings; it returns `aborted` on a double-booking, which
-        // `mapAcceptError` maps to `overlappingStay`.
+    /// Accepts a host's offer from the guest's side.
+    ///
+    /// The guest may not read the listing's calendar — that document is
+    /// managers-only, on purpose, so an accepted guest can never tell which of a
+    /// host's closed days were bookings — so this cannot carry the serialized
+    /// overlap check the host path does. It does a defensive check against the
+    /// public `unavailableRanges` the guest may read (the host may have booked
+    /// something else since the offer), then writes the status and the guest's own
+    /// address grant. The durable booked-range record, and the real double-booking
+    /// guard for offers, is the host's reconciler, which recomputes the listing's
+    /// bookings whenever the host's app sees this status change.
+    private func acceptAsGuest(_ request: StayRequest) async throws {
+        let requestRef = db.collection(FirestorePaths.stayRequests).document(request.id)
+        let listingRef = db.collection(FirestorePaths.homes).document(request.listingID)
+        let markerRef = listingRef
+            .collection(FirestorePaths.accepted)
+            .document(request.guestUserID)
 
-        // A pending request is the host's to answer, and that path no longer needs
-        // a server: `acceptAsHost` serializes on the listing document. An offer is
-        // the guest's to answer and still does need one — they cannot read the
-        // calendar to check overlap, and cannot write themselves the address.
-        if request.status == .pending {
-            try await acceptAsHost(request, hostNote: hostNote)
-            return
+        _ = try await db.runTransaction { transaction, errorPointer -> Any? in
+            let reqSnap: DocumentSnapshot
+            let listingSnap: DocumentSnapshot
+            do {
+                reqSnap = try transaction.getDocument(requestRef)
+                listingSnap = try transaction.getDocument(listingRef)
+            } catch {
+                errorPointer?.pointee = error as NSError
+                return nil
+            }
+
+            guard let current = try? reqSnap.data(as: StayRequest.self),
+                  current.status == .offered else {
+                errorPointer?.pointee = StayRequestError.noLongerPending as NSError
+                return nil
+            }
+            guard let listing = try? listingSnap.data(as: Home.self),
+                  listing.deletedAt == nil else {
+                errorPointer?.pointee = StayRequestError.listingUnavailable as NSError
+                return nil
+            }
+
+            // Advisory: the guest sees only the merged public calendar, so this
+            // catches an offer whose dates the host has since filled, but cannot
+            // serialize against a host accepting a conflicting request in the same
+            // instant. The reconciler is what closes that.
+            let taken = listing.unavailableRanges
+            if taken.contains(where: { $0.overlaps(checkIn: current.checkIn, checkOut: current.checkOut) }) {
+                errorPointer?.pointee = StayRequestError.overlappingStay as NSError
+                return nil
+            }
+
+            transaction.updateData(
+                [
+                    "status": StayRequestStatus.accepted.rawValue,
+                    "updatedAt": FieldValue.serverTimestamp()
+                ],
+                forDocument: requestRef
+            )
+            // The guest's own address grant, in the same commit as the acceptance,
+            // which is the getAfter correlation the rules check. The guest cannot
+            // write the listing calendar; the host's reconciler records the booking.
+            transaction.setData(
+                [
+                    "requestID": request.id,
+                    "guestUserID": request.guestUserID,
+                    "createdAt": FieldValue.serverTimestamp()
+                ],
+                forDocument: markerRef
+            )
+            return nil
         }
+    }
 
-        // Authoritative accept for an offer: an admin transaction re-checks
-        // overlap and writes the status plus the address-disclosure marker
-        // atomically. Undeployed in production, where accepting an offer therefore
-        // still fails — the guest-side gap this change does not close.
-        var payload: [String: Any] = ["requestID": request.id]
-        if let hostNote { payload["hostNote"] = hostNote }
-        do {
-            _ = try await functions.httpsCallable("acceptStayRequest").call(payload)
-        } catch {
-            throw Self.mapAcceptError(error)
+    func accept(_ request: StayRequest, hostNote: String?) async throws {
+        // Two client paths, split by who is owed the answer. A pending request is
+        // the host's, and serializes its overlap check on the listing document. An
+        // offer is the guest's, and cannot — so it checks advisorily and defers the
+        // durable booking to the host's reconciler. The callable that used to own
+        // both is not deployed, and neither path calls it.
+        if request.status == .offered {
+            try await acceptAsGuest(request)
+        } else {
+            try await acceptAsHost(request, hostNote: hostNote)
         }
     }
 
     /// Surfaces the callable's double-booking rejection ("aborted") as the same
     /// typed error the fast-path guard throws, so the UI shows one message either
-    /// way. Other failures pass through unchanged.
+    /// way. Other failures pass through unchanged. Retained for any residual
+    /// callable path; the accept flow no longer invokes it.
     private static func mapAcceptError(_ error: Error) -> Error {
         let nsError = error as NSError
         if nsError.domain == FunctionsErrorDomain,

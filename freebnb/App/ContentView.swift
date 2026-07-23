@@ -73,6 +73,17 @@ struct ContentView: View {
             .sorted()
     }
 
+    /// Change key for the booked-range reconciler: the incoming accepted stays and
+    /// their dates. Changes when the host accepts a request, a guest accepts the
+    /// host's offer, or an accepted stay is cancelled — each of which should move
+    /// the listing's booked dates. Steady when an unrelated snapshot arrives.
+    private var incomingAcceptedStayKey: [String] {
+        stayRequestStore.incomingRequests
+            .filter { $0.status == .accepted }
+            .map { "\($0.id)-\($0.listingID)-\($0.checkIn.timeIntervalSince1970)-\($0.checkOut.timeIntervalSince1970)" }
+            .sorted()
+    }
+
     var body: some View {
         Group {
             if !ageGateAccepted {
@@ -194,18 +205,18 @@ struct ContentView: View {
                         showWhatsNew = true
                     }
                 }
-                .onChange(of: router.pendingConversationUserID) { _, userID in
+                .onChange(of: router.pendingConversationUserID, initial: true) { _, userID in
                     guard let userID else { return }
                     selectedTab = 2
                     messagesDeepLinkUserID = userID
                     router.pendingConversationUserID = nil
                 }
-                .onChange(of: router.pendingStayEvent) { _, pending in
+                .onChange(of: router.pendingStayEvent, initial: true) { _, pending in
                     guard pending else { return }
                     selectedTab = 1
                     router.pendingStayEvent = false
                 }
-                .onChange(of: router.pendingFriendsTab) { _, pending in
+                .onChange(of: router.pendingFriendsTab, initial: true) { _, pending in
                     guard pending else { return }
                     selectedTab = 3
                     router.pendingFriendsTab = false
@@ -240,7 +251,7 @@ struct ContentView: View {
                 }
                 // A saved listing opened from Spotlight: switch to Listings and
                 // push it if it's currently loaded (drop silently otherwise).
-                .onChange(of: router.pendingListingID) { _, listingID in
+                .onChange(of: router.pendingListingID, initial: true) { _, listingID in
                     guard let listingID else { return }
                     selectedTab = 0
                     if let home = homeStore.listings.first(where: { $0.id == listingID }) {
@@ -262,6 +273,19 @@ struct ContentView: View {
         // the signed-in branch's, which the type-checker already finds long.
         .onChange(of: coHostedListingIDs, initial: true) { _, listingIDs in
             stayRequestStore.setCoHostedListingIDs(listingIDs)
+        }
+        // Keep each hosted listing's booked dates in step with its accepted stays
+        // — the client stand-in for the onStayRequestWritten trigger. Fires when
+        // the host accepts a request, when a guest accepts the host's offer (the
+        // path that cannot record its own booking), and on launch. Driven from
+        // here because it needs both stores: the accepted stays and the roster.
+        .onChange(of: incomingAcceptedStayKey, initial: true) { _, _ in
+            Task {
+                await homeStore.reconcileBookedRanges(
+                    hostUserID: authManager.userID,
+                    acceptedStays: stayRequestStore.incomingRequests
+                )
+            }
         }
         // Land on the Listings tab after signing in. selectedTab is persisted,
         // so without this a returning user would reopen on whatever tab they

@@ -19,27 +19,11 @@ struct TrustStats: Codable, Hashable, Sendable {
     /// Reviews written *about* this user, and their mean rating (1...5).
     var reviewCount: Int?
     var averageRating: Double?
-    /// Share of received stay requests this user answered rather than left
-    /// hanging: `respondedCount / receivedCount`. Nil until they've received
-    /// enough requests for the number to mean anything (see `minimumResponses`).
-    var responseRate: Double?
-    var respondedCount: Int?
-    var receivedCount: Int?
     /// Set only by an out-of-band identity check (feature 3, not yet wired to a
     /// provider). Nil and false both render as "not verified".
     var idVerified: Bool?
 
-    /// Below this many received requests a response rate is noise, not a signal,
-    /// so the server leaves `responseRate` nil and the UI shows no chip.
-    static let minimumResponses = 3
-
     var isVerified: Bool { idVerified == true }
-
-    /// "92% response rate", or nil when there isn't enough data to say.
-    var responseRateText: String? {
-        guard let responseRate else { return nil }
-        return "\(Int((responseRate * 100).rounded()))% response rate"
-    }
 
     /// "4.8 ★ (12)", or nil when nobody has reviewed this user yet.
     var ratingText: String? {

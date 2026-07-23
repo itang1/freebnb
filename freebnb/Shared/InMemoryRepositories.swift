@@ -108,8 +108,12 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         availability[homeID] = current
     }
 
-    /// Stands in for `onStayRequestWritten`, so a test can put a listing in the
-    /// state an accepted stay would leave it in.
+    func saveBookedRanges(homeID: String, booked: [DateRange]) async throws {
+        setBookedRanges(homeID: homeID, booked: booked)
+    }
+
+    /// The synchronous form, so a test can put a listing in the state an accepted
+    /// stay would leave it in without awaiting.
     func setBookedRanges(homeID: String, booked: [DateRange]) {
         var current = availability[homeID] ?? ListingAvailability()
         current.bookedDateRanges = booked
