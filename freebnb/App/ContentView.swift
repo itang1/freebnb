@@ -140,6 +140,15 @@ struct ContentView: View {
                         friendIDs: context.friendIDs,
                         blockedIDs: context.blockedIDs
                     )
+                    // The same friend set decides who may *see* this user's
+                    // listings, and the trigger that used to maintain that is a
+                    // Cloud Function this project does not deploy.
+                    Task {
+                        await homeStore.refreshOwnListingACLs(
+                            myID: context.myID,
+                            friendIDs: context.friendIDs
+                        )
+                    }
                 }
                 .sheet(isPresented: $showOnboarding, onDismiss: {
                     hasSeenOnboarding = true

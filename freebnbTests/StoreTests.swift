@@ -41,6 +41,58 @@ struct HomeStoreTests {
         let saved = try await repo.fetchVisibleListings(viewerID: "host1", after: nil, limit: 10)
         #expect(saved.map(\.id) == [home.id])
     }
+
+    /// A friendship made after the listing was saved has to reach the listing's
+    /// ACL, or the new friend never sees it. The Cloud Function that did this
+    /// isn't deployed, so the client does it.
+    @Test func aclRefreshMakesTheListingVisibleToANewFriend() async throws {
+        let repo = InMemoryHomesRepository()
+        let store = HomeStore(repository: repo)
+        let home = HomeFixture.make(hostUserID: "host1", allowedViewerIDs: ["host1"])
+        try await store.save(home)
+        store.setManagedListingsForTesting([home])
+
+        // Before: the friend is not in the ACL, so the feed query returns nothing.
+        var friendSees = try await repo.fetchVisibleListings(viewerID: "friend1", after: nil, limit: 10)
+        #expect(friendSees.isEmpty)
+
+        await store.refreshOwnListingACLs(myID: "host1", friendIDs: ["friend1"])
+
+        friendSees = try await repo.fetchVisibleListings(viewerID: "friend1", after: nil, limit: 10)
+        #expect(friendSees.map(\.id) == [home.id])
+        // The host keeps their own access.
+        let hostSees = try await repo.fetchVisibleListings(viewerID: "host1", after: nil, limit: 10)
+        #expect(hostSees.map(\.id) == [home.id])
+    }
+
+    /// An unfriending has to remove access too, not merely add.
+    @Test func aclRefreshDropsAFormerFriend() async throws {
+        let repo = InMemoryHomesRepository()
+        let store = HomeStore(repository: repo)
+        let home = HomeFixture.make(hostUserID: "host1", allowedViewerIDs: ["host1", "friend1"])
+        try await store.save(home)
+        store.setManagedListingsForTesting([home])
+
+        await store.refreshOwnListingACLs(myID: "host1", friendIDs: [])
+
+        let friendSees = try await repo.fetchVisibleListings(viewerID: "friend1", after: nil, limit: 10)
+        #expect(friendSees.isEmpty)
+    }
+
+    /// A co-hosted listing is someone else's to publish: the ACL belongs to the
+    /// host's friend graph, not to whoever happens to open the app.
+    @Test func aclRefreshLeavesCoHostedListingsAlone() async throws {
+        let repo = InMemoryHomesRepository()
+        let store = HomeStore(repository: repo)
+        let theirs = HomeFixture.make(hostUserID: "host2", allowedViewerIDs: ["host2"])
+        try await store.save(theirs)
+        store.setManagedListingsForTesting([theirs])
+
+        await store.refreshOwnListingACLs(myID: "host1", friendIDs: ["friend1"])
+
+        let friendSees = try await repo.fetchVisibleListings(viewerID: "friend1", after: nil, limit: 10)
+        #expect(friendSees.isEmpty)
+    }
 }
 
 @MainActor

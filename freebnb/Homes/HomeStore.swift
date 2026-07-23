@@ -410,6 +410,49 @@ final class HomeStore {
         }
     }
 
+    // MARK: - Read ACL upkeep
+
+    /// Rewrites the viewer ACL on the listings this user hosts, so a listing is
+    /// visible to exactly their current friends.
+    ///
+    /// `onFriendEdgeWritten` does this server-side, rebuilding both parties' ACLs
+    /// whenever an edge changes — but it is a Cloud Function, and the production
+    /// project has none deployed. Without this, accepting a friend request granted
+    /// the new friend nothing: every listing kept the roster it was saved with, so
+    /// a friendship made after a listing was created never made that listing
+    /// visible, and nothing ever repaired it.
+    ///
+    /// Each client can only write its own host's listings, so the two sides
+    /// converge separately as each person opens the app rather than both at the
+    /// moment the edge changes. Eventually consistent, where the trigger was
+    /// immediate; a listing that appears on next launch beats one that never does.
+    ///
+    /// Writes only on a real change, so the common case (nothing moved since last
+    /// launch) costs no writes at all — the same reason the trigger checks before
+    /// writing, and what keeps this off the critical path of every friend change.
+    /// Seeds `managedListings` without a listener, for tests that exercise what
+    /// this store does *with* them rather than how they arrive.
+    func setManagedListingsForTesting(_ listings: [Home]) {
+        managedListings = listings
+    }
+
+    func refreshOwnListingACLs(myID: String, friendIDs: some Sequence<String>) async {
+        guard !myID.isEmpty else { return }
+        let desired = Home.viewerIDs(hostUserID: myID, friendIDs: friendIDs)
+        for listing in managedListings where listing.isHostedBy(myID) {
+            guard Set(listing.allowedViewerIDs ?? []) != Set(desired) else { continue }
+            var updated = listing
+            updated.allowedViewerIDs = desired
+            do {
+                try await repository.save(updated)
+            } catch {
+                // Best effort: the next launch tries again, and a failure here
+                // leaves the listing exactly as visible as it already was.
+                log.error("ACL refresh failed for \(listing.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     // MARK: - Co-hosts (feature 14)
 
     /// Adds one friend to the listing's co-host roster.
