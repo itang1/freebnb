@@ -12,6 +12,7 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     private var homes: [Home]
     private var locations: [String: ListingLocation] = [:]
     private var manuals: [String: HouseManual] = [:]
+    private var availability: [String: ListingAvailability] = [:]
     init(homes: [Home] = []) { self.homes = homes }
 
     /// Mirrors what Firestore's rules would return for `viewerID`: only listings
@@ -94,6 +95,25 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
 
     func saveManual(homeID: String, manual: HouseManual) async throws {
         manuals[homeID] = manual
+    }
+
+    func fetchAvailability(homeID: String) async throws -> ListingAvailability {
+        availability[homeID] ?? ListingAvailability()
+    }
+
+    /// Mirrors the merge write: the host's half moves, the server's half stays.
+    func saveBlockedRanges(homeID: String, blocked: [DateRange]) async throws {
+        var current = availability[homeID] ?? ListingAvailability()
+        current.blockedDateRanges = blocked
+        availability[homeID] = current
+    }
+
+    /// Stands in for `onStayRequestWritten`, so a test can put a listing in the
+    /// state an accepted stay would leave it in.
+    func setBookedRanges(homeID: String, booked: [DateRange]) {
+        var current = availability[homeID] ?? ListingAvailability()
+        current.bookedDateRanges = booked
+        availability[homeID] = current
     }
 }
 
@@ -299,10 +319,6 @@ final class InMemoryUserProfileRepository: UserProfileRepository, @unchecked Sen
 
     func fetchProfile(userID: String) async throws -> UserProfile? {
         profiles[userID]
-    }
-
-    func deleteProfile(userID: String) async throws {
-        profiles.removeValue(forKey: userID)
     }
 
     func updateFCMToken(userID: String, token: String) async throws {

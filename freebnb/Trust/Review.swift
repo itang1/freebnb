@@ -60,6 +60,11 @@ struct Review: Identifiable, Codable, Hashable, Sendable {
 
     static let ratingRange = 1...5
 
+    /// Matches the `publicComment` cap in `firestore.rules`, for the same reason
+    /// `PrivateFeedback.maxLength` exists: an over-long comment should be a field
+    /// error in the composer, not a permission denial from the server.
+    static let commentMaxLength = 2000
+
     init(
         stayRequestID: String,
         listingID: String,
@@ -92,6 +97,12 @@ struct Review: Identifiable, Codable, Hashable, Sendable {
 /// inherits the review's authorship, and readable only by those two people.
 struct PrivateFeedback: Codable, Hashable, Sendable {
     var text: String
+
+    /// Matches the cap `firestore.rules` enforces on the feedback document. Kept
+    /// here so the composer can refuse an over-long note as a field error; without
+    /// it the write reached the server and came back as an opaque permission
+    /// denial, which reads as "something broke" rather than "this is too long".
+    static let maxLength = 2000
 }
 
 /// A character reference one friend writes for another, independent of any stay

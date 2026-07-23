@@ -297,7 +297,7 @@ service cloud.firestore {
                  'id', 'hostUserID', 'hostName', 'title', 'address', 'description',
                  'contactPreference', 'hostContactInfo', 'hostMotivation',
                  'sleeping', 'guestPolicy', 'amenities', 'cancellationPolicy',
-                 'photoURLs', 'blockedDateRanges', 'bookedDateRanges',
+                 'photoURLs', 'unavailableDateRanges',
                  'latitude', 'longitude',
                  'geohash', 'allowedViewerIDs', 'coHostUserIDs',
                  'deletedAt', 'createdAt'
@@ -329,14 +329,16 @@ service cloud.firestore {
             && isOptionalString(data, 'description', 2000)
             && isOptionalString(data, 'hostContactInfo', 500)
             && isOptionalList(data, 'photoURLs', 10)
-            && isOptionalList(data, 'blockedDateRanges', 100)
-            // Server-owned: `onStayRequestWritten` derives this from the listing's
-            // accepted stays. Not pinned here because the client round-trips it on
-            // every save and a tampered value only changes this listing's own
-            // "unavailable" display — the real double-booking guard is the
-            // acceptStayRequest transaction, which reads stays, not this field. The
-            // cap is all this rule owes it: it rides every feed document.
-            && isOptionalList(data, 'bookedDateRanges', 100)
+            // The merged calendar, and the only availability field this
+            // world-readable document is allowed to carry. `blockedDateRanges` and
+            // `bookedDateRanges` are absent from the key allowlist above on
+            // purpose: Firestore grants reads per document, never per field, so a
+            // listing that published both halves let any viewer subtract one from
+            // the other and learn which nights the home was occupied. They live in
+            // `private/availability` now, and this rule is what stops a modified
+            // client putting them back. The cap is the sum of the two former caps,
+            // since this is their union.
+            && isOptionalList(data, 'unavailableDateRanges', 200)
             // Enums and coordinates: a value the client can't decode makes the
             // listing silently disappear from the feed (see A5).
             && (isUnset(data, 'contactPreference')
@@ -376,7 +378,7 @@ service cloud.firestore {
       function coHostEditableKeys() {
         return ['description', 'hostMotivation', 'sleeping', 'guestPolicy',
                 'amenities', 'cancellationPolicy', 'photoURLs',
-                'blockedDateRanges', 'bookedDateRanges',
+                'unavailableDateRanges',
                 'latitude', 'longitude', 'geohash'];
       }
 
@@ -452,12 +454,22 @@ service cloud.firestore {
           && resource.data.hostUserID == request.auth.uid;
 
       // -----------------------------------------------------------------------
-      // Progressively-disclosed listing data. Two documents live here:
-      //   - `location`: the exact street address and unrounded coordinates.
-      //   - `manual`:   the host's check-in guide (feature 15).
-      // Both are readable by the host and by a guest whose stay the host has
-      // accepted, and never world-readable — the public listing document carries
-      // only city/state/zip and a coordinate rounded to roughly a kilometre.
+      // Private listing data. Three documents live here, and they do not all
+      // share a visibility rule:
+      //   - `location`:     the exact street address and unrounded coordinates.
+      //   - `manual`:       the host's check-in guide (feature 15).
+      //   - `availability`: the calendar with blocked and booked still apart.
+      //
+      // `location` and `manual` are progressively disclosed: the managers plus a
+      // guest whose stay the host has accepted, never world-readable, because the
+      // public listing carries only city/state/zip and a coordinate rounded to
+      // roughly a kilometre.
+      //
+      // `availability` is disclosed to nobody outside the managers, accepted
+      // guests included. Being accepted earns you the street you were invited to;
+      // it never earns you which of the host's other closed days were bookings.
+      // The public listing publishes only the union of the two halves, and the
+      // whole point of keeping them here is that no reader can undo that merge.
       // -----------------------------------------------------------------------
       function isValidLocation(data) {
         return data.keys().hasOnly(['street', 'latitude', 'longitude'])
@@ -481,20 +493,68 @@ service cloud.firestore {
             && isOptionalString(data, 'houseNotes', 2000)
             && isOptionalString(data, 'hostPhone', 40);
       }
-      // A co-host reads and writes both documents: a roommate who cannot see the
+      // The two halves of the calendar. Caps match the former per-field caps on
+      // the public document, whose merged field is now capped at their sum.
+      function isValidAvailability(data) {
+        return data.keys().hasOnly(['blockedDateRanges', 'bookedDateRanges'])
+            && isOptionalList(data, 'blockedDateRanges', 100)
+            && isOptionalList(data, 'bookedDateRanges', 100);
+      }
+
+      // `bookedDateRanges` is derived from accepted stays and stays pinned against
+      // every client, including the accepting one. The client-side accept
+      // serializes on the public listing's `unavailableDateRanges` instead — a
+      // field a manager may already write, and the one guests actually read — so
+      // nothing here had to be loosened to make acceptance work without the
+      // trigger. The cost is that this private half no longer learns about new
+      // bookings, so a host's own editor shows them merged into "unavailable"
+      // rather than labelled "booked"; that is a worse editor, not a wrong one,
+      // and it is the cheaper half of the trade.
+      //
+      // Note that a merge write is still evaluated against the *resulting*
+      // document, which is why this compares old to new rather than requiring the
+      // key to be absent — demanding absence would reject every host who tried to
+      // edit a listing that had a booking on it.
+      //
+      // Unlike the public copy, this one is worth pinning: a client that could
+      // write it could park a fake booking on a rival's calendar, and a host
+      // reading their own editor would have no way to tell it from a real one.
+      function bookedHalfUntouched() {
+        return request.resource.data.get('bookedDateRanges', [])
+            == (resource == null ? [] : resource.data.get('bookedDateRanges', []));
+      }
+
+      // A co-host reads and writes these documents: a roommate who cannot see the
       // street address or the door code cannot let a guest in, and the check-in
       // instructions are exactly the thing they are there to keep current.
       match /private/{docID} {
+        // The accepted-guest branch deliberately excludes `availability`. Without
+        // that exclusion an accepted guest would read the unmerged calendar and
+        // the split above would buy nothing: one accepted stay, anywhere, and the
+        // host's bookings are legible again.
         allow read: if isSignedIn()
             && (isListingManager(homeID)
-                || exists(/databases/$(database)/documents/homes/$(homeID)/accepted/$(request.auth.uid)));
+                || (docID != 'availability'
+                    && exists(/databases/$(database)/documents/homes/$(homeID)/accepted/$(request.auth.uid))));
 
         allow create, update: if isFullMember()
             && isListingManager(homeID)
             && ((docID == 'location' && isValidLocation(request.resource.data))
-                || (docID == 'manual' && isValidManual(request.resource.data)));
+                || (docID == 'manual' && isValidManual(request.resource.data))
+                || (docID == 'availability'
+                    && isValidAvailability(request.resource.data)
+                    && bookedHalfUntouched()));
 
-        allow delete: if isFullMember() && isListingManager(homeID);
+        // `availability` is excluded, because deleting a document is the one way
+        // to change a field without updating it: `bookedHalfUntouched()` pins the
+        // server-owned half against every write, and a delete would have taken
+        // the whole document out from under it. No client deletes this document
+        // — the host's editor only ever merges the blocked half — and
+        // `onHomeDeleted` cascades the subcollection as admin, which these rules
+        // do not apply to.
+        allow delete: if isFullMember()
+            && isListingManager(homeID)
+            && docID != 'availability';
       }
 
       // -----------------------------------------------------------------------
@@ -514,10 +574,29 @@ service cloud.firestore {
         allow read: if isSignedIn()
             && (request.auth.uid == guestID || isListingHost(homeID));
 
-        // The marker is written only by the acceptStayRequest callable (admin,
-        // which bypasses these rules), so accepting a stay and disclosing the
-        // address happen atomically. No client may forge a grant (L1).
-        allow create: if false;
+        // A manager may issue the grant, but only alongside a real acceptance.
+        //
+        // This was `false`, on the reasoning that only the callable should ever
+        // disclose an address. The callable is not deployed, so that rule made the
+        // address undisclosable rather than carefully disclosed. What keeps it from
+        // being a forgery hole is `getAfter`: it reads the post-commit state, so
+        // the named request must *itself* be accepted, for this listing, by this
+        // guest, when the batch settles. A manager cannot mint a grant for someone
+        // who never asked, cannot point one at a different listing, and cannot
+        // leave one behind by accepting and rolling back — the write either lands
+        // with a matching accepted request or does not land.
+        //
+        // Still nobody's to write but a manager's: it is their address.
+        allow create: if isFullMember()
+            && isListingManager(homeID)
+            && request.resource.data.keys().hasOnly(['requestID', 'guestUserID', 'createdAt'])
+            && request.resource.data.guestUserID == guestID
+            && getAfter(/databases/$(database)/documents/stayRequests/$(request.resource.data.requestID))
+                 .data.status == 'accepted'
+            && getAfter(/databases/$(database)/documents/stayRequests/$(request.resource.data.requestID))
+                 .data.guestUserID == guestID
+            && getAfter(/databases/$(database)/documents/stayRequests/$(request.resource.data.requestID))
+                 .data.listingID == homeID;
 
         // A grant is not editable in place; revoke and re-issue.
         allow update: if false;
@@ -574,10 +653,23 @@ service cloud.firestore {
             // guest's own fields (their note, their party size, their arrival
             // time) are theirs to fill in if they accept — the host must not put
             // words in their mouth.
+            //
+            // The friendship is checked here directly, and deliberately *not*
+            // left to the `allowedViewerIDs` gate below. On the guest path that
+            // ACL is a real boundary, because a guest cannot edit someone else's
+            // listing. On this path the caller is the host, who writes that array
+            // themselves — so adding an arbitrary uid to their own listing and
+            // then "offering" to them would land an unsolicited stay, with a
+            // 2000-character note, in the trip list of any user in the app. The
+            // ACL cannot gate a write by the person who authors the ACL.
+            // `onHomeWrittenACL` scrubs a hand-written roster, but it runs after
+            // the fact and is not deployed everywhere, so the invariant belongs
+            // in the rule rather than in a trigger.
             (request.resource.data.hostUserID == request.auth.uid
                 && request.resource.data.status == "offered"
                 && request.resource.data.initiatedBy == request.auth.uid
                 && request.resource.data.guestUserID != request.auth.uid
+                && areFriends(request.resource.data.guestUserID, request.auth.uid)
                 && isUnset(request.resource.data, 'guestNote')
                 && isUnset(request.resource.data, 'guestCount')
                 && isUnset(request.resource.data, 'arrivalWindow')
@@ -609,6 +701,11 @@ service cloud.firestore {
           // who is always in their own listing's ACL — so checking the caller
           // there would check nothing at all, and would let a host offer their
           // place to someone who cannot even see it.
+          //
+          // This clause carries the guest path on its own, because a guest cannot
+          // edit the ACL it reads. It does *not* carry the host path, where the
+          // caller authors the array being checked; that direction is gated by
+          // the explicit areFriends() on the offer branch above. Keep both.
           && request.resource.data.guestUserID in
                get(/databases/$(database)/documents/homes/$(request.resource.data.listingID))
                  .data.get('allowedViewerIDs', [])
@@ -673,6 +770,34 @@ service cloud.firestore {
                   (isHostSide(resource.data)
                       && resource.data.status == "pending"
                       && request.resource.data.status == "declined"
+                      && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
+                      && isOptionalString(request.resource.data, 'hostNote', 2000))
+                  ||
+                  // Host side accepts a pending request. This was the callable's
+                  // alone, because only an admin could read every accepted stay on
+                  // the listing and rule out a double-booking. The callable is not
+                  // deployed — this project has no Cloud Functions in production —
+                  // so the choice was not "client or server" but "client or not at
+                  // all", and a booking app that cannot accept a booking is not a
+                  // booking app.
+                  //
+                  // What replaces the admin query is a client transaction over
+                  // `private/availability`, which is one document rather than a
+                  // query, so a client transaction can serialize on it: two devices
+                  // accepting at once contend on the same document and the loser
+                  // retries against the winner's write. That is the same guarantee
+                  // for the case the guard was written for (one host, two devices)
+                  // and a weaker one against a modified client, which these rules
+                  // cannot check without looping over ranges.
+                  //
+                  // Deliberately narrower than the callable: only `pending`, and
+                  // only the host side. A guest accepting an *offer* still needs
+                  // the callable, because the document that would let them check
+                  // overlap is one they are forbidden to read, and the marker below
+                  // is not theirs to write.
+                  (isHostSide(resource.data)
+                      && resource.data.status == "pending"
+                      && request.resource.data.status == "accepted"
                       && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
@@ -916,10 +1041,16 @@ service cloud.firestore {
           && resource.data.status == "pending"
           && request.resource.data.status == "accepted"
           && request.auth.uid != resource.data.initiator
-          // Immutable fields must not change.
-          && request.resource.data.userA == resource.data.userA
-          && request.resource.data.userB == resource.data.userB
-          && request.resource.data.initiator == resource.data.initiator;
+          // The accept may move the status and its timestamp, and nothing else.
+          // Pinning the three identity fields by equality (as this rule used to
+          // do alone) says what may not change but never bounds what may be
+          // *added*: with no allowlist, the accepting party could hang arbitrary
+          // extra fields — or a near-megabyte of padding — off an edge document
+          // that create carefully allowlists. hasOnly() makes the two symmetric,
+          // and subsumes the equality pins on userA/userB/initiator, which are
+          // absent from the list and therefore already immutable. createdAt is
+          // likewise pinned by omission, which the old rule left free.
+          && changedKeys().hasOnly(['status', 'updatedAt']);
 
       // Either party may delete (decline, cancel, or remove friend).
       allow delete: if isSignedIn()
@@ -1098,6 +1229,13 @@ service cloud.firestore {
           && request.resource.data.reason.size() > 0
           && request.resource.data.reason.size() < 2000
           && request.resource.data.targetType in ["user", "listing", "message"]
+          // What is being reported. Bounded like every other client-authored
+          // string: `reason` was capped but this was not, leaving an unbounded
+          // write into a collection the reporter cannot read back — the one
+          // shape of abuse a write-only inbox is prone to.
+          && request.resource.data.targetID is string
+          && request.resource.data.targetID.size() > 0
+          && request.resource.data.targetID.size() < 200
           // A fresh report enters triage at the top of the queue, and is filed by
           // a person — `source: "auto"` belongs to the moderation triggers.
           && (isUnset(request.resource.data, 'status') || request.resource.data.status == 'new')

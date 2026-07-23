@@ -96,7 +96,16 @@ protocol UserProfileRepository: Sendable {
     func updateSavedListings(userID: String, listingIDs: [String]) async throws
     func updateBlockedUsers(userID: String, blockedUserIDs: [String]) async throws
     func fetchProfile(userID: String) async throws -> UserProfile?
-    func deleteProfile(userID: String) async throws
+    // No `deleteProfile`. Account deletion is the `deleteUser` callable's job and
+    // cannot be done from the client: `firestore.rules` sets `allow delete: if
+    // false` on the public user document, while the owner-only private
+    // subdocument *is* client-deletable. A client-side cascade therefore deletes
+    // the private half, is denied the public half, and — because permission
+    // denied is not a transient error and `withRetry` will not retry it — leaves
+    // the account with its `blockedUserIDs` gone. `hasBlocked()` reads a missing
+    // document as "not blocked", so a failed self-delete would silently lift
+    // every block the user had placed. The method that did this was unreferenced
+    // and has been removed rather than left as a trap.
     func updateFCMToken(userID: String, token: String) async throws
     func updateNotificationPrefs(userID: String, prefs: NotificationPreferences) async throws
     /// Stores (or, with nil, clears) the person this user shares their stays with.
@@ -285,17 +294,6 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             let snap = try await db.collection(FirestorePaths.users).document(userID).getDocument()
             guard snap.exists else { return nil }
             return try snap.data(as: UserProfile.self)
-        }
-    }
-
-    func deleteProfile(userID: String) async throws {
-        try await withRetry { [db] in
-            // Private subdoc before the public doc: Firestore does not delete
-            // subcollections with their parent, so deleting the parent first
-            // would orphan the private doc with no top-level marker to find it.
-            try await db.collection(FirestorePaths.users).document(userID)
-                .collection(FirestorePaths.privateCollection).document(privateProfileDocID).delete()
-            try await db.collection(FirestorePaths.users).document(userID).delete()
         }
     }
 

@@ -29,7 +29,15 @@ struct WriteReviewSheet: View {
 
     private var trimmedComment: String { publicComment.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var trimmedNote: String { privateNote.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canSubmit: Bool { Review.ratingRange.contains(rating) && !isSubmitting }
+    private var canSubmit: Bool {
+        Review.ratingRange.contains(rating)
+            && !isSubmitting
+            // Both caps are enforced by the rules; check them here so an over-long
+            // field disables Submit with a visible counter instead of failing the
+            // write with a permission denial.
+            && trimmedComment.count <= Review.commentMaxLength
+            && trimmedNote.count <= PrivateFeedback.maxLength
+    }
 
     var body: some View {
         NavigationStack {
@@ -56,7 +64,12 @@ struct WriteReviewSheet: View {
                 } header: {
                     Text(role.prompt)
                 } footer: {
-                    Text("Shown on \(subjectName)'s profile.")
+                    if trimmedComment.count > Review.commentMaxLength {
+                        Text("\(trimmedComment.count) / \(Review.commentMaxLength)")
+                            .foregroundColor(.danger)
+                    } else {
+                        Text("Shown on \(subjectName)'s profile.")
+                    }
                 }
 
                 Section {
@@ -66,7 +79,12 @@ struct WriteReviewSheet: View {
                 } header: {
                     Text("Private note")
                 } footer: {
-                    Text("Only \(subjectName) sees this. Nobody else, ever: not on your profile, not on theirs.")
+                    if trimmedNote.count > PrivateFeedback.maxLength {
+                        Text("\(trimmedNote.count) / \(PrivateFeedback.maxLength)")
+                            .foregroundColor(.danger)
+                    } else {
+                        Text("Only \(subjectName) sees this. Nobody else, ever: not on your profile, not on theirs.")
+                    }
                 }
 
                 if let errorMessage {

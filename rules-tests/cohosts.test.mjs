@@ -193,11 +193,15 @@ describe("homes/{id} — what a co-host may write", () => {
     );
   });
 
-  it("lets a co-host block dates", async () => {
+  // The merged field on the public document. A co-host's own blocking now goes
+  // to `private/availability` (availability.test.mjs covers that); what this
+  // asserts is that the published union is theirs to rewrite, because their save
+  // round-trips it.
+  it("lets a co-host write the merged availability field", async () => {
     await seedCoHostedListing();
     await assertSucceeds(
       updateDoc(listingDoc(asCoHost()), {
-        blockedDateRanges: [{ start: Timestamp.now(), end: Timestamp.now() }],
+        unavailableDateRanges: [{ start: Timestamp.now(), end: Timestamp.now() }],
       })
     );
   });
@@ -392,9 +396,17 @@ describe("stayRequests — the co-host's half of the inbox", () => {
     }));
   });
 
-  // Acceptance is the callable's job, not a client write, for either party.
-  it("refuses a co-host accepting by writing the status directly", async () => {
-    await seedRequest();
+  // Acceptance used to be the callable's alone, and this asserted that a co-host
+  // could not write the status directly. The callable is not deployed, so the
+  // host side now accepts from the client and a co-host is the host side —
+  // accept.test.mjs covers that path and the address grant that rides with it.
+  //
+  // What survives from the old assertion is the part that was really about
+  // co-hosts rather than about acceptance: a co-host may answer a request that
+  // was made, and may not manufacture one. Accepting an *offer* is still the
+  // guest's, and still the callable's.
+  it("refuses a co-host accepting an offer on the guest's behalf", async () => {
+    await seedRequest({ status: "offered" });
     await assertFails(updateDoc(requestDoc(asCoHost()), {
       status: "accepted",
       updatedAt: serverTimestamp(),

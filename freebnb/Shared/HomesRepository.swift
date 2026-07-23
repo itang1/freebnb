@@ -53,6 +53,14 @@ protocol HomesRepository: Sendable {
     /// has been written.
     func fetchManual(homeID: String) async throws -> HouseManual?
     func saveManual(homeID: String, manual: HouseManual) async throws
+    /// The listing's calendar with blocked and booked still apart, for the people
+    /// who manage it. Throws `permissionDenied` for anyone else, guests included:
+    /// the merged `Home.unavailableDateRanges` is all a guest ever gets. Returns
+    /// an empty value when no day has been closed or booked yet.
+    func fetchAvailability(homeID: String) async throws -> ListingAvailability
+    /// Writes the host-authored half only. `bookedDateRanges` is server-owned and
+    /// rejected from a client write by the rules.
+    func saveBlockedRanges(homeID: String, blocked: [DateRange]) async throws
 }
 
 /// The feed's canonical order: newest first, with document id descending as a
@@ -248,7 +256,7 @@ struct FirestoreHomesRepository: HomesRepository {
     /// and the id cursor advances monotonically without skips or loops.
     private func forEachHostListingPage(
         hostUserID: String,
-        mutate: @Sendable @escaping (WriteBatch, DocumentReference) -> Void
+        fields: @Sendable @escaping () -> [String: Any]
     ) async throws {
         var cursor: DocumentSnapshot?
         while true {
@@ -263,27 +271,71 @@ struct FirestoreHomesRepository: HomesRepository {
             }
             let documents = snapshot.documents
             guard !documents.isEmpty else { return }
-            try await withRetry { [db] in
-                let batch = db.batch()
-                for document in documents { mutate(batch, document.reference) }
-                try await batch.commit()
-            }
+            try await commitPage(documents, fields: fields)
             // A short final page means the host's listings are drained.
             if documents.count < firestoreBatchLimit { return }
             cursor = documents.last
         }
     }
 
-    func updateHostName(userID: String, newName: String) async throws {
-        try await forEachHostListingPage(hostUserID: userID) { batch, reference in
-            batch.updateData(["hostName": newName], forDocument: reference)
+    /// Applies `fields` to one page of listings.
+    ///
+    /// The batch is the fast path: one round trip for the whole page. But a batch
+    /// is atomic, and the `homes` update rule re-validates the *entire* merged
+    /// document — so one listing that predates `scripts/migrate_friends_only.js`
+    /// (still carrying `visibility`, or missing a key the validator now requires)
+    /// fails the commit for every healthy listing sitting beside it in the batch.
+    /// A host with a single stale listing could not rename themselves at all, and
+    /// the rename surfaced as an outright failure rather than as the one document
+    /// that refused.
+    ///
+    /// So a failed batch is retried document by document: everything that can
+    /// move does, and each refusal is recorded individually. Only a page that
+    /// refused *in its entirety* rethrows, because that means something systemic
+    /// (signed out, rules withdrawn) rather than one document left behind by a
+    /// migration.
+    private func commitPage(
+        _ documents: [QueryDocumentSnapshot],
+        fields: @Sendable @escaping () -> [String: Any]
+    ) async throws {
+        do {
+            try await withRetry { [db] in
+                let batch = db.batch()
+                for document in documents {
+                    batch.updateData(fields(), forDocument: document.reference)
+                }
+                try await batch.commit()
+            }
+            return
+        } catch {
+            // Fall through: find out which of these the server actually refused.
         }
+
+        var failures: [Error] = []
+        for document in documents {
+            let reference = document.reference
+            do {
+                try await withRetry { try await reference.updateData(fields()) }
+            } catch {
+                failures.append(error)
+                Telemetry.recordError(error, context: "listing fan-out \(document.documentID)")
+            }
+        }
+        if failures.count == documents.count, let first = failures.first { throw first }
+    }
+
+    func updateHostName(userID: String, newName: String) async throws {
+        try await forEachHostListingPage(hostUserID: userID) { ["hostName": newName] }
     }
 
     func softDeleteAllListings(hostUserID: String) async throws {
-        let now = Timestamp(date: Date())
-        try await forEachHostListingPage(hostUserID: hostUserID) { batch, reference in
-            batch.updateData(["deletedAt": now], forDocument: reference)
+        // The server's clock, not the device's. `isValidListing` only checks that
+        // `deletedAt` is a timestamp, so a client-supplied one is accepted as
+        // written and a skewed device could back- or forward-date its own soft
+        // delete. `delete(homeID:)` already stamps the server time; these two
+        // describe the same event and should agree on who timestamps it.
+        try await forEachHostListingPage(hostUserID: hostUserID) {
+            ["deletedAt": FieldValue.serverTimestamp()]
         }
     }
 
@@ -314,6 +366,26 @@ struct FirestoreHomesRepository: HomesRepository {
             try FirestorePaths.listingManual(db, homeID: homeID).setData(from: manual)
         }
     }
+
+    func fetchAvailability(homeID: String) async throws -> ListingAvailability {
+        try await withRetry { [db] in
+            let snap = try await FirestorePaths.listingAvailability(db, homeID: homeID).getDocument()
+            guard snap.exists else { return ListingAvailability() }
+            return try snap.data(as: ListingAvailability.self)
+        }
+    }
+
+    /// Writes the host's half and leaves the server's half alone. A merge write on
+    /// the one field, not `setData(from:)`, because the document also carries
+    /// `bookedDateRanges`, which the rules pin as server-owned — a whole-document
+    /// write would either clobber a booking or be rejected outright.
+    func saveBlockedRanges(homeID: String, blocked: [DateRange]) async throws {
+        try await withRetry { [db] in
+            let encoded = try blocked.map { try Firestore.Encoder().encode($0) }
+            try await FirestorePaths.listingAvailability(db, homeID: homeID)
+                .setData(["blockedDateRanges": encoded], merge: true)
+        }
+    }
 }
 
 /// The two subcollection paths that implement progressive address disclosure.
@@ -328,6 +400,14 @@ extension FirestorePaths {
     /// gate with the location document.
     static func listingManual(_ db: Firestore, homeID: String) -> DocumentReference {
         db.collection(FirestorePaths.homes).document(homeID).collection(FirestorePaths.privateCollection).document(FirestorePaths.manualDocID)
+    }
+
+    /// The listing's calendar in its unmerged form. Gated harder than the two
+    /// above: `location` and `manual` open up to an accepted guest, this one never
+    /// does, because the merged copy on the public document is the only version of
+    /// availability a guest is ever meant to hold.
+    static func listingAvailability(_ db: Firestore, homeID: String) -> DocumentReference {
+        db.collection(FirestorePaths.homes).document(homeID).collection(FirestorePaths.privateCollection).document(FirestorePaths.availabilityDocID)
     }
 
     /// Marker document whose mere existence grants `guestUserID` read access to

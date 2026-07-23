@@ -159,6 +159,42 @@ struct FirestoreMessagesRepository: MessagesRepository {
         message: Message,
         encodedMessage: [String: Any]
     ) async throws {
+        // The counter has exactly two legal shapes and the rules accept only the
+        // one matching the *server's* view of the window. The client has to guess
+        // which, and it guesses with the device clock — so a skewed clock, or a
+        // message sent within a whisker of the 60s boundary, picks the shape the
+        // server rejects. Neither rule branch then matches: the reset branch wants
+        // `windowStart == request.time`, the increment branch wants
+        // `request.time < windowStart + 60s`. The send fails outright, and because
+        // permission denied is not transient, `withRetry` will not rescue it — a
+        // device a few minutes slow could not send at all.
+        //
+        // So the guess is allowed to be wrong once. On a permission denial the
+        // opposite shape is committed, which is by construction the other branch.
+        // A genuine rate-limit rejection (at the cap, window still open) fails
+        // both shapes and still surfaces, which is the behaviour we want to keep.
+        do {
+            try await commitCounter(db: db, message: message, encodedMessage: encodedMessage, invert: false)
+        } catch let error as NSError
+            where error.domain == firestoreErrorDomain && error.code == permissionDeniedCode {
+            try await commitCounter(db: db, message: message, encodedMessage: encodedMessage, invert: true)
+        }
+    }
+
+    // Matches the domain string `RepositorySupport` already keys off; 7 is
+    // PERMISSION_DENIED, which `withRetry` deliberately treats as non-transient.
+    private static let firestoreErrorDomain = "FIRFirestoreErrorDomain"
+    private static let permissionDeniedCode = 7
+
+    /// Commits the message and the sender's counter together. `invert` flips the
+    /// device-clock guess about whether the window is still open, so the retry
+    /// commits the shape the first attempt did not.
+    private static func commitCounter(
+        db: Firestore,
+        message: Message,
+        encodedMessage: [String: Any],
+        invert: Bool
+    ) async throws {
         let rateRef = db.collection(FirestorePaths.rateLimits).document(message.senderUserID)
         let msgRef = db.collection(FirestorePaths.messages).document(message.id)
         try await withRetry {
@@ -171,15 +207,20 @@ struct FirestoreMessagesRepository: MessagesRepository {
                     return nil
                 }
 
-                // Still inside the open window: increment and keep windowStart.
-                // Otherwise open a fresh window stamped at the server's write time,
-                // which the rules require to equal request.time.
+                // Default to opening a fresh window, stamped at the server's write
+                // time, which the rules require to equal request.time. That is also
+                // the only legal shape when no counter exists yet.
                 var counter: [String: Any] = ["windowStart": FieldValue.serverTimestamp(), "count": 1]
                 if snap.exists,
                    let windowStart = snap.get("windowStart") as? Timestamp,
-                   let count = snap.get("count") as? Int,
-                   Date().timeIntervalSince(windowStart.dateValue()) < rateWindow {
-                    counter = ["windowStart": windowStart, "count": count + 1]
+                   let count = snap.get("count") as? Int {
+                    // Increment and keep windowStart while the window is still
+                    // open. `invert` flips this after the server rejected the
+                    // first shape, which means its clock disagreed with ours.
+                    let deviceSaysOpen = Date().timeIntervalSince(windowStart.dateValue()) < rateWindow
+                    if deviceSaysOpen != invert {
+                        counter = ["windowStart": windowStart, "count": count + 1]
+                    }
                 }
                 txn.setData(counter, forDocument: rateRef)
                 txn.setData(encodedMessage, forDocument: msgRef)

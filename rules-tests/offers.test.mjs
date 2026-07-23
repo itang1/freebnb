@@ -44,8 +44,30 @@ async function seed(writer) {
   });
 }
 
-/** A live listing hosted by HOST and shared with FRIEND. */
+/** An accepted friend edge, under the canonical sorted id. */
+async function seedFriendship(a, b) {
+  const [userA, userB] = [a, b].sort();
+  await seed((db) =>
+    setDoc(doc(db, "friendEdges", `${userA}_${userB}`), {
+      userA,
+      userB,
+      status: "accepted",
+      initiator: userA,
+    })
+  );
+}
+
+/**
+ * A live listing hosted by HOST and shared with FRIEND, who is an actual friend.
+ *
+ * The friend edge is part of the fixture, not decoration. This file used to model
+ * "friend" as nothing but membership in `allowedViewerIDs`, which is the same
+ * conflation the offer rule itself used to make: the host authors that array, so
+ * it could never be evidence of anything about the person in it. The rule now
+ * asks the friend graph directly, and the fixture has to supply one.
+ */
 async function seedListing(extra = {}) {
+  await seedFriendship(HOST, FRIEND);
   await seed((db) =>
     setDoc(doc(db, "homes", LISTING), {
       hostUserID: HOST,
@@ -137,6 +159,26 @@ describe("stayRequests/{id} create — a host offering their place", () => {
   it("denies a host offering to someone outside the listing's ACL", async () => {
     await seedListing();
     await assertFails(createOffer(HOST, { guestUserID: STRANGER }));
+  });
+
+  // The hole the ACL check could never have closed. `allowedViewerIDs` is
+  // written by the host, so on this path it was the caller vouching for
+  // themselves: two writes — add a uid to your own listing, then offer to it —
+  // and an unsolicited stay with a 2000-character note landed in the trip list
+  // of anyone in the app. The listing here names STRANGER in its ACL exactly as
+  // that attack would; what they lack is a friend edge, and that is now what is
+  // actually asked.
+  it("denies a host offering to a non-friend they wrote into their own ACL", async () => {
+    await seedListing({ allowedViewerIDs: [HOST, FRIEND, STRANGER] });
+    await assertFails(createOffer(HOST, { guestUserID: STRANGER }));
+  });
+
+  // The mirror, so the case above cannot pass by denying every stranger: the
+  // same ACL, and an accepted edge is the only difference.
+  it("allows the offer once that person is a real friend", async () => {
+    await seedListing({ allowedViewerIDs: [HOST, FRIEND, STRANGER] });
+    await seedFriendship(HOST, STRANGER);
+    await assertSucceeds(createOffer(HOST, { guestUserID: STRANGER }));
   });
 
   it("denies an offer to a guest who has blocked the host", async () => {

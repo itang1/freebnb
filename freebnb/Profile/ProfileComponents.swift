@@ -165,14 +165,34 @@ struct EditNameSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         do {
             try await userProfileStore.updateDisplayName(trimmed)
-            // Fan the new name out to both denormalized copies: listing cards
-            // (homes.hostName) and trip rows (stayRequests.listingHostName, L7).
-            try await homeStore.updateHostName(for: authManager.userID, newName: trimmed)
-            try await stayRequestStore.updateHostName(for: authManager.userID, newName: trimmed)
-            dismiss()
         } catch {
             errorMessage = error.localizedDescription
+            return
         }
+
+        // The name on the user document is the authoritative one, and it is now
+        // saved. Fanning it out to the two denormalized copies — listing cards
+        // (homes.hostName) and trip rows (stayRequests.listingHostName, L7) — is
+        // best effort from here.
+        //
+        // These used to run inside the do above, so a listing that refused the
+        // rewrite (one predating the friends-only migration, whose whole document
+        // the update rule re-validates) reported the rename as failed even though
+        // it had already happened, and took the second fan-out down with it. A
+        // stale denormalized copy is a cosmetic problem; telling someone their
+        // rename failed when it did not is a worse one. Each runs regardless of
+        // the other, and each reports itself rather than the sheet.
+        do {
+            try await homeStore.updateHostName(for: authManager.userID, newName: trimmed)
+        } catch {
+            Telemetry.recordError(error, context: "hostName fan-out after rename")
+        }
+        do {
+            try await stayRequestStore.updateHostName(for: authManager.userID, newName: trimmed)
+        } catch {
+            Telemetry.recordError(error, context: "listingHostName fan-out after rename")
+        }
+        dismiss()
     }
 }
 

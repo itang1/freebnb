@@ -52,8 +52,13 @@ struct OfferStaySheet: View {
         return friendStore.friendIDs.filter { viewers.contains($0) }
     }
 
+    /// Reads the merged `unavailableRanges` now that the two public arrays have
+    /// been folded into one. Naming the offending range is fine here where it
+    /// would not be guest-side: this sheet is the host's own listing, so the
+    /// oracle `StayRows` guards against (a guest learning which nights are booked
+    /// rather than blocked) does not arise — the host already knows both.
     private var blockedConflict: DateRange? {
-        listing.blockedDateRanges?.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
+        listing.unavailableRanges.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
     }
 
     /// A stay already accepted for this listing over the same dates. The host can
