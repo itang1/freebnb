@@ -168,7 +168,7 @@ struct CreateListingPage: View {
         Section("Sleeping arrangements") {
             ForEach(SleepingSurface.allCases, id: \.self) { surface in
                 Stepper(
-                    "\(vm.sleepingCounts[surface, default: 0]) \(surface.displayName)\(vm.sleepingCounts[surface, default: 0] == 1 ? "" : "s")",
+                    "\(vm.sleepingCounts[surface, default: 0]) \(surface.name(count: vm.sleepingCounts[surface, default: 0]))",
                     value: Binding(
                         get: { vm.sleepingCounts[surface, default: 0] },
                         set: { newValue in

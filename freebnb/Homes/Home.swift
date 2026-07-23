@@ -62,6 +62,23 @@ enum SleepingSurface: String, CaseIterable, Hashable, Codable {
         case .floorMat:    return "floor mat"
         }
     }
+
+    /// Spelled out rather than assembled. Two of these take -es, and the create
+    /// form's steppers appended a bare -s to all five: a host picking where their
+    /// guest sleeps was offered "0 couchs" and "0 air mattresss".
+    var pluralName: String {
+        switch self {
+        case .bed:         return "beds"
+        case .airMattress: return "air mattresses"
+        case .couch:       return "couches"
+        case .futon:       return "futons"
+        case .floorMat:    return "floor mats"
+        }
+    }
+
+    /// The form the count calls for. The other half of the same bug: the listing
+    /// page's summary never pluralized at all, so two of anything read "2 couch".
+    func name(count: Int) -> String { count == 1 ? displayName : pluralName }
 }
 
 /// The size of a `SleepingSurface.bed` (feature 17). Separate from the surface
@@ -243,7 +260,7 @@ struct Sleeping: Codable, Hashable {
     var arrangementsDescription: String {
         sleepingCounts
             .sorted { $0.key.rawValue < $1.key.rawValue }
-            .map { "\($0.value) \($0.key.displayName)" }
+            .map { "\($0.value) \($0.key.name(count: $0.value))" }
             .joined(separator: ", ")
     }
 
