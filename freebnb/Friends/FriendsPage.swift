@@ -92,10 +92,30 @@ struct FriendsPage: View {
                 }
             }
         } else {
+            // A search that finds nobody is the likeliest reason someone stalls
+            // here: the app is empty until a friend is added, and the two ways to
+            // get no result — they spell their name differently, or they aren't
+            // on FreeBNB — both leave the searcher with nothing to do next. Name
+            // both, and offer the invite, which is the answer to the second one.
             Section {
-                Text("No people found.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondaryText)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("No one found for \"\(trimmedQuery)\".")
+                        .font(.subheadline)
+                    Text("They may have signed up under a different name, or they may not be on FreeBNB yet.")
+                        .font(.caption)
+                        .foregroundColor(.secondaryText)
+                    ShareLink(
+                        item: InviteCopy.vouch(
+                            inviterName: userProfileStore.displayName,
+                            senderID: userProfileStore.currentProfile?.id
+                        ),
+                        subject: Text("FreeBNB Invite")
+                    ) {
+                        Label("Invite them to FreeBNB", systemImage: "square.and.arrow.up")
+                            .font(.subheadline.weight(.medium))
+                    }
+                }
+                .padding(.vertical, 4)
             }
         }
     }
@@ -256,6 +276,11 @@ struct FriendsPage: View {
     private func resolveInviter() async {
         guard let inviterID = router.pendingInviterID else { return }
         router.pendingInviterID = nil
+        // A leftover query from an earlier visit swaps this whole list for search
+        // results, which would hide the card the link was followed to show. The
+        // search bar keeps its text across tab switches, so this is the ordinary
+        // case, not an edge one.
+        query = ""
         guard inviterID != authManager.userID else { return }
         inviter = await userProfileStore.fetchProfileOnce(userID: inviterID)
     }

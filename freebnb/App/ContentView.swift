@@ -210,16 +210,19 @@ struct ContentView: View {
                     selectedTab = 2
                     messagesDeepLinkUserID = userID
                     router.pendingConversationUserID = nil
+                    router.didRouteSinceSignIn = true
                 }
                 .onChange(of: router.pendingStayEvent, initial: true) { _, pending in
                     guard pending else { return }
                     selectedTab = 1
                     router.pendingStayEvent = false
+                    router.didRouteSinceSignIn = true
                 }
                 .onChange(of: router.pendingFriendsTab, initial: true) { _, pending in
                     guard pending else { return }
                     selectedTab = 3
                     router.pendingFriendsTab = false
+                    router.didRouteSinceSignIn = true
                 }
                 // Write the arrival essentials to disk while there is still a
                 // network to fetch them with. Driven from here rather
@@ -258,6 +261,7 @@ struct ContentView: View {
                         listingsPath.append(home)
                     }
                     router.pendingListingID = nil
+                    router.didRouteSinceSignIn = true
                 }
             } else {
                 NavigationStack {
@@ -290,8 +294,18 @@ struct ContentView: View {
         // Land on the Listings tab after signing in. selectedTab is persisted,
         // so without this a returning user would reopen on whatever tab they
         // last used before signing out.
+        //
+        // Unless a deep link is waiting, or was just acted on: someone who signed
+        // in by following an invite asked for the Friends tab, and this default
+        // would drop them on an empty feed instead. See `didRouteSinceSignIn`.
         .onChange(of: authManager.isSignedIn) { _, signedIn in
-            if signedIn { selectedTab = 0 }
+            guard signedIn else {
+                router.didRouteSinceSignIn = false
+                return
+            }
+            if !router.hasPendingIntent && !router.didRouteSinceSignIn {
+                selectedTab = 0
+            }
         }
         .offlineBanner(isOnline: networkMonitor.isOnline)
         .appliesStoredAppearance()

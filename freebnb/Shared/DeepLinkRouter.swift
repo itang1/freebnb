@@ -34,6 +34,27 @@ final class DeepLinkRouter {
     /// someone a name they could have searched for.
     var pendingInviterID: String?
 
+    /// True while any intent above is still waiting to be acted on.
+    var hasPendingIntent: Bool {
+        pendingConversationUserID != nil
+            || pendingStayEvent
+            || pendingFriendsTab
+            || pendingListingID != nil
+            || pendingInviterID != nil
+    }
+
+    /// Set by `ContentView` when it acts on any of the intents above, and cleared
+    /// when the user signs out.
+    ///
+    /// It exists for one case: a link followed while signed out. Signing in also
+    /// resets the tab to Listings (`selectedTab` is persisted, so a returning
+    /// user would otherwise reopen wherever they left off), and that default must
+    /// not overwrite a destination the user explicitly asked for. Checking both
+    /// this and `hasPendingIntent` makes the outcome the same whichever of the
+    /// two runs first: before the link is consumed the pending flag is set, and
+    /// afterwards this one is.
+    var didRouteSinceSignIn = false
+
     /// What an incoming `freebnb://` URL asks for. Parsed apart from the app so
     /// the routing can be tested without one, and so an unknown host is an
     /// explicit nil rather than a fallthrough that quietly does something.

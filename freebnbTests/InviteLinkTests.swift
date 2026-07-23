@@ -52,6 +52,45 @@ struct InviteLinkTests {
         #expect(router.pendingConversationUserID == nil)
     }
 
+    /// The two halves of the "don't clobber a deep link on sign-in" guard, which
+    /// have to cover the transition whichever order the two handlers run in: an
+    /// intent not yet acted on, and one that already has been.
+    @Test func aPendingInviteIsVisibleBeforeItIsConsumed() {
+        let router = DeepLinkRouter()
+        #expect(router.hasPendingIntent == false)
+        #expect(router.didRouteSinceSignIn == false)
+
+        router.handle(.invite(senderID: "uid-maya"))
+        #expect(router.hasPendingIntent)
+
+        // What ContentView does when it acts on the intent.
+        router.pendingFriendsTab = false
+        router.didRouteSinceSignIn = true
+        // The inviter is still pending until FriendsPage resolves it, so the
+        // guard holds on either field alone.
+        router.pendingInviterID = nil
+        #expect(router.hasPendingIntent == false)
+        #expect(router.didRouteSinceSignIn)
+    }
+
+    @Test func everyPendingIntentCountsTowardTheGuard() {
+        let router = DeepLinkRouter()
+        router.pendingStayEvent = true
+        #expect(router.hasPendingIntent)
+        router.pendingStayEvent = false
+
+        router.pendingConversationUserID = "uid-shai"
+        #expect(router.hasPendingIntent)
+        router.pendingConversationUserID = nil
+
+        router.pendingListingID = "listing-1"
+        #expect(router.hasPendingIntent)
+        router.pendingListingID = nil
+
+        router.pendingInviterID = "uid-maya"
+        #expect(router.hasPendingIntent)
+    }
+
     @Test func vouchCopyPointsAtTheLinkWhenItNamesTheSender() {
         let message = InviteCopy.vouch(inviterName: "Maya", senderID: "uid-maya")
         #expect(message.hasPrefix("It's Maya. "))
