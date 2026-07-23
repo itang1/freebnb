@@ -166,7 +166,16 @@ final class freebnbUITests: XCTestCase {
         // the form's first stepper is "Guest rooms", which doesn't count.
         let bedStepper = app.steppers
             .matching(NSPredicate(format: "label CONTAINS[c] %@", "bed")).firstMatch
-        XCTAssertTrue(bedStepper.waitForExistence(timeout: 10))
+        // Scroll it into view first. The sleeping steppers sit below the fold, a
+        // Form renders its rows lazily, and the address fields above just raised
+        // the keyboard over what little was left — so the row genuinely does not
+        // exist yet, and waiting ten seconds for it only waits for nothing.
+        var stepperScrolls = 0
+        while !bedStepper.exists && stepperScrolls < 6 {
+            app.swipeUp()
+            stepperScrolls += 1
+        }
+        XCTAssertTrue(bedStepper.waitForExistence(timeout: 10), "sleeping steppers never came into view")
         bedStepper.buttons.element(boundBy: 1).tap()
 
         let saveButton = app.buttons["Save"]
