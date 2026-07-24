@@ -453,7 +453,13 @@ struct ModifyStaySheet: View {
     @State private var checkIn: Date
     @State private var checkOut: Date
     @State private var isSaving = false
+    @Environment(BookingPolicyStore.self) private var policyStore
     @Environment(\.dismiss) private var dismiss
+
+    /// The host's rules for this guest. Only the notice window can bite here: a
+    /// date change spends no frequency slot (it is the same ask, not another
+    /// one) and cannot touch the arrival time, which `changedKeys()` pins.
+    @State private var resolvedPolicy: BookingPolicyStore.Resolved = .unrestricted
 
     init(request: StayRequest, listing: Home?, onSave: @escaping (Date, Date) async -> Void) {
         self.request = request
@@ -484,17 +490,35 @@ struct ModifyStaySheet: View {
         checkIn != request.checkIn || checkOut != request.checkOut
     }
 
+    /// The earliest day the picker will go to. Today, or the host's notice
+    /// window if it reaches further out.
+    ///
+    /// A lower bound rather than a warning, deliberately: the picker already
+    /// refuses to go into the past and says nothing about it, so a guest whose
+    /// host set a notice window meets the same wall, with the same silence. The
+    /// rules enforce the identical bound on this write — without this the guest
+    /// could pick a date and be told "Missing or insufficient permissions",
+    /// which is the decline this whole feature exists to avoid.
+    private var earliestSelectable: Date {
+        max(Date(), resolvedPolicy.policy.earliestCheckIn())
+    }
+
     private var canSave: Bool {
         !isSaving && hasChanges && checkOut > checkIn
             && (maxStay == nil || nights <= maxStay!)
             && !hasUnavailableConflict
+            // The dates this sheet opened on predate the policy: a request filed
+            // before the host set a notice window starts out below the bound.
+            // Save stays disabled until the guest picks a date the picker is
+            // willing to offer, which is where it opens them anyway.
+            && checkIn >= Calendar.current.startOfDay(for: earliestSelectable)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("New dates") {
-                    DatePicker("Check in", selection: $checkIn, in: Date()..., displayedComponents: .date)
+                    DatePicker("Check in", selection: $checkIn, in: earliestSelectable..., displayedComponents: .date)
                     DatePicker("Check out", selection: $checkOut, in: (Calendar.current.date(byAdding: .day, value: 1, to: checkIn) ?? checkIn)..., displayedComponents: .date)
 
                     if nights > 0 {
@@ -522,6 +546,12 @@ struct ModifyStaySheet: View {
             }
             .navigationTitle("Change Dates")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                resolvedPolicy = await policyStore.resolve(
+                    hostID: request.hostUserID,
+                    guestID: request.guestUserID
+                )
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }.disabled(isSaving)

@@ -151,12 +151,14 @@ struct FirestoreCircleRepository: CircleRepository {
         guard let friendID = membership.id else { return }
         try await withRetry {
             let batch = db.batch()
-            try batch.setData(from: membership, forDocument: self.members(hostID).document(friendID), merge: true)
-            // An override that was cleared has to leave the document, not linger
-            // as a stale map the resolver would keep preferring.
-            if membership.overridePolicy == nil {
-                batch.updateData(["overridePolicy": FieldValue.delete()], forDocument: self.members(hostID).document(friendID))
-            }
+            // Written whole, not merged. A cleared override has to *leave* the
+            // document — a merge would leave the old map sitting there and the
+            // resolver would go on preferring it, which is a host turning off a
+            // restriction and watching it keep applying. The membership is only
+            // three fields and the client always holds all of them, so writing
+            // it whole says that in one operation instead of pairing a merge
+            // with a field delete on the same document in the same batch.
+            try batch.setData(from: membership, forDocument: self.members(hostID).document(friendID))
             try batch.setData(
                 from: resolvedPolicy,
                 forDocument: self.policies(hostID).document(friendID),
