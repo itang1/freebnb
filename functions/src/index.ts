@@ -409,7 +409,74 @@ export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async
   if (!edge?.userA || !edge?.userB) return;
 
   await Promise.all([edge.userA, edge.userB].map((hostID) => rebuildListingACLs(hostID)));
+
+  // A new friendship needs a circle membership on each side, because Default is
+  // a real policy-bearing circle and an absent membership is a gap rather than a
+  // representation of being in it. The clients do this themselves when their
+  // Friends screen next appears; this closes the window in between, and covers
+  // the side whose app is not running.
+  if (isFriends) {
+    await Promise.all([
+      placeInDefaultCircle(edge.userA, edge.userB),
+      placeInDefaultCircle(edge.userB, edge.userA),
+    ]);
+  }
 });
+
+// ---------------------------------------------------------------------------
+// Circles
+//
+// The functions' share of Circles is repair, never enforcement: firestore.rules
+// is the boundary, because this project has no functions deployed in production
+// and a rule that only holds where a trigger runs is not a rule. See
+// docs/internal/CIRCLES.md.
+// ---------------------------------------------------------------------------
+
+type BookingPolicyData = {
+  allowedArrivalOptions: string[];
+  minNoticeHours: number;
+  maxStaysPerPeriod: { count: number; periodDays: number } | null;
+};
+
+const circlePath = (hostID: string, circleID: string) =>
+  db.collection(Collections.users).doc(hostID).collection(Subcollections.circles).doc(circleID);
+
+/**
+ * Files `friendID` under `hostID`'s Default circle, and publishes the policy
+ * that circle implies to the projection the friend's client reads.
+ *
+ * Does nothing when a membership already exists: the host may have moved this
+ * person deliberately, and a friendship that flickers off and on again must not
+ * quietly undo that.
+ */
+async function placeInDefaultCircle(hostID: string, friendID: string): Promise<void> {
+  const memberRef = db
+    .collection(Collections.users)
+    .doc(hostID)
+    .collection(Subcollections.circleMembers)
+    .doc(friendID);
+  if ((await memberRef.get()).exists) return;
+
+  // No Default circle means this host has no circles at all, so there is no
+  // policy to file anyone under yet. Their own client seeds them on next launch,
+  // and until then nothing is restricted — which is what they had before.
+  const defaultCircle = await circlePath(hostID, Docs.defaultCircle).get();
+  const policy = defaultCircle.data()?.policy as BookingPolicyData | undefined;
+  if (!policy) return;
+
+  await Promise.all([
+    memberRef.set({
+      circleID: Docs.defaultCircle,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }),
+    db
+      .collection(Collections.users)
+      .doc(hostID)
+      .collection(Subcollections.bookingPolicies)
+      .doc(friendID)
+      .set(policy),
+  ]);
+}
 
 /** The display name on a user's public doc, or a neutral stand-in. */
 async function displayNameOf(userID: string, fallback: string): Promise<string> {

@@ -235,7 +235,12 @@ service cloud.firestore {
     function policyPermits(p, hostID, friendID, data, needsSlot) {
       return data.get('arrivalWindow', 'flexible')
                in p.get('allowedArrivalOptions', arrivalOptions())
-          && data.checkIn >= request.time + duration.value(noticeHours(p), 'h')
+          // Zero is skipped rather than compared against: checkIn is a
+          // start-of-day, so `checkIn >= request.time` would reject the
+          // same-day request the app has always allowed, and "no minimum
+          // notice" must mean exactly the behaviour a host had before Circles.
+          && (noticeHours(p) == 0
+              || data.checkIn >= request.time + duration.value(noticeHours(p), 'h'))
           && (!needsSlot
               || capCountOf(p) == 0
               || stayCounterAdvanced(hostID, friendID));

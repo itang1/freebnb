@@ -16,6 +16,10 @@ export const Collections = {
   reviews: "reviews",
   // Friend-written character references on a profile, one per (subject, author).
   references: "references",
+  // Per-(host, guest) frequency counters behind a circle's booking policy, keyed
+  // "{hostID}_{guestID}". Advanced by the guest in the same commit as the stay
+  // request; see docs/internal/CIRCLES.md.
+  stayCounters: "stayCounters",
 } as const;
 
 export const Subcollections = {
@@ -23,6 +27,23 @@ export const Subcollections = {
   private: "private",
   // Accepted-guest markers under a listing: homes/{id}/accepted/{guestUID}.
   accepted: "accepted",
+  // A host's Circles: users/{hostID}/circles/{circleID}. Host-only.
+  circles: "circles",
+  // Which circle each friend is in, plus any per-friend override:
+  // users/{hostID}/circleMembers/{friendUID}. Host-only.
+  circleMembers: "circleMembers",
+  // The resolved policy projected for one guest:
+  // users/{hostID}/bookingPolicies/{guestUID}. The only part of Circles a guest
+  // may read, and it carries no circle id and no circle name.
+  bookingPolicies: "bookingPolicies",
+  // A host's private notes on their friends:
+  // users/{hostID}/friendNotes/{noteID}. Host-only, with no projection for
+  // anyone else, and no function reads or writes one.
+  friendNotes: "friendNotes",
+  // Which post-stay note prompts a host has already dealt with:
+  // users/{hostID}/friendNotePrompts/{stayRequestID}. Host-only, and carries
+  // only a timestamp.
+  friendNotePrompts: "friendNotePrompts",
 } as const;
 
 export const Docs = {
@@ -36,6 +57,10 @@ export const Docs = {
   profile: "profile",
   // The reviewer's note to the reviewed: reviews/{reviewID}/private/feedback.
   feedback: "feedback",
+  // The circle every host has and cannot delete, at a fixed id so a security
+  // rule can always reach it — rules cannot ask which circle carries a flag.
+  // Mirrors FriendCircle.defaultID in the Swift client.
+  defaultCircle: "default",
 } as const;
 
 // users/{uid}/private/profile — the owner-only profile document.
