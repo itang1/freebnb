@@ -188,8 +188,12 @@ describe("circles", () => {
   const circleSwift = read("freebnb/Friends/FriendCircle.swift");
 
   it("the Default circle's document id", () => {
-    const swiftID = circleSwift.match(/static let defaultID = "([^"]+)"/);
-    assert.ok(swiftID, "FriendCircle.defaultID not found");
+    // FriendCircle.defaultID is an alias for this, so the Swift side has one
+    // literal and the mirror is genuinely three-way (Swift, rules, paths.ts).
+    const swiftID = read("freebnb/Shared/FirestorePaths.swift")
+      .match(/static let defaultCircleDocID = "([^"]+)"/);
+    assert.ok(swiftID, "FirestorePaths.defaultCircleDocID not found");
+    assert.match(circleSwift, /static let defaultID = FirestorePaths\.defaultCircleDocID/);
     const rulesID = rules.match(/function defaultCircleID\(\) \{ return '([^']+)'; \}/);
     assert.ok(rulesID, "defaultCircleID() not found in firestore.rules");
     assert.equal(swiftID[1], rulesID[1], "FriendCircle.defaultID vs rules defaultCircleID()");

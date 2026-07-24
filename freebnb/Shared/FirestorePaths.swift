@@ -65,4 +65,13 @@ enum FirestorePaths {
     /// The reviewer's note to the reviewed, never public:
     /// `reviews/{reviewID}/private/feedback`.
     static let feedbackDocID = "feedback"
+    /// The circle every host has and cannot delete, at a fixed id:
+    /// `users/{hostID}/circles/default`.
+    ///
+    /// Fixed rather than flagged because `firestore.rules` cannot run a query.
+    /// "Which circle is the default one" is not a question a rule can ask, so
+    /// every policy resolution has to end at a path instead — see
+    /// `FriendCircle.defaultID`, which is this value, and defaultCircleID() in
+    /// the rules, which is the third copy.
+    static let defaultCircleDocID = "default"
 }

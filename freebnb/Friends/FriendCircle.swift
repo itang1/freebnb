@@ -164,7 +164,7 @@ struct FriendCircle: Identifiable, Codable, Hashable, Sendable {
     /// resolves to a policy" is a property of the path rather than of a query.
     /// Security rules cannot ask which circle has `isDefault == true`; they can
     /// always `get()` this one.
-    static let defaultID = "default"
+    static let defaultID = FirestorePaths.defaultCircleDocID
 
     static let nameLimit = 40
 
