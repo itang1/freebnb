@@ -108,6 +108,96 @@ struct FriendNoteOrderingTests {
     }
 }
 
+// MARK: - The post-stay prompt
+
+@Suite("Friend note post-stay prompt")
+struct FriendNotePromptTests {
+    private let host = "host-1"
+    private let guest = "friend-1"
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func stay(
+        status: StayRequestStatus = .completed,
+        hostUserID: String? = nil,
+        endedDaysAgo: Double
+    ) -> StayRequest {
+        let ended = now.addingTimeInterval(-endedDaysAgo * 86_400)
+        return StayRequest(
+            listingID: "listing-1",
+            listingCity: "Town",
+            listingHostName: "Host",
+            hostUserID: hostUserID ?? host,
+            guestUserID: guest,
+            checkIn: ended.addingTimeInterval(-2 * 86_400),
+            checkOut: ended,
+            status: status,
+            completedAt: ended
+        )
+    }
+
+    @Test("a stay that just ended is offered")
+    func recentStayIsOffered() {
+        #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 1), hostID: host, isSettled: false, now: now))
+    }
+
+    /// The reason the window exists: shipping this must not greet a host with a
+    /// prompt for every stay they have ever hosted.
+    @Test("a stay from long ago is not offered")
+    func oldStayIsNotOffered() {
+        #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 400), hostID: host, isSettled: false, now: now) == false)
+        #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 15), hostID: host, isSettled: false, now: now) == false)
+    }
+
+    @Test("the window's last day still counts")
+    func boundaryIsInclusive() {
+        #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 14), hostID: host, isSettled: false, now: now))
+    }
+
+    /// Asked once. Both a written note and a wave-off arrive here as settled.
+    @Test("a settled stay is never offered again")
+    func settledIsNotOffered() {
+        #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 1), hostID: host, isSettled: true, now: now) == false)
+    }
+
+    /// Host side only. There is no guest-side twin of this prompt anywhere in
+    /// the feature, and a guest must never be asked to file anything about the
+    /// person who put them up.
+    @Test("a stay this user was the guest on is not offered")
+    func guestSideIsNotOffered() {
+        let hostedByOther = stay(hostUserID: "someone-else", endedDaysAgo: 1)
+        #expect(FriendNotePrompt.shouldOffer(hostedByOther, hostID: host, isSettled: false, now: now) == false)
+    }
+
+    @Test("a stay that never completed is not offered")
+    func incompleteIsNotOffered() {
+        for status: StayRequestStatus in [.pending, .offered, .accepted, .declined, .cancelled] {
+            #expect(
+                FriendNotePrompt.shouldOffer(
+                    stay(status: status, endedDaysAgo: 1), hostID: host, isSettled: false, now: now
+                ) == false
+            )
+        }
+    }
+
+    @Test("a signed-out viewer is offered nothing")
+    func signedOutIsNotOffered() {
+        #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 1), hostID: "", isSettled: false, now: now) == false)
+    }
+
+    /// A stay the nightly sweep completed carries no `completedAt`, so checkout
+    /// has to stand in rather than the prompt silently never appearing.
+    @Test("a stay with no completion timestamp falls back to checkout")
+    func fallsBackToCheckout() {
+        var swept = stay(endedDaysAgo: 1)
+        swept.completedAt = nil
+        #expect(FriendNotePrompt.shouldOffer(swept, hostID: host, isSettled: false, now: now))
+
+        var old = stay(endedDaysAgo: 90)
+        old.completedAt = nil
+        #expect(FriendNotePrompt.shouldOffer(old, hostID: host, isSettled: false, now: now) == false)
+    }
+}
+
 // MARK: - The repository seam
 
 @Suite("Friend note repository")

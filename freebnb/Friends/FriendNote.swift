@@ -96,6 +96,47 @@ extension FriendNote {
     }
 }
 
+// MARK: - The post-stay prompt
+
+/// When the app offers a host the optional add-a-note moment after a stay.
+///
+/// Pure and separate from the view because it is the one piece of this feature
+/// with a judgement call in it: ask too narrowly and the moment is missed, ask
+/// too widely and an established host meets a wall of prompts about stays from
+/// two years ago the first time they open the new build. A wall is a chore, and
+/// a chore gets dismissed unread, which costs the feature the one moment it was
+/// built for.
+enum FriendNotePrompt {
+    /// How long after a stay ends the prompt is still worth offering. Two weeks:
+    /// long enough to survive a host who doesn't open the app the day their
+    /// guest leaves, short enough that it is still about that visit.
+    static let window: TimeInterval = 14 * 24 * 3600
+
+    /// Whether `stay` should be offered to `hostID` as a note moment.
+    ///
+    /// `isSettled` is the caller's answer to "have they already been asked, or
+    /// already written something" — it lives in the store, which knows about
+    /// notes, rather than here, which knows about time.
+    ///
+    /// Nothing about the *guest* is consulted. There is no "difficult stay"
+    /// heuristic and no reason to build one: which visits are worth remembering
+    /// is exactly the judgement being left to the host.
+    static func shouldOffer(
+        _ stay: StayRequest,
+        hostID: String,
+        isSettled: Bool,
+        now: Date = Date()
+    ) -> Bool {
+        guard !hostID.isEmpty, stay.hostUserID == hostID else { return false }
+        guard stay.status == .completed, !isSettled else { return false }
+        // `completedAt` is set when either party closes the stay out; a stay
+        // swept up by the nightly job may not carry one, so checkout stands in.
+        // Either way the question is the same: did this end recently?
+        let endedAt = stay.completedAt ?? stay.checkOut
+        return endedAt >= now.addingTimeInterval(-window)
+    }
+}
+
 // MARK: - Derived views
 
 extension [FriendNote] {

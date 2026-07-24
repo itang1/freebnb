@@ -303,6 +303,88 @@ struct FriendNotesLink: View {
     }
 }
 
+/// The optional add-a-note moment, as a section the Stays tab drops into its
+/// own list: an ordinary row, offered once per stay, dismissible, and never a
+/// modal standing between the host and the rest of the screen. If they ignore it
+/// forever, nothing happens; if they wave it off, it does not come back, and
+/// they can still write a note from that friend's screen whenever they like.
+///
+/// Which stays reach it is the caller's question (`FriendNotePrompt`); what it
+/// says and how hard it asks are this file's.
+struct NotePromptSection: View {
+    let stays: [StayRequest]
+    @Binding var composing: FriendNoteComposition?
+
+    @Environment(FriendNoteStore.self) private var noteStore
+    @Environment(UserProfileStore.self) private var userProfileStore
+
+    var body: some View {
+        if !stays.isEmpty {
+            Section {
+                ForEach(stays, id: \.id) { stay in
+                    NotePromptRow(
+                        guestName: userProfileStore.displayName(for: stay.guestUserID) ?? "FreeBNB User",
+                        dateRange: stay.dateRangeText,
+                        onAdd: {
+                            composing = .new(friendID: stay.guestUserID, stayRequestID: stay.id)
+                        },
+                        onDismiss: {
+                            Task { await noteStore.dismissPrompt(forStayRequestID: stay.id) }
+                        }
+                    )
+                }
+            } header: {
+                Text("Anything to remember?")
+            } footer: {
+                Text("""
+                A note for yourself, if it's useful. Nobody else ever reads it, \
+                and skipping is the same as writing nothing.
+                """)
+            }
+        }
+    }
+}
+
+/// One stay's prompt. Two plain choices, neither of them urgent: the ask is an
+/// offer, so "Not this time" is a real answer and is styled as one rather than
+/// as a dismissal the host has to hunt for.
+private struct NotePromptRow: View {
+    let guestName: String
+    let dateRange: String
+    let onAdd: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(guestName) stayed with you")
+                    .font(.subheadline.weight(.medium))
+                Text(dateRange)
+                    .font(.caption)
+                    .foregroundColor(.secondaryText)
+            }
+
+            HStack(spacing: 12) {
+                Button(action: onAdd) {
+                    Label("Add a private note", systemImage: "square.and.pencil")
+                        .font(.subheadline.weight(.medium))
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 14)
+                        .background(Color.accent.opacity(0.12), in: Capsule())
+                        .foregroundColor(Color.accent)
+                }
+                .buttonStyle(.plain)
+
+                Button("Not this time", action: onDismiss)
+                    .font(.subheadline)
+                    .foregroundColor(.secondaryText)
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 #Preview {
     NavigationStack {
         FriendNotesPage(friendID: PreviewData.friendID, friendName: "Maya")
