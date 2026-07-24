@@ -89,6 +89,13 @@ struct FreeBNBApp: App {
                     requestPushPermission()
                 }
                 .onOpenURL { url in handleIncomingURL(url) }
+                // An invite link tapped in Messages or Mail. A Universal Link is
+                // handed over as a browsing activity, not as a URL, so `onOpenURL`
+                // alone would never see it — the tap would open Safari instead.
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    guard let url = activity.webpageURL else { return }
+                    handleIncomingURL(url)
+                }
                 // A saved listing tapped in Spotlight hands back its identifier;
                 // route it into the app, which pushes the listing (feature 40).
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
@@ -140,13 +147,14 @@ struct FreeBNBApp: App {
         }
     }
 
-    // Routes an incoming URL. The reversed-client-ID scheme is the Google
-    // sign-in callback; our own `freebnb://stays` scheme is what the home-screen
-    // widgets and the current-stay Live Activity open when tapped, and it simply
-    // switches to the Stays tab. `freebnb://invite` is the shared invite link,
-    // which lands on Friends with the sender's card on screen when it names one.
-    // Friend connections are still made only in-app, so a deep link never
-    // creates one; the most an invite does is save the recipient a search.
+    // Routes an incoming URL, from either entry point above. The
+    // reversed-client-ID scheme is the Google sign-in callback; our own
+    // `freebnb://stays` scheme is what the home-screen widgets and the
+    // current-stay Live Activity open when tapped, and it simply switches to the
+    // Stays tab. An invite arrives as an https Universal Link (or the older
+    // `freebnb://invite` scheme) and lands on Friends with the sender's card on
+    // screen when it names one. Friend connections are still made only in-app,
+    // so a link never creates one; the most an invite does is save a search.
     private func handleIncomingURL(_ url: URL) {
         if GIDSignIn.sharedInstance.handle(url) { return }
         guard let route = DeepLinkRouter.route(for: url) else { return }

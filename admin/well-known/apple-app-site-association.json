@@ -1,0 +1,20 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_WITH_TEAM_ID.com.poodlestrategy.freebnb"],
+        "components": [
+          {
+            "/": "/i",
+            "?": { "from": "?*" },
+            "comment": "An invite naming its sender: opens the app on the sender's card."
+          },
+          {
+            "/": "/i",
+            "comment": "An invite with no sender: opens the app on the Friends tab."
+          }
+        ]
+      }
+    ]
+  }
+}

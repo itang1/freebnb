@@ -11,32 +11,65 @@
 import Foundation
 
 enum InviteCopy {
-    /// The query item naming who sent an invite. Read by `DeepLinkRouter` and
-    /// mirrored in `FreeBNBApp.handleIncomingURL`.
+    /// The query item naming who sent an invite. Read by `DeepLinkRouter`, and
+    /// by the web landing page in `admin/i/index.html`.
     static let inviterQueryItem = "from"
+
+    /// The Firebase Hosting site the invite link points at, and the path it uses.
+    ///
+    /// These three constants are the contract between four places: the link this
+    /// file builds, the routing in `DeepLinkRouter`, the
+    /// `apple-app-site-association` file that tells iOS to open the app for this
+    /// path, and the `firebase.json` rewrite that serves it. `InviteLinkTests`
+    /// checks them against the on-disk web files, so changing one alone fails the
+    /// build rather than quietly breaking every invite.
+    static let webHost = "freebnb-6814a.web.app"
+    static let webPath = "/i"
+    static let customScheme = "freebnb"
 
     /// A link that opens the app on the Friends tab with the sender's own card
     /// already on screen, ready to add.
     ///
-    /// It carries the sender's user ID and nothing else, and it still takes no
-    /// action: opening it never creates a friend connection, it only saves the
-    /// recipient from having to remember and spell a display name. The graph is
-    /// still only ever changed by an explicit tap on "Add", answered by an
-    /// explicit "Accept" at the other end, so a forged or forwarded link buys a
-    /// sender nothing they could not get by being searched for by name.
+    /// An `https` Universal Link rather than the `freebnb://` scheme, because a
+    /// custom scheme only resolves on a phone that already has the app, which is
+    /// exactly not the person being invited: for them it did nothing at all. This
+    /// opens the app when it is installed and a web page explaining FreeBNB when
+    /// it is not.
+    ///
+    /// It carries the sender's user ID and nothing else, and it takes no action:
+    /// opening it never creates a friend connection, it only saves the recipient
+    /// from having to remember and spell a display name. The graph is still only
+    /// ever changed by an explicit tap on "Add", answered by an explicit "Accept"
+    /// at the other end, so a forged or forwarded link buys a sender nothing they
+    /// could not get by being searched for by name.
     ///
     /// `senderID` is nil until the signed-in user's profile loads; the link then
     /// degrades to the plain one, which lands on Friends with the search bar
     /// empty.
     static func inviteURL(senderID: String? = nil) -> URL {
         var components = URLComponents()
-        components.scheme = "freebnb"
-        components.host = "invite"
+        components.scheme = "https"
+        components.host = webHost
+        components.path = webPath
         if let senderID, !senderID.isEmpty {
             components.queryItems = [URLQueryItem(name: inviterQueryItem, value: senderID)]
         }
         // Force-unwrap is safe: compile-time constant URL.
-        return components.url ?? URL(string: "freebnb://invite")!
+        return components.url ?? URL(string: "https://\(webHost)\(webPath)")!
+    }
+
+    /// The pre-Universal-Link form of the same invite. Still parsed on the way in
+    /// (links already sent have to keep working), and still what the web landing
+    /// page hands to a phone that has the app, since a page cannot re-trigger the
+    /// Universal Link that just failed to open it.
+    static func customSchemeInviteURL(senderID: String? = nil) -> URL {
+        var components = URLComponents()
+        components.scheme = customScheme
+        components.host = "invite"
+        if let senderID, !senderID.isEmpty {
+            components.queryItems = [URLQueryItem(name: inviterQueryItem, value: senderID)]
+        }
+        return components.url ?? URL(string: "\(customScheme)://invite")!
     }
 
     /// The general "join me" invite, framed as vouching. On a friends-only app
@@ -89,7 +122,7 @@ enum InviteCopy {
             return "search for \(searchTarget(inviterName)) once you're in: "
                 + inviteURL().absoluteString
         }
-        return "this link will open the app on my profile, where you can add me: "
+        return "this link will open my profile in the app, where you can add me: "
             + inviteURL(senderID: senderID).absoluteString
     }
 

@@ -11,6 +11,16 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Lets an invite link open the app instead of Safari. iOS fetches
+	     https://freebnb-6814a.web.app/.well-known/apple-app-site-association on
+	     install and honours this only if that file names this app's
+	     TEAMID.bundleID; see admin/well-known/apple-app-site-association.json,
+	     which still needs the real Team ID pasted in. Until then the link opens
+	     the web page, which offers to hand off to the app. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:freebnb-6814a.web.app</string>
+	</array>
 	<!-- Shared container the app writes the widget snapshot into and the widget
 	     extension reads back. The identical group must be enabled on the widget
 	     target's entitlements. -->

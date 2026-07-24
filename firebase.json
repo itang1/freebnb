@@ -11,6 +11,15 @@
   "hosting": {
     "public": "admin",
     "ignore": ["**/.*"],
+    "predeploy": ["node \"$PROJECT_DIR/scripts/check_aasa.js\""],
+    "trailingSlash": false,
+    "rewrites": [
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "destination": "/well-known/apple-app-site-association.json"
+      },
+      { "source": "/i", "destination": "/i/index.html" }
+    ],
     "headers": [
       {
         "source": "**",
@@ -19,6 +28,10 @@
           { "key": "X-Frame-Options", "value": "DENY" },
           { "key": "Referrer-Policy", "value": "no-referrer" }
         ]
+      },
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [{ "key": "Content-Type", "value": "application/json" }]
       }
     ]
   },

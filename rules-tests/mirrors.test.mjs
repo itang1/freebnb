@@ -36,6 +36,10 @@ const createListingViewModel = read("freebnb/Homes/CreateListingViewModel.swift"
 const stayRequestSwift = read("freebnb/Stays/StayRequest.swift");
 const reviewSwift = read("freebnb/Trust/Review.swift");
 const reportSheet = read("freebnb/Safety/ReportSheet.swift");
+const inviteCopy = read("freebnb/Shared/InviteCopy.swift");
+const entitlements = read("freebnb/freebnb.entitlements");
+const firebaseJson = JSON.parse(read("firebase.json"));
+const aasa = JSON.parse(read("admin/well-known/apple-app-site-association.json"));
 
 function sameSet(actual, expected, message) {
   assert.deepEqual([...actual].sort(), [...expected].sort(), message);
@@ -257,5 +261,82 @@ describe("public coordinate rounding", () => {
     assert.ok(factorMatch, "seed_test_data.js approximate() rounding not found");
     assert.equal(factorMatch[1], factorMatch[2], "seed approximate() multiplies and divides by the same factor");
     assert.equal(Number(factorMatch[1]), 10 ** precision, "seed rounding factor vs Home.publicCoordinatePrecision");
+  });
+});
+
+// The invite link is the only bridge into a friends-only app, and the pieces
+// that make it open the app instead of Safari live in four files that cannot
+// import each other: the Swift that builds the link, the entitlement that
+// claims the domain, the AASA file iOS fetches to check that claim, and the
+// hosting config that serves it. Nothing fails loudly when they disagree —
+// links simply keep opening the browser — so they are checked here.
+describe("invite universal link", () => {
+  const swiftString = (name) => {
+    const match = inviteCopy.match(new RegExp(`static let ${name} = "([^"]+)"`));
+    assert.ok(match, `InviteCopy.${name} not found`);
+    return match[1];
+  };
+
+  const webHost = swiftString("webHost");
+  const webPath = swiftString("webPath");
+  const detail = aasa.applinks.details[0];
+
+  it("the entitlement claims the host InviteCopy builds links for", () => {
+    assert.ok(
+      entitlements.includes(`<string>applinks:${webHost}</string>`),
+      `freebnb.entitlements does not claim applinks:${webHost}`
+    );
+  });
+
+  it("the AASA covers the path InviteCopy builds, and names this app", () => {
+    const paths = detail.components.map((c) => c["/"]);
+    assert.ok(paths.includes(webPath), `AASA components do not cover ${webPath}`);
+    for (const appID of detail.appIDs) {
+      assert.ok(
+        appID.endsWith(".com.poodlestrategy.freebnb"),
+        `AASA appID ${appID} is not this app's bundle id`
+      );
+    }
+  });
+
+  it("hosting serves the AASA from the well-known path, as JSON", () => {
+    const wellKnown = "/.well-known/apple-app-site-association";
+    const rewrite = firebaseJson.hosting.rewrites.find((r) => r.source === wellKnown);
+    assert.ok(rewrite, `firebase.json has no rewrite for ${wellKnown}`);
+    // Served from a path without a leading dot, because hosting's ignore of
+    // "**/.*" would drop the file from the deploy without saying so.
+    assert.equal(rewrite.destination, "/well-known/apple-app-site-association.json");
+    assert.ok(
+      !firebaseJson.hosting.ignore.some((pattern) => rewrite.destination.includes(pattern.replace("**/", ""))),
+      "the AASA destination is covered by an ignore pattern"
+    );
+
+    const header = firebaseJson.hosting.headers.find((h) => h.source === wellKnown);
+    assert.ok(header, `firebase.json sets no headers for ${wellKnown}`);
+    assert.deepEqual(
+      header.headers.find((h) => h.key === "Content-Type")?.value,
+      "application/json",
+      "Apple requires the AASA to be served as application/json"
+    );
+  });
+
+  it("hosting serves the landing page at the invite path", () => {
+    const rewrite = firebaseJson.hosting.rewrites.find((r) => r.source === webPath);
+    assert.ok(rewrite, `firebase.json has no rewrite for ${webPath}`);
+    assert.equal(rewrite.destination, `${webPath}/index.html`);
+  });
+
+  it("the landing page hands the sender to the app's own scheme", () => {
+    const landing = read(`admin${webPath}/index.html`);
+    const scheme = swiftString("customScheme");
+    const queryItem = inviteCopy.match(/static let inviterQueryItem = "([^"]+)"/)[1];
+    assert.ok(
+      landing.includes(`"${scheme}://invite"`),
+      `the landing page does not fall back to ${scheme}://invite`
+    );
+    assert.ok(
+      landing.includes(`get("${queryItem}")`),
+      `the landing page does not read the ?${queryItem}= parameter`
+    );
   });
 });

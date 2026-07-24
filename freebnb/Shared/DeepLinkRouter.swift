@@ -65,21 +65,51 @@ final class DeepLinkRouter {
         case invite(senderID: String?)
     }
 
+    /// Both shapes an invite arrives in: the `https` Universal Link that invites
+    /// carry now, and the `freebnb://` scheme they used to. Links already sent
+    /// keep working, and the web landing page falls back to the scheme when the
+    /// Universal Link didn't open the app.
     static func route(for url: URL) -> Route? {
-        guard url.scheme == "freebnb" else { return nil }
-        switch url.host {
-        case "stays":
-            return .stays
-        case "invite":
-            let senderID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?
-                .first { $0.name == InviteCopy.inviterQueryItem }?
-                .value
-            // Treat an empty value as absent, so `?from=` behaves like no query.
-            return .invite(senderID: senderID?.isEmpty == false ? senderID : nil)
+        switch url.scheme {
+        case InviteCopy.customScheme:
+            switch url.host {
+            case "stays":
+                return .stays
+            case "invite":
+                return .invite(senderID: inviter(in: url))
+            default:
+                return nil
+            }
+        case "https":
+            // Only this host and path. A Universal Link is only delivered for the
+            // domains the app claims, but the same URL can also arrive from a
+            // pasted string, so the check is made here rather than assumed.
+            guard url.host == InviteCopy.webHost,
+                  normalizedPath(url) == InviteCopy.webPath
+            else { return nil }
+            return .invite(senderID: inviter(in: url))
         default:
             return nil
         }
+    }
+
+    /// Treats `/i/` and `/i` as the same path, since a browser or a share sheet
+    /// may add the trailing slash.
+    private static func normalizedPath(_ url: URL) -> String {
+        let path = url.path
+        guard path.count > 1, path.hasSuffix("/") else { return path }
+        return String(path.dropLast())
+    }
+
+    /// The sender named by the link, or nil. An empty value (`?from=`) reads as
+    /// absent, so a link built before the sender's profile loaded still opens
+    /// Friends rather than resolving nobody.
+    private static func inviter(in url: URL) -> String? {
+        let senderID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first { $0.name == InviteCopy.inviterQueryItem }?
+            .value
+        return senderID?.isEmpty == false ? senderID : nil
     }
 
     /// Applies a parsed route. Every case here only navigates; none of them

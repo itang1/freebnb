@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>You've been invited to FreeBNB</title>
+  <!-- Self-contained rather than sharing the console's stylesheet: this is the
+       one page on the site a person outside the team ever sees, and it should
+       not change appearance because an internal tool was restyled. -->
+  <style>
+    :root {
+      --bg: #fdf8f1;
+      --fg: #1c1c1e;
+      --muted: #6b6b70;
+      --accent: #0a5f68;
+      --on-accent: #ffffff;
+      --card: #ffffff;
+      --line: #e3e3e6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16171a;
+        --fg: #ececef;
+        --muted: #9a9aa1;
+        --accent: #35b98c;
+        --on-accent: #10231f;
+        --card: #1e1f23;
+        --line: #2c2d31;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px 48px;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    }
+    main { max-width: 30rem; margin-inline: auto; }
+    h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 12px; }
+    p { margin: 0 0 16px; }
+    .lede { color: var(--muted); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    ul { margin: 0; padding-left: 1.1rem; }
+    li { margin-bottom: 8px; }
+    li:last-child { margin-bottom: 0; }
+    .open {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      font-weight: 600;
+      background: var(--accent);
+      color: var(--on-accent);
+      padding: 14px 20px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+    .note { font-size: 0.85rem; color: var(--muted); margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>You've been invited to FreeBNB</h1>
+    <p class="lede">
+      A free place to stay with people you actually trust.
+    </p>
+
+    <div class="card">
+      <ul>
+        <li><strong>Only people you know.</strong> You only ever see places from your own friends.</li>
+        <li><strong>Always free.</strong> No booking fees, ever.</li>
+        <li><strong>Your circle stays yours.</strong> FreeBNB never uploads your contacts.</li>
+      </ul>
+    </div>
+
+    <!-- Filled in by the script below from the ?from= parameter, so the button
+         carries the sender through to the app. Hidden until then: a button that
+         goes nowhere is worse than no button. -->
+    <a id="open" class="open" href="#" hidden>Open in FreeBNB</a>
+
+    <p class="note" id="note">
+      Opening this link on an iPhone with FreeBNB installed takes you straight to
+      the profile of whoever invited you, where you can add them. Nothing is
+      shared until you add them and they accept.
+    </p>
+  </main>
+
+  <script>
+    // The sender's id, passed straight through to the app's own scheme. It is
+    // only ever put in a link: the page never reads it back, stores it, or sends
+    // it anywhere, and following the link creates no connection by itself.
+    (function () {
+      var from = new URLSearchParams(window.location.search).get("from");
+      var open = document.getElementById("open");
+      var target = "freebnb://invite";
+      if (from) target += "?from=" + encodeURIComponent(from);
+      open.setAttribute("href", target);
+      open.hidden = false;
+    })();
+  </script>
+</body>
+</html>
