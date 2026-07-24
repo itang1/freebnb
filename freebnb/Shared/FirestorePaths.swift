@@ -49,6 +49,15 @@ enum FirestorePaths {
     /// guest may read, and it deliberately carries no circle id and no circle
     /// name — only the rules that apply to them.
     static let bookingPolicies = "bookingPolicies"
+    /// A host's private notes on their friends:
+    /// `users/{hostID}/friendNotes/{noteID}`. Readable by that host alone —
+    /// there is no projection of this for anyone, because nobody else has any
+    /// business reading one.
+    static let friendNotes = "friendNotes"
+    /// Which post-stay note prompts a host has already answered or waved off:
+    /// `users/{hostID}/friendNotePrompts/{stayRequestID}`. Records that a prompt
+    /// was seen and nothing else — no text, no friend, no judgement.
+    static let friendNotePrompts = "friendNotePrompts"
 
     // Well-known document ids
     /// The listing's private street address: `homes/{id}/private/location`.

@@ -46,6 +46,14 @@ struct UserProfilePage: View {
         !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
     }
 
+    /// Notes are a host's record of somebody they actually know, so the entry
+    /// point follows the friendship rather than the profile. Never on your own
+    /// profile: `firestore.rules` refuses a note whose subject is its author,
+    /// and the button's absence and that rule should agree.
+    private var canKeepNotes: Bool {
+        !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
+    }
+
     private var myReference: CharacterReference? {
         reviewStore.references(about: userID).first { $0.authorUserID == authManager.userID }
     }
@@ -98,6 +106,24 @@ struct UserProfilePage: View {
                         .background(Color.accent.opacity(0.12))
                         .foregroundColor(Color.accent)
                         .cornerRadius(10)
+                    }
+                    .buttonStyle(.pressable)
+                }
+
+                // Deliberately the quietest control on the page: grey rather than
+                // accent, below the two things that reach the other person. What
+                // is private should not look like an invitation to broadcast.
+                if canKeepNotes {
+                    NavigationLink {
+                        FriendNotesPage(friendID: userID, friendName: displayName)
+                    } label: {
+                        Label("Your private notes", systemImage: "note.text")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.secondaryText.opacity(0.10))
+                            .foregroundColor(.secondaryText)
+                            .cornerRadius(10)
                     }
                     .buttonStyle(.pressable)
                 }

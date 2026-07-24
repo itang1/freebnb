@@ -552,6 +552,77 @@ service cloud.firestore {
             && isValidBookingPolicy(request.resource.data);
         allow delete: if isSignedIn() && isOwner(userID);
       }
+
+      // The host's private notes on their friends — what they'd write on the
+      // back of an index card so they can remember, months later, why somebody
+      // sits in the circle they sit in.
+      //
+      // Read is the owner and nobody else. Not the friend the note is about,
+      // not a moderator, not a Cloud Function, not the other side of a stay it
+      // names. That is the entire feature: a host writes candidly only if
+      // "private" means the document, not the screen, and the caller this has
+      // to hold against is the technically-minded friend reading raw documents
+      // rather than the app. There is deliberately no second branch on this
+      // read rule to audit later, and nothing anywhere projects a note, a count
+      // of notes, or a derived score out to any other reader.
+      //
+      // Note the shape of the surrounding file too: `isAdmin()` appears only on
+      // `reports`, so there is no ambient moderator read over `users/**` that
+      // would quietly widen this one.
+      match /friendNotes/{noteID} {
+        function isValidNote(data) {
+          return data.keys().hasOnly(['subjectUserID', 'text', 'stayRequestID', 'createdAt', 'updatedAt'])
+              && data.keys().hasAll(['subjectUserID', 'text'])
+              && data.subjectUserID is string
+              && data.subjectUserID.size() > 0
+              && data.subjectUserID.size() <= 128
+              // A note about yourself is not a thing this feature is for, and
+              // allowing it would put host-authored text on the one profile the
+              // host might later hand somebody else to look at.
+              && data.subjectUserID != userID
+              && data.text is string
+              && data.text.size() > 0
+              // Mirrors FriendNote.maxLength in the Swift client.
+              && data.text.size() <= 2000
+              && (data.get('stayRequestID', null) == null
+                  || (data.stayRequestID is string
+                      && data.stayRequestID.size() > 0
+                      && data.stayRequestID.size() <= 200));
+        }
+
+        allow read: if isSignedIn() && isOwner(userID);
+
+        allow create: if isSignedIn()
+            && isOwner(userID)
+            && isValidNote(request.resource.data);
+
+        // Editing changes the text (and may attach or clear a stay). It must not
+        // re-point the note at a different person: a note re-filed under someone
+        // else keeps its date and reads as contemporaneous evidence about them,
+        // which is the one way this could become unfair to a friend who never
+        // sees it. `createdAt` is pinned for the same reason it is on a review.
+        allow update: if isSignedIn()
+            && isOwner(userID)
+            && isValidNote(request.resource.data)
+            && request.resource.data.subjectUserID == resource.data.subjectUserID
+            && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null);
+
+        allow delete: if isSignedIn() && isOwner(userID);
+      }
+
+      // Which post-stay note prompts this host has already answered or waved
+      // off, so the app asks once and then leaves them alone. Deliberately
+      // separate documents from the notes themselves: this says a prompt was
+      // *seen*, carries no text, and is the only part of the feature that would
+      // ever be worth syncing across a host's devices.
+      match /friendNotePrompts/{stayRequestID} {
+        allow read: if isSignedIn() && isOwner(userID);
+        allow create, update: if isSignedIn()
+            && isOwner(userID)
+            && request.resource.data.keys().hasOnly(['dismissedAt'])
+            && request.resource.data.keys().hasAll(['dismissedAt']);
+        allow delete: if isSignedIn() && isOwner(userID);
+      }
     }
 
     // -------------------------------------------------------------------------

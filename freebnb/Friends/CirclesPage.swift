@@ -311,6 +311,16 @@ struct FriendCirclePage: View {
                     set: { overridePolicy = $0 }
                 ))
             }
+
+            // Below the rules, because that is the order a host actually works
+            // in: they come here to change what somebody can book, and the notes
+            // are what reminds them why. Nothing above reads them — moving
+            // someone between circles stays a decision the host makes.
+            Section {
+                FriendNotesLink(friendID: friendID, friendName: friendName)
+            } footer: {
+                Text("Notes are yours alone. They don't change \(friendName)'s circle or their rules on their own.")
+            }
         }
         .scrollContentBackground(.hidden)
         .background(Color.primaryBackground.ignoresSafeArea())

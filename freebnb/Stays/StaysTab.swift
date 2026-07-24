@@ -14,9 +14,11 @@ struct StaysTab: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(HomeStore.self) private var homeStore
     @Environment(ReviewStore.self) private var reviewStore
+    @Environment(FriendNoteStore.self) private var noteStore
     @Environment(DeepLinkRouter.self) private var router
     @State private var respondingTo: StayRequest?
     @State private var reviewing: ReviewTarget?
+    @State private var notingStay: FriendNoteComposition?
     @State private var thanking: StayRequest?
     @State private var sharingStay: StayRequest?
     @State private var modifying: StayRequest?
@@ -156,6 +158,13 @@ struct StaysTab: View {
             WriteReviewSheet(stay: target.stay, role: target.role, subjectName: target.subjectName)
                 .environment(reviewStore)
                 .environment(authManager)
+        }
+        .sheet(item: $notingStay) { composition in
+            FriendNoteComposerSheet(
+                composition: composition,
+                friendName: noteSubjectName(for: composition)
+            )
+            .environment(noteStore)
         }
         .sheet(item: $thanking) { req in
             ThankYouSheet(hostName: req.listingHostName) { note in
@@ -447,8 +456,92 @@ struct StaysTab: View {
     @ViewBuilder
     private func listingsRequestSections(awaitingReview: [StayRequest]) -> some View {
         reviewSection(awaitingReview)
+        noteSection
         hostSections
         pastHostingSection
+    }
+
+    /// Stays this host finished and hasn't been asked about yet. Host side only:
+    /// notes are a host's record of their own friends, and there is no guest-side
+    /// twin of this anywhere in the feature.
+    ///
+    /// Deliberately below "Needs your review" and above everything else. A review
+    /// is something the other person is waiting on; this is not, and it should
+    /// never look like it is.
+    private var completedStaysToNoteAbout: [StayRequest] {
+        requestStore.completedStays.filter {
+            $0.hostUserID == authManager.userID && noteStore.shouldPrompt(forStayRequestID: $0.id)
+        }
+    }
+
+    /// The optional add-a-note moment: an ordinary row in the list, offered once
+    /// per stay, dismissible, and never a modal that stands between the host and
+    /// the rest of the screen. If they ignore it forever, nothing happens; if
+    /// they wave it off, it does not come back, and they can still write a note
+    /// from that friend's screen whenever they like.
+    @ViewBuilder
+    private var noteSection: some View {
+        let items = completedStaysToNoteAbout
+        if !items.isEmpty {
+            Section {
+                ForEach(items, id: \.id) { req in
+                    NotePromptRow(
+                        guestName: guestName(for: req),
+                        dateRange: req.dateRangeText,
+                        onAdd: {
+                            notingStay = .new(friendID: req.guestUserID, stayRequestID: req.id)
+                        },
+                        onDismiss: {
+                            Task { await noteStore.dismissPrompt(forStayRequestID: req.id) }
+                        }
+                    )
+                }
+            } header: {
+                Text("Anything to remember?")
+            } footer: {
+                Text("A note for yourself, if it's useful. Nobody else ever reads it, and skipping is the same as writing nothing.")
+            }
+        }
+    }
+}
+
+/// The post-stay prompt. Two plain choices, neither of them urgent: the ask is
+/// an offer, so "Not this time" is a real answer and is styled as one rather
+/// than as a dismissal the host has to hunt for.
+private struct NotePromptRow: View {
+    let guestName: String
+    let dateRange: String
+    let onAdd: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(guestName) stayed with you")
+                    .font(.subheadline.weight(.medium))
+                Text(dateRange)
+                    .font(.caption)
+                    .foregroundColor(.secondaryText)
+            }
+
+            HStack(spacing: 12) {
+                Button(action: onAdd) {
+                    Label("Add a private note", systemImage: "square.and.pencil")
+                        .font(.subheadline.weight(.medium))
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 14)
+                        .background(Color.accent.opacity(0.12), in: Capsule())
+                        .foregroundColor(Color.accent)
+                }
+                .buttonStyle(.plain)
+
+                Button("Not this time", action: onDismiss)
+                    .font(.subheadline)
+                    .foregroundColor(.secondaryText)
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -593,6 +686,18 @@ extension StaysTab {
 
     private func guestName(for request: StayRequest) -> String {
         userProfileStore.displayName(for: request.guestUserID) ?? "FreeBNB User"
+    }
+
+    /// Who a note being composed here is about. Only ever a guest of the host's:
+    /// the prompt is offered on the hosting side alone, so the composition's
+    /// friend id is always the person who stayed.
+    private func noteSubjectName(for composition: FriendNoteComposition) -> String {
+        switch composition {
+        case .new(let friendID, _):
+            return userProfileStore.displayName(for: friendID) ?? "FreeBNB User"
+        case .editing(let note):
+            return userProfileStore.displayName(for: note.subjectUserID) ?? "FreeBNB User"
+        }
     }
 
     /// The other party's name, seen from the signed-in user. A guest reviews the

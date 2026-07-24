@@ -40,6 +40,7 @@ struct FreeBNBApp: App {
     // a Firestore handle there throws on the way up.
     @State private var bookingPolicyStore: BookingPolicyStore
     @State private var reviewStore: ReviewStore
+    @State private var friendNoteStore: FriendNoteStore
     @State private var networkMonitor = NetworkMonitor()
     @State private var checkInKitStore = CheckInKitStore()
 
@@ -75,6 +76,7 @@ struct FreeBNBApp: App {
         _circleStore = State(initialValue: CircleStore())
         _bookingPolicyStore = State(initialValue: BookingPolicyStore())
         _reviewStore = State(initialValue: ReviewStore())
+        _friendNoteStore = State(initialValue: FriendNoteStore())
     }
 
     var body: some Scene {
@@ -89,6 +91,7 @@ struct FreeBNBApp: App {
                 .environment(circleStore)
                 .environment(bookingPolicyStore)
                 .environment(reviewStore)
+                .environment(friendNoteStore)
                 .environment(networkMonitor)
                 .environment(router)
                 .environment(checkInKitStore)

@@ -532,3 +532,85 @@ final class InMemoryCircleRepository: CircleRepository, @unchecked Sendable {
     /// Seedable by a test that wants a guest partway through a frequency window.
     var counters: [String: StayCounter] = [:]
 }
+
+// MARK: - Friend notes
+
+/// In-memory private notes, for previews and for the tests that exercise the
+/// store without a backend. Keyed by host, because the whole point of the
+/// feature is that one host's notes are not another's.
+final class InMemoryFriendNoteRepository: FriendNoteRepository, @unchecked Sendable {
+    private(set) var notesByHost: [String: [String: FriendNote]] = [:]
+    private(set) var promptsByHost: [String: Set<String>] = [:]
+
+    /// Emits on every mutation so a store under test sees a write land the way
+    /// it would with a real snapshot listener.
+    private var noteHandlers: [String: [@Sendable (Result<[FriendNote], Error>) -> Void]] = [:]
+    private var promptHandlers: [String: [@Sendable (Result<Set<String>, Error>) -> Void]] = [:]
+
+    init(notes: [String: [FriendNote]] = [:]) {
+        for (host, list) in notes {
+            notesByHost[host] = Dictionary(uniqueKeysWithValues: list.compactMap { n in n.id.map { ($0, n) } })
+        }
+    }
+
+    private func emitNotes(_ hostID: String) {
+        let values = Array((notesByHost[hostID] ?? [:]).values).sortedByDate()
+        noteHandlers[hostID]?.forEach { $0(.success(values)) }
+    }
+
+    private func emitPrompts(_ hostID: String) {
+        let values = promptsByHost[hostID] ?? []
+        promptHandlers[hostID]?.forEach { $0(.success(values)) }
+    }
+
+    func listenToNotes(
+        hostID: String,
+        handler: @escaping @Sendable (Result<[FriendNote], Error>) -> Void
+    ) -> RepositoryListener {
+        noteHandlers[hostID, default: []].append(handler)
+        emitNotes(hostID)
+        return NoopListener()
+    }
+
+    func listenToPrompts(
+        hostID: String,
+        handler: @escaping @Sendable (Result<Set<String>, Error>) -> Void
+    ) -> RepositoryListener {
+        promptHandlers[hostID, default: []].append(handler)
+        emitPrompts(hostID)
+        return NoopListener()
+    }
+
+    @discardableResult
+    func createNote(hostID: String, _ note: FriendNote) async throws -> String {
+        let id = note.id ?? UUID().uuidString
+        var stored = note
+        stored.id = id
+        // The server stamps these; a fake that leaves them nil would make every
+        // note in a test sort as "still in flight".
+        stored.createdAt = note.createdAt ?? Date()
+        stored.updatedAt = stored.createdAt
+        notesByHost[hostID, default: [:]][id] = stored
+        emitNotes(hostID)
+        return id
+    }
+
+    func updateNote(hostID: String, noteID: String, text: String, stayRequestID: String?) async throws {
+        guard var note = notesByHost[hostID]?[noteID] else { return }
+        note.text = text
+        note.stayRequestID = stayRequestID
+        note.updatedAt = Date()
+        notesByHost[hostID]?[noteID] = note
+        emitNotes(hostID)
+    }
+
+    func deleteNote(hostID: String, noteID: String) async throws {
+        notesByHost[hostID]?.removeValue(forKey: noteID)
+        emitNotes(hostID)
+    }
+
+    func markPromptSeen(hostID: String, stayRequestID: String) async throws {
+        promptsByHost[hostID, default: []].insert(stayRequestID)
+        emitPrompts(hostID)
+    }
+}
