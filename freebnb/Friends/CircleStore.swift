@@ -26,7 +26,7 @@ import os
 @MainActor
 @Observable
 final class CircleStore {
-    private(set) var circles: [Circle] = []
+    private(set) var circles: [FriendCircle] = []
     private(set) var membershipsByFriendID: [String: CircleMembership] = [:]
     private(set) var listenerError: String?
     /// False until both listeners have delivered a first snapshot. The
@@ -65,11 +65,11 @@ final class CircleStore {
 
     // MARK: - Derived views
 
-    var defaultCircle: Circle? {
-        circles.first { $0.id == Circle.defaultID }
+    var defaultCircle: FriendCircle? {
+        circles.first { $0.id == FriendCircle.defaultID }
     }
 
-    func circle(id: String) -> Circle? {
+    func circle(id: String) -> FriendCircle? {
         circles.first { $0.id == id }
     }
 
@@ -88,10 +88,10 @@ final class CircleStore {
     func memberIDs(of circleID: String, among friendIDs: [String]) -> [String] {
         friendIDs.filter { friendID in
             guard let membership = membershipsByFriendID[friendID] else {
-                return circleID == Circle.defaultID
+                return circleID == FriendCircle.defaultID
             }
             return membership.circleID == circleID
-                || (circleID == Circle.defaultID && circle(id: membership.circleID) == nil)
+                || (circleID == FriendCircle.defaultID && circle(id: membership.circleID) == nil)
         }
     }
 
@@ -100,7 +100,7 @@ final class CircleStore {
         var counts: [String: Int] = [:]
         for friendID in friendIDs {
             let membership = membershipsByFriendID[friendID]
-            let circleID = membership.flatMap { circle(id: $0.circleID)?.id } ?? Circle.defaultID
+            let circleID = membership.flatMap { circle(id: $0.circleID)?.id } ?? FriendCircle.defaultID
             counts[circleID, default: 0] += 1
         }
         return counts
@@ -187,7 +187,7 @@ final class CircleStore {
             do {
                 try await repository.saveMembership(
                     hostID: hostID,
-                    CircleMembership(id: friendID, circleID: Circle.defaultID),
+                    CircleMembership(id: friendID, circleID: FriendCircle.defaultID),
                     resolvedPolicy: fallback.policy
                 )
             } catch {
@@ -200,9 +200,9 @@ final class CircleStore {
 
     func createCircle(named name: String) async throws {
         guard !hostID.isEmpty else { return }
-        let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Circle.nameLimit))
+        let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(FriendCircle.nameLimit))
         guard !trimmed.isEmpty else { return }
-        let circle = Circle(
+        let circle = FriendCircle(
             id: UUID().uuidString,
             name: trimmed,
             isDefault: false,
@@ -212,9 +212,9 @@ final class CircleStore {
         try await repository.saveCircle(hostID: hostID, circle)
     }
 
-    func rename(_ circle: Circle, to name: String) async throws {
+    func rename(_ circle: FriendCircle, to name: String) async throws {
         guard !hostID.isEmpty else { return }
-        let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Circle.nameLimit))
+        let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(FriendCircle.nameLimit))
         guard !trimmed.isEmpty, trimmed != circle.name else { return }
         var updated = circle
         updated.name = trimmed
@@ -223,7 +223,7 @@ final class CircleStore {
 
     /// Saves a circle's policy and republishes it to everyone the circle governs
     /// — everyone in it who has no override of their own.
-    func updatePolicy(of circle: Circle, to policy: BookingPolicy, friendIDs: [String]) async throws {
+    func updatePolicy(of circle: FriendCircle, to policy: BookingPolicy, friendIDs: [String]) async throws {
         guard !hostID.isEmpty, let circleID = circle.id else { return }
         var updated = circle
         updated.policy = policy
@@ -239,7 +239,7 @@ final class CircleStore {
 
     /// Deletes a circle, moving everyone in it back to Default. Refused for
     /// Default itself, which the rules refuse too.
-    func delete(_ circle: Circle, friendIDs: [String]) async throws {
+    func delete(_ circle: FriendCircle, friendIDs: [String]) async throws {
         guard !hostID.isEmpty, let circleID = circle.id, circle.isDeletable else { return }
         let members = memberIDs(of: circleID, among: friendIDs)
             .filter { membershipsByFriendID[$0]?.circleID == circleID }

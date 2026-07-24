@@ -164,6 +164,66 @@ describe("stay request enums", () => {
     );
     sameSet(swiftWindows, rulesWindows, "ArrivalWindow vs rules arrivalWindow whitelist");
   });
+
+  // Circles gate which of the five a friend may pick, so the rules now carry a
+  // second copy of the same list — in arrivalOptions(), which is what a booking
+  // policy is validated against and what an absent policy falls back to. A copy
+  // that drifted would let a host store an option the create rule then rejects.
+  it("arrival windows: rules whitelist vs the Circles policy list", () => {
+    const rulesWindows = quoted(
+      section(rules, "request.resource.data.arrivalWindow in", "]", "rules arrivalWindow")
+    );
+    const policyWindows = quoted(
+      section(rules, "function arrivalOptions() {", "}", "rules arrivalOptions()")
+    );
+    sameSet(rulesWindows, policyWindows, "rules arrivalWindow whitelist vs arrivalOptions()");
+  });
+});
+
+// The Circles policy bounds live in three places that cannot share code: the
+// Swift model a host edits against, the rules that validate what gets stored,
+// and the migration that backfills. A bound that drifts is a policy a host can
+// save and the rules then refuse.
+describe("circles", () => {
+  const circleSwift = read("freebnb/Friends/FriendCircle.swift");
+
+  it("the Default circle's document id", () => {
+    const swiftID = circleSwift.match(/static let defaultID = "([^"]+)"/);
+    assert.ok(swiftID, "FriendCircle.defaultID not found");
+    const rulesID = rules.match(/function defaultCircleID\(\) \{ return '([^']+)'; \}/);
+    assert.ok(rulesID, "defaultCircleID() not found in firestore.rules");
+    assert.equal(swiftID[1], rulesID[1], "FriendCircle.defaultID vs rules defaultCircleID()");
+  });
+
+  it("policy bounds: Swift model vs rules validation", () => {
+    const policyBlock = section(rules, "function isValidBookingPolicy(policy) {", "\n    }", "isValidBookingPolicy");
+
+    assert.equal(
+      number(circleSwift, /static let maxNoticeHours = (\d+)/, "BookingPolicy.maxNoticeHours"),
+      number(policyBlock, /minNoticeHours <= (\d+)/, "rules minNoticeHours cap"),
+      "maxNoticeHours"
+    );
+
+    const countRange = circleSwift.match(/static let countRange = (\d+)\.\.\.(\d+)/);
+    assert.ok(countRange, "StayFrequencyCap.countRange not found");
+    assert.equal(Number(countRange[2]), number(policyBlock, /count <= (\d+)/, "rules count cap"), "cap count");
+
+    const periodRange = circleSwift.match(/static let periodRange = (\d+)\.\.\.(\d+)/);
+    assert.ok(periodRange, "StayFrequencyCap.periodRange not found");
+    assert.equal(
+      Number(periodRange[2]),
+      number(policyBlock, /periodDays <= (\d+)/, "rules periodDays cap"),
+      "cap periodDays"
+    );
+  });
+
+  it("circle name cap: Swift model vs rules", () => {
+    assert.equal(
+      number(circleSwift, /static let nameLimit = (\d+)/, "FriendCircle.nameLimit"),
+      number(rules, /data\.name\.size\(\) <= (\d+)/, "rules circle name cap"),
+      "circle name cap"
+    );
+  });
 });
 
 describe("reports", () => {

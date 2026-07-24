@@ -240,8 +240,15 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         return NoopListener()
     }
 
-    func create(_ request: StayRequest) async throws {
+    /// Records the advanced counter alongside the request so a test can assert
+    /// a slot was spent; the cap itself is the rules' business, not this one's.
+    private(set) var counters: [String: StayCounter] = [:]
+
+    func create(_ request: StayRequest, advancing counter: StayCounter?) async throws {
         requests.append(request)
+        if let counter {
+            counters[StayCounter.documentID(hostUserID: counter.hostUserID, guestUserID: counter.guestUserID)] = counter
+        }
     }
 
     func updateListingHostName(hostUserID: String, newName: String) async throws {
@@ -439,4 +446,89 @@ final class InMemoryFriendEdgeRepository: FriendEdgeRepository, @unchecked Senda
     }
 
     func fetchSuggestions() async throws -> [FriendSuggestion] { [] }
+}
+
+// MARK: - Circles
+
+/// In-memory Circles, for previews and for the unit tests that exercise the
+/// store's reconciliation without a backend. Holds one host's world at a time,
+/// keyed by host id so a test can still stand up two.
+final class InMemoryCircleRepository: CircleRepository, @unchecked Sendable {
+    private(set) var circlesByHost: [String: [String: FriendCircle]] = [:]
+    private(set) var membersByHost: [String: [String: CircleMembership]] = [:]
+    /// The projections a guest would read. Kept so a test can assert the fan-out
+    /// actually happened — the projection going stale is the failure mode that
+    /// costs a guest a rejected write.
+    var publishedByHost: [String: [String: BookingPolicy]] = [:]
+
+    init(circles: [String: [FriendCircle]] = [:], memberships: [String: [CircleMembership]] = [:]) {
+        for (host, list) in circles {
+            circlesByHost[host] = Dictionary(uniqueKeysWithValues: list.compactMap { c in c.id.map { ($0, c) } })
+        }
+        for (host, list) in memberships {
+            membersByHost[host] = Dictionary(uniqueKeysWithValues: list.compactMap { m in m.id.map { ($0, m) } })
+        }
+    }
+
+    func listenToCircles(
+        hostID: String,
+        handler: @escaping @Sendable (Result<[FriendCircle], Error>) -> Void
+    ) -> RepositoryListener {
+        let values = (circlesByHost[hostID] ?? [:]).values
+        handler(.success(values.sorted { ($0.sortOrder, $0.name) < ($1.sortOrder, $1.name) }))
+        return NoopListener()
+    }
+
+    func listenToMemberships(
+        hostID: String,
+        handler: @escaping @Sendable (Result<[CircleMembership], Error>) -> Void
+    ) -> RepositoryListener {
+        handler(.success(Array((membersByHost[hostID] ?? [:]).values)))
+        return NoopListener()
+    }
+
+    func saveCircle(hostID: String, _ circle: FriendCircle) async throws {
+        guard let id = circle.id else { return }
+        circlesByHost[hostID, default: [:]][id] = circle
+    }
+
+    func deleteCircle(hostID: String, circleID: String, movingMembers members: [String]) async throws {
+        guard circleID != FriendCircle.defaultID else { return }
+        circlesByHost[hostID]?.removeValue(forKey: circleID)
+        for friendID in members {
+            membersByHost[hostID]?[friendID]?.circleID = FriendCircle.defaultID
+        }
+    }
+
+    func saveMembership(hostID: String, _ membership: CircleMembership, resolvedPolicy: BookingPolicy) async throws {
+        guard let friendID = membership.id else { return }
+        membersByHost[hostID, default: [:]][friendID] = membership
+        publishedByHost[hostID, default: [:]][friendID] = resolvedPolicy
+    }
+
+    func publishPolicies(hostID: String, policiesByFriendID: [String: BookingPolicy]) async throws {
+        for (friendID, policy) in policiesByFriendID {
+            publishedByHost[hostID, default: [:]][friendID] = policy
+        }
+    }
+
+    func seedCircles(hostID: String) async throws {
+        for circle in FriendCircle.seeded() {
+            guard let id = circle.id else { continue }
+            if circlesByHost[hostID]?[id] == nil {
+                circlesByHost[hostID, default: [:]][id] = circle
+            }
+        }
+    }
+
+    func fetchPolicy(hostID: String, guestID: String) async throws -> BookingPolicy? {
+        publishedByHost[hostID]?[guestID]
+    }
+
+    func fetchStayCounter(hostID: String, guestID: String) async throws -> StayCounter? {
+        counters[StayCounter.documentID(hostUserID: hostID, guestUserID: guestID)]
+    }
+
+    /// Seedable by a test that wants a guest partway through a frequency window.
+    var counters: [String: StayCounter] = [:]
 }

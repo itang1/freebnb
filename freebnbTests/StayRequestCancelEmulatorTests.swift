@@ -77,7 +77,7 @@ extension EmulatorBackedTests {
                 checkIn: Date().addingTimeInterval(5 * 86_400),
                 checkOut: Date().addingTimeInterval(7 * 86_400)
             )
-            try await requests.create(request)
+            try await requests.create(request, advancing: nil)
             return (guest, request)
         }
 

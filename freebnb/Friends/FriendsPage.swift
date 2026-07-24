@@ -10,6 +10,7 @@ struct FriendsPage: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(AuthManager.self) private var authManager
     @Environment(HomeStore.self) private var homeStore
+    @Environment(CircleStore.self) private var circleStore
     @Environment(DeepLinkRouter.self) private var router
 
     @State private var showInvite = false
@@ -46,6 +47,9 @@ struct FriendsPage: View {
         .textInputAutocapitalization(.words)
         .autocorrectionDisabled()
         .task { await friendStore.loadSuggestions() }
+        // Seeds this host's starter circles and files any new friend under
+        // Default. Idempotent, and it writes only what is missing.
+        .task(id: friendStore.friendIDs) { await circleStore.reconcile(friendIDs: friendStore.friendIDs) }
         .task(id: trimmedQuery) { await performSearch() }
         .task(id: router.pendingInviterID) { await resolveInviter() }
         .navigationTitle("Friends")
@@ -168,6 +172,28 @@ struct FriendsPage: View {
         }
 
         if !friendStore.friendEdges.isEmpty {
+            // Circles sit above the friend list, because the list below is where
+            // a host acts on one of them and this is the thing that explains
+            // what the subtitle on each row means. Host-only, like everything
+            // behind it — a guest has no way to reach this screen at all.
+            Section {
+                NavigationLink {
+                    CirclesPage()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Circles")
+                            Text("Set who can book your places, and how often")
+                                .font(.caption)
+                                .foregroundColor(.secondaryText)
+                        }
+                    } icon: {
+                        Image(systemName: "person.2.circle")
+                            .foregroundColor(Color.accent)
+                    }
+                }
+            }
+
             let counts = homeCountsByFriend
             Section("Friends") {
                 ForEach(friendStore.friendEdges) { edge in
@@ -179,7 +205,20 @@ struct FriendsPage: View {
                     NavigationLink {
                         UserProfilePage(userID: otherID, fallbackName: name)
                     } label: {
-                        FriendRow(name: name, userID: otherID, homeCount: counts[otherID] ?? 0)
+                        FriendRow(
+                            name: name,
+                            userID: otherID,
+                            homeCount: counts[otherID] ?? 0,
+                            circleLabel: circleLabel(for: otherID)
+                        )
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        NavigationLink {
+                            FriendCirclePage(friendID: otherID, friendName: name)
+                        } label: {
+                            Label("Circle", systemImage: "person.2.circle")
+                        }
+                        .tint(Color.accent)
                     }
                 }
             }
@@ -210,6 +249,24 @@ struct FriendsPage: View {
                 .padding(.vertical, 24)
             }
             .listRowBackground(Color.clear)
+        }
+    }
+
+    /// What this friend's row says under their name: the circle they're in, and
+    /// whether the host has set rules on them directly. Only ever shown to the
+    /// host — this is their own Friends list, and the friend it names has no
+    /// route to this screen.
+    private func circleLabel(for friendID: String) -> String? {
+        switch circleStore.resolved(for: friendID).source {
+        case .override:
+            let circleName = circleStore.circle(id: circleStore.membership(for: friendID)?.circleID ?? "")?.name
+            return circleName.map { "\($0) · custom rules" } ?? "Custom rules"
+        case .circle(_, let name):
+            return name
+        case .fallbackDefault:
+            return circleStore.defaultCircle?.name
+        case .unconfigured:
+            return nil
         }
     }
 
@@ -341,12 +398,22 @@ private struct FriendRow: View {
     let name: String
     let userID: String
     let homeCount: Int
+    /// The circle this friend is in, for the host's eyes. Nil before circles
+    /// exist for this host, which is when there is nothing to say.
+    let circleLabel: String?
 
     var body: some View {
         HStack(spacing: 12) {
             GeneratedAvatar(seed: userID)
-            Text(name)
-                .font(.body)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.body)
+                if let circleLabel {
+                    Text(circleLabel)
+                        .font(.caption)
+                        .foregroundColor(.secondaryText)
+                }
+            }
             Spacer()
             if homeCount > 0 {
                 Text("\(homeCount) home\(homeCount == 1 ? "" : "s")")
@@ -356,9 +423,9 @@ private struct FriendRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            homeCount > 0
-                ? "\(name), \(homeCount) home\(homeCount == 1 ? "" : "s")"
-                : name
+            [name, circleLabel, homeCount > 0 ? "\(homeCount) home\(homeCount == 1 ? "" : "s")" : nil]
+                .compactMap { $0 }
+                .joined(separator: ", ")
         )
     }
 }

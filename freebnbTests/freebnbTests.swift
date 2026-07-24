@@ -59,8 +59,8 @@ struct StayRequestRepositoryTests {
         let repo = InMemoryStayRequestsRepository()
         let existing = makeRequest(id: "r1", checkIn: day(1), checkOut: day(5), status: .accepted)
         let incoming = makeRequest(id: "r2", checkIn: day(3), checkOut: day(7))
-        try await repo.create(existing)
-        try await repo.create(incoming)
+        try await repo.create(existing, advancing: nil)
+        try await repo.create(incoming, advancing: nil)
 
         await #expect(throws: StayRequestError.self) {
             try await repo.accept(incoming, hostNote: nil)
@@ -73,8 +73,8 @@ struct StayRequestRepositoryTests {
         let repo = InMemoryStayRequestsRepository()
         let existing = makeRequest(id: "r1", checkIn: day(1), checkOut: day(5), status: .accepted)
         let incoming = makeRequest(id: "r2", checkIn: day(5), checkOut: day(9))
-        try await repo.create(existing)
-        try await repo.create(incoming)
+        try await repo.create(existing, advancing: nil)
+        try await repo.create(incoming, advancing: nil)
 
         try await repo.accept(incoming, hostNote: "welcome")
 
@@ -91,8 +91,8 @@ struct StayRequestRepositoryTests {
         let repo = InMemoryStayRequestsRepository()
         let declined = makeRequest(id: "r1", checkIn: day(1), checkOut: day(9), status: .declined)
         let incoming = makeRequest(id: "r2", checkIn: day(2), checkOut: day(4))
-        try await repo.create(declined)
-        try await repo.create(incoming)
+        try await repo.create(declined, advancing: nil)
+        try await repo.create(incoming, advancing: nil)
 
         try await repo.accept(incoming, hostNote: nil)  // must not throw
     }
@@ -104,7 +104,7 @@ struct StayRequestRepositoryTests {
     @Test func acceptingDisclosesTheAddressToTheGuest() async throws {
         let repo = InMemoryStayRequestsRepository()
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
-        try await repo.create(request)
+        try await repo.create(request, advancing: nil)
         #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
 
         try await repo.accept(request, hostNote: nil)
@@ -114,7 +114,7 @@ struct StayRequestRepositoryTests {
     @Test func cancellingAnAcceptedStayRevokesTheAddress() async throws {
         let repo = InMemoryStayRequestsRepository()
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
-        try await repo.create(request)
+        try await repo.create(request, advancing: nil)
         try await repo.accept(request, hostNote: nil)
 
         try await repo.updateStatus(request, status: .cancelled, hostNote: nil, cancelledBy: request.guestUserID)
@@ -126,7 +126,7 @@ struct StayRequestRepositoryTests {
     @Test func cancellingRecordsWhichPartyBackedOut() async throws {
         let repo = InMemoryStayRequestsRepository()
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
-        try await repo.create(request)
+        try await repo.create(request, advancing: nil)
         try await repo.accept(request, hostNote: nil)
 
         try await repo.updateStatus(request, status: .cancelled, hostNote: nil, cancelledBy: request.hostUserID)
@@ -138,7 +138,7 @@ struct StayRequestRepositoryTests {
     @Test func decliningRecordsNoCanceller() async throws {
         let repo = InMemoryStayRequestsRepository()
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
-        try await repo.create(request)
+        try await repo.create(request, advancing: nil)
 
         try await repo.updateStatus(request, status: .declined, hostNote: "Sorry!", cancelledBy: nil)
         #expect(repo.request(id: "r1")?.cancelledBy == nil)
@@ -147,7 +147,7 @@ struct StayRequestRepositoryTests {
     @Test func decliningNeverDisclosesTheAddress() async throws {
         let repo = InMemoryStayRequestsRepository()
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
-        try await repo.create(request)
+        try await repo.create(request, advancing: nil)
 
         try await repo.updateStatus(request, status: .declined, hostNote: "Sorry!", cancelledBy: nil)
         #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))

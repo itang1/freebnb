@@ -21,15 +21,7 @@ struct InfoPage: View {
                     InfoCard(
                         icon: "sparkles",
                         title: "What's New",
-                        subtitle: "The latest features and fixes"
-                    )
-                }
-
-                NavigationLink(destination: FeatureSpotlightPage()) {
-                    InfoCard(
-                        icon: "lightbulb.max.fill",
-                        title: "Feature Spotlight",
-                        subtitle: "Short reads on getting the most from FreeBNB"
+                        subtitle: "The latest features, and how they work"
                     )
                 }
 
@@ -52,7 +44,7 @@ struct InfoPage: View {
                 NavigationLink(destination: FeaturesPage()) {
                     InfoCard(
                         icon: "star.fill",
-                        title: "Features",
+                        title: "Overview",
                         subtitle: "What FreeBNB offers"
                     )
                 }

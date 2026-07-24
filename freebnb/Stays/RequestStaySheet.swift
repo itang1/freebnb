@@ -11,7 +11,15 @@ struct RequestStaySheet: View {
     @Environment(StayRequestStore.self) private var requestStore
     @Environment(MessageStore.self) private var messageStore
     @Environment(AuthManager.self) private var authManager
+    @Environment(BookingPolicyStore.self) private var policyStore
     @Environment(\.dismiss) private var dismiss
+
+    // The host's booking rules for this guest, resolved once when the sheet
+    // opens (see BookingPolicyStore). Everything it changes about this screen is
+    // a subtraction — an arrival option that isn't listed, a day drawn the way a
+    // booked day is drawn. Nothing here says a rule exists, because the guest
+    // being restricted is exactly the person who must not be told.
+    @State private var resolvedPolicy: BookingPolicyStore.Resolved = .unrestricted
 
     // Nil until the guest taps. Nothing is pre-filled because the grid knows which
     // days are gone and a default has no way to: tomorrow may be the middle of a
@@ -40,8 +48,29 @@ struct RequestStaySheet: View {
     }
 
     // The days the grid greys out, computed once per listing rather than per cell.
+    //
+    // Three sources, one set, and that is the point: the host's blocked days,
+    // the days somebody else's accepted stay took, and the days this guest's own
+    // booking rules withhold all arrive here indistinguishable from one another.
+    // The grid draws a member of this set one way and has no idea which source
+    // it came from, so there is nothing for a restricted guest to compare.
     private var unavailableDays: Set<Date> {
         AvailabilityCalendar.blockedDays(in: listing.unavailableRanges)
+            .union(BookingPolicyGuestView.daysWithheld(
+                by: resolvedPolicy.policy,
+                staysUsedInWindow: resolvedPolicy.staysUsedInWindow,
+                windowEndsAt: resolvedPolicy.windowEndsAt,
+                monthsAhead: StayDateGrid.monthsAhead
+            ))
+    }
+
+    /// The arrival times this guest may pick. A policy that withholds one simply
+    /// leaves it out of the picker — there is no disabled row, no footnote, and
+    /// no "ask your host" — so the menu reads as the whole of what was ever on
+    /// offer.
+    private var arrivalChoices: [ArrivalWindow] {
+        let allowed = resolvedPolicy.policy.allowedArrivalWindows
+        return allowed.isEmpty ? ArrivalWindow.allCases : allowed
     }
 
     private var acceptedConflict: StayRequest? {
@@ -57,6 +86,14 @@ struct RequestStaySheet: View {
         guard let checkIn, let checkOut else { return false }
         return !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays
             && unavailableConflict == nil && acceptedConflict == nil
+            // The grid refuses to select across an unavailable day, but the set
+            // can grow under an open sheet — the policy resolves a moment after
+            // the sheet appears, and a frequency window can close while it sits
+            // there. Re-checking the selection against the live set is what keeps
+            // the Send button from offering a write the rules would refuse.
+            && AvailabilityCalendar.isStaySelectable(
+                checkIn: checkIn, checkOut: checkOut, unavailableDays: unavailableDays
+            )
     }
 
     var body: some View {
@@ -143,7 +180,7 @@ struct RequestStaySheet: View {
 
                 Section("Arrival") {
                     Picker("Arrival time", selection: $arrivalWindow) {
-                        ForEach(ArrivalWindow.allCases, id: \.self) { window in
+                        ForEach(arrivalChoices, id: \.self) { window in
                             Text(window.displayName).tag(window)
                         }
                     }
@@ -164,6 +201,7 @@ struct RequestStaySheet: View {
             }
             .navigationTitle("Request a Stay")
             .navigationBarTitleDisplayMode(.inline)
+            .task { await loadPolicy() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -188,6 +226,20 @@ struct RequestStaySheet: View {
         return "\(formatter.string(from: checkIn)) – \(formatter.string(from: checkOut))"
     }
 
+    /// Loads the host's rules for this guest and re-points the arrival picker if
+    /// its default is one of the ones withheld. Selecting a value the picker no
+    /// longer lists would leave the row blank, which is the one way this could
+    /// draw attention to itself.
+    private func loadPolicy() async {
+        resolvedPolicy = await policyStore.resolve(
+            hostID: listing.hostUserID,
+            guestID: authManager.userID
+        )
+        if !resolvedPolicy.policy.allows(arrivalWindow), let first = arrivalChoices.first {
+            arrivalWindow = first
+        }
+    }
+
     private func send() async {
         guard let checkIn, let checkOut else { return }
         isSending = true
@@ -201,7 +253,14 @@ struct RequestStaySheet: View {
                 checkOut: checkOut,
                 guestNote: note.isEmpty ? nil : note,
                 guestCount: guestCount,
-                arrivalWindow: arrivalWindow
+                arrivalWindow: arrivalWindow,
+                // Spends a slot against the host's frequency cap, in the same
+                // commit as the request. Nil when there is no cap.
+                advancing: policyStore.advancedCounter(
+                    for: resolvedPolicy,
+                    hostID: listing.hostUserID,
+                    guestID: authManager.userID
+                )
             )
             messageStore.sendStayEvent(
                 StayEvent(kind: .requested, dateRange: dateRangeText(from: checkIn, to: checkOut, nights: nights)),
@@ -210,8 +269,24 @@ struct RequestStaySheet: View {
             )
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = Self.guestFacingMessage(for: error)
         }
+    }
+
+    /// What a failed send says. A rules rejection is reported as the same
+    /// "no longer available" a guest already gets when somebody else takes the
+    /// night first, because the two are indistinguishable to them and must stay
+    /// that way: the only writes these rules refuse are ones this sheet would
+    /// not have offered, so reaching here at all means the host's calendar or
+    /// their rules moved while the sheet was open. Either way it is news about
+    /// the listing, not about the guest.
+    private static func guestFacingMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        // 7 = permission denied.
+        let isDenied = nsError.domain == "FIRFirestoreErrorDomain" && nsError.code == 7
+        return isDenied
+            ? (StayRequestError.listingUnavailable.errorDescription ?? "This listing is no longer available.")
+            : error.localizedDescription
     }
 
     private func dateRangeText(from start: Date, to end: Date, nights: Int) -> String {

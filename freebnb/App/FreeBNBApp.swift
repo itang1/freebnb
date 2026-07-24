@@ -33,6 +33,12 @@ struct FreeBNBApp: App {
     @State private var userProfileStore: UserProfileStore
     @State private var stayRequestStore: StayRequestStore
     @State private var friendStore: FriendStore
+    @State private var circleStore: CircleStore
+    // Declared without an initializer, like the other repository-backed stores:
+    // an inline `= BookingPolicyStore()` runs while the property wrappers are
+    // built, which is before `FirebaseApp.configure()` below, and constructing
+    // a Firestore handle there throws on the way up.
+    @State private var bookingPolicyStore: BookingPolicyStore
     @State private var reviewStore: ReviewStore
     @State private var networkMonitor = NetworkMonitor()
     @State private var checkInKitStore = CheckInKitStore()
@@ -66,6 +72,8 @@ struct FreeBNBApp: App {
         _userProfileStore = State(initialValue: UserProfileStore())
         _stayRequestStore = State(initialValue: StayRequestStore())
         _friendStore = State(initialValue: FriendStore())
+        _circleStore = State(initialValue: CircleStore())
+        _bookingPolicyStore = State(initialValue: BookingPolicyStore())
         _reviewStore = State(initialValue: ReviewStore())
     }
 
@@ -78,6 +86,8 @@ struct FreeBNBApp: App {
                 .environment(userProfileStore)
                 .environment(stayRequestStore)
                 .environment(friendStore)
+                .environment(circleStore)
+                .environment(bookingPolicyStore)
                 .environment(reviewStore)
                 .environment(networkMonitor)
                 .environment(router)

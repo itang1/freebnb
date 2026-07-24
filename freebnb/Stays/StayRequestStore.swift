@@ -233,7 +233,8 @@ final class StayRequestStore {
         checkOut: Date,
         guestNote: String?,
         guestCount: Int? = nil,
-        arrivalWindow: ArrivalWindow? = nil
+        arrivalWindow: ArrivalWindow? = nil,
+        advancing counter: StayCounter? = nil
     ) async throws {
         let trimmedNote = guestNote.flatMap {
             let t = $0.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -253,7 +254,7 @@ final class StayRequestStore {
             arrivalWindow: arrivalWindow
         )
         do {
-            try await repository.create(request)
+            try await repository.create(request, advancing: counter)
             Telemetry.log(.stayRequestSent)
         } catch {
             log.error("send error: \(error.localizedDescription, privacy: .public)")
@@ -327,7 +328,11 @@ final class StayRequestStore {
             initiatedBy: listing.hostUserID
         )
         do {
-            try await repository.create(request)
+            // No counter: a circle policy governs what a friend may *ask* for,
+            // and a host offering their own place is not asking. The rules apply
+            // the policy to the guest branch of `create` only, for the same
+            // reason.
+            try await repository.create(request, advancing: nil)
             Telemetry.log(.stayOfferSent)
         } catch {
             log.error("offer error: \(error.localizedDescription, privacy: .public)")

@@ -73,7 +73,13 @@ protocol StayRequestsRepository: Sendable {
         handler: @escaping @Sendable (Result<[StayRequest], Error>) -> Void
     ) -> RepositoryListener
 
-    func create(_ request: StayRequest) async throws
+    /// Creates the request, and — when the host's circle policy caps how often
+    /// this guest may book — advances their `stayCounters` document in the same
+    /// commit. The two have to land together: `firestore.rules` reads the
+    /// post-commit counter with `getAfter()` and refuses a capped request that
+    /// arrives without its slot, which is the only way a rule that cannot query
+    /// can enforce a rate. Passing nil is the uncapped case, and writes nothing.
+    func create(_ request: StayRequest, advancing counter: StayCounter?) async throws
     /// Rewrites the denormalized `listingHostName` on every request this user
     /// hosts, so a display-name change doesn't leave trip rows showing the old
     /// name forever (L7). Touches only that field.
@@ -189,9 +195,27 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         return CompositeListener(listeners: registrations)
     }
 
-    func create(_ request: StayRequest) async throws {
+    func create(_ request: StayRequest, advancing counter: StayCounter?) async throws {
         try await withRetry { [db] in
-            try db.collection(FirestorePaths.stayRequests).document(request.id).setData(from: request)
+            guard let counter else {
+                try db.collection(FirestorePaths.stayRequests).document(request.id).setData(from: request)
+                return
+            }
+            // One batch, because a request without its counter advance is a
+            // request the rules will not take, and a counter advance without its
+            // request would silently spend one of the guest's slots.
+            let batch = db.batch()
+            try batch.setData(
+                from: request,
+                forDocument: db.collection(FirestorePaths.stayRequests).document(request.id)
+            )
+            try batch.setData(
+                from: counter,
+                forDocument: db.collection(FirestorePaths.stayCounters).document(
+                    StayCounter.documentID(hostUserID: counter.hostUserID, guestUserID: counter.guestUserID)
+                )
+            )
+            try await batch.commit()
         }
     }
 

@@ -24,7 +24,12 @@ struct StayDateGrid: View {
 
     /// How far ahead a guest may look. A year is well past any host's blocked
     /// calendar and keeps the chevrons from running forever.
-    private static let monthsAhead = 12
+    ///
+    /// Not private: the request sheet builds the days a booking policy withholds
+    /// (BookingPolicyGuestView) and has to clamp them to the same horizon, or a
+    /// ten-year frequency cap would build ten years of dates for a grid that
+    /// shows twelve months.
+    static let monthsAhead = 12
 
     @State private var visibleMonth: Date = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
 

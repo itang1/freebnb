@@ -338,6 +338,20 @@ describe("minimum notice", () => {
     );
   });
 
+  // "No minimum" has to mean exactly the behaviour a host had before Circles,
+  // and checkIn is a local start-of-day — so a literal `checkIn >= request.time`
+  // would quietly withdraw the same-day request the app has always allowed.
+  // Zero is skipped rather than compared against, on both sides.
+  it("still admits a same-day request when the notice is zero", async () => {
+    await seedCircle("default", policy({ minNoticeHours: 0 }));
+    await assertSucceeds(
+      createRequest(FRIEND, {
+        checkIn: Timestamp.fromMillis(Date.now() - 6 * 3_600_000),
+        checkOut: Timestamp.fromMillis(Date.now() + 2 * DAY_MS),
+      })
+    );
+  });
+
   it("re-checks the notice window when a pending request moves its dates", async () => {
     await seedCircle("default", policy({ minNoticeHours: 72 }));
     await assertSucceeds(createRequest(FRIEND));

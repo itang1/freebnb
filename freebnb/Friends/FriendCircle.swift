@@ -1,5 +1,5 @@
 //
-//  Circle.swift
+//  FriendCircle.swift
 //  freebnb
 //
 //  Circles: the host's own grouping of their friends, and the booking rules
@@ -118,7 +118,14 @@ struct BookingPolicy: Codable, Hashable, Sendable {
     /// Rounding up to the next whole day is what keeps the two in step: a
     /// 12-hour notice at 9pm rules out tomorrow, because tomorrow starts in
     /// three hours.
+    ///
+    /// No minimum returns today, and does not go through that arithmetic at all.
+    /// It cannot: today's start-of-day is already behind `now`, so rounding up
+    /// would push a zero-hour notice to tomorrow and quietly withdraw the
+    /// same-day request the app has always allowed. `firestore.rules` skips the
+    /// bound for zero for exactly the same reason.
     func earliestCheckIn(now: Date = Date(), calendar: Calendar = .current) -> Date {
+        guard minNoticeHours > 0 else { return calendar.startOfDay(for: now) }
         let horizon = now.addingTimeInterval(TimeInterval(minNoticeHours) * 3600)
         let startOfHorizonDay = calendar.startOfDay(for: horizon)
         guard startOfHorizonDay < horizon else { return startOfHorizonDay }
@@ -126,15 +133,20 @@ struct BookingPolicy: Codable, Hashable, Sendable {
     }
 }
 
-// MARK: - Circle
+// MARK: - FriendCircle
 
 /// A host-managed group of friends. Not an enum: the host names these, and the
 /// only fixed one is Default, which is fixed by its document id rather than by
 /// its name or by a type.
-struct Circle: Identifiable, Codable, Hashable, Sendable {
-    @DocumentID var id: String?
+struct FriendCircle: Identifiable, Codable, Hashable, Sendable {
+    /// The document id, carried alongside the decoded document rather than in
+    /// it. Not `@DocumentID`, because these are constructed locally too — the
+    /// seeded starter circles know their ids before any document exists — and
+    /// that wrapper logs a warning and discards the value every time one is.
+    /// The repository stamps it from `documentID` on the way in.
+    var id: String?
     var name: String
-    /// True only on the circle at document id `Circle.defaultID`. Carried on the
+    /// True only on the circle at document id `FriendCircle.defaultID`. Carried on the
     /// document so a list of circles sorts and renders without re-deriving it
     /// from the id, and pinned by the rules so it cannot be claimed elsewhere.
     var isDefault: Bool
@@ -142,6 +154,11 @@ struct Circle: Identifiable, Codable, Hashable, Sendable {
     var policy: BookingPolicy
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
+
+    /// The id lives in the path, so it is never encoded into the document.
+    enum CodingKeys: String, CodingKey {
+        case name, isDefault, sortOrder, policy, createdAt, updatedAt
+    }
 
     /// The Default circle's document id, and the whole reason "every friend
     /// resolves to a policy" is a property of the path rather than of a query.
@@ -177,11 +194,11 @@ struct Circle: Identifiable, Codable, Hashable, Sendable {
     /// The circles a host starts with. Default plus two ordinary ones, all three
     /// permissive: seeding a restriction the host never chose would be a decline
     /// they never made. Renaming or deleting the latter two is expected.
-    static func seeded() -> [Circle] {
+    static func seeded() -> [FriendCircle] {
         [
-            Circle(id: defaultID, name: "Everyone else", isDefault: true, sortOrder: 0),
-            Circle(id: "closeFriend", name: "Close friend", sortOrder: 1),
-            Circle(id: "acquaintance", name: "Acquaintance", sortOrder: 2)
+            FriendCircle(id: defaultID, name: "Everyone else", isDefault: true, sortOrder: 0),
+            FriendCircle(id: "closeFriend", name: "Close friend", sortOrder: 1),
+            FriendCircle(id: "acquaintance", name: "Acquaintance", sortOrder: 2)
         ]
     }
 }
@@ -192,15 +209,20 @@ struct Circle: Identifiable, Codable, Hashable, Sendable {
 /// host set on that person directly. One document per friend, keyed by their
 /// uid so `firestore.rules` can reach it in a single `get()`.
 struct CircleMembership: Identifiable, Codable, Hashable, Sendable {
-    /// The friend's user id (the document id).
-    @DocumentID var id: String?
+    /// The friend's user id, which is this document's id. Carried beside the
+    /// document rather than in it, for the same reason as `FriendCircle.id`.
+    var id: String?
     var circleID: String
     /// A policy set on this one person, superseding their circle's. Absent for
     /// the overwhelming majority of friends.
     var overridePolicy: BookingPolicy?
     @ServerTimestamp var updatedAt: Date?
 
-    init(id: String? = nil, circleID: String = Circle.defaultID, overridePolicy: BookingPolicy? = nil, updatedAt: Date? = nil) {
+    enum CodingKeys: String, CodingKey {
+        case circleID, overridePolicy, updatedAt
+    }
+
+    init(id: String? = nil, circleID: String = FriendCircle.defaultID, overridePolicy: BookingPolicy? = nil, updatedAt: Date? = nil) {
         self.id = id
         self.circleID = circleID
         self.overridePolicy = overridePolicy
@@ -235,7 +257,7 @@ enum CirclePolicyResolver {
     /// the order here, change it there.
     static func resolve(
         membership: CircleMembership?,
-        circles: [Circle]
+        circles: [FriendCircle]
     ) -> (policy: BookingPolicy, source: Source) {
         if let override = membership?.overridePolicy {
             return (override, .override)
@@ -244,7 +266,7 @@ enum CirclePolicyResolver {
            let circle = circles.first(where: { $0.id == circleID }) {
             return (circle.policy, .circle(id: circleID, name: circle.name))
         }
-        if let fallback = circles.first(where: { $0.id == Circle.defaultID }) {
+        if let fallback = circles.first(where: { $0.id == FriendCircle.defaultID }) {
             return (fallback.policy, .fallbackDefault)
         }
         return (.permissive, .unconfigured)

@@ -25,7 +25,7 @@ protocol CircleRepository: Sendable {
     // MARK: Host side
     func listenToCircles(
         hostID: String,
-        handler: @escaping @Sendable (Result<[Circle], Error>) -> Void
+        handler: @escaping @Sendable (Result<[FriendCircle], Error>) -> Void
     ) -> RepositoryListener
 
     func listenToMemberships(
@@ -33,7 +33,7 @@ protocol CircleRepository: Sendable {
         handler: @escaping @Sendable (Result<[CircleMembership], Error>) -> Void
     ) -> RepositoryListener
 
-    func saveCircle(hostID: String, _ circle: Circle) async throws
+    func saveCircle(hostID: String, _ circle: FriendCircle) async throws
     /// Deletes a circle and moves everyone in it back to Default, then refreshes
     /// their projections. Never called for the Default circle itself.
     func deleteCircle(hostID: String, circleID: String, movingMembers members: [String]) async throws
@@ -74,13 +74,16 @@ struct FirestoreCircleRepository: CircleRepository {
 
     func listenToCircles(
         hostID: String,
-        handler: @escaping @Sendable (Result<[Circle], Error>) -> Void
+        handler: @escaping @Sendable (Result<[FriendCircle], Error>) -> Void
     ) -> RepositoryListener {
         let reg = circles(hostID).addSnapshotListener { snapshot, error in
             if let error { handler(.failure(error)); return }
-            let circles: [Circle] = (snapshot?.documents ?? []).compactMap { doc in
-                do { return try doc.data(as: Circle.self) }
-                catch {
+            let circles: [FriendCircle] = (snapshot?.documents ?? []).compactMap { doc in
+                do {
+                    var circle = try doc.data(as: FriendCircle.self)
+                    circle.id = doc.documentID
+                    return circle
+                } catch {
                     Telemetry.decodeFailure(collection: FirestorePaths.circles, documentID: doc.documentID, error: error)
                     return nil
                 }
@@ -97,8 +100,11 @@ struct FirestoreCircleRepository: CircleRepository {
         let reg = members(hostID).addSnapshotListener { snapshot, error in
             if let error { handler(.failure(error)); return }
             let memberships: [CircleMembership] = (snapshot?.documents ?? []).compactMap { doc in
-                do { return try doc.data(as: CircleMembership.self) }
-                catch {
+                do {
+                    var membership = try doc.data(as: CircleMembership.self)
+                    membership.id = doc.documentID
+                    return membership
+                } catch {
                     Telemetry.decodeFailure(collection: FirestorePaths.circleMembers, documentID: doc.documentID, error: error)
                     return nil
                 }
@@ -108,7 +114,7 @@ struct FirestoreCircleRepository: CircleRepository {
         return FirestoreListenerBox(reg)
     }
 
-    func saveCircle(hostID: String, _ circle: Circle) async throws {
+    func saveCircle(hostID: String, _ circle: FriendCircle) async throws {
         guard let id = circle.id else { return }
         try await withRetry {
             try circles(hostID).document(id).setData(from: circle, merge: true)
@@ -116,7 +122,7 @@ struct FirestoreCircleRepository: CircleRepository {
     }
 
     func deleteCircle(hostID: String, circleID: String, movingMembers members: [String]) async throws {
-        guard circleID != Circle.defaultID else { return }
+        guard circleID != FriendCircle.defaultID else { return }
         try await withRetry {
             // One batch, so a friend is never briefly in a circle that no longer
             // exists. Chunked for a host with more friends than the batch cap
@@ -129,7 +135,7 @@ struct FirestoreCircleRepository: CircleRepository {
                 let batch = db.batch()
                 for friendID in chunk {
                     batch.updateData(
-                        ["circleID": Circle.defaultID, "updatedAt": FieldValue.serverTimestamp()],
+                        ["circleID": FriendCircle.defaultID, "updatedAt": FieldValue.serverTimestamp()],
                         forDocument: self.members(hostID).document(friendID)
                     )
                 }
@@ -177,7 +183,7 @@ struct FirestoreCircleRepository: CircleRepository {
     func seedCircles(hostID: String) async throws {
         try await withRetry {
             let batch = db.batch()
-            for circle in Circle.seeded() {
+            for circle in FriendCircle.seeded() {
                 guard let id = circle.id else { continue }
                 // merge:true so a re-run never stomps a host who has since
                 // renamed or reconfigured one of these.

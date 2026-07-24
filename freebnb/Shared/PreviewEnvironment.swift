@@ -30,6 +30,8 @@ extension View {
             .environment(UserProfileStore(repository: InMemoryUserProfileRepository()))
             .environment(StayRequestStore(repository: InMemoryStayRequestsRepository()))
             .environment(FriendStore(repository: InMemoryFriendEdgeRepository()))
+            .environment(CircleStore(repository: InMemoryCircleRepository()))
+            .environment(BookingPolicyStore(repository: InMemoryCircleRepository()))
             .environment(ReviewStore(repository: InMemoryReviewsRepository()))
             .environment(NetworkMonitor(start: false))
             .environment(DeepLinkRouter())

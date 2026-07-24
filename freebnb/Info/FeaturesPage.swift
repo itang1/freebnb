@@ -62,7 +62,7 @@ struct FeaturesPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.primaryBackground)
-        .navigationTitle("Features")
+        .navigationTitle("Overview")
     }
 }
 
