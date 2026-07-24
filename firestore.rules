@@ -122,6 +122,220 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/homes/$(homeID)).data.guestPolicy.maxGuests;
     }
 
+    // -------------------------------------------------------------------------
+    // Circles — friend-grouped booking rules.
+    //
+    // A host sorts their friends into named circles and hangs a booking policy
+    // off each one. The whole point of the feature is that a restricted friend
+    // is never told: there is no decline, no error, and nothing on a guest's
+    // screen that distinguishes a rule from a busy week. That means these rules
+    // are the *only* enforcement that counts — the client hides what it must not
+    // offer, but hiding is not refusing, and a modified client is exactly the
+    // caller a host restricting someone has in mind.
+    //
+    // Resolution order, matched exactly by CirclePolicyResolver in the Swift
+    // client: per-friend override, then the circle the friend is filed under,
+    // then the Default circle. It always terminates, because Default lives at a
+    // fixed document id. Rules cannot query, so "which circle is the default
+    // one" could never have been a field to search for; it has to be a path.
+    //
+    // A host who has no circles at all — nobody has run the migration, and they
+    // have not opened the app since Circles shipped — restricts nothing, which
+    // is precisely the behaviour they had before. That is the absence of
+    // configuration, not a special case for Default: once the documents exist,
+    // Default is read like any other circle.
+    //
+    // See docs/internal/CIRCLES.md.
+    // -------------------------------------------------------------------------
+
+    function defaultCircleID() { return 'default'; }
+
+    // Mirrors ArrivalWindow in the Swift client and the whitelist the stay
+    // request create rule applies to `arrivalWindow`; rules-tests/mirrors.test.mjs
+    // asserts all three still agree.
+    function arrivalOptions() {
+      return ['flexible', 'morning', 'afternoon', 'evening', 'lateNight'];
+    }
+
+    function circlePath(hostID, circleID) {
+      return /databases/$(database)/documents/users/$(hostID)/circles/$(circleID);
+    }
+
+    function membershipPath(hostID, friendID) {
+      return /databases/$(database)/documents/users/$(hostID)/circleMembers/$(friendID);
+    }
+
+    // The shape of a policy, wherever it is stored: on a circle, as a per-friend
+    // override, or as the resolved projection a guest reads. Bounds mirror
+    // BookingPolicy / StayFrequencyCap in Circle.swift.
+    function isValidBookingPolicy(policy) {
+      return policy is map
+          && policy.keys().hasOnly(['allowedArrivalOptions', 'minNoticeHours', 'maxStaysPerPeriod'])
+          && policy.keys().hasAll(['allowedArrivalOptions', 'minNoticeHours'])
+          && policy.allowedArrivalOptions is list
+          && policy.allowedArrivalOptions.size() > 0
+          && policy.allowedArrivalOptions.size() <= 5
+          && policy.allowedArrivalOptions.hasOnly(arrivalOptions())
+          && policy.minNoticeHours is int
+          && policy.minNoticeHours >= 0
+          && policy.minNoticeHours <= 8760
+          // Absent means uncapped. There is no sentinel count standing in for
+          // "unlimited", so a cleared cap leaves no number behind to misread.
+          && (policy.get('maxStaysPerPeriod', null) == null
+              || (policy.maxStaysPerPeriod is map
+                  && policy.maxStaysPerPeriod.keys().hasOnly(['count', 'periodDays'])
+                  && policy.maxStaysPerPeriod.count is int
+                  && policy.maxStaysPerPeriod.count >= 1
+                  && policy.maxStaysPerPeriod.count <= 100
+                  && policy.maxStaysPerPeriod.periodDays is int
+                  && policy.maxStaysPerPeriod.periodDays >= 1
+                  && policy.maxStaysPerPeriod.periodDays <= 3650));
+    }
+
+    // The resolution below is written as a chain of functions that pass the
+    // document they just read down as an argument, rather than as helpers that
+    // each re-read it. Rules have no local bindings, so a `policy(host, friend)`
+    // helper called from four places is four full re-resolutions — and the first
+    // draft of this blew the engine's 1000-expression budget on an ordinary
+    // booking. Passing the map is the binding.
+
+    // 0 for anything that isn't a plain int, so a malformed policy written out
+    // of band degrades to "no minimum" rather than wedging a host's bookings.
+    function noticeHours(p) {
+      return p.get('minNoticeHours', 0) is int ? p.get('minNoticeHours', 0) : 0;
+    }
+
+    // 0 means uncapped — an absent cap, and also a malformed one.
+    function capCountOf(p) {
+      return p.get('maxStaysPerPeriod', null) == null
+           ? 0
+           : (p.maxStaysPerPeriod.get('count', 0) is int ? p.maxStaysPerPeriod.get('count', 0) : 0);
+    }
+
+    function capPeriodDaysOf(p) {
+      return p.get('maxStaysPerPeriod', null) == null
+           ? 0
+           : (p.maxStaysPerPeriod.get('periodDays', 0) is int ? p.maxStaysPerPeriod.get('periodDays', 0) : 0);
+    }
+
+    // Whether policy `p` admits this booking.
+    //
+    // An absent arrivalWindow is read as 'flexible' rather than waved through:
+    // the field is optional on the document, so treating "unset" as "unchecked"
+    // would leave the whole arrival restriction one omitted key away from being
+    // nothing at all.
+    //
+    // checkIn is a local start-of-day, and the client rounds the same horizon up
+    // to a whole day before greying cells out (BookingPolicy.earliestCheckIn),
+    // so the two agree on which day is the first bookable one.
+    //
+    // `needsSlot` is false when the write is an edit to a request that already
+    // spent one: moving the dates on a pending request is the same ask, not
+    // another.
+    function policyPermits(p, hostID, friendID, data, needsSlot) {
+      return data.get('arrivalWindow', 'flexible')
+               in p.get('allowedArrivalOptions', arrivalOptions())
+          && data.checkIn >= request.time + duration.value(noticeHours(p), 'h')
+          && (!needsSlot
+              || capCountOf(p) == 0
+              || stayCounterAdvanced(hostID, friendID));
+    }
+
+    function circleHasPolicy(hostID, circleID) {
+      return exists(circlePath(hostID, circleID))
+          && 'policy' in get(circlePath(hostID, circleID)).data;
+    }
+
+    // The circle named, falling back to Default when it has been deleted, and
+    // to no restriction at all when the host has no circles — the state of a
+    // host who has not opened the app since Circles shipped.
+    function circlePermits(hostID, circleID, friendID, data, needsSlot) {
+      return circleHasPolicy(hostID, circleID)
+           ? policyPermits(get(circlePath(hostID, circleID)).data.policy, hostID, friendID, data, needsSlot)
+           : (circleHasPolicy(hostID, defaultCircleID())
+              ? policyPermits(get(circlePath(hostID, defaultCircleID())).data.policy,
+                              hostID, friendID, data, needsSlot)
+              : true);
+    }
+
+    // A per-friend override supersedes the circle, which is the entire meaning
+    // of an override.
+    function membershipPermits(hostID, member, friendID, data, needsSlot) {
+      return member.get('overridePolicy', null) != null
+           ? policyPermits(member.overridePolicy, hostID, friendID, data, needsSlot)
+           : circlePermits(hostID, member.get('circleID', defaultCircleID()), friendID, data, needsSlot);
+    }
+
+    // The entry point: does `hostID`'s Circles configuration admit this booking
+    // from `friendID`? A friend with no membership document is governed by
+    // Default, which is the window between a friend request being accepted and
+    // the host's client filing them.
+    function bookingPermitted(hostID, friendID, data, needsSlot) {
+      return exists(membershipPath(hostID, friendID))
+           ? membershipPermits(hostID, get(membershipPath(hostID, friendID)).data, friendID, data, needsSlot)
+           : circlePermits(hostID, defaultCircleID(), friendID, data, needsSlot);
+    }
+
+    // The cap and window governing a pair, for the counter's own rules. Same
+    // chain, resolving to numbers instead of a verdict; 0 means uncapped.
+    function pairCapCount(hostID, friendID) {
+      return exists(membershipPath(hostID, friendID))
+           ? membershipCapCount(hostID, get(membershipPath(hostID, friendID)).data)
+           : circleCapCount(hostID, defaultCircleID());
+    }
+
+    function membershipCapCount(hostID, member) {
+      return member.get('overridePolicy', null) != null
+           ? capCountOf(member.overridePolicy)
+           : circleCapCount(hostID, member.get('circleID', defaultCircleID()));
+    }
+
+    function circleCapCount(hostID, circleID) {
+      return circleHasPolicy(hostID, circleID)
+           ? capCountOf(get(circlePath(hostID, circleID)).data.policy)
+           : (circleHasPolicy(hostID, defaultCircleID())
+              ? capCountOf(get(circlePath(hostID, defaultCircleID())).data.policy)
+              : 0);
+    }
+
+    function pairCapPeriodDays(hostID, friendID) {
+      return exists(membershipPath(hostID, friendID))
+           ? membershipCapPeriodDays(hostID, get(membershipPath(hostID, friendID)).data)
+           : circleCapPeriodDays(hostID, defaultCircleID());
+    }
+
+    function membershipCapPeriodDays(hostID, member) {
+      return member.get('overridePolicy', null) != null
+           ? capPeriodDaysOf(member.overridePolicy)
+           : circleCapPeriodDays(hostID, member.get('circleID', defaultCircleID()));
+    }
+
+    function circleCapPeriodDays(hostID, circleID) {
+      return circleHasPolicy(hostID, circleID)
+           ? capPeriodDaysOf(get(circlePath(hostID, circleID)).data.policy)
+           : (circleHasPolicy(hostID, defaultCircleID())
+              ? capPeriodDaysOf(get(circlePath(hostID, defaultCircleID())).data.policy)
+              : 0);
+    }
+
+    function stayCounterPath(hostID, guestID) {
+      return /databases/$(database)/documents/stayCounters/$(hostID + '_' + guestID);
+    }
+
+    // The frequency cap, enforced the only way a query-less rule can enforce a
+    // rate: the guest advances a counter in the same commit as the request, this
+    // requires the advance to have happened, and the counter's own rules cap it.
+    // Deliberately identical in shape to rateCounterAdvanced() below, including
+    // its caveat — a batch of creates paired with one increment shares a slot,
+    // and App Check is the primary control against a hand-rolled client.
+    function stayCounterAdvanced(hostID, guestID) {
+      return (getAfter(stayCounterPath(hostID, guestID)).data.windowStart == request.time
+              && getAfter(stayCounterPath(hostID, guestID)).data.count == 1)
+          || (exists(stayCounterPath(hostID, guestID))
+              && getAfter(stayCounterPath(hostID, guestID)).data.count
+                 == get(stayCounterPath(hostID, guestID)).data.count + 1);
+    }
+
     // The keys an update actually touches. Anything absent from the caller's
     // allowlist is thereby pinned to its existing value.
     function changedKeys() {
@@ -262,6 +476,76 @@ service cloud.firestore {
       // Cloud Functions still reach it through elevated get()/exists().
       match /private/{docID} {
         allow read, write: if isSignedIn() && isOwner(userID);
+      }
+
+      // The host's circles. Owner-only in both directions, and the read side
+      // matters as much as the write side: a circle carries a *name*, and
+      // "Acquaintance" is precisely the decline this feature exists to spare
+      // people. Firestore has no field-level read rules, so the rules a guest's
+      // client legitimately needs are projected into `bookingPolicies` below
+      // instead of being read from here.
+      match /circles/{circleID} {
+        function isValidCircle(data) {
+          return data.keys().hasOnly(['name', 'isDefault', 'sortOrder', 'policy', 'createdAt', 'updatedAt'])
+              && data.keys().hasAll(['name', 'isDefault', 'sortOrder', 'policy'])
+              && data.name is string
+              && data.name.size() > 0
+              && data.name.size() <= 40
+              && data.sortOrder is int
+              // Being the Default circle is a fact about the document id, never
+              // a claim the document makes. Every policy resolution ends at this
+              // id, so exactly one document can hold that role and it is the one
+              // the path names.
+              && data.isDefault == (circleID == defaultCircleID())
+              && isValidBookingPolicy(data.policy);
+        }
+
+        allow read: if isSignedIn() && isOwner(userID);
+        allow create, update: if isSignedIn()
+            && isOwner(userID)
+            && isValidCircle(request.resource.data);
+        // Default cannot be deleted — a new friend always needs somewhere to
+        // land, and the resolution chain has to end somewhere that exists.
+        // Renaming it and rewriting its policy are ordinary updates above; there
+        // is nothing else special about it.
+        allow delete: if isSignedIn() && isOwner(userID) && circleID != defaultCircleID();
+      }
+
+      // Which circle each friend is in, plus any policy the host set on that one
+      // person. Keyed by the friend's uid so a booking resolves in one get().
+      match /circleMembers/{friendID} {
+        function isValidMembership(data) {
+          return data.keys().hasOnly(['circleID', 'overridePolicy', 'updatedAt'])
+              && data.keys().hasAll(['circleID'])
+              && data.circleID is string
+              && data.circleID.size() > 0
+              && data.circleID.size() <= 200
+              && (data.get('overridePolicy', null) == null
+                  || isValidBookingPolicy(data.overridePolicy));
+        }
+
+        allow read: if isSignedIn() && isOwner(userID);
+        allow create, update: if isSignedIn()
+            && isOwner(userID)
+            && isValidMembership(request.resource.data);
+        allow delete: if isSignedIn() && isOwner(userID);
+      }
+
+      // The resolved policy, projected for one guest — the only part of Circles
+      // a guest may read, and only their own. It carries the three rules and
+      // nothing else: no circle id, no circle name, no count of circles, nothing
+      // that reveals the host sorts anyone at all.
+      //
+      // A display cache in the same sense a listing's `unavailableDateRanges`
+      // is one. The rules above are the boundary; this exists so the request
+      // sheet can decline to *offer* what the rules would refuse, which is what
+      // keeps a restricted friend from ever meeting an error.
+      match /bookingPolicies/{guestID} {
+        allow read: if isSignedIn() && (isOwner(userID) || isOwner(guestID));
+        allow create, update: if isSignedIn()
+            && isOwner(userID)
+            && isValidBookingPolicy(request.resource.data);
+        allow delete: if isSignedIn() && isOwner(userID);
       }
     }
 
@@ -653,7 +937,19 @@ service cloud.firestore {
                 && (isUnset(request.resource.data, 'initiatedBy')
                     || request.resource.data.initiatedBy == request.auth.uid)
                 // A host's note is the host's to write, and only on a reply.
-                && isUnset(request.resource.data, 'hostNote'))
+                && isUnset(request.resource.data, 'hostNote')
+                // The host's circle policy for this friend, enforced on the ask
+                // and only on the ask: a policy governs what a friend may
+                // request, and a host offering their own place is not asking.
+                //
+                // Nothing here produces a distinguishable failure. A guest whose
+                // client is current never reaches these clauses, because the
+                // request sheet does not offer what they would refuse; a guest
+                // whose client is stale sees the same generic "no longer
+                // available" a lost race already gives them. Neither is told a
+                // circle exists.
+                && bookingPermitted(request.resource.data.hostUserID, request.auth.uid,
+                                    request.resource.data, true))
             ||
             // The host offers. The mirror: the host writes the note, and the
             // guest's own fields (their note, their party size, their arrival
@@ -764,7 +1060,14 @@ service cloud.firestore {
                 && request.resource.data.checkIn is timestamp
                 && request.resource.data.checkOut is timestamp
                 && request.resource.data.checkOut > request.resource.data.checkIn
-                && request.resource.data.checkIn > request.time - duration.value(1, 'd'))
+                && request.resource.data.checkIn > request.time - duration.value(1, 'd')
+                // A date change is a second chance to break the notice rule:
+                // ask for a date three months out, then walk it back to
+                // tomorrow. The same bound applies here as on create. It spends
+                // no new frequency slot — this is the same request, not another
+                // one — and the arrival window is pinned by changedKeys().
+                && bookingPermitted(resource.data.hostUserID, request.auth.uid,
+                                    request.resource.data, false))
             ||
             // Status transitions: no edits once the request is terminal.
             (resource.data.status in ["pending", "offered", "accepted"]
@@ -1027,6 +1330,71 @@ service cloud.firestore {
                 && request.time < resource.data.windowStart + duration.value(windowSeconds(), 's')
                 && request.resource.data.count == resource.data.count + 1
                 && request.resource.data.count <= messageCap())
+          );
+
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Stay counters — the frequency half of a circle's booking policy.
+    // Document id is "{hostUID}_{guestUID}", pinned to the two id fields below.
+    //
+    // Rules cannot run a query, so "how many times has this person booked me
+    // lately" is not a question that can be asked at write time. It is the same
+    // problem message rate limiting already has, and the same answer: the guest
+    // advances this counter in the same commit as the request, the stay request
+    // rule requires the advance through getAfter(), and the cap lives here.
+    //
+    // The cap and the window length are read from the *host's* circle documents,
+    // which the guest cannot write. A guest who tampers with their own counter
+    // can only deny themselves slots they were owed.
+    //
+    // A slot is spent when a request is created and is not returned if the host
+    // declines it or the guest cancels. Refunding needs a server that recounts,
+    // and there is none deployed; the throttle is therefore on how often someone
+    // asks, which is the behaviour a host reaching for it actually wants.
+    // -------------------------------------------------------------------------
+    match /stayCounters/{counterID} {
+      function capCount(data) { return pairCapCount(data.hostUserID, data.guestUserID); }
+      function windowDays(data) { return pairCapPeriodDays(data.hostUserID, data.guestUserID); }
+
+      // Both parties may read it: the guest's own client needs it to know when
+      // its window rolls over, and the host's to show what a circle is doing.
+      allow read: if isSignedIn()
+          && (isOwner(resource.data.guestUserID) || isOwner(resource.data.hostUserID));
+
+      // First request this guest has ever sent this host: a fresh window with a
+      // single request in it.
+      allow create: if isFullMember()
+          && request.resource.data.keys().hasOnly(['hostUserID', 'guestUserID', 'windowStart', 'count'])
+          && request.resource.data.hostUserID is string
+          && request.resource.data.guestUserID is string
+          && counterID == request.resource.data.hostUserID + '_' + request.resource.data.guestUserID
+          && isOwner(request.resource.data.guestUserID)
+          && request.resource.data.windowStart == request.time
+          && request.resource.data.count == 1;
+
+      allow update: if isFullMember()
+          && request.resource.data.keys().hasOnly(['hostUserID', 'guestUserID', 'windowStart', 'count'])
+          && request.resource.data.hostUserID == resource.data.hostUserID
+          && request.resource.data.guestUserID == resource.data.guestUserID
+          && isOwner(resource.data.guestUserID)
+          && request.resource.data.count is int
+          && (
+            // The window has elapsed — or the host has no cap at all, so there
+            // is no window to respect. Either way a fresh one opens here.
+            ((windowDays(resource.data) == 0
+              || request.time >= resource.data.windowStart + duration.value(windowDays(resource.data), 'd'))
+                && request.resource.data.windowStart == request.time
+                && request.resource.data.count == 1)
+            ||
+            // Still inside the open window: increment by one, up to the cap.
+            // windowStart is pinned, so the window cannot be slid forward to buy
+            // headroom — the same trick rateLimits closes.
+            (request.resource.data.windowStart == resource.data.windowStart
+                && request.resource.data.count == resource.data.count + 1
+                && (capCount(resource.data) == 0
+                    || request.resource.data.count <= capCount(resource.data)))
           );
 
       allow delete: if false;
