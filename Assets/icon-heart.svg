@@ -1,0 +1,6 @@
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Welcome">
+  <!-- an open hand offering a heart: hospitality, free to stay -->
+  <path d="M10 40 q14 -6 28 0" fill="none" stroke="#0A6774" stroke-width="3" stroke-linecap="round"/>
+  <path d="M24 12 c-4 -5 -12 -1.5 -12 4.5 c0 5 7 9 12 12.5 c5 -3.5 12 -7.5 12 -12.5 c0 -6 -8 -9.5 -12 -4.5 Z"
+        fill="#FF7E6A" stroke="#BE4537" stroke-width="2"/>
+</svg>

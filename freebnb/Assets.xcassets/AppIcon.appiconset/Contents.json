@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "AppIcon-1024.png",
+      "filename" : "AppIcon-1024-Dark.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "AppIcon-1024.png",
+      "filename" : "AppIcon-1024-Tinted.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -76,6 +76,7 @@
       "size" : "512x512"
     },
     {
+      "filename" : "freebnb_app_icon.jpg",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "512x512"

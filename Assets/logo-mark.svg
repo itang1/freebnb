@@ -1,0 +1,14 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FreeBNB logo mark">
+  <!-- FreeBNB mark: a home whose roof is two friends leaning together -->
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="#FAF3E8"/>
+  <!-- house body -->
+  <path d="M32 62 L60 40 L88 62 V90 a6 6 0 0 1 -6 6 H38 a6 6 0 0 1 -6 -6 Z"
+        fill="none" stroke="#0A6774" stroke-width="6" stroke-linejoin="round"/>
+  <!-- two friends under one roof -->
+  <circle cx="52" cy="72" r="5.5" fill="#BE4537"/>
+  <circle cx="68" cy="72" r="5.5" fill="#0A6774"/>
+  <path d="M45 92 a7 7 0 0 1 14 0" fill="none" stroke="#BE4537" stroke-width="5" stroke-linecap="round"/>
+  <path d="M61 92 a7 7 0 0 1 14 0" fill="none" stroke="#0A6774" stroke-width="5" stroke-linecap="round"/>
+  <!-- heart at the peak -->
+  <path d="M60 34 c-3 -4 -9 -1 -9 3.2 c0 3.3 5 6.3 9 9 c4 -2.7 9 -5.7 9 -9 c0 -4.2 -6 -7.2 -9 -3.2 Z" fill="#FF7E6A"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg viewBox="0 0 1200 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Section divider">
+  <!-- gentle cozy wave with dotted accents in the FreeBNB palette -->
+  <path d="M0 24 Q75 6 150 24 T300 24 T450 24 T600 24 T750 24 T900 24 T1050 24 T1200 24"
+        fill="none" stroke="#A9DCD3" stroke-width="4" stroke-linecap="round"/>
+  <path d="M0 30 Q75 12 150 30 T300 30 T450 30 T600 30 T750 30 T900 30 T1050 30 T1200 30"
+        fill="none" stroke="#0A6774" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="150" cy="24" r="5" fill="#BE4537"/>
+  <circle cx="450" cy="24" r="5" fill="#0A6774"/>
+  <circle cx="750" cy="24" r="5" fill="#FF7E6A"/>
+  <circle cx="1050" cy="24" r="5" fill="#0A6774"/>
+</svg>
