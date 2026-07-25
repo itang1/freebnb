@@ -22,6 +22,11 @@ struct AvailabilityEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var blockedDays: Set<Date> = []
+    /// The turnover gap the host wants held around every confirmed stay. Loaded
+    /// with the calendar and written back on save; `loadedBufferHours` is what it
+    /// arrived as, so an untouched buffer costs no write.
+    @State private var bufferHours = ListingAvailability.defaultBufferHours
+    @State private var loadedBufferHours = ListingAvailability.defaultBufferHours
     /// The server's half, loaded alongside the host's. Held rather than derived
     /// from `listing` because the listing only carries the merged copy now, and
     /// merged is exactly the thing this screen must not show.
@@ -54,7 +59,24 @@ struct AvailabilityEditorView: View {
             in: AvailabilityCalendar.upcoming(availability.blockedDateRanges)
         )
         bookedRanges = availability.bookedDateRanges
+        bufferHours = availability.bufferHours
+        loadedBufferHours = availability.bufferHours
         isLoading = false
+    }
+
+    /// The buffer choices, in whole turnover days because the calendar is
+    /// day-granular: a sub-day buffer would still close a whole date, so offering
+    /// "2 hours" would draw a day and read as a lie. Stored as hours all the same,
+    /// which is the unit the setting is defined in.
+    private static let bufferOptions: [Int] = [0, 24, 48, 72]
+
+    private static func bufferLabel(_ hours: Int) -> String {
+        switch hours {
+        case 0:  return "No buffer"
+        default:
+            let days = AvailabilityCalendar.bufferDays(forHours: hours)
+            return "\(days) day\(days == 1 ? "" : "s")"
+        }
     }
 
     /// Derived on demand rather than mirrored into state, so the summary list can
@@ -87,6 +109,8 @@ struct AvailabilityEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     blockedSection
+
+                    bufferSection
 
                     applyToAllSection
 
@@ -146,6 +170,38 @@ struct AvailabilityEditorView: View {
             }
 
             summary
+        }
+    }
+
+    // MARK: - Turnover buffer
+
+    /// The gap held automatically around every confirmed stay, so a checkout and
+    /// the next check-in never land on the same day without the host blocking it by
+    /// hand each time. Reason-free to the guest like everything else here: the held
+    /// days simply read as unavailable, indistinguishable from a booking or a
+    /// closed week.
+    @ViewBuilder
+    private var bufferSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Turnover buffer")
+                .font(.headline)
+
+            Text("Holds time around every confirmed stay so you have room to reset between guests. Friends see the held days as unavailable, the same as any other closed date.")
+                .font(.subheadline)
+                .foregroundColor(.secondaryText)
+
+            Picker("Turnover buffer", selection: $bufferHours) {
+                ForEach(Self.bufferOptions, id: \.self) { hours in
+                    Text(Self.bufferLabel(hours)).tag(hours)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(bufferHours == 0
+                 ? "A guest can check in the day another checks out."
+                 : "The day before a check-in and the day after a checkout close automatically.")
+                .font(.caption)
+                .foregroundColor(.secondaryText)
         }
     }
 
@@ -248,6 +304,18 @@ struct AvailabilityEditorView: View {
         errorMessage = nil
         defer { isSaving = false }
         let ranges = blockedRanges
+        // The buffer first, when it changed, so the blocked-range save that follows
+        // republishes the union with the new padding already in the cache. An
+        // untouched buffer is skipped: it would only rewrite the same value.
+        if bufferHours != loadedBufferHours {
+            do {
+                try await homeStore.saveBufferHours(bufferHours, for: listing)
+                loadedBufferHours = bufferHours
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
+        }
         do {
             try await homeStore.saveBlockedRanges(ranges, for: listing)
         } catch {

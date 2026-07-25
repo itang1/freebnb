@@ -319,6 +319,7 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
     private func acceptAsHost(_ request: StayRequest, hostNote: String?) async throws {
         let requestRef = db.collection(FirestorePaths.stayRequests).document(request.id)
         let listingRef = db.collection(FirestorePaths.homes).document(request.listingID)
+        let availabilityRef = FirestorePaths.listingAvailability(db, homeID: request.listingID)
         let markerRef = listingRef
             .collection(FirestorePaths.accepted)
             .document(request.guestUserID)
@@ -326,9 +327,16 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         _ = try await db.runTransaction { transaction, errorPointer -> Any? in
             let reqSnap: DocumentSnapshot
             let listingSnap: DocumentSnapshot
+            // The host's own turnover buffer, read in the same transaction so the
+            // stay being accepted publishes its buffer immediately rather than
+            // waiting for the reconciler's next pass. The host may read this
+            // managers-only document; a guest never can, which is why the offer
+            // path (`acceptAsGuest`) can't do the same.
+            let availabilitySnap: DocumentSnapshot
             do {
                 reqSnap = try transaction.getDocument(requestRef)
                 listingSnap = try transaction.getDocument(listingRef)
+                availabilitySnap = try transaction.getDocument(availabilityRef)
             } catch {
                 errorPointer?.pointee = error as NSError
                 return nil
@@ -353,9 +361,21 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
                 return nil
             }
 
-            let booked = DateRange(start: current.checkIn, end: current.checkOut)
+            // Grow this booking by the host's buffer before publishing it, so the
+            // day before check-in and the day after checkout close in the same
+            // write that accepts the stay. The reconciler recomputes the identical
+            // padded set from every accepted stay moments later; this keeps the
+            // guard the next concurrent accept reads honest in the meantime. An
+            // absent or unreadable availability doc falls back to the default
+            // buffer, the same value `fetchAvailability` would return.
+            let bufferHours = (try? availabilitySnap.data(as: ListingAvailability.self))?.bufferHours
+                ?? ListingAvailability.defaultBufferHours
+            let bookedFootprint = AvailabilityCalendar.buffered(
+                [DateRange(start: current.checkIn, end: current.checkOut)],
+                bufferHours: bufferHours
+            )
             var updatedRanges = listing.unavailableDateRanges ?? []
-            updatedRanges.append(booked)
+            updatedRanges.append(contentsOf: bookedFootprint)
 
             var fields: [String: Any] = [
                 "status": StayRequestStatus.accepted.rawValue,

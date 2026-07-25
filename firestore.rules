@@ -853,12 +853,22 @@ service cloud.firestore {
             && isOptionalString(data, 'houseNotes', 2000)
             && isOptionalString(data, 'hostPhone', 40);
       }
-      // The two halves of the calendar. Caps match the former per-field caps on
-      // the public document, whose merged field is now capped at their sum.
+      // The two halves of the calendar, plus the host's turnover buffer. Caps
+      // match the former per-field caps on the public document, whose merged field
+      // is now capped at their sum. `bufferHours` is the gap held around every
+      // confirmed stay (feature: turnover buffer); it is validated but not
+      // range-checked against the calendar here, for the same reason the
+      // double-booking guard lives in the accept transaction and not these rules:
+      // a rule cannot loop over ranges. Bounds mirror
+      // ListingAvailability.maxBufferHours.
       function isValidAvailability(data) {
-        return data.keys().hasOnly(['blockedDateRanges', 'bookedDateRanges'])
+        return data.keys().hasOnly(['blockedDateRanges', 'bookedDateRanges', 'bufferHours'])
             && isOptionalList(data, 'blockedDateRanges', 100)
-            && isOptionalList(data, 'bookedDateRanges', 100);
+            && isOptionalList(data, 'bookedDateRanges', 100)
+            && (isUnset(data, 'bufferHours')
+                || (data.bufferHours is int
+                    && data.bufferHours >= 0
+                    && data.bufferHours <= 168));
       }
 
       // `bookedDateRanges` is derived from accepted stays, and used to be pinned

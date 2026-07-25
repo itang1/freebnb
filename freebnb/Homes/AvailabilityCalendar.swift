@@ -159,6 +159,34 @@ enum AvailabilityCalendar {
         return !nights.contains(where: unavailableDays.contains)
     }
 
+    /// Days of turnover padding a buffer of `hours` implies, on a day-granular
+    /// calendar. Rounds up, because any positive buffer rules out same-day
+    /// turnover: even an hour means the day a guest checks out is not a day the
+    /// next guest may check in.
+    static func bufferDays(forHours hours: Int) -> Int {
+        hours > 0 ? (hours + 23) / 24 : 0
+    }
+
+    /// Each booked range grown by `bufferHours` of turnover on both sides, then
+    /// merged. This is what the published calendar carries in place of the raw
+    /// stays: the day before a check-in and the day after a checkout read as
+    /// unavailable, indistinguishable from any other closed day, so a guest still
+    /// learns only that a date is spoken for and never why. A zero buffer returns
+    /// the ranges untouched, which is exactly the pre-buffer behaviour.
+    static func buffered(_ ranges: [DateRange], bufferHours: Int, calendar: Calendar = .current) -> [DateRange] {
+        let days = bufferDays(forHours: bufferHours)
+        guard days > 0 else { return ranges }
+        let padded = ranges.map { range in
+            DateRange(
+                start: calendar.date(byAdding: .day, value: -days, to: range.start) ?? range.start,
+                end: calendar.date(byAdding: .day, value: days, to: range.end) ?? range.end
+            )
+        }
+        // Round-trip through the day set so overlapping padded ranges merge, the
+        // same normalisation `merging` relies on.
+        return self.ranges(from: blockedDays(in: padded, calendar: calendar), calendar: calendar)
+    }
+
     /// The next `monthCount` months starting with the one containing `from`, which
     /// is how far ahead the grid lets a host or guest look.
     static func months(from: Date = Date(), count: Int, calendar: Calendar = .current) -> [Date] {

@@ -58,17 +58,60 @@ struct BookedDatesTests {
     }
 
     /// The union the private document hands to the public one. Blocked and booked
-    /// land in one list in which nothing marks which was which.
+    /// land in one list in which nothing marks which was which. Buffer zero here,
+    /// so this pins the pure merge without the turnover padding the next tests own.
     @Test func availabilityMergesBlockedAndBooked() {
         let availability = ListingAvailability(
             blockedDateRanges: [DateRange(start: day(1), end: day(3))],
-            bookedDateRanges: [DateRange(start: day(10), end: day(14))]
+            bookedDateRanges: [DateRange(start: day(10), end: day(14))],
+            bufferHours: 0
         )
 
         let ranges = availability.unavailableRanges
         #expect(ranges.count == 2)
         #expect(ranges.contains(DateRange(start: day(1), end: day(3))))
         #expect(ranges.contains(DateRange(start: day(10), end: day(14))))
+    }
+
+    /// The turnover buffer grows the booked half by whole days on both sides
+    /// before it merges. A one-day buffer around a stay booked day 10 – 14 closes
+    /// day 9 (the day before check-in) and day 14 (the day after checkout, which
+    /// the raw half-open range left open), while the host's blocked days pass
+    /// through untouched. The published field carries the padded stay, so a guest
+    /// reads it as unavailable with nothing to say it is a buffer rather than a
+    /// booking.
+    @Test func bufferGrowsTheBookedHalfOnBothSides() {
+        let availability = ListingAvailability(
+            blockedDateRanges: [DateRange(start: day(1), end: day(3))],
+            bookedDateRanges: [DateRange(start: day(10), end: day(14))],
+            bufferHours: 24
+        )
+
+        let days = AvailabilityCalendar.blockedDays(in: availability.unavailableRanges)
+        // The stay's own nights.
+        #expect(days.contains(day(10)))
+        #expect(days.contains(day(13)))
+        // The buffer: the day before check-in and the checkout day the raw range
+        // would have left bookable.
+        #expect(days.contains(day(9)))
+        #expect(days.contains(day(14)))
+        // Just outside the buffer on either side stays open.
+        #expect(!days.contains(day(8)))
+        #expect(!days.contains(day(15)))
+        // The host's blocked days are not padded.
+        #expect(days.contains(day(1)))
+        #expect(!days.contains(day(0)))
+    }
+
+    /// A listing written before the buffer existed reads as the default, not zero,
+    /// so it still gets its turnover day. This is the retroactive half of the
+    /// feature: no host has to opt in for the gap to appear.
+    @Test func availabilityMissingBufferDecodesAsTheDefault() throws {
+        let restored = try JSONDecoder().decode(
+            ListingAvailability.self,
+            from: Data(#"{"bookedDateRanges":[{"start":864000,"end":1209600}]}"#.utf8)
+        )
+        #expect(restored.bufferHours == ListingAvailability.defaultBufferHours)
     }
 
     /// Either half being empty must not swallow the other: a listing with only

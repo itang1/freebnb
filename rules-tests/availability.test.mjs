@@ -173,4 +173,46 @@ describe("homes/{id}/private/availability write — the server's half", () => {
       setDoc(availability(as(HOST)), { awayUntil: Timestamp.now() }, { merge: true })
     );
   });
+
+  // The turnover buffer (feature: turnover buffer): the host's gap around every
+  // confirmed stay, stored here rather than on the public listing so a guest
+  // cannot subtract a known buffer from an unavailable stretch to recover the
+  // booking under it. The rule validates the field but does not range-check it
+  // against the calendar — a rule cannot loop over ranges, which is why the
+  // double-booking and buffer guards both live in the accept path.
+  it("allows the host to set a valid turnover buffer", async () => {
+    await assertSucceeds(
+      setDoc(availability(as(HOST)), { bufferHours: 48 }, { merge: true })
+    );
+  });
+
+  it("allows a co-host to set the buffer", async () => {
+    await assertSucceeds(
+      setDoc(availability(as(COHOST)), { bufferHours: 0 }, { merge: true })
+    );
+  });
+
+  it("denies a buffer beyond the ceiling", async () => {
+    await assertFails(
+      setDoc(availability(as(HOST)), { bufferHours: 169 }, { merge: true })
+    );
+  });
+
+  it("denies a negative buffer", async () => {
+    await assertFails(
+      setDoc(availability(as(HOST)), { bufferHours: -1 }, { merge: true })
+    );
+  });
+
+  it("denies a non-integer buffer", async () => {
+    await assertFails(
+      setDoc(availability(as(HOST)), { bufferHours: 12.5 }, { merge: true })
+    );
+  });
+
+  it("denies an outsider setting the buffer", async () => {
+    await assertFails(
+      setDoc(availability(as(OUTSIDER)), { bufferHours: 24 }, { merge: true })
+    );
+  });
 });

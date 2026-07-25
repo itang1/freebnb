@@ -244,6 +244,58 @@ struct MergeBlockedRangesTests {
     }
 }
 
+/// The turnover buffer's arithmetic (feature: turnover buffer): the padding the
+/// published calendar carries around every confirmed stay. Mirrored on the
+/// server by `bufferedStoredRanges` in functions/src/index.ts; an off-by-one here
+/// is a day a guest could book onto a host's turnover, or a day closed for no
+/// reason.
+struct TurnoverBufferTests {
+    /// Whole days round up: any positive buffer rules out same-day turnover, so
+    /// even an hour costs a day, and a day and one hour costs two.
+    @Test func bufferDaysRoundUpFromHours() {
+        #expect(AvailabilityCalendar.bufferDays(forHours: 0) == 0)
+        #expect(AvailabilityCalendar.bufferDays(forHours: 1) == 1)
+        #expect(AvailabilityCalendar.bufferDays(forHours: 24) == 1)
+        #expect(AvailabilityCalendar.bufferDays(forHours: 25) == 2)
+        #expect(AvailabilityCalendar.bufferDays(forHours: 48) == 2)
+    }
+
+    /// A one-day buffer grows a stay by a day on each side. The check-out day, left
+    /// open by the half-open range, is exactly what the buffer closes.
+    @Test func oneDayBufferClosesTheDayBeforeAndTheCheckoutDay() {
+        let stay = DateRange(start: date(2026, 3, 5), end: date(2026, 3, 9))
+        let buffered = AvailabilityCalendar.buffered([stay], bufferHours: 24, calendar: utc)
+        let days = AvailabilityCalendar.blockedDays(in: buffered, calendar: utc)
+        // Day before check-in through the checkout day, inclusive.
+        #expect(days == [
+            date(2026, 3, 4), date(2026, 3, 5), date(2026, 3, 6),
+            date(2026, 3, 7), date(2026, 3, 8), date(2026, 3, 9),
+        ])
+    }
+
+    /// Zero buffer is the pre-feature behaviour: the stay is published as-is, and
+    /// the checkout day stays bookable.
+    @Test func zeroBufferLeavesTheStayUntouched() {
+        let stay = DateRange(start: date(2026, 3, 5), end: date(2026, 3, 9))
+        let buffered = AvailabilityCalendar.buffered([stay], bufferHours: 0, calendar: utc)
+        #expect(buffered == [stay])
+    }
+
+    /// Two stays whose buffers overlap merge into one closed stretch rather than
+    /// double-counting the shared days, the same normalisation the blocked half
+    /// gets.
+    @Test func adjacentBuffersMerge() {
+        let first = DateRange(start: date(2026, 3, 5), end: date(2026, 3, 9))
+        let second = DateRange(start: date(2026, 3, 11), end: date(2026, 3, 14))
+        let buffered = AvailabilityCalendar.buffered([first, second], bufferHours: 24, calendar: utc)
+        // First → [Mar 4, Mar 10), second → [Mar 10, Mar 15): they touch at Mar 10
+        // and fuse into one range.
+        #expect(buffered.count == 1)
+        #expect(buffered[0].start == date(2026, 3, 4))
+        #expect(buffered[0].end == date(2026, 3, 15))
+    }
+}
+
 struct TogglePastDayTests {
     private let now = date(2026, 3, 10)
 

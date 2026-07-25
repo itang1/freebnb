@@ -63,6 +63,10 @@ protocol HomesRepository: Sendable {
     /// Writes the booked half. Authored by the host's reconciler now, not a
     /// trigger, from the listing's accepted stays.
     func saveBookedRanges(homeID: String, booked: [DateRange]) async throws
+    /// Writes the host's turnover buffer, in hours. A merge write on the one
+    /// field, so it rides alongside the blocked and booked halves without
+    /// touching them.
+    func saveBufferHours(homeID: String, bufferHours: Int) async throws
 }
 
 /// The feed's canonical order: newest first, with document id descending as a
@@ -394,6 +398,16 @@ struct FirestoreHomesRepository: HomesRepository {
             let encoded = try booked.map { try Firestore.Encoder().encode($0) }
             try await FirestorePaths.listingAvailability(db, homeID: homeID)
                 .setData(["bookedDateRanges": encoded], merge: true)
+        }
+    }
+
+    /// The same one-field merge as the two halves above: the rules validate
+    /// `bufferHours` as an optional int on this managers-only document, so the
+    /// write neither clobbers the calendar nor needs the whole document present.
+    func saveBufferHours(homeID: String, bufferHours: Int) async throws {
+        try await withRetry { [db] in
+            try await FirestorePaths.listingAvailability(db, homeID: homeID)
+                .setData(["bufferHours": bufferHours], merge: true)
         }
     }
 }

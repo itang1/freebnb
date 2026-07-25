@@ -950,19 +950,32 @@ export const acceptStayRequest = onCall(async (request) => {
 
     // All reads must precede all writes in a transaction. Re-read the accepted
     // requests for this listing inside the txn so a concurrent accept that
-    // committed first is seen here and blocks this one.
-    const accepted = await t.get(
-      db.collection(Collections.stayRequests)
-        .where("listingID", "==", req.listingID)
-        .where("status", "==", "accepted")
-    );
+    // committed first is seen here and blocks this one. The host's turnover buffer
+    // comes from the same managers-only availability document the client reads.
+    const [accepted, availabilitySnap] = await Promise.all([
+      t.get(
+        db.collection(Collections.stayRequests)
+          .where("listingID", "==", req.listingID)
+          .where("status", "==", "accepted")
+      ),
+      t.get(
+        db.collection(Collections.homes).doc(req.listingID)
+          .collection(Subcollections.private).doc(Docs.availability)
+      ),
+    ]);
+    const bufferHours = (availabilitySnap.data()?.bufferHours ?? DEFAULT_BUFFER_HOURS) as number;
+    const padMs = bufferDaysForHours(bufferHours) * MS_PER_DAY;
     const inMs = req.checkIn.toMillis();
     const outMs = req.checkOut.toMillis();
     for (const doc of accepted.docs) {
       if (doc.id === requestID) continue;
       const other = doc.data() as { checkIn: admin.firestore.Timestamp; checkOut: admin.firestore.Timestamp };
-      // Half-open interval overlap: [checkIn, checkOut).
-      if (other.checkIn.toMillis() < outMs && inMs < other.checkOut.toMillis()) {
+      // Half-open overlap of this stay's raw dates against the other stay grown by
+      // the turnover buffer on both sides: the candidate must clear not just the
+      // other booking but the reset gap around it. Padding one side (the existing
+      // stay) rather than both is deliberate — padding both would double-count the
+      // gap and demand two buffers between neighbours instead of one.
+      if (other.checkIn.toMillis() - padMs < outMs && inMs < other.checkOut.toMillis() + padMs) {
         // "aborted" (not "failed-precondition") so the client can distinguish a
         // double-booking from the not-pending case and show the right message.
         throw new HttpsError(
@@ -1014,6 +1027,44 @@ function sameStoredRanges(a: StoredRange[], b: StoredRange[]): boolean {
   return true;
 }
 
+// The turnover buffer a listing is treated as having when its availability
+// document has never set one. Mirrors ListingAvailability.defaultBufferHours on
+// the client: a listing that predates the feature still holds one turnover day
+// around each booking.
+const DEFAULT_BUFFER_HOURS = 24;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Whole turnover days a buffer of `hours` implies. Rounds up, because the
+// calendar is day-granular and any positive buffer rules out same-day turnover.
+// Mirrors AvailabilityCalendar.bufferDays(forHours:) on the client.
+function bufferDaysForHours(hours: number): number {
+  return hours > 0 ? Math.ceil(hours / 24) : 0;
+}
+
+// Each booked range grown by the turnover buffer on both sides, then merged, so
+// the published calendar closes the day before a check-in and the day after a
+// checkout — indistinguishable from any other unavailable day. Mirrors
+// AvailabilityCalendar.buffered(_:bufferHours:) on the client. A zero buffer
+// returns the ranges unchanged, which is the pre-buffer behaviour.
+function bufferedStoredRanges(ranges: StoredRange[], bufferHours: number): StoredRange[] {
+  const days = bufferDaysForHours(bufferHours);
+  if (days <= 0) return ranges;
+  const padMs = days * MS_PER_DAY;
+  const padded = ranges
+    .map((r) => ({ start: r.start.toMillis() - padMs, end: r.end.toMillis() + padMs }))
+    .sort((a, b) => a.start - b.start);
+  const merged: { start: number; end: number }[] = [];
+  for (const r of padded) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else merged.push({ ...r });
+  }
+  return merged.map((r) => ({
+    start: admin.firestore.Timestamp.fromMillis(r.start),
+    end: admin.firestore.Timestamp.fromMillis(r.end),
+  }));
+}
+
 async function recomputeListingBookedRanges(listingID: string): Promise<void> {
   const listingRef = db.collection(Collections.homes).doc(listingID);
   const availabilityRef = listingRef
@@ -1045,6 +1096,7 @@ async function recomputeListingBookedRanges(listingID: string): Promise<void> {
 
   const existing = (availabilitySnap.data()?.bookedDateRanges ?? []) as StoredRange[];
   const blocked = (availabilitySnap.data()?.blockedDateRanges ?? []) as StoredRange[];
+  const bufferHours = (availabilitySnap.data()?.bufferHours ?? DEFAULT_BUFFER_HOURS) as number;
   if (sameStoredRanges(existing, ranges)) return;
 
   // Two writes, because availability is stored twice on purpose: the two halves
@@ -1066,8 +1118,12 @@ async function recomputeListingBookedRanges(listingID: string): Promise<void> {
   //
   // Sorted so the write is stable: the change-check above compares only the
   // booked half, and an unstable order here would rewrite the public field on
-  // every trigger for no reason.
-  const union = [...blocked, ...ranges].sort(
+  // every trigger for no reason. The booked half is grown by the host's turnover
+  // buffer before it is merged with the blocked half, so the published calendar
+  // carries the buffer while the private `bookedDateRanges` stays the raw stays
+  // — the buffer is derived on publish, never stored per stay, which is what lets
+  // a cancellation release it for free (the next recompute simply drops the stay).
+  const union = [...blocked, ...bufferedStoredRanges(ranges, bufferHours)].sort(
     (a, b) => a.start.toMillis() - b.start.toMillis()
   );
   await listingRef.update({ unavailableDateRanges: union });

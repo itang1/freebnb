@@ -504,17 +504,11 @@ final class HomeStore {
     /// `reconcileBookedRanges`, and this republishes the union of both so a new
     /// block doesn't drop a booking (nor the reverse).
     func saveBlockedRanges(_ blocked: [DateRange], for home: Home) async throws {
-        let current = await availability(for: home.id)
+        var updated = await availability(for: home.id)
         do {
             try await repository.saveBlockedRanges(homeID: home.id, blocked: blocked)
-            var updated = current
             updated.blockedDateRanges = blocked
-            listingAvailability[home.id] = updated
-
-            var published = home
-            let union = updated.unavailableRanges
-            published.unavailableDateRanges = union.isEmpty ? nil : union
-            try await repository.save(published)
+            try await republishCalendar(updated, for: home)
         } catch {
             log.error("availability save error for \(home.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw error
@@ -640,6 +634,37 @@ final class HomeStore {
             try await repository.updateHostName(userID: userID, newName: newName)
         } catch {
             log.error("update host name error: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+}
+
+// MARK: - Availability publishing
+extension HomeStore {
+    /// Caches `availability` and rewrites the public listing's merged calendar from
+    /// it: the one place blocked days, an accepted stay's booked days, and the
+    /// turnover buffer collapse into the single `unavailableDateRanges` a guest
+    /// reads, with nothing marking which day was which.
+    func republishCalendar(_ availability: ListingAvailability, for home: Home) async throws {
+        listingAvailability[home.id] = availability
+        var published = home
+        let union = availability.unavailableRanges
+        published.unavailableDateRanges = union.isEmpty ? nil : union
+        try await repository.save(published)
+    }
+
+    /// Writes the host's turnover buffer and republishes the merged calendar, since
+    /// the buffer changes how far each booking's closure reaches. Private field
+    /// first, like `saveBlockedRanges`. The union only moves when a booking exists
+    /// to pad, so setting this before the first guest simply stores the preference.
+    func saveBufferHours(_ bufferHours: Int, for home: Home) async throws {
+        var updated = await availability(for: home.id)
+        do {
+            try await repository.saveBufferHours(homeID: home.id, bufferHours: bufferHours)
+            updated.bufferHours = bufferHours
+            try await republishCalendar(updated, for: home)
+        } catch {
+            log.error("buffer save error for \(home.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw error
         }
     }
