@@ -21,6 +21,11 @@ struct StayEventCard: View {
     /// Pending while the send is in flight, failed if it never committed. Ordinary
     /// events resolve to `.sent` almost immediately.
     var state: MessageState = .sent
+    /// Set only for a `hostCancelled` event shown to the guest: opens the
+    /// listing so they can look at its other dates. An offer, not a nudge, so
+    /// the card carries it as a quiet button the guest can ignore. Nil for every
+    /// other card, including the host's own copy of the cancellation.
+    var onSeeOtherDates: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 6) {
@@ -43,6 +48,13 @@ struct StayEventCard: View {
                     .font(.caption)
                     .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
+            }
+
+            if let onSeeOtherDates {
+                Button("See other dates", action: onSeeOtherDates)
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(Color.accent)
+                    .padding(.top, 2)
             }
 
             footer
@@ -91,6 +103,9 @@ struct StayEventCard: View {
         case .accepted:  return "\(actor) accepted the stay"
         case .declined:  return "\(actor) declined the stay"
         case .cancelled: return "\(actor) cancelled the stay"
+        // The guest reads that the host had to call it off, not that they simply
+        // did. The host's own copy stays plain: they know why.
+        case .hostCancelled: return isFromMe ? "You cancelled the stay" : "\(otherName) had to cancel the stay"
         case .modified:  return "\(actor) changed the dates"
         }
     }
@@ -101,7 +116,7 @@ struct StayEventCard: View {
         case .offered:   return "gift"
         case .accepted:  return "checkmark.circle.fill"
         case .declined:  return "xmark.circle"
-        case .cancelled: return "slash.circle"
+        case .cancelled, .hostCancelled: return "slash.circle"
         case .modified:  return "calendar.badge.clock"
         }
     }
@@ -114,7 +129,7 @@ struct StayEventCard: View {
         // the thread, not a question being posed.
         case .offered:   return .green
         case .accepted:  return .green
-        case .declined, .cancelled: return .secondary
+        case .declined, .cancelled, .hostCancelled: return .secondary
         }
     }
 }
@@ -130,6 +145,11 @@ struct StayEventCard: View {
                       timestamp: Date(), isFromMe: false, otherName: "Maya")
         StayEventCard(event: StayEvent(kind: .cancelled, dateRange: "Mar 3 – Mar 6 · 3 nights"),
                       timestamp: nil, isFromMe: true, otherName: "Maya", state: .pending)
+        StayEventCard(event: StayEvent(kind: .hostCancelled, dateRange: "Mar 3 – Mar 6 · 3 nights",
+                                       note: "So sorry. The week after is wide open if that helps.",
+                                       listingID: "L1"),
+                      timestamp: Date(), isFromMe: false, otherName: "Maya",
+                      onSeeOtherDates: {})
     }
     .padding(.vertical)
     .background(Color.primaryBackground)

@@ -46,13 +46,23 @@ struct StayEvent: Codable, Hashable, Sendable {
     enum Kind: String, Codable, Sendable {
         /// `offered` is the host-initiated mirror of `requested` (feature 43).
         case requested, offered, accepted, declined, cancelled, modified
+        /// A host calling off a stay the guest had already been given: the one
+        /// cancellation the guest was counting on. Kept apart from `cancelled`
+        /// (which also covers a guest backing out and a host taking back an
+        /// unanswered offer) so the guest's card can read as the host having to
+        /// cancel and can offer a way back to the listing's other dates.
+        case hostCancelled
     }
 
     let kind: Kind
     /// Human-readable dates for the stay, e.g. "Mar 3 – Mar 6 · 3 nights".
     let dateRange: String
-    /// The host's optional note, set only on `accepted`.
+    /// The host's optional note. Set on `accepted`, and on `hostCancelled` when
+    /// the host offered a word or suggested other dates on the way out.
     var note: String?
+    /// The listing the stay was on, carried only on `hostCancelled` so the
+    /// guest's card can point back to its availability. Absent everywhere else.
+    var listingID: String?
 
     /// The plain string stored in the message's `text`: the conversation-list
     /// preview, the push body, and what a client that doesn't understand `event`
@@ -65,6 +75,7 @@ struct StayEvent: Codable, Hashable, Sendable {
         case .accepted:  base = "Stay accepted · \(dateRange)"
         case .declined:  base = "Stay request declined · \(dateRange)"
         case .cancelled: base = "Request cancelled · \(dateRange)"
+        case .hostCancelled: base = "Stay cancelled · \(dateRange)"
         case .modified:  base = "Dates changed · \(dateRange)"
         }
         if let note, !note.isEmpty { base += "\n\(note)" }

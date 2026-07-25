@@ -427,6 +427,36 @@ struct MessageStoreTests {
         #expect(accepted.fallbackText == "Stay accepted · Mar 3 – Mar 6 · 3 nights")
     }
 
+    @Test func hostCancelledEventCarriesNoteListingAndFallbackText() throws {
+        let repo = InMemoryMessagesRepository()
+        let store = MessageStore(repository: repo)
+
+        // The host's optional suggestion and the listing to look at both ride the
+        // event, so the guest's card can show the note and offer a way back.
+        let event = StayEvent(
+            kind: .hostCancelled,
+            dateRange: "Mar 3 – Mar 6 · 3 nights",
+            note: "So sorry. The week after is open if that helps.",
+            listingID: "L1"
+        )
+        #expect(store.sendStayEvent(event, senderUserID: "host", recipientUserID: "guest"))
+
+        let box = Box<[(messages: [Message], hasMore: Bool)]>([])
+        _ = repo.listenToConversation(participants: ["host", "guest"], limit: 10) { result in
+            if case .success(let page) = result { box.value.append(page) }
+        }
+        let stored = box.value.first?.messages.first
+        #expect(stored?.event == event)
+        #expect(stored?.event?.listingID == "L1")
+        // The preview / push fallback reads as a stay ending, not a request.
+        #expect(stored?.text == "Stay cancelled · Mar 3 – Mar 6 · 3 nights\nSo sorry. The week after is open if that helps.")
+    }
+
+    @Test func hostCancelledFallbackTextOmitsEmptyNote() {
+        let event = StayEvent(kind: .hostCancelled, dateRange: "Mar 3 – Mar 6 · 3 nights")
+        #expect(event.fallbackText == "Stay cancelled · Mar 3 – Mar 6 · 3 nights")
+    }
+
     @Test func conversationParsesDocumentWithDefaults() {
         // A summary written before anyone reads or mutes carries no unreadCounts
         // or mutedBy; parsing must still succeed with sensible defaults.

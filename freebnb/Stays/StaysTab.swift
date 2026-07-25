@@ -27,8 +27,14 @@ struct StaysTab: View {
     @State private var completing: StayRequest?
     // An accepted stay someone is about to call off. Cancelling a confirmed stay
     // is consequential for both parties, so unlike a pending request it asks
-    // first; pending cancels stay immediate.
+    // first; pending cancels stay immediate. This is the guest's side: a simple
+    // confirmation. A host calling off a stay the guest was counting on goes
+    // through `hostCancelling` instead, which carries a way to help them.
     @State private var cancelling: StayRequest?
+    // A host about to cancel a confirmed stay. Kept apart from `cancelling`
+    // because the host's flow does more: it says what the guest will be told and
+    // offers an optional note to suggest other dates.
+    @State private var hostCancelling: StayRequest?
     @State private var actionError: String?
     @State private var selectedTab: StaysTabSelection = .trips
     @State private var showPastTrips = false
@@ -215,6 +221,13 @@ struct StaysTab: View {
             Button("Keep stay", role: .cancel) { cancelling = nil }
         } message: {
             Text("This calls the stay off for both of you. The other person sees the change in your conversation.")
+        }
+        .sheet(item: $hostCancelling) { stay in
+            HostCancelStaySheet(
+                request: stay,
+                guestName: subjectName(for: stay),
+                onConfirm: { note in await hostCancel(stay, note: note) }
+            )
         }
     }
 
@@ -411,8 +424,10 @@ struct StaysTab: View {
                         onComplete: req.canBeMarkedComplete() ? { completing = req } : nil,
                         // A host can no longer honor a stay sometimes (illness, a
                         // burst pipe). firestore.rules admits accepted → cancelled
-                        // from the host's side for exactly this.
-                        onCancel: { cancelling = req }
+                        // from the host's side for exactly this. The guest was
+                        // counting on this one, so it routes through the sheet that
+                        // tells them clearly and offers a way back.
+                        onCancel: { hostCancelling = req }
                     )
                 }
             }
@@ -550,6 +565,31 @@ extension StaysTab {
             )
         } catch {
             actionError = error.localizedDescription
+        }
+    }
+
+    /// A host calls off a confirmed stay. The write is the same cancel either side
+    /// makes; what differs is the guest's side of it. The chat event is
+    /// `hostCancelled` rather than a plain `cancelled`, so the guest's card reads
+    /// as the host having to cancel and offers a way back to the listing's other
+    /// dates, and it carries the host's optional note. Returns nil on success or
+    /// the message for the sheet to show, so a failure keeps the sheet open.
+    private func hostCancel(_ request: StayRequest, note: String?) async -> String? {
+        do {
+            try await requestStore.cancel(request)
+            messageStore.sendStayEvent(
+                StayEvent(
+                    kind: .hostCancelled,
+                    dateRange: request.dateRangeText,
+                    note: note,
+                    listingID: request.listingID
+                ),
+                senderUserID: authManager.userID,
+                recipientUserID: request.guestUserID
+            )
+            return nil
+        } catch {
+            return error.localizedDescription
         }
     }
 

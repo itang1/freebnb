@@ -1232,6 +1232,25 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     const hostName: string = after.listingHostName ?? "The host";
     const guestName =
       (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Your guest";
+
+    // A host calling off a *confirmed* stay is the one cancellation the guest had
+    // been counting on, so it gets its own words: it says the host had to, and it
+    // points forward without pressure. The other dates are theirs to look at if
+    // and when they want, which is an offer, not a summons. Every other cancel (a
+    // host withdrawing an unanswered offer, either party dropping a pending
+    // request, a guest backing out) keeps the plain copy below.
+    if (cancelledByHost && beforeStatus === "accepted") {
+      await sendPush({
+        recipientID: guestUserID,
+        category: "stayUpdates",
+        senderID: cancelledBy,
+        title: "Your host had to cancel",
+        body: `${hostName} had to cancel your stay${placeSuffix}. You can look at their other dates whenever you're ready.`,
+        data: { type: "stay_update", requestID, role: "guest", status: "cancelled" },
+      });
+      return;
+    }
+
     await sendPush({
       recipientID,
       category: "stayUpdates",

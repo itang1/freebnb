@@ -19,6 +19,11 @@ struct MessageBubble: View {
     let onDiscard: () -> Void
     var onReport: () -> Void = {}
 
+    /// Routes a tapped "See other dates" on a host-cancellation card back to the
+    /// listing. Navigation-only, exactly like the Spotlight-listing deep link it
+    /// borrows, so no confirmation is owed.
+    @Environment(DeepLinkRouter.self) private var router
+
     private var isFromMe: Bool { message.senderUserID == currentUserID }
     private var isFailed: Bool { state == .failed }
 
@@ -27,10 +32,21 @@ struct MessageBubble: View {
             // Structured stay events render as a centered system card, not a
             // left/right chat bubble (item 29).
             StayEventCard(event: event, timestamp: message.timestamp,
-                          isFromMe: isFromMe, otherName: otherName, state: state)
+                          isFromMe: isFromMe, otherName: otherName, state: state,
+                          onSeeOtherDates: seeOtherDatesAction(for: event))
         } else {
             textBubble
         }
+    }
+
+    /// Offered only on the guest's copy of a host cancellation, and only when the
+    /// event carried the listing it was on. The host's own copy and every other
+    /// event get nil, which hides the button.
+    private func seeOtherDatesAction(for event: StayEvent) -> (() -> Void)? {
+        guard event.kind == .hostCancelled, !isFromMe, let listingID = event.listingID else {
+            return nil
+        }
+        return { router.pendingListingID = listingID }
     }
 
     private var textBubble: some View {

@@ -20,7 +20,17 @@ struct MessagingRequestActions {
     @MainActor
     func cancel(_ request: StayRequest) async throws {
         try await requestStore.cancel(request)
-        post(StayEvent(kind: .cancelled, dateRange: request.dateRangeText), for: request)
+        // A host calling off a confirmed stay is the one cancellation the guest
+        // had been counting on, so it posts the humane `hostCancelled` card with
+        // the listing to look at instead. The banner offers no note field, so the
+        // suggestion the Stays-tab flow can carry is simply absent here. Every
+        // other cancel (a guest backing out, either party dropping a request)
+        // stays a plain `cancelled`.
+        let hostCallingOffConfirmed = request.role(of: currentUserID) == .host && request.status == .accepted
+        let event = hostCallingOffConfirmed
+            ? StayEvent(kind: .hostCancelled, dateRange: request.dateRangeText, listingID: request.listingID)
+            : StayEvent(kind: .cancelled, dateRange: request.dateRangeText)
+        post(event, for: request)
     }
 
     /// A host takes back an offer the guest hasn't answered (feature 43).
