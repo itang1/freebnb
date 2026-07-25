@@ -41,11 +41,14 @@ resolves the real binary before `firebase` gets a chance to shadow it.
 
 ## Writing a test
 
-Two things the `messages` rule needs that are easy to miss:
+Three things the `messages` rule needs that are easy to miss:
 
 - A message create is gated on `rateCounterAdvanced`, so the write must be a
   batch that also advances `rateLimits/{senderUserID}`. A lone `setDoc` on
   `messages/{id}` is denied no matter what the blocking rules say.
+- A message create is also gated on `areFriends`, so any case that expects a
+  send to succeed has to seed an accepted `friendEdges` document for the pair
+  first. The edge id is the two uids sorted and joined with `_`.
 - `authenticatedContext(uid)` signs in with `sign_in_provider: "custom"`, which
   clears the rules' `isFullMember()` gate. Use `unauthenticatedContext()` to
   test the signed-out path; there is no built-in way to fake `anonymous`.

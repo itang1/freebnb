@@ -397,7 +397,7 @@ service cloud.firestore {
           || (data.event is map
               && data.event.keys().hasOnly(['kind', 'dateRange', 'note'])
               && data.event.kind is string
-              && data.event.kind in ['requested', 'offered', 'accepted', 'declined', 'cancelled', 'modified']
+              && data.event.kind in ['requested', 'offered', 'accepted', 'declined', 'cancelled', 'modified', 'hostCancelled']
               && data.event.dateRange is string
               && data.event.dateRange.size() > 0
               && data.event.dateRange.size() < 200
@@ -1398,6 +1398,19 @@ service cloud.firestore {
           // Reject the message if either party has blocked the other, so a
           // block can't be bypassed by writing to Firestore directly (S11).
           && !blockedEitherWay(
+               request.auth.uid,
+               request.resource.data.participants[0] == request.auth.uid
+                 ? request.resource.data.participants[1]
+                 : request.resource.data.participants[0]
+             )
+          // The friend graph is the trust model, and messaging is one of the
+          // three things it gates. Reads were already participants-only, but
+          // sends were open to any member the recipient hadn't blocked, so a
+          // stranger who knew a uid could put text on someone's lock screen.
+          // This is the same reasoning the host-offer branch records above: an
+          // unsolicited write that lands in another person's app is a decision
+          // for the friendship to make, not for the sender.
+          && areFriends(
                request.auth.uid,
                request.resource.data.participants[0] == request.auth.uid
                  ? request.resource.data.participants[1]

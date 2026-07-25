@@ -54,6 +54,14 @@ struct UserProfilePage: View {
         !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
     }
 
+    /// Messaging is friend-gated like the rest of the graph, so the thread opens
+    /// only once the friendship exists. Offering it earlier would hand someone a
+    /// composer whose send the rules refuse, which is the decline this app tries
+    /// not to make people discover by hitting it.
+    private var canMessage: Bool {
+        !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
+    }
+
     private var myReference: CharacterReference? {
         reviewStore.references(about: userID).first { $0.authorUserID == authManager.userID }
     }
@@ -72,12 +80,15 @@ struct UserProfilePage: View {
                 if !isSelf && authManager.authMethod != .guest {
                     // The relationship control only earns space up here when there's
                     // an action to take (add, or answer a request). Once you're
-                    // friends, status and unfriending move to the bottom, so this is
-                    // absent rather than an empty gap above Message.
+                    // friends, status and unfriending move to the bottom, and this
+                    // slot becomes Message instead: the two are alternatives now
+                    // that a thread needs the friendship first.
                     if !friendStore.isFriend(userID) {
                         FriendshipControl(userID: userID, displayName: displayName)
                     }
+                }
 
+                if canMessage {
                     NavigationLink {
                         MessagingPage(otherUserID: userID, otherName: displayName)
                     } label: {

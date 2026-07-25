@@ -14,7 +14,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
+import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
 import { swiftStayEventKinds } from "./sources.mjs";
 
 const rulesPath = fileURLToPath(new URL("../firestore.rules", import.meta.url));
@@ -75,6 +75,21 @@ async function blocks(ownerID, blockedIDs) {
   });
 }
 
+// Messaging is friend-gated, so every case that expects a send to *succeed* has
+// to seed the edge first. Seeded directly rather than written through the rules
+// for the same reason `blocks` is: these tests are about the message rule.
+async function seedFriendship(a, b, status = "accepted") {
+  const [userA, userB] = [a, b].sort();
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "friendEdges", `${userA}_${userB}`), {
+      userA,
+      userB,
+      status,
+      initiator: userA,
+    });
+  });
+}
+
 // An authenticated context defaults to sign_in_provider "custom", which is not
 // "anonymous", so it clears the rules' isFullMember() gate.
 const asSender = () => testEnv.authenticatedContext(SENDER).firestore();
@@ -89,7 +104,12 @@ describe("messages/{id} create — blocking", () => {
 
   after(() => testEnv.cleanup());
 
-  beforeEach(() => testEnv.clearFirestore());
+  beforeEach(async () => {
+    await testEnv.clearFirestore();
+    // The pair is friends unless a case says otherwise; blocking a friend is
+    // the ordinary shape of a block, so this is the realistic baseline.
+    await seedFriendship(SENDER, RECIPIENT);
+  });
 
   // The control. Without it, a rule that denied everything would still pass both
   // negative cases below.
@@ -126,7 +146,12 @@ describe("messages/{id} create — stay event", () => {
 
   after(() => testEnv.cleanup());
 
-  beforeEach(() => testEnv.clearFirestore());
+  beforeEach(async () => {
+    await testEnv.clearFirestore();
+    // The pair is friends unless a case says otherwise; blocking a friend is
+    // the ordinary shape of a block, so this is the realistic baseline.
+    await seedFriendship(SENDER, RECIPIENT);
+  });
 
   // Every kind the Swift client can send, read from StayEvent.Kind in
   // MessageStore.swift rather than listed here by hand. The 'offered' and
@@ -183,5 +208,59 @@ describe("messages/{id} create — stay event", () => {
     await assertFails(
       sendMessageWithEvent(asSender(), SENDER, "e6", "requested")
     );
+  });
+});
+
+// The friend graph is the trust model, and messaging is one of the three things
+// PRODUCT.md says it gates. Reads were always participants-only, but sends were
+// open to any full member the recipient hadn't blocked — so a stranger who knew
+// a uid could put text on someone's lock screen. The app hides the composer for
+// a non-friend, which is not a control; this is.
+describe("messages/{id} create — friendship", () => {
+  before(async () => {
+    testEnv = await initializeTestEnvironment({
+      projectId: "freebnb-rules-tests",
+      firestore: { rules: readFileSync(rulesPath, "utf8") },
+    });
+  });
+
+  after(() => testEnv.cleanup());
+
+  // No friendship seeded here — each case states its own edge.
+  beforeEach(() => testEnv.clearFirestore());
+
+  it("denies a message between strangers", async () => {
+    await assertFails(sendMessage(asSender(), SENDER, "f1"));
+  });
+
+  it("denies a message when the friend request is still pending", async () => {
+    await seedFriendship(SENDER, RECIPIENT, "pending");
+    await assertFails(sendMessage(asSender(), SENDER, "f2"));
+  });
+
+  it("allows a message between accepted friends", async () => {
+    await seedFriendship(SENDER, RECIPIENT);
+    await assertSucceeds(sendMessage(asSender(), SENDER, "f3"));
+  });
+
+  // The edge id sorts its two participants, and rules cannot sort, so
+  // `areFriends` probes both orders. A message from the *second* uid has to
+  // clear the same gate as one from the first.
+  it("allows a message from the other side of the same edge", async () => {
+    await seedFriendship(SENDER, RECIPIENT);
+    const db = testEnv.authenticatedContext(RECIPIENT).firestore();
+    await assertSucceeds(sendMessage(db, RECIPIENT, "f4"));
+  });
+
+  // Unfriending should end the thread's future, not just hide it.
+  it("denies a message once the friendship is removed", async () => {
+    await seedFriendship(SENDER, RECIPIENT);
+    await assertSucceeds(sendMessage(asSender(), SENDER, "f5"));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await deleteDoc(
+        doc(context.firestore(), "friendEdges", `${PARTICIPANTS[0]}_${PARTICIPANTS[1]}`)
+      );
+    });
+    await assertFails(sendMessage(asSender(), SENDER, "f6"));
   });
 });
