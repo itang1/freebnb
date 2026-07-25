@@ -9,11 +9,23 @@ rules_version = '2';
 // viewers, and blocking anonymous sessions denies the cheapest path-enumeration
 // attack (an anon session minted from the public web config). Only the host may
 // write, only up to 10 MB per image, and only image content types.
+//
+// That defense rests entirely on the object path being unguessable, so `get`
+// and `list` are granted separately below and `list` is never granted at all.
+// `read` would have covered both, and both path segments are already public:
+// `users` is listable by any full member, and `reviews` carries `listingID`.
+// A member who knew a host and a listing could then list the prefix and read
+// back every filename instead of guessing one, which is the whole of what the
+// path secrecy was buying. See docs/internal/TODO.md item 13: the filenames
+// must be random per upload, and the image proxy is still the real fix.
 service firebase.storage {
   match /b/{bucket}/o {
     match /listings/{hostUserID}/{listingID}/{allPaths=**} {
       // Full members only; an anonymous guest cannot read listing photos.
-      allow read: if request.auth != null
+      // `get`, not `read`: a viewer must arrive with the exact object path,
+      // which only the friends-only listing document hands out. Deliberately no
+      // `list` rule, so the prefix cannot be enumerated.
+      allow get: if request.auth != null
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
       // Only a full-member host may write their own listing images.
       allow write: if request.auth != null
