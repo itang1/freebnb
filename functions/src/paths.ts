@@ -44,6 +44,15 @@ export const Subcollections = {
   // users/{hostID}/friendNotePrompts/{stayRequestID}. Host-only, and carries
   // only a timestamp.
   friendNotePrompts: "friendNotePrompts",
+  // A guest's private notes on the hosts they stay with and the listings they
+  // consider: users/{guestID}/guestNotes/{noteID}. The symmetric twin of
+  // friendNotes, guest-only, with no projection for anyone else, and no function
+  // reads or writes one.
+  guestNotes: "guestNotes",
+  // Which post-trip note prompts a guest has already dealt with:
+  // users/{guestID}/guestNotePrompts/{stayRequestID}. Guest-only, and carries
+  // only a timestamp.
+  guestNotePrompts: "guestNotePrompts",
 } as const;
 
 export const Docs = {

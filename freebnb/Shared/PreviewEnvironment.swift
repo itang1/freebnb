@@ -34,6 +34,7 @@ extension View {
             .environment(BookingPolicyStore(repository: InMemoryCircleRepository()))
             .environment(ReviewStore(repository: InMemoryReviewsRepository()))
             .environment(FriendNoteStore(repository: InMemoryFriendNoteRepository()))
+            .environment(GuestNoteStore(repository: InMemoryGuestNoteRepository()))
             .environment(NetworkMonitor(start: false))
             .environment(DeepLinkRouter())
             // A temporary directory, so a preview never reads or writes the real

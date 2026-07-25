@@ -58,6 +58,16 @@ enum FirestorePaths {
     /// `users/{hostID}/friendNotePrompts/{stayRequestID}`. Records that a prompt
     /// was seen and nothing else — no text, no friend, no judgement.
     static let friendNotePrompts = "friendNotePrompts"
+    /// A guest's private notes on the hosts they stay with and the listings they
+    /// consider: `users/{guestID}/guestNotes/{noteID}`. The symmetric twin of
+    /// `friendNotes`, readable by that guest alone — there is no projection of
+    /// this for anyone, not the host it is about and not a moderator, because
+    /// nobody else has any business reading one.
+    static let guestNotes = "guestNotes"
+    /// Which post-trip note prompts a guest has already answered or waved off:
+    /// `users/{guestID}/guestNotePrompts/{stayRequestID}`. Records that a prompt
+    /// was seen and nothing else — no text, no subject, no judgement.
+    static let guestNotePrompts = "guestNotePrompts"
 
     // Well-known document ids
     /// The listing's private street address: `homes/{id}/private/location`.

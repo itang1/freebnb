@@ -623,6 +623,89 @@ service cloud.firestore {
             && request.resource.data.keys().hasAll(['dismissedAt']);
         allow delete: if isSignedIn() && isOwner(userID);
       }
+
+      // The guest's private notes on the hosts they stay with and the listings
+      // they consider — the symmetric twin of `friendNotes` above, read from the
+      // other side of the same stay. The host-side note protects a host from a
+      // repeat bad guest; this protects nobody and is not meant to. It is the
+      // guest's own reference material, so a guest who had a rough stay has a
+      // record of their own.
+      //
+      // Read is the owner and nobody else. Not the host the note is about, not a
+      // moderator, not a Cloud Function, not the other side of a stay it names.
+      // That is the entire feature, and the caller it has to hold against is the
+      // technically-minded host reading raw documents rather than the app. There
+      // is deliberately no second branch on this read rule — no `isAdmin()` reach
+      // here, exactly as there is none on `friendNotes`; the app's moderation
+      // queue lives at `reports`, and a note is deliberately not a report.
+      // Nothing anywhere projects a note, a count of notes, or a derived score
+      // out to any other reader.
+      //
+      // Unlike a friend note, whose subject is always a person, a guest note
+      // points at a host (a user) or a listing (a home). `subjectType` says
+      // which, and `subjectID` is that thing's id; the update rule pins both, so
+      // a note can never be re-filed from one host onto another, or off a host
+      // onto a listing, while keeping its date.
+      match /guestNotes/{noteID} {
+        function isValidNote(data) {
+          return data.keys().hasOnly(['subjectType', 'subjectID', 'text', 'stayRequestID', 'createdAt', 'updatedAt'])
+              && data.keys().hasAll(['subjectType', 'subjectID', 'text'])
+              && data.subjectType in ['host', 'listing']
+              && data.subjectID is string
+              && data.subjectID.size() > 0
+              && data.subjectID.size() <= 200
+              // A `host` note about yourself is not a thing this feature is for,
+              // the same way a friend note about yourself isn't: it would put
+              // guest-authored text on the one profile you might later hand
+              // somebody else to look at. A listing you happen to host is a
+              // different id space and carries no such profile, so only the host
+              // case is barred here.
+              && !(data.subjectType == 'host' && data.subjectID == userID)
+              && data.text is string
+              && data.text.size() > 0
+              // Mirrors GuestNote.maxLength in the Swift client.
+              && data.text.size() <= 2000
+              && (data.get('stayRequestID', null) == null
+                  || (data.stayRequestID is string
+                      && data.stayRequestID.size() > 0
+                      && data.stayRequestID.size() <= 200));
+        }
+
+        allow read: if isSignedIn() && isOwner(userID);
+
+        allow create: if isSignedIn()
+            && isOwner(userID)
+            && isValidNote(request.resource.data);
+
+        // Editing changes the text (and may attach or clear a stay). It must not
+        // re-point the note at a different host or listing: a note re-filed under
+        // someone else keeps its date and reads as contemporaneous evidence about
+        // them, which is the one way this could become unfair to a host who never
+        // sees it. `createdAt` is pinned for the same reason it is on a friend
+        // note.
+        allow update: if isSignedIn()
+            && isOwner(userID)
+            && isValidNote(request.resource.data)
+            && request.resource.data.subjectType == resource.data.subjectType
+            && request.resource.data.subjectID == resource.data.subjectID
+            && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null);
+
+        allow delete: if isSignedIn() && isOwner(userID);
+      }
+
+      // Which post-trip note prompts this guest has already answered or waved
+      // off, so the app asks once and then leaves them alone. The mirror of
+      // `friendNotePrompts`: this says a prompt was *seen*, carries no text, and
+      // is the only part of the feature that would ever be worth syncing across
+      // a guest's devices.
+      match /guestNotePrompts/{stayRequestID} {
+        allow read: if isSignedIn() && isOwner(userID);
+        allow create, update: if isSignedIn()
+            && isOwner(userID)
+            && request.resource.data.keys().hasOnly(['dismissedAt'])
+            && request.resource.data.keys().hasAll(['dismissedAt']);
+        allow delete: if isSignedIn() && isOwner(userID);
+      }
     }
 
     // -------------------------------------------------------------------------

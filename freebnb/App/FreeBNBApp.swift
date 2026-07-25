@@ -41,6 +41,7 @@ struct FreeBNBApp: App {
     @State private var bookingPolicyStore: BookingPolicyStore
     @State private var reviewStore: ReviewStore
     @State private var friendNoteStore: FriendNoteStore
+    @State private var guestNoteStore: GuestNoteStore
     @State private var networkMonitor = NetworkMonitor()
     @State private var checkInKitStore = CheckInKitStore()
 
@@ -77,6 +78,7 @@ struct FreeBNBApp: App {
         _bookingPolicyStore = State(initialValue: BookingPolicyStore())
         _reviewStore = State(initialValue: ReviewStore())
         _friendNoteStore = State(initialValue: FriendNoteStore())
+        _guestNoteStore = State(initialValue: GuestNoteStore())
     }
 
     var body: some Scene {
@@ -92,6 +94,7 @@ struct FreeBNBApp: App {
                 .environment(bookingPolicyStore)
                 .environment(reviewStore)
                 .environment(friendNoteStore)
+                .environment(guestNoteStore)
                 .environment(networkMonitor)
                 .environment(router)
                 .environment(checkInKitStore)

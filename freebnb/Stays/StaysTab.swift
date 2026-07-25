@@ -15,10 +15,12 @@ struct StaysTab: View {
     @Environment(HomeStore.self) private var homeStore
     @Environment(ReviewStore.self) private var reviewStore
     @Environment(FriendNoteStore.self) private var noteStore
+    @Environment(GuestNoteStore.self) private var guestNoteStore
     @Environment(DeepLinkRouter.self) private var router
     @State private var respondingTo: StayRequest?
     @State private var reviewing: ReviewTarget?
     @State private var notingStay: FriendNoteComposition?
+    @State private var notingTrip: GuestNoteComposition?
     @State private var thanking: StayRequest?
     @State private var sharingStay: StayRequest?
     @State private var modifying: StayRequest?
@@ -166,6 +168,13 @@ struct StaysTab: View {
             )
             .environment(noteStore)
         }
+        .sheet(item: $notingTrip) { composition in
+            GuestNoteComposerSheet(
+                composition: composition,
+                subjectName: tripNoteSubjectName(for: composition)
+            )
+            .environment(guestNoteStore)
+        }
         .sheet(item: $thanking) { req in
             ThankYouSheet(hostName: req.listingHostName) { note in
                 await sendThanks(req, note: note)
@@ -271,6 +280,7 @@ struct StaysTab: View {
                 }
             }
             reviewSection(awaitingReview)
+            tripNoteSection
             travelerSections
             pastTripsSection
         }
@@ -487,6 +497,36 @@ struct StaysTab: View {
     private var noteSection: some View {
         NotePromptSection(stays: completedStaysToNoteAbout, composing: $notingStay)
     }
+
+    // MARK: - My Trips: the guest's own post-trip note
+
+    /// Trips this guest finished and hasn't been asked about yet — the mirror of
+    /// `completedStaysToNoteAbout`, from the traveler's side of the same stay.
+    /// Guest side only: this appears under My Trips, never My Listings, and a
+    /// host is never asked here to file anything about a guest (that is the host
+    /// prompt's job, and it lives on the other pane).
+    ///
+    /// The window and the "already asked" rule live in `GuestNotePrompt`, which
+    /// is pure and tested; this only supplies who is asking and what the store
+    /// already knows.
+    private var completedTripsToNoteAbout: [StayRequest] {
+        requestStore.completedStays.filter { stay in
+            GuestNotePrompt.shouldOffer(
+                stay,
+                guestID: authManager.userID,
+                isSettled: !guestNoteStore.shouldPrompt(forStayRequestID: stay.id)
+            )
+        }
+    }
+
+    /// The optional add-a-note moment on the traveler's side. Built in
+    /// `GuestNotePromptSection`; this only decides which trips it covers.
+    /// Deliberately below "Needs your review" and above everything else, for the
+    /// same reason the host prompt is: a review is something the other person is
+    /// waiting on, and this is not.
+    private var tripNoteSection: some View {
+        GuestNotePromptSection(stays: completedTripsToNoteAbout, composing: $notingTrip)
+    }
 }
 
 // Actions, row builders, and lookups live in a same-file extension rather than
@@ -655,6 +695,31 @@ extension StaysTab {
             return userProfileStore.displayName(for: friendID) ?? "FreeBNB User"
         case .editing(let note):
             return userProfileStore.displayName(for: note.subjectUserID) ?? "FreeBNB User"
+        }
+    }
+
+    /// What a trip note being composed here is about. Only ever a listing the
+    /// guest stayed at: the prompt files against the trip's listing, so the
+    /// composition's subject id is always a listing id, named by its label when
+    /// the listing is cached and by the trip's own denormalized label otherwise.
+    private func tripNoteSubjectName(for composition: GuestNoteComposition) -> String {
+        switch composition {
+        case .new(_, let subjectID, let stayRequestID):
+            if let home = homeStore.listings.first(where: { $0.id == subjectID }) {
+                return home.displayTitle
+            }
+            // The listing isn't in the guest's cached set (it is the host's, not
+            // theirs), so fall back to the label the stay snapshotted.
+            if let stayRequestID,
+               let stay = requestStore.outgoingRequests.first(where: { $0.id == stayRequestID }) {
+                return stay.listingLabel
+            }
+            return "this listing"
+        case .editing(let note):
+            if let home = homeStore.listings.first(where: { $0.id == note.subjectID }) {
+                return home.displayTitle
+            }
+            return "this listing"
         }
     }
 

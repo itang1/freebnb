@@ -130,6 +130,20 @@ struct HomeDetailPage: View {
                 // the full list one tap away on their profile.
                 ReviewsSection(subjectUserID: home.hostUserID, subjectName: home.hostName, limit: 3)
 
+                // A private note the guest can keep about this listing, at any
+                // time and whether or not they have ever stayed. Deliberately the
+                // quietest control on the page — grey, below everything that
+                // reaches the host — because what only you can read should not
+                // look like an invitation to broadcast. Full members only: an
+                // anonymous browser has nowhere to store one.
+                if authManager.userID != home.hostUserID && authManager.authMethod != .guest {
+                    GuestNotesLink(
+                        subjectType: .listing,
+                        subjectID: home.id,
+                        subjectName: home.displayTitle
+                    )
+                }
+
                 if authManager.userID != home.hostUserID {
                     reportFooter
                 }

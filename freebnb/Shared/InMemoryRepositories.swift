@@ -620,3 +620,86 @@ final class InMemoryFriendNoteRepository: FriendNoteRepository, @unchecked Senda
         emitPrompts(hostID)
     }
 }
+
+// MARK: - Guest notes
+
+/// In-memory guest notes, for previews and for the tests that exercise the store
+/// without a backend. Keyed by guest, because the whole point of the feature is
+/// that one guest's notes are not another's — the mirror of
+/// `InMemoryFriendNoteRepository`, keyed by the other party to the same stay.
+final class InMemoryGuestNoteRepository: GuestNoteRepository, @unchecked Sendable {
+    private(set) var notesByGuest: [String: [String: GuestNote]] = [:]
+    private(set) var promptsByGuest: [String: Set<String>] = [:]
+
+    /// Emits on every mutation so a store under test sees a write land the way it
+    /// would with a real snapshot listener.
+    private var noteHandlers: [String: [@Sendable (Result<[GuestNote], Error>) -> Void]] = [:]
+    private var promptHandlers: [String: [@Sendable (Result<Set<String>, Error>) -> Void]] = [:]
+
+    init(notes: [String: [GuestNote]] = [:]) {
+        for (guest, list) in notes {
+            notesByGuest[guest] = Dictionary(uniqueKeysWithValues: list.compactMap { n in n.id.map { ($0, n) } })
+        }
+    }
+
+    private func emitNotes(_ guestID: String) {
+        let values = Array((notesByGuest[guestID] ?? [:]).values).sortedByDate()
+        noteHandlers[guestID]?.forEach { $0(.success(values)) }
+    }
+
+    private func emitPrompts(_ guestID: String) {
+        let values = promptsByGuest[guestID] ?? []
+        promptHandlers[guestID]?.forEach { $0(.success(values)) }
+    }
+
+    func listenToNotes(
+        guestID: String,
+        handler: @escaping @Sendable (Result<[GuestNote], Error>) -> Void
+    ) -> RepositoryListener {
+        noteHandlers[guestID, default: []].append(handler)
+        emitNotes(guestID)
+        return NoopListener()
+    }
+
+    func listenToPrompts(
+        guestID: String,
+        handler: @escaping @Sendable (Result<Set<String>, Error>) -> Void
+    ) -> RepositoryListener {
+        promptHandlers[guestID, default: []].append(handler)
+        emitPrompts(guestID)
+        return NoopListener()
+    }
+
+    @discardableResult
+    func createNote(guestID: String, _ note: GuestNote) async throws -> String {
+        let id = note.id ?? UUID().uuidString
+        var stored = note
+        stored.id = id
+        // The server stamps these; a fake that leaves them nil would make every
+        // note in a test sort as "still in flight".
+        stored.createdAt = note.createdAt ?? Date()
+        stored.updatedAt = stored.createdAt
+        notesByGuest[guestID, default: [:]][id] = stored
+        emitNotes(guestID)
+        return id
+    }
+
+    func updateNote(guestID: String, noteID: String, text: String, stayRequestID: String?) async throws {
+        guard var note = notesByGuest[guestID]?[noteID] else { return }
+        note.text = text
+        note.stayRequestID = stayRequestID
+        note.updatedAt = Date()
+        notesByGuest[guestID]?[noteID] = note
+        emitNotes(guestID)
+    }
+
+    func deleteNote(guestID: String, noteID: String) async throws {
+        notesByGuest[guestID]?.removeValue(forKey: noteID)
+        emitNotes(guestID)
+    }
+
+    func markPromptSeen(guestID: String, stayRequestID: String) async throws {
+        promptsByGuest[guestID, default: []].insert(stayRequestID)
+        emitPrompts(guestID)
+    }
+}
