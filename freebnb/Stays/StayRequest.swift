@@ -281,6 +281,21 @@ extension StayRequest {
         return now < dayAfterCheckout
     }
 
+    /// True while an accepted stay still has a future: from the moment it is
+    /// accepted through the end of checkout day. `isUnderway` is this minus the
+    /// stays that haven't started yet.
+    ///
+    /// Bounded at checkout rather than at `status == .accepted` alone, because
+    /// the nightly sweep is what moves a finished stay to `.completed` and it
+    /// can be late or, in an environment with no functions deployed, never. A
+    /// gate that waited for the sweep would be a gate that sometimes never
+    /// opens.
+    func isOutstanding(now: Date = Date()) -> Bool {
+        guard status == .accepted else { return false }
+        let dayAfterCheckout = Calendar.current.date(byAdding: .day, value: 1, to: checkOut) ?? checkOut
+        return now < dayAfterCheckout
+    }
+
     /// The review `userID` would write about the other party, if the stay is over.
     func reviewRole(for userID: String) -> ReviewRole? {
         guard status == .completed else { return nil }
@@ -293,6 +308,24 @@ extension StayRequest {
 }
 
 extension [StayRequest] {
+    /// The outstanding accepted stay between these two people, if there is one.
+    ///
+    /// Backs the unfriend guard. Messaging is friend-gated, so unfriending
+    /// mid-stay takes away the thread the two of them need to sort out a key,
+    /// a late arrival, or a lock-out — and it would do it at the moment that
+    /// thread matters most. Either direction counts: the awkwardness is the
+    /// same whichever of them is the host.
+    ///
+    /// Blocking is deliberately not gated on this. A block is a safety exit and
+    /// has to work at any time, including — especially — during a stay.
+    func outstandingStay(between viewerID: String, and otherID: String, now: Date = Date()) -> StayRequest? {
+        first { stay in
+            stay.isOutstanding(now: now)
+                && ((stay.hostUserID == viewerID && stay.guestUserID == otherID)
+                    || (stay.hostUserID == otherID && stay.guestUserID == viewerID))
+        }
+    }
+
     /// How many of these are waiting on `userID` to answer. Backs the Stays tab
     /// badge, which means "someone is blocked on you" and nothing looser. Pure,
     /// so the badge rule is testable without standing up a store and an auth

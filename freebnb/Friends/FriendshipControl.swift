@@ -159,10 +159,20 @@ struct FriendStatusButton: View {
     let displayName: String
 
     @Environment(FriendStore.self) private var friendStore
+    @Environment(AuthManager.self) private var authManager
+    @Environment(StayRequestStore.self) private var stayRequestStore
 
     @State private var confirming = false
     @State private var isWorking = false
     @State private var errorMessage: String?
+
+    /// The stay, if any, that unfriending would cut the thread on. Messaging is
+    /// friend-gated, so ending the friendship here would take away the way these
+    /// two coordinate a key handoff or a lock-out, at the one time they need it.
+    private var outstandingStay: StayRequest? {
+        (stayRequestStore.incomingRequests + stayRequestStore.outgoingRequests)
+            .outstandingStay(between: authManager.userID, and: userID)
+    }
 
     var body: some View {
         if let edge = friendStore.existingEdge(with: userID), edge.status == .accepted {
@@ -186,18 +196,32 @@ struct FriendStatusButton: View {
                 isPresented: $confirming,
                 titleVisibility: .visible
             ) {
-                Button("Unfriend \(displayName)", role: .destructive) {
-                    errorMessage = nil
-                    isWorking = true
-                    Task {
-                        do { try await friendStore.remove(edge) }
-                        catch { errorMessage = error.localizedDescription }
-                        isWorking = false
+                // No unfriend option while a stay is on the books. The dialog
+                // still opens and still says why, rather than the row going
+                // quietly inert — an option that vanishes without explanation
+                // reads as a bug.
+                if outstandingStay == nil {
+                    Button("Unfriend \(displayName)", role: .destructive) {
+                        errorMessage = nil
+                        isWorking = true
+                        Task {
+                            do { try await friendStore.remove(edge) }
+                            catch { errorMessage = error.localizedDescription }
+                            isWorking = false
+                        }
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Unfriending means you'll no longer see each other's homes. To reconnect, one of you will need to send a new friend request.")
+                if outstandingStay == nil {
+                    Text("Unfriending means you'll no longer see each other's homes. To reconnect, one of you will need to send a new friend request.")
+                } else {
+                    // Blocking stays available from the row below this one, and
+                    // is not mentioned here: someone who needs it will look for
+                    // it, and offering it in answer to "unfriend" would read as
+                    // a suggestion to escalate.
+                    Text("You have a stay booked with \(displayName), so unfriending is unavailable until it's finished. Ending it now would close the thread you'd use to sort out arrival or keys.")
+                }
             }
         }
     }

@@ -328,6 +328,57 @@ struct StayTimelineTests {
         #expect(stay(offsetIn: -1, offsetOut: 2, status: .pending).isUnderway(now: now) == false)
         #expect(stay(offsetIn: -1, offsetOut: 2, status: .completed).isUnderway(now: now) == false)
     }
+
+    // `isOutstanding` backs the unfriend guard: messaging is friend-gated, so
+    // ending a friendship mid-stay takes away the thread the two of them need.
+    // It is `isUnderway` without the lower bound — an upcoming stay counts.
+
+    @Test func outstandingCoversUpcomingAndCurrentButNotFinished() {
+        let now = Date()
+        #expect(stay(offsetIn: 3, offsetOut: 6).isOutstanding(now: now) == true)    // upcoming
+        #expect(stay(offsetIn: -1, offsetOut: 2).isOutstanding(now: now) == true)   // in progress
+        #expect(stay(offsetIn: -5, offsetOut: -2).isOutstanding(now: now) == false) // finished
+    }
+
+    @Test func outstandingRequiresAnAcceptedStay() {
+        let now = Date()
+        // A request nobody answered, or one that was turned down, is not a
+        // reason to keep two people connected.
+        #expect(stay(offsetIn: 3, offsetOut: 6, status: .pending).isOutstanding(now: now) == false)
+        #expect(stay(offsetIn: 3, offsetOut: 6, status: .declined).isOutstanding(now: now) == false)
+        #expect(stay(offsetIn: 3, offsetOut: 6, status: .cancelled).isOutstanding(now: now) == false)
+    }
+
+    @Test func outstandingSurvivesASweepThatNeverRan() {
+        // The gate is bounded at checkout, not at `.completed`, because the
+        // sweep that completes a stay is a Cloud Function and production
+        // deploys none. Waiting for it would be a gate that never opens.
+        let now = Date()
+        #expect(stay(offsetIn: -9, offsetOut: -6).isOutstanding(now: now) == false)
+    }
+
+    @Test func outstandingStayFindsThePairInEitherDirection() {
+        let now = Date()
+        let hosting = stay(offsetIn: 2, offsetOut: 5)                    // h hosts g
+        #expect([hosting].outstandingStay(between: "h", and: "g", now: now) != nil)
+        #expect([hosting].outstandingStay(between: "g", and: "h", now: now) != nil)
+    }
+
+    @Test func outstandingStayIgnoresThirdParties() {
+        let now = Date()
+        let hosting = stay(offsetIn: 2, offsetOut: 5)                    // h hosts g
+        // Someone else's stay must not keep an unrelated friendship locked.
+        #expect([hosting].outstandingStay(between: "h", and: "stranger", now: now) == nil)
+        #expect([hosting].outstandingStay(between: "g", and: "stranger", now: now) == nil)
+        #expect([].outstandingStay(between: "h", and: "g", now: now) == nil)
+    }
+
+    @Test func outstandingStayIgnoresAFinishedStayWithTheSamePerson() {
+        // The control for the guard: having hosted someone once must not lock
+        // the friendship forever.
+        let now = Date()
+        #expect([stay(offsetIn: -5, offsetOut: -2)].outstandingStay(between: "h", and: "g", now: now) == nil)
+    }
 }
 
 @MainActor
