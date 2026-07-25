@@ -1018,6 +1018,19 @@ service cloud.firestore {
       // marker delete as one batch, and a batch is atomic, so the cancel failed
       // outright rather than leaving the address behind. All three now ask the
       // same question.
+      //
+      // There is deliberately no `match /{path=**}/accepted/{guestID}` anywhere in
+      // this file, so a client cannot run a collection-group query here. Note that
+      // `firestore.indexes.json` does enable COLLECTION_GROUP scope on
+      // `accepted.guestUserID`: that index exists for `onUserDeleted`, which
+      // cascades the grants of a deleted account through the Admin SDK and so
+      // bypasses these rules entirely. The index is not evidence that a client
+      // query was intended, and if one is ever wanted, the rule it needs is
+      // `resource.data.guestUserID == request.auth.uid` and nothing looser.
+      // `isListingManager(homeID)` cannot be carried across — `homeID` is unbound
+      // under a wildcard match — and the `isSignedIn()` that would make the query
+      // "work" would hand every host's accepted-guest roster, which is the address
+      // grant itself, to everyone.
       // -----------------------------------------------------------------------
       match /accepted/{guestID} {
         allow read: if isSignedIn()
@@ -1090,6 +1103,16 @@ service cloud.firestore {
           // Denormalized listing title, snapshotted at request time (optional).
           // Same 60-char cap as the listing's own title.
           && isOptionalString(request.resource.data, 'listingTitle', 60)
+          // The other two snapshots were in the key allowlist and validated
+          // nowhere, which left them unbounded free text chosen by whoever
+          // created the request. Neither one stays in the document: both are
+          // interpolated straight into push bodies (onStayRequestWritten) and
+          // into the local reminder copy, so an unvalidated value here is
+          // arbitrary text on the other person's Lock Screen. Capped to match
+          // the fields they are snapshots of — city as the listing's own city,
+          // host name as `displayName`.
+          && isOptionalString(request.resource.data, 'listingCity', 100)
+          && isOptionalString(request.resource.data, 'listingHostName', 200)
           // A stay cannot be born finished.
           && isUnset(request.resource.data, 'completedAt')
           // Two ways a stay can start, and the creator must be the party the

@@ -156,6 +156,36 @@ describe("stayRequests/{id} create — the friends-only boundary", () => {
       createRequest(FRIEND, { createdAt: Timestamp.fromMillis(Date.now() - 30 * DAY_MS) })
     );
   });
+
+  // listingCity and listingHostName sat in the key allowlist with nothing
+  // checking them, so a hand-rolled client could put unbounded free text in
+  // either. Neither field stays in the document: both are interpolated into
+  // push bodies and into the on-device reminder copy, so this is the gap
+  // between "a snapshot of the listing" and "arbitrary text on the other
+  // person's Lock Screen".
+  it("denies a request whose listingCity is unbounded text", async () => {
+    await seedListing();
+    await assertFails(createRequest(FRIEND, { listingCity: "x".repeat(101) }));
+  });
+
+  it("denies a request whose listingHostName is unbounded text", async () => {
+    await seedListing();
+    await assertFails(createRequest(FRIEND, { listingHostName: "x".repeat(201) }));
+  });
+
+  it("denies a request whose listingCity is not a string", async () => {
+    await seedListing();
+    await assertFails(createRequest(FRIEND, { listingCity: { evil: true } }));
+  });
+
+  it("allows the ordinary snapshots the client actually sends", async () => {
+    // The control for the three above: the cap has to admit a real city and a
+    // real display name, or it would have broken every request.
+    await seedListing();
+    await assertSucceeds(
+      createRequest(FRIEND, { listingCity: "San Francisco", listingHostName: "Alex Rivera" })
+    );
+  });
 });
 
 describe("stayRequests/{id} update — host cancels an accepted stay", () => {

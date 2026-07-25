@@ -92,18 +92,6 @@
     </p>
   </main>
 
-  <script>
-    // The sender's id, passed straight through to the app's own scheme. It is
-    // only ever put in a link: the page never reads it back, stores it, or sends
-    // it anywhere, and following the link creates no connection by itself.
-    (function () {
-      var from = new URLSearchParams(window.location.search).get("from");
-      var open = document.getElementById("open");
-      var target = "freebnb://invite";
-      if (from) target += "?from=" + encodeURIComponent(from);
-      open.setAttribute("href", target);
-      open.hidden = false;
-    })();
-  </script>
+  <script src="invite.js"></script>
 </body>
 </html>

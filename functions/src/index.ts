@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
 // The auth `onDelete` background trigger has no v2 equivalent (v2 offers only the
 // `beforeUserCreated`/`beforeUserSignedIn` blocking triggers, not a post-delete
 // hook), so that one function stays on the v1 API surface. v1 and v2 functions
@@ -662,15 +662,44 @@ export const moderateListingContent = onDocumentWritten(homeDocPattern, async (e
 });
 
 // ---------------------------------------------------------------------------
+/**
+ * The calling uid, or a thrown error.
+ *
+ * Every callable checked `request.auth` and stopped there, which is a weaker
+ * gate than the one `firestore.rules` applies to the same people: `isFullMember`
+ * also excludes anonymous browse-only sessions, which the rules treat as
+ * read-only throughout. Nothing was reachable through the gap — an anonymous
+ * account owns no stay requests and no friend edges, so every callable already
+ * returned nothing to one — but the two boundaries should say the same thing
+ * before a later callable makes the difference matter.
+ *
+ * Callables are also declared with `enforceAppCheck`, which is the other half:
+ * firestore.rules names App Check as its primary control against a hand-rolled
+ * client in two places, and a callable that skipped it would be the way around
+ * both. Note that Firestore-side App Check enforcement is a console setting, not
+ * anything in this repo — see docs/internal/TODO.md.
+ */
+function requireFullMember(request: CallableRequest): string {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
+  if (request.auth?.token?.firebase?.sign_in_provider === "anonymous") {
+    throw new HttpsError("permission-denied", "This needs a full account.");
+  }
+  return uid;
+}
+
+/** Applied to every callable below. See `requireFullMember`. */
+const callableOptions = { enforceAppCheck: true } as const;
+
+// ---------------------------------------------------------------------------
 // mutualFriends (callable)
 // "You and Priya have 3 friends in common" (feature 2). Server-side because
 // `friendEdges` documents are readable only by the two users they connect, so a
 // client cannot see anyone else's edges to intersect them.
 // Call from the app: httpsCallable("mutualFriends").call(["userID": id])
 // ---------------------------------------------------------------------------
-export const mutualFriends = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
+export const mutualFriends = onCall(callableOptions, async (request) => {
+  const uid = requireFullMember(request);
 
   const otherID: unknown = request.data?.userID;
   if (typeof otherID !== "string" || otherID.length === 0) {
@@ -866,9 +895,8 @@ export const onHomeDeleted = onDocumentWritten(homeDocPattern, async (event) => 
 // themselves. This callable, reading as admin, is the only thing that can.
 // Call from the app: httpsCallable("acceptStayRequest").call(["requestID": id])
 // ---------------------------------------------------------------------------
-export const acceptStayRequest = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
+export const acceptStayRequest = onCall(callableOptions, async (request) => {
+  const uid = requireFullMember(request);
 
   const requestID: unknown = request.data?.requestID;
   const hostNote: unknown = request.data?.hostNote;
@@ -1327,9 +1355,8 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
 // onUserDeleted removes so the export is complete relative to what is stored.
 // Call from the app: Functions.functions().httpsCallable("exportUserData")
 // ---------------------------------------------------------------------------
-export const exportUserData = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
+export const exportUserData = onCall(callableOptions, async (request) => {
+  const uid = requireFullMember(request);
 
   const [
     profileSnap,
@@ -1410,9 +1437,8 @@ type FriendSuggestion = {
   mutualNames: string[];
 };
 
-export const suggestFriends = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
+export const suggestFriends = onCall(callableOptions, async (request) => {
+  const uid = requireFullMember(request);
 
   // Everyone the caller already has any edge with — friends and pending both —
   // so a suggestion is never someone they're already connected to or awaiting.

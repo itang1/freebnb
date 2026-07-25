@@ -391,7 +391,13 @@ describe("invite universal link", () => {
   });
 
   it("the landing page hands the sender to the app's own scheme", () => {
-    const landing = read(`admin${webPath}/index.html`);
+    const html = read(`admin${webPath}/index.html`);
+    // The logic moved out of an inline <script> so the site's CSP can refuse
+    // inline script. Follow the page to whatever it loads rather than naming
+    // the file here, so this keeps checking the real thing if it moves again.
+    const src = html.match(/<script[^>]+src="([^"]+)"/);
+    assert.ok(src, "the landing page loads no script");
+    const landing = read(`admin${webPath}/${src[1]}`);
     const scheme = swiftString("customScheme");
     const queryItem = inviteCopy.match(/static let inviterQueryItem = "([^"]+)"/)[1];
     assert.ok(

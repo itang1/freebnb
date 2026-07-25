@@ -28,11 +28,23 @@ service firebase.storage {
       allow get: if request.auth != null
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
       // Only a full-member host may write their own listing images.
-      allow write: if request.auth != null
+      //
+      // `create, update`, not `write`: `write` covers delete too, and the size
+      // and content-type checks read `request.resource`, which is null on a
+      // delete. So the whole condition failed there and a host could never
+      // remove a photo from the client — a bug that would have shipped as
+      // "delete silently does nothing".
+      allow create, update: if request.auth != null
         && request.auth.token.firebase.sign_in_provider != 'anonymous'
         && request.auth.uid == hostUserID
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+
+      // Removing your own photo asks only who you are; there is no incoming
+      // object to measure.
+      allow delete: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.auth.uid == hostUserID;
     }
 
     // Nothing else is readable or writable from the client.
