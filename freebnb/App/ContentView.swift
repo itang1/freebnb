@@ -47,13 +47,16 @@ struct ContentView: View {
         return homeStore.listings.filter { saved.contains($0.id) }
     }
 
-    /// Cheap change key for the check-in kit sync: the guest's accepted stays and
-    /// their dates. Changes when one is accepted, moved, or cancelled, and stays
-    /// still when an unrelated snapshot arrives.
+    /// Cheap change key for the check-in kit sync: who is viewing, plus their
+    /// accepted stays and dates. Changes when one is accepted, moved, or
+    /// cancelled, and stays still when an unrelated snapshot arrives. Derived by
+    /// `CheckInKitStore.changeKey` so the sign-out property it carries is pinned
+    /// by a test rather than by this comment.
     private var acceptedStayKey: [String] {
-        stayRequestStore.outgoingRequests
-            .filter { $0.status == .accepted }
-            .map { "\($0.id)-\($0.checkIn.timeIntervalSince1970)-\($0.checkOut.timeIntervalSince1970)" }
+        CheckInKitStore.changeKey(
+            viewerID: authManager.userID,
+            stays: stayRequestStore.outgoingRequests
+        )
     }
 
     // Cheap change key for the Spotlight sync: the saved-and-loaded listing ids.
@@ -224,28 +227,6 @@ struct ContentView: View {
                     router.pendingFriendsTab = false
                     router.didRouteSinceSignIn = true
                 }
-                // Write the arrival essentials to disk while there is still a
-                // network to fetch them with. Driven from here rather
-                // than from StayRequestStore because building a kit needs the
-                // listing's address and manual, which only HomeStore can fetch.
-                // Keyed on the accepted stays themselves, so a new acceptance, a
-                // date change, or a cancellation each re-reconcile.
-                .onChange(of: acceptedStayKey, initial: true) { _, _ in
-                    Task {
-                        await checkInKitStore.sync(
-                            stays: stayRequestStore.outgoingRequests,
-                            viewerID: authManager.userID
-                        ) { listingID in
-                            guard let home = homeStore.listings.first(where: { $0.id == listingID })
-                            else { return nil }
-                            // Both are cached after the first call, so a repeat
-                            // reconcile costs nothing.
-                            async let location = homeStore.location(for: listingID)
-                            async let manual = homeStore.manual(for: listingID)
-                            return await (home, location, manual)
-                        }
-                    }
-                }
                 // Keep the Spotlight index in step with the saved set (feature 40).
                 // Fires on appear and whenever a listing is saved/unsaved or the
                 // loaded feed changes what we can describe.
@@ -277,6 +258,34 @@ struct ContentView: View {
         // the signed-in branch's, which the type-checker already finds long.
         .onChange(of: coHostedListingIDs, initial: true) { _, listingIDs in
             stayRequestStore.setCoHostedListingIDs(listingIDs)
+        }
+        // Write the arrival essentials to disk while there is still a network to
+        // fetch them with. Driven from here rather than from StayRequestStore
+        // because building a kit needs the listing's address and manual, which
+        // only HomeStore can fetch. Keyed on the accepted stays themselves, so a
+        // new acceptance, a date change, or a cancellation each re-reconcile.
+        //
+        // On the outer chain, not the signed-in branch's, and that placement is
+        // the whole point: the branch is torn down on sign-out, so a modifier
+        // inside it never sees the transition, and the store's "signed out, take
+        // the kits off the device" path was unreachable for as long as it lived
+        // there. Out here the key goes empty, the sync runs, and the door codes
+        // of whoever just left get deleted.
+        .onChange(of: acceptedStayKey, initial: true) { _, _ in
+            Task {
+                await checkInKitStore.sync(
+                    stays: stayRequestStore.outgoingRequests,
+                    viewerID: authManager.userID
+                ) { listingID in
+                    guard let home = homeStore.listings.first(where: { $0.id == listingID })
+                    else { return nil }
+                    // Both are cached after the first call, so a repeat
+                    // reconcile costs nothing.
+                    async let location = homeStore.location(for: listingID)
+                    async let manual = homeStore.manual(for: listingID)
+                    return await (home, location, manual)
+                }
+            }
         }
         // Keep each hosted listing's booked dates in step with its accepted stays
         // — the client stand-in for the onStayRequestWritten trigger. Fires when

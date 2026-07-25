@@ -99,9 +99,12 @@ final class StayRequestStore {
         guard let userID else {
             isLoadingHosted = false
             isLoadingCoHosted = false
-            // Signed out: take down the widgets and any running Live Activity so
-            // the last user's stay doesn't linger on the Lock Screen.
+            // Signed out: take down the widgets, any running Live Activity, and
+            // the scheduled reminders, so nothing of the last user's stay
+            // lingers on the Lock Screen. The reminders outlive the app process,
+            // so they are the one of the three that nobody would notice.
             publishToWidgetsAndActivities(viewerID: "")
+            syncReminders(viewerID: "")
             return
         }
         isLoadingHosted = true

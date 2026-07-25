@@ -39,6 +39,18 @@ final class CheckInKitStore {
     /// The kit for a stay, if one was saved.
     func kit(for stayID: String) -> CheckInKit? { kits[stayID] }
 
+    /// The change key the view watches to decide when to call `sync`. Pure, and
+    /// out here rather than inline in ContentView, because the one property it
+    /// must have is invisible at the call site: the viewer id leads, so signing
+    /// out changes the key even though a signed-out user has no stays. Keyed on
+    /// the stays alone, the transition that has to prune the device is the one
+    /// that looks like no change at all, and `sync` never runs.
+    static func changeKey(viewerID: String, stays: [StayRequest]) -> [String] {
+        [viewerID] + stays
+            .filter { $0.status == .accepted }
+            .map { "\($0.id)-\($0.checkIn.timeIntervalSince1970)-\($0.checkOut.timeIntervalSince1970)" }
+    }
+
     /// Reconciles disk against the stays this guest actually has.
     ///
     /// `fetch` supplies the address and manual for a listing. It is a closure

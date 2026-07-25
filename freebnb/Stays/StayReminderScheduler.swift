@@ -107,8 +107,13 @@ final class StayReminderScheduler {
     /// no longer should (a stay was cancelled, completed, or had its dates moved).
     /// Only reminders this type owns (the `stay-` prefix) are ever removed.
     func sync(acceptedStays stays: [StayRequest], viewerID: String, now: Date = Date()) async {
-        guard !viewerID.isEmpty else { return }
-        let desired = StayReminder.reminders(for: stays, viewerID: viewerID, now: now)
+        // Signed out: nothing is desired, which cancels every reminder this type
+        // owns. Returning early instead would leave the departed user's "You
+        // check in tomorrow in Lisbon" on the next person's Lock Screen, named
+        // city and all, with no app state left to explain it.
+        let desired = viewerID.isEmpty
+            ? []
+            : StayReminder.reminders(for: stays, viewerID: viewerID, now: now)
         let desiredIDs = Set(desired.map(\.identifier))
 
         let pending = await center.pendingNotificationRequests()
