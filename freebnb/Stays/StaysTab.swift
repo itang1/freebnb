@@ -552,7 +552,16 @@ extension StaysTab {
             )
             return nil
         } catch {
-            return error.localizedDescription
+            // A guest accepting a host's offer is the mirror of sending a request:
+            // the offer can be invalidated under the open sheet (a competing stay
+            // lands, the host closes the dates), and a rejection must read as the
+            // same neutral "no longer available" so it never names the cause. A
+            // host accepting a guest's request keeps the raw description, whose
+            // rejections are their own ("already answered"), not the guest's to see.
+            let viewerIsGuest = request.role(of: authManager.userID) == .guest
+            return viewerIsGuest
+                ? StayRequestError.guestFacingMessage(for: error)
+                : error.localizedDescription
         }
     }
 
