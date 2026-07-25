@@ -96,6 +96,22 @@ enum StayRequestError: LocalizedError {
             return "This listing is no longer available."
         }
     }
+
+    /// What a guest should see when a write fails. A rules rejection arrives as
+    /// Firestore permission-denied (code 7) and becomes the same "no longer
+    /// available" a guest already gets when a night is taken first, because the
+    /// two are indistinguishable and must stay that way: the only writes these
+    /// rules refuse are ones the sheet would not have offered, so reaching here
+    /// means the host's calendar or their rules moved while the sheet was open.
+    /// Either way it is news about the listing, never about the guest. Anything
+    /// that is not a rejection keeps its own description.
+    static func guestFacingMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        let isDenied = nsError.domain == "FIRFirestoreErrorDomain" && nsError.code == 7
+        return isDenied
+            ? (StayRequestError.listingUnavailable.errorDescription ?? "This listing is no longer available.")
+            : error.localizedDescription
+    }
 }
 
 struct StayRequest: Identifiable, Codable, Hashable, Sendable {

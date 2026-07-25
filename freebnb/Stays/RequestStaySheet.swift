@@ -149,16 +149,18 @@ struct RequestStaySheet: View {
                             .foregroundColor(.danger)
                     }
                     // The own-stay message is more specific, so it wins: an overlap
-                    // that is the guest's own confirmed stay shows only that, not
-                    // the generic "host is unavailable" the same dates would trip.
+                    // that is the guest's own confirmed stay names itself, where any
+                    // other conflict falls to the neutral, causeless line the grid
+                    // and the date-change sheet already use. A booked night, a
+                    // blocked one, and a stay's turnover buffer all read the same
+                    // here, and none of them names the span it took.
                     if let conflict = acceptedConflict {
                         let f = AppDateFormatters.shortDay
                         Label("You already have an accepted stay here \(f.string(from: conflict.checkIn)) – \(f.string(from: conflict.checkOut))", systemImage: "calendar.badge.exclamationmark")
                             .font(.caption)
                             .foregroundColor(.danger)
-                    } else if let conflict = unavailableConflict {
-                        let f = AppDateFormatters.shortDay
-                        Label("Host is unavailable \(f.string(from: conflict.start)) – \(f.string(from: conflict.end))", systemImage: "calendar.badge.minus")
+                    } else if unavailableConflict != nil {
+                        Label("Those dates aren't available", systemImage: "calendar.badge.minus")
                             .font(.caption)
                             .foregroundColor(.danger)
                     }
@@ -269,24 +271,8 @@ struct RequestStaySheet: View {
             )
             dismiss()
         } catch {
-            errorMessage = Self.guestFacingMessage(for: error)
+            errorMessage = StayRequestError.guestFacingMessage(for: error)
         }
-    }
-
-    /// What a failed send says. A rules rejection is reported as the same
-    /// "no longer available" a guest already gets when somebody else takes the
-    /// night first, because the two are indistinguishable to them and must stay
-    /// that way: the only writes these rules refuse are ones this sheet would
-    /// not have offered, so reaching here at all means the host's calendar or
-    /// their rules moved while the sheet was open. Either way it is news about
-    /// the listing, not about the guest.
-    private static func guestFacingMessage(for error: Error) -> String {
-        let nsError = error as NSError
-        // 7 = permission denied.
-        let isDenied = nsError.domain == "FIRFirestoreErrorDomain" && nsError.code == 7
-        return isDenied
-            ? (StayRequestError.listingUnavailable.errorDescription ?? "This listing is no longer available.")
-            : error.localizedDescription
     }
 
     private func dateRangeText(from start: Date, to end: Date, nights: Int) -> String {

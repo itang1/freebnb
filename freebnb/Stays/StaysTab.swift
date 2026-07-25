@@ -529,7 +529,12 @@ extension StaysTab {
             )
             modifying = nil
         } catch {
-            actionError = error.localizedDescription
+            // A rejected date change is the one guest write that could still reach
+            // the rules and come back "Missing or insufficient permissions" — a
+            // booking landing, or a notice window arriving, under the open sheet.
+            // Route it through the same neutral mapping the request sheet uses so
+            // the refusal reads as "no longer available" and never names the cause.
+            actionError = StayRequestError.guestFacingMessage(for: error)
         }
     }
 
