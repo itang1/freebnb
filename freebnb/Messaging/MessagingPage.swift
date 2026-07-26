@@ -24,6 +24,7 @@ struct MessagingPage: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(NetworkMonitor.self) private var networkMonitor
     @Environment(CheckInKitStore.self) private var checkInKitStore
+    @Environment(FriendStore.self) private var friendStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft = ""
@@ -47,6 +48,12 @@ struct MessagingPage: View {
     private var participants: [String] { [currentUserID, otherUserID].sorted() }
     private var isMuted: Bool { messageStore.isMuted(conversationID) }
     private var isBlocked: Bool { userProfileStore.isBlocked(otherUserID) }
+
+    /// Whether the composer belongs on screen. The same gate `UserProfilePage`
+    /// applies before offering the thread at all, applied again here because a
+    /// thread outlives the friendship that opened it: it stays in the messages
+    /// list, and the friend-gated send rule refuses anything typed into it.
+    private var canMessage: Bool { friendStore.isFriend(otherUserID) }
 
     /// Every active stay between the two participants, in both directions. Their
     /// request for my place and my request for theirs can be open at once, and
@@ -139,7 +146,11 @@ struct MessagingPage: View {
             )
 
             Divider()
-            MessageInputBar(otherName: otherName, draft: $draft, isFocused: $inputFocused, onSend: sendMessage, isOffline: !networkMonitor.isOnline)
+            if canMessage {
+                MessageInputBar(otherName: otherName, draft: $draft, isFocused: $inputFocused, onSend: sendMessage, isOffline: !networkMonitor.isOnline)
+            } else {
+                MessageThreadClosedFooter(otherName: otherName)
+            }
         }
         .background(Color.primaryBackground.ignoresSafeArea())
         .navigationTitle(otherName)
