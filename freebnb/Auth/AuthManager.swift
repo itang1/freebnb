@@ -55,6 +55,11 @@ final class AuthManager {
     private(set) var isSignedIn = false
     private(set) var isLoading = false
     var authError: AuthError?
+    /// False until Firebase has told us who (if anyone) is signed in. Every other
+    /// property here reads as "signed out" during that window, which is a lie for
+    /// the returning user who is about to be restored, so anything that would
+    /// destroy the departing user's local state must wait for this.
+    private(set) var hasResolvedAuthState = false
     private(set) var userID = ""
     private(set) var userEmail = ""
     private(set) var authMethod: AuthMethod = .none
@@ -101,6 +106,7 @@ final class AuthManager {
             authMethod = .none
             isSignedIn = false
         }
+        hasResolvedAuthState = true
         // Attribute crash reports and analytics to the current user (A6).
         Telemetry.setUserID(user?.uid)
     }

@@ -106,9 +106,20 @@ struct CheckInKitStoreTests {
         // The regression in one line. A signed-out user has no stays, so without
         // the viewer id both sides are `[]`, SwiftUI sees no change, `sync` never
         // runs, and the door codes stay on the device.
-        let signedIn = CheckInKitStore.changeKey(viewerID: guestID, stays: [])
-        let signedOut = CheckInKitStore.changeKey(viewerID: "", stays: [])
+        let signedIn = CheckInKitStore.changeKey(authResolved: true, viewerID: guestID, stays: [])
+        let signedOut = CheckInKitStore.changeKey(authResolved: true, viewerID: "", stays: [])
         #expect(signedIn != signedOut)
+    }
+
+    @Test func launchingBeforeAuthResolvesDoesNotLookLikeSigningOut() {
+        // The other direction, and the more expensive one to get wrong. At launch
+        // the uid has not arrived yet, so the key carries an empty viewer id that
+        // means "not known", not "nobody" — and the caller skips the sync on the
+        // strength of it. Once Firebase answers, the key must change, or a guest
+        // who really is signed out keeps kits that are no longer theirs.
+        let unresolved = CheckInKitStore.changeKey(authResolved: false, viewerID: "", stays: [])
+        let signedOut = CheckInKitStore.changeKey(authResolved: true, viewerID: "", stays: [])
+        #expect(unresolved != signedOut)
     }
 
     @Test func switchingUsersChangesTheKeyWithIdenticalStays() {
@@ -116,8 +127,8 @@ struct CheckInKitStoreTests {
         // viewers look alike, or the second user's sync would be skipped.
         let stays = [staleStay(id: "stay-1")]
         #expect(
-            CheckInKitStore.changeKey(viewerID: guestID, stays: stays)
-                != CheckInKitStore.changeKey(viewerID: "guest-2", stays: stays)
+            CheckInKitStore.changeKey(authResolved: true, viewerID: guestID, stays: stays)
+                != CheckInKitStore.changeKey(authResolved: true, viewerID: "guest-2", stays: stays)
         )
     }
 
@@ -136,8 +147,8 @@ struct CheckInKitStoreTests {
             status: .pending
         )
         #expect(
-            CheckInKitStore.changeKey(viewerID: guestID, stays: [live])
-                == CheckInKitStore.changeKey(viewerID: guestID, stays: [live, pending])
+            CheckInKitStore.changeKey(authResolved: true, viewerID: guestID, stays: [live])
+                == CheckInKitStore.changeKey(authResolved: true, viewerID: guestID, stays: [live, pending])
         )
     }
 

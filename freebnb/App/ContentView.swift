@@ -54,6 +54,7 @@ struct ContentView: View {
     /// by a test rather than by this comment.
     private var acceptedStayKey: [String] {
         CheckInKitStore.changeKey(
+            authResolved: authManager.hasResolvedAuthState,
             viewerID: authManager.userID,
             stays: stayRequestStore.outgoingRequests
         )
@@ -271,7 +272,16 @@ struct ContentView: View {
         // the kits off the device" path was unreachable for as long as it lived
         // there. Out here the key goes empty, the sync runs, and the door codes
         // of whoever just left get deleted.
+        //
+        // Gated on a resolved auth state, and that is not belt and braces. The
+        // uid arrives from an async listener callback, so on the `initial: true`
+        // pass it is still empty — which the store reads as "signed out" and
+        // answers by deleting every kit, the stay list notwithstanding. That is
+        // a signed-in guest cold-launching offline at the door and finding the
+        // code gone. The key changes when the state resolves, so the sync we
+        // skip here runs a moment later with a real answer.
         .onChange(of: acceptedStayKey, initial: true) { _, _ in
+            guard authManager.hasResolvedAuthState else { return }
             Task {
                 await checkInKitStore.sync(
                     stays: stayRequestStore.outgoingRequests,

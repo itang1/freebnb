@@ -40,13 +40,20 @@ final class CheckInKitStore {
     func kit(for stayID: String) -> CheckInKit? { kits[stayID] }
 
     /// The change key the view watches to decide when to call `sync`. Pure, and
-    /// out here rather than inline in ContentView, because the one property it
-    /// must have is invisible at the call site: the viewer id leads, so signing
-    /// out changes the key even though a signed-out user has no stays. Keyed on
-    /// the stays alone, the transition that has to prune the device is the one
-    /// that looks like no change at all, and `sync` never runs.
-    static func changeKey(viewerID: String, stays: [StayRequest]) -> [String] {
-        [viewerID] + stays
+    /// out here rather than inline in ContentView, because the two properties it
+    /// must have are invisible at the call site.
+    ///
+    /// The viewer id leads, so signing out changes the key even though a
+    /// signed-out user has no stays. Keyed on the stays alone, the transition
+    /// that has to prune the device is the one that looks like no change at all,
+    /// and `sync` never runs.
+    ///
+    /// `authResolved` leads that, because at launch an unresolved auth state and
+    /// a signed-out one are both an empty viewer id, and they must not look
+    /// alike: the first has to be ignored (the kits belong to the user who is
+    /// about to be restored) and the second has to prune.
+    static func changeKey(authResolved: Bool, viewerID: String, stays: [StayRequest]) -> [String] {
+        ["auth-\(authResolved)", viewerID] + stays
             .filter { $0.status == .accepted }
             .map { "\($0.id)-\($0.checkIn.timeIntervalSince1970)-\($0.checkOut.timeIntervalSince1970)" }
     }
