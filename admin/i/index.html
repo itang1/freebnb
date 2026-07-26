@@ -92,6 +92,9 @@
     </p>
   </main>
 
-  <script src="invite.js"></script>
+  <!-- Absolute, not relative. Hosting serves this page at /i with
+       trailingSlash:false, so a relative src resolves against the site root
+       and 404s: the button below would stay hidden for every recipient. -->
+  <script src="/i/invite.js"></script>
 </body>
 </html>

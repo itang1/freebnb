@@ -9,13 +9,19 @@
 // matching, so a refactor that moves a constant fails the suite loudly instead
 // of letting the check rot into a vacuous pass.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 export function read(relPath) {
   return readFileSync(repoRoot + relPath, "utf8");
+}
+
+/** Whether the repo publishes a file at this path. For assertions that want to
+ *  say what is missing rather than let `read` throw ENOENT. */
+export function exists(relPath) {
+  return existsSync(repoRoot + relPath);
 }
 
 /** The slice of `text` between two markers; throws if either is missing. */
@@ -70,4 +76,21 @@ export function swiftStayEventKinds() {
   const kinds = swiftEnumCases(section(swift, "enum Kind: String", "\n    }", "StayEvent.Kind"));
   if (kinds.length === 0) throw new Error("StayEvent.Kind: no cases parsed");
   return kinds;
+}
+
+/**
+ * The stored property names of StayEvent — the exact key set the encoder can
+ * put on `event`. Computed properties are skipped: their declaration opens a
+ * brace, a stored one ends at the type.
+ *
+ * The kind list was mirrored and the key list was not, which is how a kind got
+ * whitelisted while the field it always carries stayed rejected. Both halves
+ * are parsed now.
+ */
+export function swiftStayEventFields() {
+  const swift = read("freebnb/Shared/MessageStore.swift");
+  const block = section(swift, "struct StayEvent", "\n}", "StayEvent");
+  const fields = [...block.matchAll(/^ {4}(?:let|var) (\w+): [^\n{]+$/gm)].map((m) => m[1]);
+  if (fields.length === 0) throw new Error("StayEvent: no stored properties parsed");
+  return fields;
 }

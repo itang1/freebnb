@@ -15,7 +15,16 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { describe, it } from "node:test";
-import { number, quoted, read, section, swiftEnumCases, swiftStayEventKinds } from "./sources.mjs";
+import {
+  exists,
+  number,
+  quoted,
+  read,
+  section,
+  swiftEnumCases,
+  swiftStayEventFields,
+  swiftStayEventKinds,
+} from "./sources.mjs";
 
 const require = createRequire(import.meta.url);
 const { MAX_TERMS, MAX_PREFIX_LENGTH } = require("../scripts/search_terms.js");
@@ -54,6 +63,22 @@ describe("stay event kinds", () => {
       rulesKinds,
       swiftStayEventKinds(),
       "firestore.rules validMessageEvent vs StayEvent.Kind in MessageStore.swift"
+    );
+  });
+
+  it("rules validMessageEvent allows exactly the keys StayEvent encodes", () => {
+    // The other half of the same mirror. Whitelisting a kind is not enough: an
+    // event whose new field is missing from hasOnly() is rejected outright, and
+    // because the kind loop below sends only kind+dateRange, the deny is
+    // invisible there. `hostCancelled` shipped that way — allowed as a kind,
+    // denied for the listingID it always carries.
+    const rulesKeys = quoted(
+      section(rules, "data.event.keys().hasOnly([", "])", "validMessageEvent keys")
+    );
+    sameSet(
+      rulesKeys,
+      swiftStayEventFields(),
+      "firestore.rules validMessageEvent keys vs StayEvent's stored properties"
     );
   });
 });
@@ -397,7 +422,17 @@ describe("invite universal link", () => {
     // the file here, so this keeps checking the real thing if it moves again.
     const src = html.match(/<script[^>]+src="([^"]+)"/);
     assert.ok(src, "the landing page loads no script");
-    const landing = read(`admin${webPath}/${src[1]}`);
+    // Resolve the src the way a browser would, not the way the repo is laid
+    // out. Hosting serves this page at `${webPath}` with trailingSlash:false,
+    // so there is no trailing segment for a relative src to resolve against
+    // and it lands at the site root. Reading it from the page's own directory
+    // instead would pass while the deployed page 404s on its only script.
+    const resolved = src[1].startsWith("/") ? src[1] : `/${src[1]}`;
+    assert.ok(
+      exists(`admin${resolved}`),
+      `the landing page loads "${src[1]}", which a browser at ${webPath} resolves to ${resolved} — nothing is published there`
+    );
+    const landing = read(`admin${resolved}`);
     const scheme = swiftString("customScheme");
     const queryItem = inviteCopy.match(/static let inviterQueryItem = "([^"]+)"/)[1];
     assert.ok(
