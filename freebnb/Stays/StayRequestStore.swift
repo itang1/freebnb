@@ -50,9 +50,16 @@ final class StayRequestStore {
         !isLoadingIncoming && !isLoadingOutgoing && listenerError == nil
     }
 
-    private var isLoadingHosted = false
+    // True from birth, not false. The listeners are bound from an auth callback,
+    // so between init and that callback nothing has been asked yet, and starting
+    // at false would call that empty window a loaded, empty inbox: a skeleton
+    // replaced by "no requests" for a frame, and `hasLoadedRequests` vouching for
+    // a list that has never been fetched.
+    private var isLoadingHosted = true
+    private var isLoadingOutgoing = true
+    // The exception, and it stays false: no co-hosted listener exists until
+    // ContentView supplies the roster, so there is nothing to wait for yet.
     private var isLoadingCoHosted = false
-    private var isLoadingOutgoing = false
     /// Who the requests above belong to. Observed rather than ignored: the tab
     /// badge is derived from it, so it has to invalidate the view when it changes.
     /// Empty while signed out.
