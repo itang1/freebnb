@@ -395,13 +395,17 @@ service cloud.firestore {
     function validMessageEvent(data) {
       return isUnset(data, 'event')
           || (data.event is map
-              && data.event.keys().hasOnly(['kind', 'dateRange', 'note'])
+              && data.event.keys().hasOnly(['kind', 'dateRange', 'note', 'listingID'])
               && data.event.kind is string
               && data.event.kind in ['requested', 'offered', 'accepted', 'declined', 'cancelled', 'modified', 'hostCancelled']
               && data.event.dateRange is string
               && data.event.dateRange.size() > 0
               && data.event.dateRange.size() < 200
-              && isOptionalString(data.event, 'note', 2000));
+              && isOptionalString(data.event, 'note', 2000)
+              // The listing the event refers to, so the card can offer a way
+              // back to it. Optional because the kinds that predate it don't
+              // carry one; capped because it is a document id, not free text.
+              && isOptionalString(data.event, 'listingID', 200));
     }
 
     // -------------------------------------------------------------------------
@@ -760,6 +764,13 @@ service cloud.firestore {
             // client from putting it back on the world-readable document.
             && data.address.keys().hasOnly(['city', 'state', 'zip'])
             && data.address.keys().hasAll(['city', 'state'])
+            // The city is snapshotted onto every stay request against this
+            // listing, where it is capped at 100. Uncapped here, a longer city
+            // would validate on the listing and then reject every request made
+            // against it, with nothing on either screen to say why.
+            && data.address.city is string
+            && data.address.city.size() > 0
+            && data.address.city.size() <= 100
             && data.sleeping is map
             && data.guestPolicy is map
             && data.amenities is map
@@ -1112,7 +1123,10 @@ service cloud.firestore {
           // the fields they are snapshots of — city as the listing's own city,
           // host name as `displayName`.
           && isOptionalString(request.resource.data, 'listingCity', 100)
-          && isOptionalString(request.resource.data, 'listingHostName', 200)
+          // 199, not 200: the host-rename update branch below requires
+          // `size() < 200`, so a name created at exactly 200 could never be
+          // renamed again. Same bound `displayName` itself is held to.
+          && isOptionalString(request.resource.data, 'listingHostName', 199)
           // A stay cannot be born finished.
           && isUnset(request.resource.data, 'completedAt')
           // Two ways a stay can start, and the creator must be the party the

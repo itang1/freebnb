@@ -179,6 +179,30 @@ describe("messages/{id} create — stay event", () => {
     );
   });
 
+  it("allows a hostCancelled event carrying the listing it points back to", async () => {
+    // The exact payload StaysTab.hostCancel and MessagingRequestActions build.
+    // The kind loop above sends only kind+dateRange, so it passed while this
+    // shape — the only one the client actually sends for this kind — did not.
+    await assertSucceeds(
+      sendMessageWithEvent(asSender(), SENDER, "e2b", {
+        kind: "hostCancelled",
+        dateRange: "Mar 3 – Mar 6 · 3 nights",
+        note: "Sorry, something came up. Other dates are open.",
+        listingID: "listing-1",
+      })
+    );
+  });
+
+  it("denies an event whose listingID is not a document id but an essay", async () => {
+    await assertFails(
+      sendMessageWithEvent(asSender(), SENDER, "e2c", {
+        kind: "hostCancelled",
+        dateRange: "Mar 3 – Mar 6 · 3 nights",
+        listingID: "L".repeat(201),
+      })
+    );
+  });
+
   it("denies an event with an unknown kind", async () => {
     await assertFails(
       sendMessageWithEvent(asSender(), SENDER, "e3", {
@@ -199,7 +223,7 @@ describe("messages/{id} create — stay event", () => {
       sendMessageWithEvent(asSender(), SENDER, "e5", {
         kind: "requested",
         dateRange: "Mar 3 – Mar 6 · 3 nights",
-        listingID: "sneaky-extra-field",
+        stayID: "sneaky-extra-field",
       })
     );
   });
