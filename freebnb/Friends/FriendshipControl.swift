@@ -166,12 +166,27 @@ struct FriendStatusButton: View {
     @State private var isWorking = false
     @State private var errorMessage: String?
 
-    /// The stay, if any, that unfriending would cut the thread on. Messaging is
-    /// friend-gated, so ending the friendship here would take away the way these
-    /// two coordinate a key handoff or a lock-out, at the one time they need it.
-    private var outstandingStay: StayRequest? {
-        (stayRequestStore.incomingRequests + stayRequestStore.outgoingRequests)
-            .outstandingStay(between: authManager.userID, and: userID)
+    /// Whether unfriending can be offered, which the stay lists answer three ways
+    /// rather than two.
+    private enum UnfriendAvailability {
+        case available
+        /// A stay is on the books. Messaging is friend-gated, so ending the
+        /// friendship here would take away the way these two coordinate a key
+        /// handoff or a lock-out, at the one time they need it.
+        case blockedByStay
+        /// The lists have not arrived yet, or a listener failed. Either way they
+        /// are empty, and an empty list is not the same answer as "no stay" —
+        /// reading it as one puts the button back exactly when the store cannot
+        /// contradict it.
+        case unknown
+    }
+
+    private var unfriendAvailability: UnfriendAvailability {
+        guard stayRequestStore.hasLoadedRequests else { return .unknown }
+        let stays = stayRequestStore.incomingRequests + stayRequestStore.outgoingRequests
+        return stays.outstandingStay(between: authManager.userID, and: userID) == nil
+            ? .available
+            : .blockedByStay
     }
 
     var body: some View {
@@ -200,7 +215,7 @@ struct FriendStatusButton: View {
                 // still opens and still says why, rather than the row going
                 // quietly inert — an option that vanishes without explanation
                 // reads as a bug.
-                if outstandingStay == nil {
+                if case .available = unfriendAvailability {
                     Button("Unfriend \(displayName)", role: .destructive) {
                         errorMessage = nil
                         isWorking = true
@@ -213,14 +228,17 @@ struct FriendStatusButton: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                if outstandingStay == nil {
+                // Blocking stays available from the row below this one, and is
+                // not mentioned in any of these: someone who needs it will look
+                // for it, and offering it in answer to "unfriend" would read as
+                // a suggestion to escalate.
+                switch unfriendAvailability {
+                case .available:
                     Text("Unfriending means you'll no longer see each other's homes. To reconnect, one of you will need to send a new friend request.")
-                } else {
-                    // Blocking stays available from the row below this one, and
-                    // is not mentioned here: someone who needs it will look for
-                    // it, and offering it in answer to "unfriend" would read as
-                    // a suggestion to escalate.
+                case .blockedByStay:
                     Text("You have a stay booked with \(displayName), so unfriending is unavailable until it's finished. Ending it now would close the thread you'd use to sort out arrival or keys.")
+                case .unknown:
+                    Text("Your stays haven't loaded yet, and unfriending during a booked stay would close the thread you'd use to sort out arrival or keys. This becomes available once they arrive.")
                 }
             }
         }

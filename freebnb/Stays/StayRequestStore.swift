@@ -41,8 +41,18 @@ final class StayRequestStore {
     /// premature "no requests yet" is the whole bug.
     var isLoadingIncoming: Bool { isLoadingHosted || isLoadingCoHosted }
 
+    /// Whether the lists above can be trusted to say a stay does *not* exist.
+    /// False while any listener is still delivering its first snapshot, and false
+    /// when one has failed, because in both cases an empty list is the absence of
+    /// an answer rather than an answer. Callers that only render what is there
+    /// can ignore this; callers that act on nothing being there cannot.
+    var hasLoadedRequests: Bool {
+        !isLoadingIncoming && !isLoadingOutgoing && listenerError == nil
+    }
+
     private var isLoadingHosted = false
     private var isLoadingCoHosted = false
+    private var isLoadingOutgoing = false
     /// Who the requests above belong to. Observed rather than ignored: the tab
     /// badge is derived from it, so it has to invalidate the view when it changes.
     /// Empty while signed out.
@@ -56,6 +66,9 @@ final class StayRequestStore {
     /// accepted stays below. Kept in sync on every snapshot so a cancellation or a
     /// date change withdraws or moves its reminders without any extra plumbing.
     @ObservationIgnored private let reminderScheduler = StayReminderScheduler()
+    /// The in-flight reminder reconcile, held so the next one can wait for it.
+    /// See `syncReminders` for why overlapping them is not safe.
+    @ObservationIgnored private var reminderSyncTask: Task<Void, Never>?
     /// Keeps the current-stay Live Activity (feature 21) in step with the accepted
     /// stays below, the same way `reminderScheduler` keeps the local reminders in
     /// step. Reconciled on every snapshot.
@@ -99,6 +112,7 @@ final class StayRequestStore {
         guard let userID else {
             isLoadingHosted = false
             isLoadingCoHosted = false
+            isLoadingOutgoing = false
             // Signed out: take down the widgets, any running Live Activity, and
             // the scheduled reminders, so nothing of the last user's stay
             // lingers on the Lock Screen. The reminders outlive the app process,
@@ -108,6 +122,7 @@ final class StayRequestStore {
             return
         }
         isLoadingHosted = true
+        isLoadingOutgoing = true
         // No co-hosted listener is bound yet; ContentView supplies the roster
         // once HomeStore has it, and binding flips this back on.
         isLoadingCoHosted = false
@@ -137,9 +152,11 @@ final class StayRequestStore {
                 case .failure(let error):
                     self?.log.error("outgoing snapshot error: \(error.localizedDescription, privacy: .public)")
                     self?.listenerError = error.localizedDescription
+                    self?.isLoadingOutgoing = false
                 case .success(let requests):
                     self?.listenerError = nil
                     self?.outgoingRequests = requests.sortedByDate()
+                    self?.isLoadingOutgoing = false
                     self?.syncReminders(viewerID: userID)
                     self?.publishToWidgetsAndActivities(viewerID: userID)
                 }
@@ -199,9 +216,22 @@ final class StayRequestStore {
     /// Re-reconciles the local reminder schedule with the currently-accepted
     /// stays across both directions. Cheap and idempotent, so calling it on every
     /// snapshot (from either listener) is fine.
+    ///
+    /// Serialized against the previous call rather than fired and forgotten. The
+    /// scheduler decides what it wants *before* it awaits the pending list, so
+    /// two overlapping syncs can finish in the wrong order: a snapshot that
+    /// arrives just before sign-out computes the departing user's reminders,
+    /// suspends, and can resume after the sign-out sync has cleared everything —
+    /// putting "You check in tomorrow in Lisbon" back on the next person's Lock
+    /// Screen, which is the leak this is here to prevent. Chaining makes the last
+    /// caller the last writer.
     private func syncReminders(viewerID: String) {
         let accepted = (incomingRequests + outgoingRequests).filter { $0.status == .accepted }
-        Task { await reminderScheduler.sync(acceptedStays: accepted, viewerID: viewerID) }
+        let previous = reminderSyncTask
+        reminderSyncTask = Task { [reminderScheduler] in
+            await previous?.value
+            await reminderScheduler.sync(acceptedStays: accepted, viewerID: viewerID)
+        }
     }
 
     /// Republishes the home-screen widget snapshot and reconciles the current-stay
