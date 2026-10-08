@@ -2,11 +2,9 @@
 //  FirestorePaths.swift
 //  freebnb
 //
-//  The single source of truth for Firestore collection, subcollection, and
-//  well-known document names. Every repository, Cloud Function, security rule,
-//  and seed/backfill script references the same collections; a typo in any one
-//  of them silently reads or writes the wrong place. Keep this in sync with the
-//  backend mirror in `functions/src/paths.ts`.
+//  The single source of truth for Firestore collection and document names, shared
+//  by repositories, rules and scripts; a typo silently hits the wrong place.
+//  Mirrored in `functions/src/paths.ts`.
 //
 
 enum FirestorePaths {
@@ -23,12 +21,10 @@ enum FirestorePaths {
     static let reviews = "reviews"
     /// Friend-written character references on a profile, one per (subject, author).
     static let references = "references"
-    /// One document per (host, guest) pair, id `{hostID}_{guestID}`, counting the
-    /// stay requests that guest has opened with that host inside the host's
-    /// current frequency window. Advanced by the guest in the same commit as the
-    /// request it governs, exactly as `rateLimits` is advanced alongside a
-    /// message: security rules cannot run a query, so a counter the write rule
-    /// can `getAfter()` is the only way to cap a rate. See docs/internal/CIRCLES.md.
+    /// One doc per (host, guest) pair, id `{hostID}_{guestID}`, counting the guest's
+    /// requests in the host's current frequency window. Advanced in the same commit
+    /// as the request, since rules can't query and can only `getAfter()` a counter.
+    /// See docs/internal/CIRCLES.md.
     static let stayCounters = "stayCounters"
 
     // Subcollections
@@ -37,36 +33,21 @@ enum FirestorePaths {
     static let privateCollection = "private"
     /// Accepted-guest markers under a listing: `homes/{id}/accepted/{guestUID}`.
     static let accepted = "accepted"
-    /// A host's Circles: `users/{hostID}/circles/{circleID}`. Host-only, and the
-    /// Default circle always sits at the fixed id `Circle.defaultID`.
+    /// A host's Circles: `users/{hostID}/circles/{circleID}`. Host-only; Default is at `Circle.defaultID`.
     static let circles = "circles"
-    /// Which circle a host has filed each friend under, plus any per-friend
-    /// override: `users/{hostID}/circleMembers/{friendUID}`. Host-only; keyed by
-    /// the friend's uid so the rules resolve a policy in one get().
+    /// Which circle a host filed each friend under, plus any override:
+    /// `users/{hostID}/circleMembers/{friendUID}`. Host-only.
     static let circleMembers = "circleMembers"
-    /// The resolved policy projected for one guest:
-    /// `users/{hostID}/bookingPolicies/{guestUID}`. The only part of Circles a
-    /// guest may read, and it deliberately carries no circle id and no circle
-    /// name — only the rules that apply to them.
+    /// The resolved policy for one guest: `users/{hostID}/bookingPolicies/{guestUID}`.
+    /// The only part of Circles a guest reads; carries no circle id or name.
     static let bookingPolicies = "bookingPolicies"
-    /// A host's private notes on their friends:
-    /// `users/{hostID}/friendNotes/{noteID}`. Readable by that host alone —
-    /// there is no projection of this for anyone, because nobody else has any
-    /// business reading one.
+    /// A host's private notes on friends: `users/{hostID}/friendNotes/{noteID}`. That host alone reads them.
     static let friendNotes = "friendNotes"
-    /// Which post-stay note prompts a host has already answered or waved off:
-    /// `users/{hostID}/friendNotePrompts/{stayRequestID}`. Records that a prompt
-    /// was seen and nothing else — no text, no friend, no judgement.
+    /// Which note prompts a host answered or waved off: `users/{hostID}/friendNotePrompts/{stayRequestID}`.
     static let friendNotePrompts = "friendNotePrompts"
-    /// A guest's private notes on the hosts they stay with and the listings they
-    /// consider: `users/{guestID}/guestNotes/{noteID}`. The symmetric twin of
-    /// `friendNotes`, readable by that guest alone — there is no projection of
-    /// this for anyone, not the host it is about and not a moderator, because
-    /// nobody else has any business reading one.
+    /// A guest's private notes on hosts and listings: `users/{guestID}/guestNotes/{noteID}`. That guest alone reads them.
     static let guestNotes = "guestNotes"
-    /// Which post-trip note prompts a guest has already answered or waved off:
-    /// `users/{guestID}/guestNotePrompts/{stayRequestID}`. Records that a prompt
-    /// was seen and nothing else — no text, no subject, no judgement.
+    /// Which note prompts a guest answered or waved off: `users/{guestID}/guestNotePrompts/{stayRequestID}`.
     static let guestNotePrompts = "guestNotePrompts"
 
     // Well-known document ids
@@ -74,23 +55,16 @@ enum FirestorePaths {
     static let locationDocID = "location"
     /// The listing's private house manual: `homes/{id}/private/manual`.
     static let manualDocID = "manual"
-    /// The two halves of the listing's calendar, blocked and booked, kept apart
-    /// from the merged copy the public document publishes:
-    /// `homes/{id}/private/availability`. Managers only — unlike `location`, an
-    /// accepted guest has no business here.
+    /// The listing's blocked and booked halves, apart from the merged public copy:
+    /// `homes/{id}/private/availability`. Managers only.
     static let availabilityDocID = "availability"
     /// The user's private profile: `users/{uid}/private/profile`.
     static let profileDocID = "profile"
     /// The reviewer's note to the reviewed, never public:
     /// `reviews/{reviewID}/private/feedback`.
     static let feedbackDocID = "feedback"
-    /// The circle every host has and cannot delete, at a fixed id:
-    /// `users/{hostID}/circles/default`.
-    ///
-    /// Fixed rather than flagged because `firestore.rules` cannot run a query.
-    /// "Which circle is the default one" is not a question a rule can ask, so
-    /// every policy resolution has to end at a path instead — see
-    /// `FriendCircle.defaultID`, which is this value, and defaultCircleID() in
-    /// the rules, which is the third copy.
+    /// The circle every host has and cannot delete, at a fixed id
+    /// (`users/{hostID}/circles/default`). Fixed, not flagged, since rules can't
+    /// query; see `FriendCircle.defaultID` and defaultCircleID() in the rules.
     static let defaultCircleDocID = "default"
 }

@@ -2,57 +2,39 @@
 //  FriendNote.swift
 //  freebnb
 //
-//  A host's private note about one friend: what they'd write on the back of an
-//  index card and never show anybody. Stored at
-//  `users/{hostID}/friendNotes/{noteID}`, readable by that host and by nobody
-//  else, ever.
+//  A host's private note about one friend. Stored at
+//  `users/{hostID}/friendNotes/{noteID}`, readable by that host alone. The host
+//  is the path; nothing is denormalized, projected or scored. Enforcement is the
+//  `friendNotes` block in firestore.rules; this file must agree.
 //
-//  The host is the path, not a field. Nothing here is denormalized onto the
-//  friend, projected for anyone to read, or counted into a score — unlike a
-//  circle's policy, which a guest legitimately needs the resolved half of, a
-//  note has no audience but its author, so there is nothing to project. See the
-//  `friendNotes` block in firestore.rules, which is the enforcement; this file
-//  only has to agree with it.
-//
-//  Notes exist so a host can move somebody into a stricter circle for a reason
-//  they can still remember in six months. They are reference material for that
-//  judgement, never an input to it: nothing reads these to change a circle, and
-//  nothing ever will.
+//  Notes are reference material for a host's judgement, never an input to it.
 //
 
 import FirebaseFirestore
 import Foundation
 
 struct FriendNote: Identifiable, Codable, Hashable, Sendable {
-    /// The document id, carried beside the document rather than in it, for the
-    /// same reason as `FriendCircle.id`: these are constructed locally before any
-    /// document exists, and `@DocumentID` discards a value that was set that way.
-    /// The repository stamps it from `documentID` on the way in.
+    /// The document id, carried beside the document like `FriendCircle.id`
+    /// (`@DocumentID` discards locally set values). The repository stamps it.
     var id: String?
 
-    /// The friend this note is about. Immutable once written — `firestore.rules`
-    /// pins it on update, so an edit cannot quietly re-file a note under a
-    /// different person.
+    /// The friend this note is about. Immutable; the rules pin it on update.
     let subjectUserID: String
 
     var text: String
 
-    /// The stay this note came out of, when it came out of one. Nil is the
-    /// ordinary case and not a degraded one: a host should be able to write down
-    /// something they noticed without a visit to hang it on.
+    /// The stay this came from, if any. Nil is ordinary: a host can note something without a visit.
     var stayRequestID: String?
 
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
 
-    /// The id lives in the path, so it is never encoded into the document.
+    /// The id lives in the path, so it isn't encoded.
     enum CodingKeys: String, CodingKey {
         case subjectUserID, text, stayRequestID, createdAt, updatedAt
     }
 
-    /// Matches the cap `firestore.rules` enforces, for the same reason
-    /// `Review.commentMaxLength` does: an over-long note should be a field error
-    /// in the composer, not an opaque permission denial from the server.
+    /// Matches the rules' cap, so overlong notes are a composer error rather than a permission denial.
     static let maxLength = 2000
 
     init(
@@ -71,9 +53,7 @@ struct FriendNote: Identifiable, Codable, Hashable, Sendable {
         self.updatedAt = updatedAt
     }
 
-    /// Whether this note has been edited since it was written. Both timestamps
-    /// are server-stamped, and a create sets them in the same commit, so the
-    /// comparison needs a little slack rather than an equality test.
+    /// Whether the note was edited since written. Both timestamps are server-stamped, so allow slack.
     var wasEdited: Bool {
         guard let createdAt, let updatedAt else { return false }
         return updatedAt.timeIntervalSince(createdAt) > 1
@@ -86,9 +66,7 @@ struct FriendNote: Identifiable, Codable, Hashable, Sendable {
 // MARK: - Validation
 
 extension FriendNote {
-    /// The text as it would be stored: trimmed, and cut to the cap the rules
-    /// enforce. Returns nil when there is nothing left, which is what makes
-    /// "save an empty note" a disabled button rather than a rejected write.
+    /// The text as stored: trimmed and cut to the cap. Nil when empty, which disables Save.
     static func normalized(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -98,29 +76,16 @@ extension FriendNote {
 
 // MARK: - The post-stay prompt
 
-/// When the app offers a host the optional add-a-note moment after a stay.
-///
-/// Pure and separate from the view because it is the one piece of this feature
-/// with a judgement call in it: ask too narrowly and the moment is missed, ask
-/// too widely and an established host meets a wall of prompts about stays from
-/// two years ago the first time they open the new build. A wall is a chore, and
-/// a chore gets dismissed unread, which costs the feature the one moment it was
-/// built for.
+/// When the app offers a host the optional add-a-note moment after a stay. Pure
+/// and separate from the view since the judgement call is how widely to ask: too
+/// wide and an established host meets a wall of prompts about old stays.
 enum FriendNotePrompt {
-    /// How long after a stay ends the prompt is still worth offering. Two weeks:
-    /// long enough to survive a host who doesn't open the app the day their
-    /// guest leaves, short enough that it is still about that visit.
+    /// How long after a stay ends the prompt is still worth offering: two weeks.
     static let window: TimeInterval = 14 * 24 * 3600
 
     /// Whether `stay` should be offered to `hostID` as a note moment.
-    ///
-    /// `isSettled` is the caller's answer to "have they already been asked, or
-    /// already written something" — it lives in the store, which knows about
-    /// notes, rather than here, which knows about time.
-    ///
-    /// Nothing about the *guest* is consulted. There is no "difficult stay"
-    /// heuristic and no reason to build one: which visits are worth remembering
-    /// is exactly the judgement being left to the host.
+    /// `isSettled` (already asked or written) comes from the store, which knows
+    /// notes; nothing about the guest is consulted.
     static func shouldOffer(
         _ stay: StayRequest,
         hostID: String,
@@ -129,9 +94,7 @@ enum FriendNotePrompt {
     ) -> Bool {
         guard !hostID.isEmpty, stay.hostUserID == hostID else { return false }
         guard stay.status == .completed, !isSettled else { return false }
-        // `completedAt` is set when either party closes the stay out; a stay
-        // swept up by the nightly job may not carry one, so checkout stands in.
-        // Either way the question is the same: did this end recently?
+        // `completedAt` may be missing for a swept stay, so checkout stands in: did this end recently?
         let endedAt = stay.completedAt ?? stay.checkOut
         return endedAt >= now.addingTimeInterval(-window)
     }
@@ -140,9 +103,7 @@ enum FriendNotePrompt {
 // MARK: - Derived views
 
 extension [FriendNote] {
-    /// Newest first. A note still awaiting its server timestamp floats to the
-    /// top so one just written appears immediately, matching `[Review]` and
-    /// `[StayRequest]`.
+    /// Newest first; a note awaiting its server timestamp floats to the top, as in `[Review]`.
     func sortedByDate() -> [FriendNote] {
         sorted {
             switch ($0.createdAt, $1.createdAt) {

@@ -6,8 +6,7 @@
 import AuthenticationServices
 import CryptoKit
 import FirebaseAuth
-// FirebaseCore for FirebaseApp.options.clientID in the Google sign-in path —
-// FirebaseAuth does not re-export it under SPM.
+// FirebaseCore for FirebaseApp.options.clientID in the Google path; FirebaseAuth doesn't re-export it under SPM.
 import FirebaseCore
 import GoogleSignIn
 import Observation
@@ -55,19 +54,15 @@ final class AuthManager {
     private(set) var isSignedIn = false
     private(set) var isLoading = false
     var authError: AuthError?
-    /// False until Firebase has told us who (if anyone) is signed in. Every other
-    /// property here reads as "signed out" during that window, which is a lie for
-    /// the returning user who is about to be restored, so anything that would
-    /// destroy the departing user's local state must wait for this.
+    /// False until Firebase says who is signed in. Until then everything reads
+    /// "signed out", so anything destroying the departing user's local state must wait.
     private(set) var hasResolvedAuthState = false
     private(set) var userID = ""
     private(set) var userEmail = ""
     private(set) var authMethod: AuthMethod = .none
 
     private var currentNonce: String?
-    // `nonisolated(unsafe)` because `deinit` is nonisolated and must remove
-    // the listener. Only assigned from @MainActor contexts, and
-    // `Auth.removeStateDidChangeListener(_:)` is thread-safe.
+    // `nonisolated(unsafe)` so the nonisolated `deinit` can remove the listener (thread-safe).
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("auth")
 
@@ -81,15 +76,10 @@ final class AuthManager {
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
-    // The seeded guest-tester account's fixed uid (scripts/seed_test_data.js),
-    // signed into via the DEBUG-only "Sign in as guest" button. Recognizing it
-    // here — rather than deriving `.guest` purely from `isAnonymous` — lets
-    // that button exercise the same restricted guest UI a true anonymous
-    // session used to, without the app ever creating disposable, unconnected
-    // Firebase Auth users. No real Sign in with Apple uid can ever equal this
-    // fixed string, so the check is harmless outside DEBUG.
-    // nonisolated so the nonisolated `method(for:)` can compare against it under
-    // the Swift 6 actor-isolation checker; it is an immutable Sendable constant.
+    // The seeded guest-tester uid (scripts/seed_test_data.js), signed into via the
+    // DEBUG-only "Sign in as guest" button, so that button gets the restricted guest
+    // UI without creating disposable anonymous users. Harmless outside DEBUG.
+    // nonisolated so `method(for:)` can compare it under Swift 6 isolation.
     nonisolated static let guestTesterUID = "seed-guest-tester"
 
     // MARK: - Single source of truth
@@ -107,11 +97,11 @@ final class AuthManager {
             isSignedIn = false
         }
         hasResolvedAuthState = true
-        // Attribute crash reports and analytics to the current user (A6).
+        // Attribute crash reports and analytics to the current user.
         Telemetry.setUserID(user?.uid)
     }
 
-    // Derives the sign-in method from Firebase's provider data
+    // Derives the sign-in method from Firebase's provider data.
     nonisolated static func method(for user: User) -> AuthMethod {
         if user.isAnonymous || user.uid == Self.guestTesterUID { return .guest }
         let providers = Set(user.providerData.map(\.providerID))
@@ -195,9 +185,8 @@ final class AuthManager {
 
     // MARK: - Sign in with Google
 
-    /// Presents Google's sign-in sheet, then exchanges the returned tokens for a
-    /// Firebase credential. Requires the reversed client ID URL scheme (see the
-    /// manual setup notes).
+    /// Presents Google's sign-in sheet and exchanges the tokens for a Firebase
+    /// credential. Needs the reversed client ID URL scheme.
     func signInWithGoogle() {
         guard let clientID = FirebaseApp.app()?.options.clientID else {
             log.error("google sign in: missing Firebase clientID (GoogleService-Info.plist)")
@@ -264,9 +253,8 @@ final class AuthManager {
         }
     }
 
-    /// Creates a new email/password account, optionally stamping a display name.
-    /// If a guest (anonymous) session is active, links the credential to it
-    /// instead of creating a fresh account, so guest data carries over.
+    /// Creates an email/password account, stamping a display name if given. An
+    /// active guest session is linked rather than replaced, so its data carries over.
     func register(withEmail email: String, password: String, displayName: String) {
         let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -296,8 +284,7 @@ final class AuthManager {
         }
     }
 
-    // Maps a FirebaseAuth error into a user-facing `AuthError`, so the email form
-    // can show "that email is already registered" instead of a raw SDK message.
+    // Maps a FirebaseAuth error to a user-facing `AuthError` for the email form.
     nonisolated static func emailAuthError(from error: Error) -> AuthError {
         switch (error as NSError).code {
         case AuthErrorCode.emailAlreadyInUse.rawValue: return .emailInUse
@@ -313,13 +300,9 @@ final class AuthManager {
     // MARK: - Debug sign-in (emulator only)
 
     #if DEBUG
-    /// Email/password sign-in for the seeded development accounts (devna, the
-    /// guest tester).
-    ///
-    /// Compile-gated to DEBUG *and* refused unless this process is pointed at the
-    /// Auth emulator. A hardcoded credential that only ever reaches localhost is
-    /// not a backdoor into production, so weakening one guard is not enough to
-    /// turn it into one.
+    /// Email/password sign-in for the seeded dev accounts. Compile-gated to DEBUG
+    /// and refused unless the process points at the Auth emulator, so the
+    /// hardcoded credential can only ever reach localhost.
     func signInWithEmail(_ email: String, password: String) {
         guard EmulatorEnvironment.isActive else {
             log.error("debug sign in refused: not running against the Auth emulator")
@@ -349,7 +332,7 @@ final class AuthManager {
 
     func deleteAccount() async {
         guard let user = Auth.auth().currentUser else { return }
-        // Captured before the delete, which is the last moment this is readable.
+        // Captured before the delete, the last moment it's readable.
         let userID = user.uid
         isLoading = true
         defer { isLoading = false }
@@ -357,24 +340,17 @@ final class AuthManager {
             if authMethod == .apple {
                 try await revokeAppleAndReauthenticate(user: user)
             }
-            // Delete only the Auth user here. The `onUserDeleted` Cloud Function
-            // owns the full data cascade (listings, profile, messages, stay
-            // requests, friend edges, private location, storage photos), so the
-            // client no longer soft-deletes listings or removes the profile
-            // itself. Doing so client-side left a partial-failure window: if
-            // `user.delete()` threw after those writes, the account survived with
-            // its data half-gone (L8). One deletion, one owner.
+            // Delete only the Auth user; the `onUserDeleted` Cloud Function owns the
+            // data cascade. A client-side cascade left a partial-failure window where
+            // the account survived half-deleted.
             try await user.delete()
             UserDefaults.standard.removeObject(forKey: UserDefaultsKey.userName)
-            // `onUserDeleted` cannot reach this device. An unfinished listing draft
-            // holds the host's street address, so the one copy the cascade can't
-            // see has to go here (feature 13).
+            // `onUserDeleted` can't reach this device, so remove the draft, which holds the host's street address.
             ListingDraftStore().clear(userID: userID)
         } catch AuthError.cancelled {
             return
         } catch let error as NSError where error.code == AuthErrorCode.requiresRecentLogin.rawValue {
-            // Google/email deletes can require a fresh login (Apple is reauthed
-            // above). Ask the user to sign in again rather than failing opaquely.
+            // Google/email deletes may need a fresh login (Apple reauths above); ask rather than fail opaquely.
             authError = .reauthRequired
         } catch {
             log.error("delete account failed: \(error.localizedDescription, privacy: .public)")
@@ -382,9 +358,8 @@ final class AuthManager {
         }
     }
 
-    // Apple requires revokeToken with a fresh authorization code. The code expires in
-    // ~5 minutes, so we re-run Sign in with Apple at delete time to get a usable one,
-    // reauthenticate, then revoke before deleting the user.
+    // Apple requires revokeToken with a fresh authorization code, which expires in
+    // ~5 minutes, so re-run Sign in with Apple at delete time, reauthenticate, then revoke.
     private func revokeAppleAndReauthenticate(user: User) async throws {
         let rawNonce = try randomNonceString()
         let coordinator = AppleSignInCoordinator()
@@ -419,7 +394,7 @@ final class AuthManager {
         guard errorCode == errSecSuccess else {
             throw AuthError.nonceGenerationFailed
         }
-        // 64-char set keeps `UInt8 % 64` unbiased (256 / 64 = 4 evenly).
+        // A 64-char set keeps `UInt8 % 64` unbiased (256 / 64 divides evenly).
         let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._")
         return String(randomBytes.map { charset[Int($0) % charset.count] })
     }
@@ -432,8 +407,7 @@ final class AuthManager {
 
     // MARK: - Presentation helper
 
-    // The frontmost view controller, used as the presenter for Google's sign-in
-    // sheet. Apple's flow supplies its own anchor via the coordinator.
+    // The frontmost view controller, presenting Google's sheet (Apple supplies its own anchor).
     private static func topViewController() -> UIViewController? {
         let keyWindow = UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.keyWindow }
