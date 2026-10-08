@@ -1,19 +1,11 @@
-// Host-initiated offers (feature 43): the host proposes, the guest answers.
-//
-// This is the first write in the app where the *host* creates a stay document,
-// which inverts an assumption the create rule had baked in everywhere — that the
-// caller is the guest. The interesting cases are all forgeries that the old
-// shape would have waved through:
-//
-//   - a host manufacturing a "pending" request from a friend who never asked,
-//     which would let them accept it themselves and mint trust stats from nothing.
-//   - a guest posting an "offered" document to make it look like they were invited.
-//   - a host offering to someone who cannot even see the listing, which is the
-//     friends-only boundary the whole product rests on.
-//   - a host writing the guest's own words (their note, their party size).
-//
-// Acceptance is not tested here: it is a callable, not a client write, because
-// the double-booking guard has to be an admin transaction (L1).
+// Host-initiated offers: the host proposes, the guest answers. This is the first write where the
+// *host* creates a stay document, inverting the create rule's assumption that the caller is the
+// guest. The cases are forgeries the old shape would have waved through:
+//   - a host manufacturing a "pending" request from a friend who never asked (self-accept, mint trust stats);
+//   - a guest posting an "offered" document to look invited;
+//   - a host offering to someone who can't see the listing (the friends-only boundary);
+//   - a host writing the guest's own words (note, party size).
+// Acceptance isn't tested here; the double-booking guard is an admin transaction.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -142,7 +134,7 @@ after(() => testEnv.cleanup());
 beforeEach(() => testEnv.clearFirestore());
 
 describe("stayRequests/{id} create — a host offering their place", () => {
-  // The control: without it, a rule denying everything would pass the rest.
+  // The control: a rule denying everything would pass the rest.
   it("allows a host offering to a friend the listing is shared with", async () => {
     await seedListing();
     await assertSucceeds(createOffer(HOST));
@@ -153,28 +145,21 @@ describe("stayRequests/{id} create — a host offering their place", () => {
     await assertSucceeds(createOffer(HOST, { hostNote: "The place is yours that week." }));
   });
 
-  // The friends-only boundary, from the host's side. A listing id is not a
-  // capability: being able to name someone does not mean you may put a stay in
-  // their trip list.
+  // The friends-only boundary from the host's side: a listing id isn't a capability.
   it("denies a host offering to someone outside the listing's ACL", async () => {
     await seedListing();
     await assertFails(createOffer(HOST, { guestUserID: STRANGER }));
   });
 
-  // The hole the ACL check could never have closed. `allowedViewerIDs` is
-  // written by the host, so on this path it was the caller vouching for
-  // themselves: two writes — add a uid to your own listing, then offer to it —
-  // and an unsolicited stay with a 2000-character note landed in the trip list
-  // of anyone in the app. The listing here names STRANGER in its ACL exactly as
-  // that attack would; what they lack is a friend edge, and that is now what is
-  // actually asked.
+  // The hole the ACL check couldn't close: the host writes `allowedViewerIDs`, so they could add
+  // a uid to their own listing then offer to it, landing an unsolicited stay in anyone's trip list.
+  // The listing here names STRANGER in its ACL as that attack would; what they lack is a friend edge, now what's asked.
   it("denies a host offering to a non-friend they wrote into their own ACL", async () => {
     await seedListing({ allowedViewerIDs: [HOST, FRIEND, STRANGER] });
     await assertFails(createOffer(HOST, { guestUserID: STRANGER }));
   });
 
-  // The mirror, so the case above cannot pass by denying every stranger: the
-  // same ACL, and an accepted edge is the only difference.
+  // The mirror, so the case above can't pass by denying every stranger: same ACL, and only the accepted edge differs.
   it("allows the offer once that person is a real friend", async () => {
     await seedListing({ allowedViewerIDs: [HOST, FRIEND, STRANGER] });
     await seedFriendship(HOST, STRANGER);
@@ -225,10 +210,7 @@ describe("stayRequests/{id} create — a host offering their place", () => {
 });
 
 describe("stayRequests/{id} create — forging the other side", () => {
-  // The one that matters most. A host who could write status "pending" on a
-  // document naming a friend as guest could then accept it themselves, and the
-  // completed stay would count toward their own trust stats. The guest never
-  // asked and might never find out.
+  // The most important: a host writing status "pending" naming a friend as guest could accept it and count the stay toward their trust stats.
   it("denies a host manufacturing a pending request from a friend", async () => {
     await seedListing();
     await assertFails(createOffer(HOST, { status: "pending", initiatedBy: FRIEND }));
@@ -239,8 +221,7 @@ describe("stayRequests/{id} create — forging the other side", () => {
     await assertFails(createOffer(HOST, { initiatedBy: FRIEND }));
   });
 
-  // The mirror: a guest posting an "offered" document would fabricate an
-  // invitation that the host never extended.
+  // The mirror: a guest posting an "offered" document would fabricate an invitation.
   it("denies a guest creating an offered document", async () => {
     await seedListing();
     await assertFails(createOffer(FRIEND, { initiatedBy: FRIEND }));
@@ -256,8 +237,7 @@ describe("stayRequests/{id} create — forging the other side", () => {
     await assertFails(createOffer(STRANGER));
   });
 
-  // The guest's own words are theirs. A host who could write these would be
-  // putting a note, a party size, or an arrival time in their friend's mouth.
+  // The guest's words are theirs; a host writing a note, party size or arrival would put them in their friend's mouth.
   it("denies a host writing the guest's note on an offer", async () => {
     await seedListing();
     await assertFails(createOffer(HOST, { guestNote: "I'd love to come!" }));
@@ -273,8 +253,7 @@ describe("stayRequests/{id} create — forging the other side", () => {
     await assertFails(createOffer(HOST, { arrivalWindow: "morning" }));
   });
 
-  // A guest's request is the host's to answer, so the host's note belongs on the
-  // reply, not on the asking.
+  // A guest's request is the host's to answer, so the host's note belongs on the reply.
   it("denies a guest writing the host's note on their own request", async () => {
     await seedListing();
     await assertFails(
@@ -305,8 +284,7 @@ describe("stayRequests/{id} update — answering an offer", () => {
     );
   });
 
-  // The offer's note is the host's own words. A guest declining must not be able
-  // to rewrite what the host said when they offered.
+  // The offer's note is the host's words; a declining guest mustn't rewrite them.
   it("denies the guest overwriting the host's note while declining", async () => {
     await seedListing();
     await seedOffer({ hostNote: "The place is yours." });
@@ -315,11 +293,8 @@ describe("stayRequests/{id} update — answering an offer", () => {
     );
   });
 
-  // Acceptance used to be the callable's alone. The callable is not deployed, so
-  // the guest accepts their offer from the client; the double-booking guard for
-  // offers moved to the host's booked-range reconciler. The deny cases that
-  // matter now (host cannot self-accept, stranger cannot accept, dates and the
-  // host's note cannot be rewritten while accepting) live in accept.test.mjs.
+  // The callable isn't deployed, so the guest accepts from the client and the double-booking guard moved to the
+  // host's reconciler. The deny cases that matter now live in accept.test.mjs.
   it("allows the guest to accept their offer directly", async () => {
     await seedListing();
     await seedOffer();
@@ -344,8 +319,7 @@ describe("stayRequests/{id} update — answering an offer", () => {
     await assertFails(patch(STRANGER, { status: "declined", updatedAt: serverTimestamp() }));
   });
 
-  // Dates are what the guest is agreeing to. A host who could move them after the
-  // fact could offer one week and book another.
+  // Dates are what the guest agrees to; a host moving them afterwards could offer one week and book another.
   it("denies the host moving the dates on an offer", async () => {
     await seedListing();
     await seedOffer();
@@ -368,8 +342,7 @@ describe("stayRequests/{id} update — answering an offer", () => {
 describe("stayRequests/{id} update — withdrawing an offer", () => {
   const patch = (uid, data) => updateDoc(doc(as(uid), "stayRequests", OFFER), data);
 
-  // Cancelled, not declined: the friend never said no, and a trip list claiming
-  // they did would be a small lie told about them.
+  // Cancelled, not declined: the friend never said no.
   it("allows the host to withdraw an unanswered offer", async () => {
     await seedListing();
     await seedOffer();

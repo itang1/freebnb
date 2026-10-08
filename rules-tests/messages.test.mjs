@@ -1,10 +1,7 @@
-// Blocking is a rules boundary, not a UI one. The app hides a blocked thread,
-// but nothing stops a modified client from writing to `messages` directly, so
-// the rule is the only real control.
-//
-// The case that matters most here is the S11 regression: `recipientHasBlocked`
-// checked one direction only, so the *blocker* could keep writing messages to
-// the person they had blocked. `blockedEitherWay` closes it.
+// Blocking is a rules boundary, not a UI one: the app hides a blocked thread, but a modified
+// client can write to `messages` directly. The key case is the S11 regression: the old rule
+// checked one direction, so a *blocker* could keep messaging the person they blocked;
+// `blockedEitherWay` closes it.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -26,10 +23,8 @@ const PARTICIPANTS = [SENDER, RECIPIENT].sort();
 
 let testEnv;
 
-// A message write must carry the sender's rate-limit counter in the same commit,
-// because the create rule gates on `rateCounterAdvanced`. This mirrors the
-// transaction FirestoreMessagesRepository.send commits, so a rules change that
-// breaks the real client breaks these tests too.
+// A message write carries the sender's rate-limit counter in the same commit, since the create rule
+// gates on `rateCounterAdvanced`. Mirrors FirestoreMessagesRepository.send's transaction.
 function sendMessage(db, senderUserID, messageID) {
   const batch = writeBatch(db);
   batch.set(doc(db, "messages", messageID), {
@@ -46,8 +41,7 @@ function sendMessage(db, senderUserID, messageID) {
   return batch.commit();
 }
 
-// Same as sendMessage but attaches a structured stay `event` (item 29). The
-// event travels on the message doc, so it is validated by the same create rule.
+// Same as sendMessage but with a structured stay `event`, validated by the same create rule.
 function sendMessageWithEvent(db, senderUserID, messageID, event) {
   const batch = writeBatch(db);
   batch.set(doc(db, "messages", messageID), {
@@ -65,8 +59,7 @@ function sendMessageWithEvent(db, senderUserID, messageID, event) {
   return batch.commit();
 }
 
-// The app writes its own block list; seeding it directly keeps these tests about
-// the message rule rather than the private-profile rule.
+// The app writes its own block list; seeding it directly keeps these tests about the message rule.
 async function blocks(ownerID, blockedIDs) {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), `users/${ownerID}/private/profile`), {
@@ -75,9 +68,7 @@ async function blocks(ownerID, blockedIDs) {
   });
 }
 
-// Messaging is friend-gated, so every case that expects a send to *succeed* has
-// to seed the edge first. Seeded directly rather than written through the rules
-// for the same reason `blocks` is: these tests are about the message rule.
+// Messaging is friend-gated, so cases expecting a send to succeed seed the edge first (directly, like `blocks`).
 async function seedFriendship(a, b, status = "accepted") {
   const [userA, userB] = [a, b].sort();
   await testEnv.withSecurityRulesDisabled(async (context) => {
@@ -90,8 +81,7 @@ async function seedFriendship(a, b, status = "accepted") {
   });
 }
 
-// An authenticated context defaults to sign_in_provider "custom", which is not
-// "anonymous", so it clears the rules' isFullMember() gate.
+// An authenticated context defaults to sign_in_provider "custom", not "anonymous", so it clears isFullMember().
 const asSender = () => testEnv.authenticatedContext(SENDER).firestore();
 
 describe("messages/{id} create — blocking", () => {
@@ -106,36 +96,30 @@ describe("messages/{id} create — blocking", () => {
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
-    // The pair is friends unless a case says otherwise; blocking a friend is
-    // the ordinary shape of a block, so this is the realistic baseline.
+    // Friends by default; blocking a friend is the ordinary shape of a block.
     await seedFriendship(SENDER, RECIPIENT);
   });
 
-  // The control. Without it, a rule that denied everything would still pass both
-  // negative cases below.
+  // The control: a rule denying everything would pass both negative cases below.
   it("allows a message when neither party has blocked the other", async () => {
     await assertSucceeds(sendMessage(asSender(), SENDER, "m1"));
   });
 
-  // Already enforced before S11; this pins it against regression.
+  // Already enforced before S11; pinned against regression.
   it("denies a message when the recipient has blocked the sender", async () => {
     await blocks(RECIPIENT, [SENDER]);
     await assertFails(sendMessage(asSender(), SENDER, "m2"));
   });
 
-  // S11. This write was admitted before `blockedEitherWay`: the rule only ever
-  // read the recipient's block list, so blocking someone did not stop you from
-  // continuing to message them.
+  // S11: admitted before `blockedEitherWay`, since the rule read only the recipient's block list.
   it("denies a message when the sender has blocked the recipient (S11)", async () => {
     await blocks(SENDER, [RECIPIENT]);
     await assertFails(sendMessage(asSender(), SENDER, "m3"));
   });
 });
 
-// item 29: a message may carry a structured stay `event` that the recipient's
-// UI renders as a trusted system card. Because the card is trusted, the rule has
-// to keep the shape tight — a modified client must not be able to attach an
-// arbitrary map, an unknown kind, or extra keys.
+// A message may carry a structured stay `event` the recipient's UI renders as a trusted
+// card, so the rule keeps the shape tight: no arbitrary map, unknown kind or extra keys.
 describe("messages/{id} create — stay event", () => {
   before(async () => {
     testEnv = await initializeTestEnvironment({
@@ -148,16 +132,12 @@ describe("messages/{id} create — stay event", () => {
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
-    // The pair is friends unless a case says otherwise; blocking a friend is
-    // the ordinary shape of a block, so this is the realistic baseline.
+    // Friends by default; blocking a friend is the ordinary shape of a block.
     await seedFriendship(SENDER, RECIPIENT);
   });
 
-  // Every kind the Swift client can send, read from StayEvent.Kind in
-  // MessageStore.swift rather than listed here by hand. The 'offered' and
-  // 'modified' kinds shipped in the client while the rules whitelist still held
-  // the original four, so both courtesy notes failed silently in the thread;
-  // parsing the enum is what keeps a seventh kind from repeating that.
+  // Every kind the Swift client can send, parsed from StayEvent.Kind in MessageStore.swift
+  // (the 'offered' and 'modified' kinds once shipped while the whitelist held four, failing silently).
   for (const kind of swiftStayEventKinds()) {
     it(`allows an event of kind '${kind}'`, async () => {
       await assertSucceeds(
@@ -180,9 +160,7 @@ describe("messages/{id} create — stay event", () => {
   });
 
   it("allows a hostCancelled event carrying the listing it points back to", async () => {
-    // The exact payload StaysTab.hostCancel and MessagingRequestActions build.
-    // The kind loop above sends only kind+dateRange, so it passed while this
-    // shape — the only one the client actually sends for this kind — did not.
+    // The exact payload StaysTab.hostCancel and MessagingRequestActions build; the kind loop sends only kind+dateRange and missed it.
     await assertSucceeds(
       sendMessageWithEvent(asSender(), SENDER, "e2b", {
         kind: "hostCancelled",
@@ -235,11 +213,9 @@ describe("messages/{id} create — stay event", () => {
   });
 });
 
-// The friend graph is the trust model, and messaging is one of the three things
-// PRODUCT.md says it gates. Reads were always participants-only, but sends were
-// open to any full member the recipient hadn't blocked — so a stranger who knew
-// a uid could put text on someone's lock screen. The app hides the composer for
-// a non-friend, which is not a control; this is.
+// The friend graph is the trust model and messaging is one of the three things it gates. Sends were
+// open to any full member the recipient hadn't blocked, so a stranger knowing a uid could put text on
+// their lock screen; hiding the composer isn't a control.
 describe("messages/{id} create — friendship", () => {
   before(async () => {
     testEnv = await initializeTestEnvironment({
@@ -250,7 +226,7 @@ describe("messages/{id} create — friendship", () => {
 
   after(() => testEnv.cleanup());
 
-  // No friendship seeded here — each case states its own edge.
+  // No friendship seeded; each case states its own edge.
   beforeEach(() => testEnv.clearFirestore());
 
   it("denies a message between strangers", async () => {
@@ -267,16 +243,14 @@ describe("messages/{id} create — friendship", () => {
     await assertSucceeds(sendMessage(asSender(), SENDER, "f3"));
   });
 
-  // The edge id sorts its two participants, and rules cannot sort, so
-  // `areFriends` probes both orders. A message from the *second* uid has to
-  // clear the same gate as one from the first.
+  // The edge id sorts its participants and rules can't sort, so `areFriends` probes both orders; a message from the second uid must clear the same gate.
   it("allows a message from the other side of the same edge", async () => {
     await seedFriendship(SENDER, RECIPIENT);
     const db = testEnv.authenticatedContext(RECIPIENT).firestore();
     await assertSucceeds(sendMessage(db, RECIPIENT, "f4"));
   });
 
-  // Unfriending should end the thread's future, not just hide it.
+  // Unfriending ends the thread's future, not just hides it.
   it("denies a message once the friendship is removed", async () => {
     await seedFriendship(SENDER, RECIPIENT);
     await assertSucceeds(sendMessage(asSender(), SENDER, "f5"));

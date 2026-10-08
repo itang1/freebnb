@@ -1,18 +1,12 @@
-// Co-hosts (feature 14) are a delegation of authority over a listing, and the
-// rules are where that delegation is bounded. The interesting cases are not
-// "can a co-host edit the listing" — they are all the things a co-host must
-// *not* be able to do while holding a credential that looks a lot like the
-// host's.
-//
-// Six boundaries are pinned here:
+// Co-hosts are a delegation of authority over a listing, and the rules bound it. The
+// interesting cases are what a co-host must *not* do while holding a credential that looks
+// like the host's. Pinned boundaries:
 //   - only the host changes the roster, and only to an accepted friend;
-//   - a co-host cannot promote themselves to host, nor add further co-hosts;
-//   - a co-host cannot rewrite `allowedViewerIDs` (which would republish a
-//     friends-only listing to their own social graph);
-//   - a co-host cannot delete the listing, by the delete rule or by smuggling
-//     `deletedAt` through the update rule;
-//   - a co-host *can* read and write the private location and house manual,
-//     because a roommate who can't see the door code can't let a guest in;
+//   - a co-host can't promote themselves to host or add further co-hosts;
+//   - a co-host can't rewrite `allowedViewerIDs` (it would republish the listing to their graph);
+//   - a co-host can't delete the listing, by the delete rule or via `deletedAt` in an update;
+//   - a co-host can read and write the private location and manual (a roommate who can't
+//     see the door code can't let a guest in);
 //   - a stranger can do none of it.
 
 import { readFileSync } from "node:fs";
@@ -100,8 +94,7 @@ describe("homes/{id} — the co-host roster", () => {
     await assertSucceeds(updateDoc(listingDoc(asHost()), { coHostUserIDs: [COHOST] }));
   });
 
-  // A co-host is handed the street address. "Co-host" must not become a way to
-  // grant a stranger read access to the host's front door.
+  // A co-host gets the street address, so "co-host" mustn't become a way to grant a stranger the front door.
   it("refuses a co-host who is not an accepted friend of the host", async () => {
     await seedListing();
     await assertFails(updateDoc(listingDoc(asHost()), { coHostUserIDs: [STRANGER] }));
@@ -113,8 +106,7 @@ describe("homes/{id} — the co-host roster", () => {
     await assertFails(updateDoc(listingDoc(asHost()), { coHostUserIDs: [COHOST] }));
   });
 
-  // Rules cannot loop, so the friend check only holds if additions arrive one at
-  // a time. A batch of two would let the second one through unchecked.
+  // Rules can't loop, so the friend check holds only if additions arrive one at a time; a batch of two would pass the second unchecked.
   it("refuses two co-hosts added in a single write, even if both are friends", async () => {
     await seedFriendship(HOST, COHOST);
     await seedFriendship(HOST, FRIEND);
@@ -130,8 +122,7 @@ describe("homes/{id} — the co-host roster", () => {
     await assertSucceeds(updateDoc(listingDoc(asHost()), { coHostUserIDs: [COHOST, FRIEND] }));
   });
 
-  // Taking a capability back is always safe, so removal needs no friend edge —
-  // which matters, because unfriending someone is exactly when you'd remove them.
+  // Taking a capability back is safe, so removal needs no friend edge (unfriending is when you'd remove them).
   it("lets the host remove a co-host even after the friendship is gone", async () => {
     await seedCoHostedListing();
     await assertSucceeds(updateDoc(listingDoc(asHost()), { coHostUserIDs: [] }));
@@ -149,13 +140,10 @@ describe("homes/{id} — the co-host roster", () => {
     );
   });
 
-  // Admitting a roster at create would mean validating every name in it against
-  // the friend graph, which a loop-free rule cannot do.
+  // Admitting a roster at create would need validating every name against the friend graph, which a loop-free rule can't do.
   //
-  // `createdAt` must be serverTimestamp(): the create rule pins it to
-  // request.time, so any other value fails the write for a reason that has
-  // nothing to do with co-hosts, and the assertion would pass vacuously. The
-  // sibling test below is what proves this one is testing what it claims.
+  // `createdAt` must be serverTimestamp() (the create rule pins it to request.time), or the write
+  // fails for an unrelated reason and the assertion passes vacuously; the sibling test proves this one tests what it claims.
   it("refuses a listing created with co-hosts already on it", async () => {
     await seedFriendship(HOST, COHOST);
     await assertFails(
@@ -193,10 +181,8 @@ describe("homes/{id} — what a co-host may write", () => {
     );
   });
 
-  // The merged field on the public document. A co-host's own blocking now goes
-  // to `private/availability` (availability.test.mjs covers that); what this
-  // asserts is that the published union is theirs to rewrite, because their save
-  // round-trips it.
+  // The merged field on the public document: a co-host's blocking goes to `private/availability`
+  // (availability.test.mjs), but the published union is theirs to rewrite since their save round-trips it.
   it("lets a co-host write the merged availability field", async () => {
     await seedCoHostedListing();
     await assertSucceeds(
@@ -206,7 +192,7 @@ describe("homes/{id} — what a co-host may write", () => {
     );
   });
 
-  // The listing's identity. A co-host who could write this would own the listing.
+  // The listing's identity: a co-host who could write this would own the listing.
   it("refuses a co-host promoting themselves to host", async () => {
     await seedCoHostedListing();
     await assertFails(updateDoc(listingDoc(asCoHost()), { hostUserID: COHOST }));
@@ -223,9 +209,7 @@ describe("homes/{id} — what a co-host may write", () => {
     await assertFails(updateDoc(listingDoc(asCoHost()), { coHostUserIDs: [COHOST] }));
   });
 
-  // The client rebuilds allowedViewerIDs from the *saving* user's friends. If a
-  // co-host could write it, saving an edit would silently republish a
-  // friends-only listing to a social graph the host never saw.
+  // The client rebuilds allowedViewerIDs from the saving user's friends; a co-host writing it would republish a friends-only listing to another graph.
   it("refuses a co-host rewriting the read ACL", async () => {
     await seedCoHostedListing();
     await assertFails(
@@ -244,8 +228,7 @@ describe("homes/{id} — what a co-host may write", () => {
     await assertFails(deleteDoc(listingDoc(asCoHost())));
   });
 
-  // Refused the delete rule, a co-host must not reach the same end through the
-  // update rule: `deletedAt` is what the feed filters on.
+  // Refused the delete rule, a co-host mustn't reach the same end through the update rule (`deletedAt` is what the feed filters on).
   it("refuses a co-host soft-deleting the listing through an update", async () => {
     await seedCoHostedListing();
     await assertFails(updateDoc(listingDoc(asCoHost()), { deletedAt: Timestamp.now() }));
@@ -272,9 +255,7 @@ describe("homes/{id} — reading a co-hosted listing", () => {
     await assertSucceeds(getDoc(listingDoc(asCoHost())));
   });
 
-  // The roster is the grant. Losing the friendship, and so a place in
-  // allowedViewerIDs, must not lock a co-host out of the listing they manage;
-  // removing them from the roster is how the host takes it back.
+  // The roster is the grant: losing the friendship (and the ACL place) mustn't lock a co-host out; removing them from the roster is how the host takes it back.
   it("lets a co-host read a friends-only listing they have dropped out of the ACL of", async () => {
     await seedListing({ coHostUserIDs: [COHOST], allowedViewerIDs: [HOST] });
     await assertSucceeds(getDoc(listingDoc(asCoHost())));
@@ -318,11 +299,8 @@ describe("homes/{id}/private — the address and the house manual", () => {
   });
 });
 
-// A co-host answers stay requests for the listings they manage. This was the
-// one piece of the delegation that was withheld, which left a co-host able to
-// block dates on a calendar while blind to the bookings filling it. The
-// boundaries that matter now are the ones separating "acts with the host's
-// authority" from "is the host": a co-host answers requests, and still cannot
+// A co-host answers stay requests for the listings they manage. The boundaries now separate
+// "acts with the host's authority" from "is the host": a co-host answers requests but can't
 // rename the host, offer the place, or answer a request they themselves sent.
 describe("stayRequests — the co-host's half of the inbox", () => {
   const REQUEST = "request-1";
@@ -354,12 +332,9 @@ describe("stayRequests — the co-host's half of the inbox", () => {
     await assertSucceeds(getDoc(requestDoc(asCoHost())));
   });
 
-  // The app never reads one request by id — both the host inbox and the co-host
-  // inbox are snapshot *queries*, and a query is evaluated against the read rule
-  // differently than a getDoc. Adding `isListingManager()` (a get()) to that rule
-  // for co-hosts risked denying the whole query, including the host's own inbox
-  // that used only field comparisons before. These pin that the queries the app
-  // actually runs still resolve.
+  // The app reads requests through snapshot queries, not getDoc, and a query is evaluated against the read
+  // rule differently. Adding `isListingManager()` (a get()) risked denying the whole query, including the
+  // host's own inbox. These pin that the queries the app runs still resolve.
   it("lets the host list their incoming requests by hostUserID", async () => {
     await seedRequest();
     const q = query(
@@ -421,8 +396,7 @@ describe("stayRequests — the co-host's half of the inbox", () => {
     }));
   });
 
-  // `cancelledBy` names the side, not the individual: the push trigger branches
-  // on it and the guest's trip row reads it back.
+  // `cancelledBy` names the side, not the individual: the push trigger branches on it and the guest's trip row reads it.
   it("refuses a co-host stamping cancelledBy with their own id", async () => {
     await seedRequest({ status: "accepted" });
     await assertFails(updateDoc(requestDoc(asCoHost()), {
@@ -432,15 +406,10 @@ describe("stayRequests — the co-host's half of the inbox", () => {
     }));
   });
 
-  // Acceptance used to be the callable's alone, and this asserted that a co-host
-  // could not write the status directly. The callable is not deployed, so the
-  // host side now accepts from the client and a co-host is the host side —
-  // accept.test.mjs covers that path and the address grant that rides with it.
-  //
-  // What survives from the old assertion is the part that was really about
-  // co-hosts rather than about acceptance: a co-host may answer a request that
-  // was made, and may not manufacture one. Accepting an *offer* is still the
-  // guest's, and still the callable's.
+  // Acceptance was the callable's alone; the callable isn't deployed, so the host side accepts
+  // from the client and a co-host is the host side (accept.test.mjs covers the path and address
+  // grant). What survives is the co-host part: they may answer a request that was made, not
+  // manufacture one. Accepting an offer is still the guest's, and the callable's.
   it("refuses a co-host accepting an offer on the guest's behalf", async () => {
     await seedRequest({ status: "offered" });
     await assertFails(updateDoc(requestDoc(asCoHost()), {
@@ -449,15 +418,13 @@ describe("stayRequests — the co-host's half of the inbox", () => {
     }));
   });
 
-  // The name is the host's own, and a rename propagating from a co-host would
-  // rewrite trip rows to say something the host never chose.
+  // The name is the host's own; a co-host's rename would rewrite trip rows to something the host never chose.
   it("refuses a co-host rewriting the denormalized host name", async () => {
     await seedRequest();
     await assertFails(updateDoc(requestDoc(asCoHost()), { listingHostName: "Not The Host" }));
   });
 
-  // Offering is the host's to extend: the create rule pins hostUserID to the
-  // caller, so a co-host cannot mint one even for the listing they manage.
+  // Offering is the host's: the create rule pins hostUserID to the caller, so a co-host can't mint one.
   it("refuses a co-host offering the place to a friend", async () => {
     await seedCoHostedListing();
     await seedFriendship(COHOST, FRIEND);
@@ -469,17 +436,14 @@ describe("stayRequests — the co-host's half of the inbox", () => {
     })));
   });
 
-  // The listing a co-host manages is one they may also ask to stay at, which
-  // puts them on both sides of the document. They may send it; the callable is
-  // what refuses to let them answer it (see acceptStayRequest).
+  // A co-host may also ask to stay at a listing they manage, putting them on both sides; they may send it, and the callable refuses to let them answer it.
   it("lets a co-host decline a request from someone else, not their own", async () => {
     await seedCoHostedListing();
     await seed((db) => setDoc(requestDoc(db, "request-own"), requestBody({
       id: "request-own",
       guestUserID: COHOST,
     })));
-    // Declining their own request is indistinguishable from cancelling it, which
-    // they may already do as the guest, so the rule need not single it out.
+    // Declining their own request is indistinguishable from cancelling it, which they may do as the guest.
     await assertSucceeds(updateDoc(requestDoc(asCoHost(), "request-own"), {
       status: "declined",
       updatedAt: serverTimestamp(),

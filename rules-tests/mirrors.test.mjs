@@ -1,16 +1,8 @@
-// The same values live in more than one language on purpose: firestore.rules,
-// the Swift app, the Cloud Functions, the admin console, and the seed scripts
-// cannot share code, so caps, enum whitelists, and id formats are written out
-// in each. A change to one copy and not the others is a silent bug (the
-// 'offered'/'modified' event kinds shipped in the client while the rules still
-// whitelisted four, and the courtesy notes just never arrived).
-//
-// This file is the tripwire: it parses each copy out of the real source files
-// and asserts they still agree. Pure text checks, no emulator needed, so it
-// also runs standalone: `node --test mirrors.test.mjs`.
-//
-// If a test here fails, the fix is almost never in this file. Find the copies
-// it names, decide which one is right, and move the others to match.
+// The same values live in several languages on purpose (firestore.rules, Swift, Cloud Functions,
+// admin console, seed scripts can't share code), so a change to one copy and not the others is a
+// silent bug (the 'offered'/'modified' kinds shipped while the rules whitelisted four). This
+// tripwire parses each copy from the real sources and asserts they agree. Pure text checks, so
+// it runs standalone: `node --test mirrors.test.mjs`. If one fails, fix the named copies, not this file.
 
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -67,11 +59,8 @@ describe("stay event kinds", () => {
   });
 
   it("rules validMessageEvent allows exactly the keys StayEvent encodes", () => {
-    // The other half of the same mirror. Whitelisting a kind is not enough: an
-    // event whose new field is missing from hasOnly() is rejected outright, and
-    // because the kind loop below sends only kind+dateRange, the deny is
-    // invisible there. `hostCancelled` shipped that way — allowed as a kind,
-    // denied for the listingID it always carries.
+    // Whitelisting a kind isn't enough: an event with a new field missing from hasOnly() is rejected,
+    // invisible to the kind loop below (`hostCancelled` shipped denied for its listingID).
     const rulesKeys = quoted(
       section(rules, "data.event.keys().hasOnly([", "])", "validMessageEvent keys")
     );
@@ -157,9 +146,7 @@ describe("listing caps", () => {
 
 describe("notification categories", () => {
   it("Swift NotificationCategory cases match the functions' union type", () => {
-    // A renamed Swift case moves the stored preference under a new key; the
-    // server reads the old key, finds nothing, and treats the category as
-    // opted-in, so a muted category silently starts pushing again.
+    // A renamed Swift case moves the stored preference under a new key; the server reads the old one and re-enables a muted category.
     const swiftCases = swiftEnumCases(
       section(notificationPreferences, "enum NotificationCategory", "var id", "NotificationCategory")
     );
@@ -190,10 +177,8 @@ describe("stay request enums", () => {
     sameSet(swiftWindows, rulesWindows, "ArrivalWindow vs rules arrivalWindow whitelist");
   });
 
-  // Circles gate which of the five a friend may pick, so the rules now carry a
-  // second copy of the same list — in arrivalOptions(), which is what a booking
-  // policy is validated against and what an absent policy falls back to. A copy
-  // that drifted would let a host store an option the create rule then rejects.
+  // Circles gate which of the five a friend may pick, so the rules carry a second copy in
+  // arrivalOptions(); a drifted copy would let a host store an option the create rule rejects.
   it("arrival windows: rules whitelist vs the Circles policy list", () => {
     const rulesWindows = quoted(
       section(rules, "request.resource.data.arrivalWindow in", "]", "rules arrivalWindow")
@@ -205,16 +190,12 @@ describe("stay request enums", () => {
   });
 });
 
-// The Circles policy bounds live in three places that cannot share code: the
-// Swift model a host edits against, the rules that validate what gets stored,
-// and the migration that backfills. A bound that drifts is a policy a host can
-// save and the rules then refuse.
+// The Circles policy bounds live in three places that can't share code (Swift model, rules, migration); a drifted bound is a policy a host saves and the rules refuse.
 describe("circles", () => {
   const circleSwift = read("freebnb/Friends/FriendCircle.swift");
 
   it("the Default circle's document id", () => {
-    // FriendCircle.defaultID is an alias for this, so the Swift side has one
-    // literal and the mirror is genuinely three-way (Swift, rules, paths.ts).
+    // FriendCircle.defaultID aliases this, so the mirror is three-way (Swift, rules, paths.ts).
     const swiftID = read("freebnb/Shared/FirestorePaths.swift")
       .match(/static let defaultCircleDocID = "([^"]+)"/);
     assert.ok(swiftID, "FirestorePaths.defaultCircleDocID not found");
@@ -353,12 +334,9 @@ describe("public coordinate rounding", () => {
   });
 });
 
-// The invite link is the only bridge into a friends-only app, and the pieces
-// that make it open the app instead of Safari live in four files that cannot
-// import each other: the Swift that builds the link, the entitlement that
-// claims the domain, the AASA file iOS fetches to check that claim, and the
-// hosting config that serves it. Nothing fails loudly when they disagree —
-// links simply keep opening the browser — so they are checked here.
+// The invite link is the only bridge into a friends-only app, and what makes it open the app (not
+// Safari) lives in four files: the Swift that builds it, the entitlement, the AASA file and the hosting
+// config. Nothing fails loudly when they disagree, so they're checked here.
 describe("invite universal link", () => {
   const swiftString = (name) => {
     const match = inviteCopy.match(new RegExp(`static let ${name} = "([^"]+)"`));
@@ -392,8 +370,7 @@ describe("invite universal link", () => {
     const wellKnown = "/.well-known/apple-app-site-association";
     const rewrite = firebaseJson.hosting.rewrites.find((r) => r.source === wellKnown);
     assert.ok(rewrite, `firebase.json has no rewrite for ${wellKnown}`);
-    // Served from a path without a leading dot, because hosting's ignore of
-    // "**/.*" would drop the file from the deploy without saying so.
+    // Served from a path without a leading dot, since hosting's "**/.*" ignore would silently drop it.
     assert.equal(rewrite.destination, "/well-known/apple-app-site-association.json");
     assert.ok(
       !firebaseJson.hosting.ignore.some((pattern) => rewrite.destination.includes(pattern.replace("**/", ""))),
@@ -417,16 +394,10 @@ describe("invite universal link", () => {
 
   it("the landing page hands the sender to the app's own scheme", () => {
     const html = read(`admin${webPath}/index.html`);
-    // The logic moved out of an inline <script> so the site's CSP can refuse
-    // inline script. Follow the page to whatever it loads rather than naming
-    // the file here, so this keeps checking the real thing if it moves again.
+    // The logic moved out of an inline <script> for the CSP; follow the page to what it loads rather than naming the file.
     const src = html.match(/<script[^>]+src="([^"]+)"/);
     assert.ok(src, "the landing page loads no script");
-    // Resolve the src the way a browser would, not the way the repo is laid
-    // out. Hosting serves this page at `${webPath}` with trailingSlash:false,
-    // so there is no trailing segment for a relative src to resolve against
-    // and it lands at the site root. Reading it from the page's own directory
-    // instead would pass while the deployed page 404s on its only script.
+    // Resolve the src as a browser would: hosting serves the page at `${webPath}` with trailingSlash:false, so a relative src lands at the site root, not the repo layout.
     const resolved = src[1].startsWith("/") ? src[1] : `/${src[1]}`;
     assert.ok(
       exists(`admin${resolved}`),

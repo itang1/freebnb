@@ -1,16 +1,9 @@
-// Stay requests and friend requests are the two writes that let one member land
-// in another's inbox, so they are where the friends-only boundary and the block
-// feature have to hold at the rules level, not just in the UI.
-//
-// Four boundaries are pinned here:
-//   - a stay request requires the guest to be in the listing's read ACL, and no
-//     block in either direction.
-//   - the host may call off an accepted stay (cancelled), but a pending request
-//     is declined, never host-cancelled.
-//   - a friend request is refused when either party has blocked the other, and
-//     the edge carries only its known keys.
-//   - a stay request is readable to its own two parties and to anyone managing
-//     the listing it targets, and to nobody else.
+// Stay requests and friend requests are the two writes that land one member in another's
+// inbox, so the friends-only boundary and blocking must hold at the rules level. Pinned:
+//   - a stay request needs the guest in the listing's read ACL and no block either way;
+//   - the host may call off an accepted stay (cancelled), but a pending request is declined, never host-cancelled;
+//   - a friend request is refused when either party blocked the other, and the edge has only its known keys;
+//   - a stay request is readable by its two parties and the listing's managers, nobody else.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -43,8 +36,7 @@ const DAY_MS = 86_400_000;
 
 let testEnv;
 
-// An authenticated context defaults to sign_in_provider "custom", which is not
-// "anonymous", so it clears the rules' isFullMember() gate.
+// An authenticated context defaults to sign_in_provider "custom", not "anonymous", so it clears isFullMember().
 const as = (uid) => testEnv.authenticatedContext(uid).firestore();
 
 /** Seeds documents the rules read but these tests aren't about. */
@@ -127,7 +119,7 @@ after(() => testEnv.cleanup());
 beforeEach(() => testEnv.clearFirestore());
 
 describe("stayRequests/{id} create — the friends-only boundary", () => {
-  // The control: without it, a rule denying everything would pass the rest.
+  // The control: a rule denying everything would pass the rest.
   it("allows a guest the listing is shared with", async () => {
     await seedListing();
     await assertSucceeds(createRequest(FRIEND));
@@ -157,12 +149,8 @@ describe("stayRequests/{id} create — the friends-only boundary", () => {
     );
   });
 
-  // listingCity and listingHostName sat in the key allowlist with nothing
-  // checking them, so a hand-rolled client could put unbounded free text in
-  // either. Neither field stays in the document: both are interpolated into
-  // push bodies and into the on-device reminder copy, so this is the gap
-  // between "a snapshot of the listing" and "arbitrary text on the other
-  // person's Lock Screen".
+  // listingCity and listingHostName were allowlisted but unchecked, so a hand-rolled client could put
+  // unbounded text in either; both are interpolated into push bodies and reminder copy (text on the other person's Lock Screen).
   it("denies a request whose listingCity is unbounded text", async () => {
     await seedListing();
     await assertFails(createRequest(FRIEND, { listingCity: "x".repeat(101) }));
@@ -179,8 +167,7 @@ describe("stayRequests/{id} create — the friends-only boundary", () => {
   });
 
   it("allows the ordinary snapshots the client actually sends", async () => {
-    // The control for the three above: the cap has to admit a real city and a
-    // real display name, or it would have broken every request.
+    // The control for the three above: the cap must admit a real city and display name.
     await seedListing();
     await assertSucceeds(
       createRequest(FRIEND, { listingCity: "San Francisco", listingHostName: "Alex Rivera" })
@@ -236,9 +223,7 @@ describe("stayRequests/{id} update — host cancels an accepted stay", () => {
   });
 });
 
-// `cancelledBy` is what tells the push trigger whom to notify, since both
-// parties can cancel and the document is otherwise identical either way. It is
-// therefore only worth anything if it cannot lie.
+// `cancelledBy` tells the push trigger whom to notify (both parties can cancel), so it's only worth anything if it can't lie.
 describe("stayRequests/{id} update — cancelledBy names whoever cancelled", () => {
   it("denies a host cancel that blames the guest", async () => {
     await seedStay("accepted");
@@ -263,8 +248,7 @@ describe("stayRequests/{id} update — cancelledBy names whoever cancelled", () 
   });
 
   it("denies a cancel that omits cancelledBy", async () => {
-    // Without it the trigger cannot tell who already knows, so it stays quiet —
-    // making an unattributed cancellation a way to silence the notification.
+    // Without it the trigger can't tell who already knows and stays quiet, so an unattributed cancel would silence the notification.
     await seedStay("accepted");
     await assertFails(
       updateDoc(doc(as(FRIEND), "stayRequests", STAY), {
@@ -328,21 +312,11 @@ describe("friendEdges/{id} create — blocks stop friend requests", () => {
   });
 });
 
-// The overlap question — "is any accepted stay on this listing in my dates?" —
-// used to be unaskable from the client by anyone, because the read rule named
-// only the two parties and a `list` is evaluated against its potential result
-// set. Co-hosts changed that: their inbox is a listing-scoped query
-// (`listingID in [...]`), which the rule can only admit by making listing scope
-// provable, so the same shape is now legal for anyone managing the listing.
-//
-// What that does *not* change is where the double-booking guard lives. It was
-// never this denial — it is the transaction inside the acceptStayRequest
-// callable, which is also the only thing that can read across both parties'
-// requests. A client that now runs the query still cannot act on it: the update
-// rule refuses a client-written "accepted" from either side.
-//
-// The boundary that still holds is who may ask: a manager of the listing, and
-// nobody else. The guest's denial below is the control proving that.
+// "Is any accepted stay on this listing in my dates?" was unaskable from the client because the read
+// rule named only the two parties. Co-hosts changed that: their inbox is a listing-scoped query, so
+// the same shape is now legal for anyone managing the listing. The double-booking guard was never
+// this denial but the acceptStayRequest transaction, and a client running the query still can't act
+// on it (the update rule refuses a client-written "accepted"). What holds is who may ask: managers only.
 describe("stayRequests — the listing-scoped overlap query", () => {
   const acceptedOnListing = (uid) =>
     getDocs(
@@ -358,14 +332,12 @@ describe("stayRequests — the listing-scoped overlap query", () => {
     await seedStay("accepted");
   });
 
-  // The host manages their own listing, so the scope is provable for them. They
-  // could already read every one of these requests via `hostUserID == uid`; this
-  // is a second shape on the same data, not new reach.
+  // The host manages their own listing so the scope is provable; they could already read these via `hostUserID == uid`, so no new reach.
   it("allows the listing-scoped query to the host", async () => {
     await assertSucceeds(acceptedOnListing(HOST));
   });
 
-  // ...but reading is still not accepting. The guard that matters survives.
+  // ...but reading is still not accepting; the guard that matters survives.
   it("still refuses the host writing an acceptance directly", async () => {
     await assertFails(
       updateDoc(doc(as(HOST), "stayRequests", STAY), {
@@ -379,9 +351,7 @@ describe("stayRequests — the listing-scoped overlap query", () => {
     await assertFails(acceptedOnListing(FRIEND));
   });
 
-  // The control: constraining the query to one party's own requests is provable
-  // against the read rule, so the denials above are about the missing
-  // constraint, not a rule that denies every list.
+  // The control: constraining the query to one party's requests is provable, so the denials above are about the missing constraint.
   it("allows a query constrained to the caller's own requests", async () => {
     await assertSucceeds(
       getDocs(
