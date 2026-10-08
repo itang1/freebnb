@@ -1,17 +1,12 @@
-// Accepting a stay used to be the callable's alone, and the rules said so:
-// `allow create: if false` on the address-disclosure marker, and no accept
-// branch on the stay request at all. The callable is not deployed in
-// production, so that combination did not protect acceptance — it prevented it.
-//
-// The host path now runs on the client. These tests pin what that did *not*
-// open up, which is the whole point of writing them:
+// Accepting a stay was the callable's alone (`allow create: if false` on the address marker, no
+// accept branch on the request), but with the callable undeployed that prevented acceptance.
+// The host path now runs on the client. These pin what that did *not* open up:
 //   - only the host side may accept, and only a pending request;
-//   - accepting may not rewrite the dates, the parties, or the listing;
-//   - a guest may not accept their own request (the self-approval hole);
-//   - an offer still may not be client-accepted — that path keeps the callable;
-//   - the address grant cannot be forged: not without an accepted request, not
-//     for a request belonging to someone else, not pointed at another listing,
-//     and not by the guest who would benefit from it.
+//   - accepting can't rewrite the dates, parties or listing;
+//   - a guest can't accept their own request (self-approval);
+//   - an offer still can't be client-accepted by the host;
+//   - the address grant can't be forged: without an accepted request, for someone else's request,
+//     pointed at another listing, or by the guest who'd benefit.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -90,12 +85,8 @@ const markerFields = (extra = {}) => ({
 before(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: "freebnb-accept-tests",
-    // No host/port: every other file in this directory lets the emulator be
-    // discovered from FIRESTORE_EMULATOR_HOST, which `emulators:exec` sets to
-    // whatever port it actually booted on. Naming one here pinned this file to a
-    // port nothing was listening on, so `before` hung and the runner cancelled
-    // every test in the file with "did not finish before its parent" — which
-    // reads like a suite-wide breakage rather than a wrong address.
+    // No host/port: other files discover the emulator from FIRESTORE_EMULATOR_HOST, and naming
+    // one here left `before` hanging and the runner cancelling every test with a misleading error.
     firestore: { rules: readFileSync(rulesPath, "utf8") },
   });
 });
@@ -133,8 +124,7 @@ describe("accepting a pending request from the client", () => {
   });
 
   it("refuses the host accepting their own offer on the guest's behalf", async () => {
-    // An offer is the guest's to accept. The host writing accepted here would be
-    // the self-approval hole on the offer path.
+    // An offer is the guest's to accept; the host writing accepted is the self-approval hole.
     await seed((db) => setDoc(doc(db, "stayRequests", REQUEST), requestBody({ status: "offered", initiatedBy: HOST })));
     await assertFails(updateDoc(doc(as(HOST), "stayRequests", REQUEST), acceptFields));
   });
@@ -263,11 +253,9 @@ describe("the address grant", () => {
   });
 });
 
-// Read, create, and delete on the marker have to ask the same question. They
-// drifted once: `create` moved to `isListingManager` so the grant could ride
-// along with a client-side acceptance, while read and delete stayed on
-// `isListingHost`. A co-host could then issue a grant they could not read back,
-// and could cancel a stay whose address they could not revoke.
+// Read, create and delete on the marker must ask the same question. They drifted once: `create` moved
+// to `isListingManager` while read and delete stayed on `isListingHost`, so a co-host could issue a
+// grant they couldn't read back and cancel a stay whose address they couldn't revoke.
 describe("the address grant — revoking and reading it back", () => {
   /** A stay already accepted, with the guest holding the address. */
   async function seedAccepted() {
@@ -313,11 +301,8 @@ describe("the address grant — revoking and reading it back", () => {
     await assertFails(deleteDoc(markerDoc(as(STRANGER))));
   });
 
-  // The case the drift actually broke. `updateStatus` sends the cancellation and
-  // the revocation as one batch, and a batch is atomic — so when a co-host could
-  // cancel but not revoke, the cancel failed outright rather than leaving the
-  // address behind. Written as the batch the client sends, not as two writes,
-  // because two writes would pass on rules that this one dies on.
+  // The drift's actual break: `updateStatus` sends the cancel and revoke as one atomic batch, so a
+  // co-host who could cancel but not revoke failed outright. Written as that batch, since two writes would pass.
   function cancelBatch(db) {
     const batch = writeBatch(db);
     batch.update(doc(db, "stayRequests", REQUEST), {
@@ -365,9 +350,7 @@ describe("the listing's published calendar", () => {
   });
 
   it("lets the host reconcile the private booked half", async () => {
-    // Previously pinned against every client because the trigger owned it. The
-    // host's reconciler owns it now, so this must be allowed — and it is still
-    // managers-only, which is what keeps it off a guest's read.
+    // Previously pinned because a trigger owned it; the host's reconciler does now, so this must be allowed (still managers-only).
     await seed((db) =>
       setDoc(doc(db, "homes", LISTING, "private", "availability"), {
         blockedDateRanges: [], bookedDateRanges: [],
@@ -384,8 +367,7 @@ describe("the listing's published calendar", () => {
         blockedDateRanges: [], bookedDateRanges: [{ start: day(3), end: day(6) }],
       })
     );
-    // Even an accepted guest: the split's whole purpose is that a booking never
-    // becomes legible as distinct from a blocked day.
+    // Even an accepted guest: a booking must never become legible as distinct from a blocked day.
     await seed((db) => setDoc(doc(db, "homes", LISTING, "accepted", GUEST), markerFields()));
     const { getDoc } = await import("firebase/firestore");
     await assertFails(getDoc(doc(as(GUEST), "homes", LISTING, "private", "availability")));
