@@ -45,7 +45,8 @@ enum FirestorePaths {
     static let friendNotes = "friendNotes"
     /// Which note prompts a host answered or waved off: `users/{hostID}/friendNotePrompts/{stayRequestID}`.
     static let friendNotePrompts = "friendNotePrompts"
-    /// A guest's private notes on hosts and listings: `users/{guestID}/guestNotes/{noteID}`. That guest alone reads them.
+    /// A guest's private notes on hosts and listings: `users/{guestID}/guestNotes/{noteID}`. That guest alone
+    /// reads them.
     static let guestNotes = "guestNotes"
     /// Which note prompts a guest answered or waved off: `users/{guestID}/guestNotePrompts/{stayRequestID}`.
     static let guestNotePrompts = "guestNotePrompts"

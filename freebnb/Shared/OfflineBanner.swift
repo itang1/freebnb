@@ -2,7 +2,8 @@
 //  OfflineBanner.swift
 //  freebnb
 //
-//  A slim banner under the status bar while offline, reassuring that sends are queued, not lost. Driven by `NetworkMonitor`.
+//  A slim banner under the status bar while offline, reassuring that sends are queued, not lost. Driven by
+//  `NetworkMonitor`.
 //
 
 import SwiftUI

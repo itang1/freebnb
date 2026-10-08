@@ -22,7 +22,8 @@ struct TestProfile: Identifiable {
 
     var id: String { email }
 
-    /// The slug for accessibility identifiers, from the email handle; Guest and Devna keep the IDs the UI tests target (see `accessibilityID(surface:)`).
+    /// The slug for accessibility identifiers, from the email handle; Guest and Devna keep the IDs the UI
+    /// tests target (see `accessibilityID(surface:)`).
     var slug: String { String(email.prefix(while: { $0 != "@" })) }
 
     /// `"<surface>.<slug>SignInButton"`, e.g. `"welcome.spongebobSignInButton"`. Quirk: the dev

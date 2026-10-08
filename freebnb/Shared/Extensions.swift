@@ -8,7 +8,8 @@ import UIKit
 
 // MARK: - Shared formatters
 
-/// `DateFormatter` allocation is expensive and a few configurations recur across stay/message screens, so one instance per style is reused.
+/// `DateFormatter` allocation is expensive and a few configurations recur across stay/message screens, so one
+/// instance per style is reused.
 enum AppDateFormatters {
     /// "Mar 5" — used in chat banners and activity strings.
     static let shortDay: DateFormatter = {

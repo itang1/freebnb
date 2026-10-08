@@ -2,7 +2,8 @@
 //  FeedSections.swift
 //  freebnb
 //
-//  Why a listing is in your feed, as the chip on each card. A pure derivation of (listing, viewer, friends), unit-tested directly.
+//  Why a listing is in your feed, as the chip on each card. A pure derivation of (listing, viewer, friends),
+//  unit-tested directly.
 //
 
 import Foundation

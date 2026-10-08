@@ -2,7 +2,8 @@
 //  ConversationStayContextTests.swift
 //  freebnbTests
 //
-//  The chip on a conversation row: which stay it picks and when it stays quiet. A lingering chip becomes furniture, so most cases pin the absence.
+//  The chip on a conversation row: which stay it picks and when it stays quiet. A lingering chip becomes
+//  furniture, so most cases pin the absence.
 //
 
 import Foundation
@@ -131,7 +132,8 @@ struct CheckInKitBannerTimingTests {
         )
     }
 
-    /// The banner is for arrival: it appears the day before check-in and goes at checkout, so it neither clutters date-haggling nor pins an address after.
+    /// The banner is for arrival: it appears the day before check-in and goes at checkout, so it neither
+    /// clutters date-haggling nor pins an address after.
     @Test func theBannerOnlyAppearsAroundTheStay() {
         let arriving = kit(checkIn: day(1), checkOut: day(4))
         #expect(CheckInKitBanner.isRelevant(arriving))

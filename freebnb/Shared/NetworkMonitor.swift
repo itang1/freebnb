@@ -13,7 +13,8 @@ import Observation
 @MainActor
 @Observable
 final class NetworkMonitor {
-    /// Whether the device has a usable network path. Starts `true` so no offline banner flashes before the first path update.
+    /// Whether the device has a usable network path. Starts `true` so no offline banner flashes before the
+    /// first path update.
     private(set) var isOnline: Bool = true
 
     private let monitor: NWPathMonitor
@@ -33,7 +34,8 @@ final class NetworkMonitor {
         monitor.start(queue: queue)
     }
 
-    /// The pure path-status mapping to "usable", unit-testable without an interface; only `.satisfied` counts as online.
+    /// The pure path-status mapping to "usable", unit-testable without an interface; only `.satisfied` counts
+    /// as online.
     nonisolated static func isSatisfied(_ status: NWPath.Status) -> Bool {
         status == .satisfied
     }

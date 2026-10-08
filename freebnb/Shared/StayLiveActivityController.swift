@@ -2,7 +2,8 @@
 //  StayLiveActivityController.swift
 //  freebnb
 //
-//  Drives the current-stay Live Activity from the accepted-stay set: at most one activity, for the most imminent live
+//  Drives the current-stay Live Activity from the accepted-stay set: at most one activity, for the most
+//  imminent live
 //  stay, started at check-in day, moved through phases and ended after checkout.
 //
 
@@ -14,7 +15,8 @@ import os
 final class StayLiveActivityController {
     private let log = AppLog.logger("liveactivity")
 
-    /// Reconciles the running Live Activity with `stays`; idempotent, so safe on every snapshot. Picks the one live stay and starts/updates/ends to match.
+    /// Reconciles the running Live Activity with `stays`; idempotent, so safe on every snapshot. Picks the
+    /// one live stay and starts/updates/ends to match.
     func sync(activeStays stays: [StayRequest], viewerID: String, now: Date = Date()) {
         guard !viewerID.isEmpty else {
             Task { await endAll() }

@@ -11,13 +11,16 @@ import Observation
 final class DeepLinkRouter {
     var pendingConversationUserID: String?
 
-    /// A stay-event push the user tapped; ContentView switches to the Stays tab. Navigation-only, so acting on it directly is safe.
+    /// A stay-event push the user tapped; ContentView switches to the Stays tab. Navigation-only, so acting
+    /// on it directly is safe.
     var pendingStayEvent: Bool = false
 
-    /// A saved listing opened from Spotlight; ContentView switches to Listings and pushes it if loaded. Navigation-only.
+    /// A saved listing opened from Spotlight; ContentView switches to Listings and pushes it if loaded.
+    /// Navigation-only.
     var pendingListingID: String?
 
-    /// Set when a child view (e.g. "Find Friends") wants the Friends tab; ContentView switches and resets it. Navigation-only.
+    /// Set when a child view (e.g. "Find Friends") wants the Friends tab; ContentView switches and resets it.
+    /// Navigation-only.
     var pendingFriendsTab: Bool = false
 
     /// The sender of an opened invite link. ContentView switches to Friends and
@@ -39,7 +42,8 @@ final class DeepLinkRouter {
     /// gives the same outcome whichever runs first.
     var didRouteSinceSignIn = false
 
-    /// What an incoming `freebnb://` URL asks for. Parsed apart from the app so routing is testable, and an unknown host is an explicit nil.
+    /// What an incoming `freebnb://` URL asks for. Parsed apart from the app so routing is testable, and an
+    /// unknown host is an explicit nil.
     enum Route: Equatable {
         case stays
         /// `senderID` is nil for a link naming nobody (an older invite, or shared before the profile loaded).
@@ -85,7 +89,8 @@ final class DeepLinkRouter {
         return senderID?.isEmpty == false ? senderID : nil
     }
 
-    /// Applies a parsed route. Every case only navigates and writes nothing, so acting on a tapped link needs no confirmation.
+    /// Applies a parsed route. Every case only navigates and writes nothing, so acting on a tapped link needs
+    /// no confirmation.
     func handle(_ route: Route) {
         switch route {
         case .stays:

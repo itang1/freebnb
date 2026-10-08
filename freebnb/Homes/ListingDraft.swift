@@ -11,7 +11,8 @@
 
 import Foundation
 
-/// A snapshot of the new-listing form. Defaults match the form's opening state, so `ListingDraft()` is "nothing typed" and untouched forms are easy to refuse.
+/// A snapshot of the new-listing form. Defaults match the form's opening state, so `ListingDraft()` is
+/// "nothing typed" and untouched forms are easy to refuse.
 struct ListingDraft: Codable, Equatable, Sendable {
     var street = ""
     var city = ""
@@ -22,7 +23,8 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var numBathrooms = 0
     var maxGuests = 2
     var maxStayDays = 7
-    /// Keyed by `SleepingSurface.rawValue`, like `Sleeping.arrangements`; an enum-keyed dictionary wouldn't round-trip through JSON as a map.
+    /// Keyed by `SleepingSurface.rawValue`, like `Sleeping.arrangements`; an enum-keyed dictionary wouldn't
+    /// round-trip through JSON as a map.
     var sleepingArrangements: [String: Int] = [:]
     /// Keyed by `BedSize.rawValue`, for the same reason.
     var bedSizes: [String: Int] = [:]
@@ -55,7 +57,8 @@ struct ListingDraft: Codable, Equatable, Sendable {
 
     var title = ""
     /// Whether `title` is the host's wording or the form's suggestion, which a restore must distinguish
-    /// (suggestions keep tracking the city). Defaults to false so older drafts decode as suggested, the recoverable direction.
+    /// (suggestions keep tracking the city). Defaults to false so older drafts decode as suggested, the
+    /// recoverable direction.
     var titleWasEdited = false
     var description = ""
     var contactPreference: HostContactPreference = .inApp
@@ -71,7 +74,8 @@ struct ListingDraft: Codable, Equatable, Sendable {
         return self == baseline
     }
 
-    /// Typed view of the sleeping arrangements. Both directions drop unknown surfaces and non-positive counts, so setting then reading round-trips and a pristine draft stays pristine.
+    /// Typed view of the sleeping arrangements. Both directions drop unknown surfaces and non-positive
+    /// counts, so setting then reading round-trips and a pristine draft stays pristine.
     var sleepingCounts: [SleepingSurface: Int] {
         get {
             sleepingArrangements.reduce(into: [:]) { result, pair in
@@ -143,11 +147,13 @@ struct ListingDraftStore {
     }
 }
 
-/// What the listing form is for. The axes are which listing seeds the fields and which (if any) the save overwrites; duplication is where they differ.
+/// What the listing form is for. The axes are which listing seeds the fields and which (if any) the save
+/// overwrites; duplication is where they differ.
 enum ListingFormMode: Hashable {
     case create
     case edit(Home)
-    /// Prefilled from an existing listing, saved as new, so a host with several rooms needn't retype their address.
+    /// Prefilled from an existing listing, saved as new, so a host with several rooms needn't retype their
+    /// address.
     case duplicate(Home)
 
     /// The listing whose values the form opens with.
@@ -158,13 +164,15 @@ enum ListingFormMode: Hashable {
         }
     }
 
-    /// The listing this save overwrites, or nil for a new document; `duplicate` keeps fields but none of the identity.
+    /// The listing this save overwrites, or nil for a new document; `duplicate` keeps fields but none of the
+    /// identity.
     var target: Home? {
         guard case .edit(let home) = self else { return nil }
         return home
     }
 
-    /// Only a from-scratch listing is draft-backed; restoring an unrelated draft over an edit or duplicate would overwrite what the host asked for.
+    /// Only a from-scratch listing is draft-backed; restoring an unrelated draft over an edit or duplicate
+    /// would overwrite what the host asked for.
     var isDraftBacked: Bool {
         if case .create = self { return true }
         return false

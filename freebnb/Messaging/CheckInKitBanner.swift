@@ -3,7 +3,8 @@
 //  freebnb
 //
 //  The arrival essentials pinned atop the host thread once a stay is close. The thread is where a guest goes on
-//  arrival day, so the door code should be there; collapsed by default since an open wifi password is a shoulder-surfing risk.
+//  arrival day, so the door code should be there; collapsed by default since an open wifi password is a
+//  shoulder-surfing risk.
 //
 
 import SwiftUI
@@ -13,7 +14,8 @@ struct CheckInKitBanner: View {
 
     @State private var isExpanded = false
 
-    /// Shown from the day before check-in through checkout; earlier is noise while dates are in question, later leaves an address on screen.
+    /// Shown from the day before check-in through checkout; earlier is noise while dates are in question,
+    /// later leaves an address on screen.
     static func isRelevant(_ kit: CheckInKit, now: Date = Date()) -> Bool {
         let calendar = Calendar.current
         let opensAt = calendar.date(byAdding: .day, value: -1, to: kit.checkIn) ?? kit.checkIn

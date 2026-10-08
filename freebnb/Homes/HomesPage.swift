@@ -104,7 +104,8 @@ struct HomesPage: View {
             || showSavedOnly
     }
 
-    /// Also the id the exhaustion loop restarts on, so the task re-runs for the next page until a `FeedSearchPaging` stop trips.
+    /// Also the id the exhaustion loop restarts on, so the task re-runs for the next page until a
+    /// `FeedSearchPaging` stop trips.
     private var paging: FeedSearchPaging {
         FeedSearchPaging(
             isNarrowing: isNarrowingFeed,
@@ -251,7 +252,8 @@ struct HomesPage: View {
                         }
                     }
                     .animation(AppAnimation.contentSwap, value: showingSkeletons)
-                    // Animate on IDs so rows slide rather than pop, without re-running for unrelated field changes.
+                    // Animate on IDs so rows slide rather than pop, without re-running for unrelated field
+                    // changes.
                     .animatesListChanges(on: filteredListings.map(\.id))
                 }
             }
@@ -328,7 +330,8 @@ private extension HomesPage {
             emptyStateMessage
         }
         .padding()
-        // The suggestions bridge needs the friends-of-friends list, which otherwise loads only with the Friends tab.
+        // The suggestions bridge needs the friends-of-friends list, which otherwise loads only with the
+        // Friends tab.
         .task {
             if isUnfilteredEmptyFeed {
                 await friendStore.loadSuggestions()

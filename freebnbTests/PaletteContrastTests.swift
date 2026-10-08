@@ -52,7 +52,8 @@ struct PaletteContrastTests {
         )
     }
 
-    /// A plain list row's own background, which `scrollContentBackground(.hidden)` doesn't restyle; status text in the Stays list sits on it.
+    /// A plain list row's own background, which `scrollContentBackground(.hidden)` doesn't restyle; status
+    /// text in the Stays list sits on it.
     private func systemRow(dark: Bool) -> UIColor {
         UIColor.secondarySystemGroupedBackground.resolvedColor(
             with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
@@ -94,7 +95,8 @@ struct PaletteContrastTests {
         }
     }
 
-    /// StatusBadge and the banners tint their text colour to 15% for the fill, so the text must survive its own chip.
+    /// StatusBadge and the banners tint their text colour to 15% for the fill, so the text must survive its
+    /// own chip.
     @Test(arguments: [false, true])
     func statusTextSurvivesItsOwnSoftFill(dark: Bool) {
         for role in [AppColor.success, .danger, .warning] {

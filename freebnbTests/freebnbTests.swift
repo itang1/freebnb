@@ -92,7 +92,8 @@ struct StayRequestRepositoryTests {
         try await repo.accept(incoming, hostNote: nil)  // must not throw
     }
 
-    // The `accepted/{guestUserID}` marker is the capability firestore.rules checks before revealing the street; these pin the transitions that write and clear it.
+    // The `accepted/{guestUserID}` marker is the capability firestore.rules checks before revealing the
+    // street; these pin the transitions that write and clear it.
 
     @Test func acceptingDisclosesTheAddressToTheGuest() async throws {
         let repo = InMemoryStayRequestsRepository()
@@ -114,7 +115,8 @@ struct StayRequestRepositoryTests {
         #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
     }
 
-    // Both parties can cancel and the document reads the same either way, so the push trigger relies on this field.
+    // Both parties can cancel and the document reads the same either way, so the push trigger relies on this
+    // field.
     @Test func cancellingRecordsWhichPartyBackedOut() async throws {
         let repo = InMemoryStayRequestsRepository()
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))

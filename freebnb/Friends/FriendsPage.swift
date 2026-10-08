@@ -309,7 +309,8 @@ struct FriendsPage: View {
     private func resolveInviter() async {
         guard let inviterID = router.pendingInviterID else { return }
         router.pendingInviterID = nil
-        // A leftover query would swap in search results and hide the invite card; the search text persists across tab switches.
+        // A leftover query would swap in search results and hide the invite card; the search text persists
+        // across tab switches.
         query = ""
         guard inviterID != authManager.userID else { return }
         inviter = await userProfileStore.fetchProfileOnce(userID: inviterID)
@@ -469,7 +470,8 @@ private struct FriendRequestRow: View {
                 }
                 .buttonStyle(.pressable)
                 Button(action: onAccept) {
-                    // Coral for the answer a request waits on; other actions stay teal so coral means "someone is waiting on you".
+                    // Coral for the answer a request waits on; other actions stay teal so coral means
+                    // "someone is waiting on you".
                     Text("Accept")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
@@ -522,7 +524,8 @@ private struct SearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Seeded by ID only, so the avatar matches the person's own profile; a document without an id can't be friended anyway.
+            // Seeded by ID only, so the avatar matches the person's own profile; a document without an id
+            // can't be friended anyway.
             GeneratedAvatar(seed: profile.id ?? "")
             Text(profile.displayName)
                 .font(.body)

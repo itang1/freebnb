@@ -2,7 +2,8 @@
 //  StayWidgetProvider.swift
 //  freebnbWidgets
 //
-//  Feeds both widgets from the App Group snapshot the app writes. No network: the timeline is one entry plus a periodic nudge so day-relative copy stays fresh.
+//  Feeds both widgets from the App Group snapshot the app writes. No network: the timeline is one entry plus
+//  a periodic nudge so day-relative copy stays fresh.
 //
 
 import WidgetKit
@@ -27,7 +28,8 @@ struct StayWidgetProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<StayWidgetEntry>) -> Void) {
         let now = Date()
         let entry = StayWidgetEntry(date: now, snapshot: StayWidgetSnapshot.read())
-        // The app reloads timelines when data changes, so this is a backstop: refresh at the next hour so day-relative text drifts under an hour.
+        // The app reloads timelines when data changes, so this is a backstop: refresh at the next hour so
+        // day-relative text drifts under an hour.
         let next = Calendar.current.nextDate(
             after: now,
             matching: DateComponents(minute: 0),

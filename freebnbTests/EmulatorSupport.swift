@@ -113,7 +113,8 @@ enum EmulatorSupport {
 
     static let memberPassword = "password123"
 
-    /// Signs in a new email/password user and returns its uid; rules treat that as a full member who may create listings.
+    /// Signs in a new email/password user and returns its uid; rules treat that as a full member who may
+    /// create listings.
     @discardableResult
     static func signInFullMember() async throws -> String {
         try await createFullMember().uid

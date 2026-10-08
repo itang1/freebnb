@@ -152,7 +152,8 @@ enum MessageState: Hashable {
 @MainActor
 @Observable
 final class MessageStore {
-    /// True from launch until the first list snapshot (or sign-out), so the UI shows skeletons, not the empty state.
+    /// True from launch until the first list snapshot (or sign-out), so the UI shows skeletons, not the empty
+    /// state.
     private(set) var isLoadingConversations = true
     private(set) var pendingIDs: Set<String> = []
     private(set) var failedIDs: Set<String> = []

@@ -139,7 +139,8 @@ struct ContentView: View {
                         friendIDs: context.friendIDs,
                         blockedIDs: context.blockedIDs
                     )
-                    // The friend set also decides who may see this user's listings, which no Cloud Function does here.
+                    // The friend set also decides who may see this user's listings, which no Cloud Function
+                    // does here.
                     Task {
                         await homeStore.refreshOwnListingACLs(
                             myID: context.myID,

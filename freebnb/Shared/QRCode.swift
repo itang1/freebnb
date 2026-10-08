@@ -2,8 +2,10 @@
 //  QRCode.swift
 //  freebnb
 //
-//  Renders a string as a scannable QR code on-device. The invite sheet encodes the same invite link as sharing, so a
-//  nearby friend can scan it with the stock Camera: no network or permission. The link carries no identity and takes no action.
+//  Renders a string as a scannable QR code on-device. The invite sheet encodes the same invite link as
+//  sharing, so a
+//  nearby friend can scan it with the stock Camera: no network or permission. The link carries no identity
+//  and takes no action.
 //
 
 import CoreImage
@@ -11,7 +13,8 @@ import CoreImage.CIFilterBuiltins
 import UIKit
 
 enum QRCode {
-    /// A crisp QR image for `string`, or nil if CoreImage can't encode it. `scale` enlarges the one-pixel-per-module
+    /// A crisp QR image for `string`, or nil if CoreImage can't encode it. `scale` enlarges the
+    /// one-pixel-per-module
     /// bitmap; render with `.interpolation(.none)` so SwiftUI doesn't blur it unscannable.
     static func image(for string: String, scale: CGFloat = 12) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()

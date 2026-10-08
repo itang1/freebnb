@@ -2,7 +2,8 @@
 //  CachedAsyncImage.swift
 //  freebnb
 //
-//  Drop-in AsyncImage replacement for feed imagery: AsyncImage decodes at full resolution each appearance, stuttering
+//  Drop-in AsyncImage replacement for feed imagery: AsyncImage decodes at full resolution each appearance,
+//  stuttering
 //  scrolls. This downsamples to the drawn pixels and keeps the decoded result in a shared in-memory cache.
 //
 
@@ -46,7 +47,8 @@ struct CachedAsyncImage<Content: View>: View {
     }
 }
 
-/// Downloads and downsamples in one step so the full-resolution bitmap is never decoded; cached by URL and target size.
+/// Downloads and downsamples in one step so the full-resolution bitmap is never decoded; cached by URL and
+/// target size.
 enum DownsampledImageLoader {
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()

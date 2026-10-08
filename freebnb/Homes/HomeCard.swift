@@ -21,7 +21,8 @@ struct HomeCard: View {
 
             // Body: the card is for scanning; the full breakdown is on HomeDetailPage.
             VStack(alignment: .leading, spacing: 8) {
-                // Everything here is yours or a friend's, so "from a friend" goes unlabelled; only your own listings get a chip.
+                // Everything here is yours or a friend's, so "from a friend" goes unlabelled; only your own
+                // listings get a chip.
                 let showReasonChip = reason == .yourListing
                 if showReasonChip || distanceMiles != nil {
                     HStack(spacing: 6) {
@@ -66,7 +67,8 @@ struct HomeCard: View {
     }
 
     // MARK: - Header
-    // No availability chip: dates are a calendar's job, and a chip would fire on every listing or promise a vacancy never offered.
+    // No availability chip: dates are a calendar's job, and a chip would fire on every listing or promise a
+    // vacancy never offered.
 
     @ViewBuilder
     private var header: some View {
@@ -143,7 +145,8 @@ struct HomeCard: View {
 
     private var tealHeaderContent: some View {
         HStack(spacing: 10) {
-            // Photo-less cards used to be an identical teal strip; the host's avatar differs per card, on a light disc since its tints suit the page background.
+            // Photo-less cards used to be an identical teal strip; the host's avatar differs per card, on a
+            // light disc since its tints suit the page background.
             GeneratedAvatar(seed: listing.hostUserID, size: 36)
                 .background(Circle().fill(Color.primaryBackground))
 
@@ -196,7 +199,8 @@ struct FeedReasonChip: View {
     }
 }
 
-/// A spec pill (room / bath / guest counts, distance): text in the primary colour for weight, icon in brand teal, so the "Friend" chip still stands out.
+/// A spec pill (room / bath / guest counts, distance): text in the primary colour for weight, icon in brand
+/// teal, so the "Friend" chip still stands out.
 struct SummaryPill: View {
     let icon: String
     let text: String

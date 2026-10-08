@@ -8,7 +8,8 @@
 import Foundation
 
 protocol PhotoUploader: Sendable {
-    /// Uploads an image and returns the public download URL; scope paths by listing so rules can enforce ownership.
+    /// Uploads an image and returns the public download URL; scope paths by listing so rules can enforce
+    /// ownership.
     func upload(imageData: Data, listingID: String, hostUserID: String) async throws -> URL
 }
 
@@ -23,7 +24,8 @@ enum PhotoUploaderError: LocalizedError {
     }
 }
 
-/// Default stand-in so the app builds without Firebase Storage; uploads throw `notConfigured` so failures are loud.
+/// Default stand-in so the app builds without Firebase Storage; uploads throw `notConfigured` so failures are
+/// loud.
 struct NoopPhotoUploader: PhotoUploader {
     func upload(imageData: Data, listingID: String, hostUserID: String) async throws -> URL {
         throw PhotoUploaderError.notConfigured

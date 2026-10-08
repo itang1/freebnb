@@ -68,7 +68,8 @@ final class CheckInKitStore {
             guard let resolved = await fetch(stay.listingID) else { continue }
             let (home, location, manual) = resolved
             guard let kit = CheckInKit.make(stay: stay, home: home, location: location, manual: manual) else {
-                // Nothing worth saving yet (no manual, address not fetched); keep any existing kit rather than replace it with an empty one.
+                // Nothing worth saving yet (no manual, address not fetched); keep any existing kit rather
+                // than replace it with an empty one.
                 continue
             }
             // Skip the write when only the timestamp changed, so snapshot storms don't rewrite secrets.

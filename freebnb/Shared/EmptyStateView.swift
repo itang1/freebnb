@@ -2,19 +2,22 @@
 //  EmptyStateView.swift
 //  freebnb
 //
-//  The app's empty states in seafoam: stock ContentUnavailableView's grey glyph reads as a dead end, while these are
+//  The app's empty states in seafoam: stock ContentUnavailableView's grey glyph reads as a dead end, while
+//  these are
 //  invitations. One view keeps every quiet screen consistent and seafoam reserved for atmosphere.
 //
 
 import SwiftUI
 
-/// The illustration alone: an SF Symbol in brand teal on overlapping seafoam pools, for screens with their own text layout.
+/// The illustration alone: an SF Symbol in brand teal on overlapping seafoam pools, for screens with their
+/// own text layout.
 struct EmptyStateMedallion: View {
     let systemImage: String
 
     var body: some View {
         ZStack {
-            // Offset behind the main pool like light on water; opacity, not a second color, so dark mode's variant carries both.
+            // Offset behind the main pool like light on water; opacity, not a second color, so dark mode's
+            // variant carries both.
             Circle()
                 .fill(Color.secondaryAccent.opacity(0.4))
                 .frame(width: 130, height: 130)

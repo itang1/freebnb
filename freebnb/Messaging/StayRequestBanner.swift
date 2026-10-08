@@ -16,7 +16,8 @@ struct StayRequestBanner: View {
     let otherName: String
     /// True while an action is in flight; disables every button.
     let isBusy: Bool
-    /// Cancel for a sent request, withdraw for an offer, or call off an accepted stay; the parent maps the label to the write.
+    /// Cancel for a sent request, withdraw for an offer, or call off an accepted stay; the parent maps the
+    /// label to the write.
     let onCancel: () -> Void
     let onDecline: () -> Void
     let onAccept: () -> Void
@@ -24,7 +25,8 @@ struct StayRequestBanner: View {
     private var viewerIsHost: Bool { request.role(of: viewerID) == .host }
     private var tint: Color { request.status == .accepted ? .success : .warning }
 
-    /// How the headline names the home. A thread spans all of a host's listings, so an unnamed "your place" is ambiguous; the title answers when set.
+    /// How the headline names the home. A thread spans all of a host's listings, so an unnamed "your place"
+    /// is ambiguous; the title answers when set.
     private var hostPlace: String { request.namedListingTitle ?? "your place" }
     private var guestPlace: String { request.namedListingTitle ?? "\(otherName)'s place" }
 

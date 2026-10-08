@@ -2,7 +2,8 @@
 //  MessagingRequestActions.swift
 //  freebnb
 //
-//  Accept / decline / cancel / withdraw from inside a chat thread: each mutates the request, then posts the matching system message.
+//  Accept / decline / cancel / withdraw from inside a chat thread: each mutates the request, then posts the
+//  matching system message.
 //
 
 import Foundation
@@ -17,7 +18,8 @@ struct MessagingRequestActions {
     @MainActor
     func cancel(_ request: StayRequest) async throws {
         try await requestStore.cancel(request)
-        // A host calling off a confirmed stay posts the humane `hostCancelled` card with the listing; the banner has no note field. Other cancels stay plain `cancelled`.
+        // A host calling off a confirmed stay posts the humane `hostCancelled` card with the listing; the
+        // banner has no note field. Other cancels stay plain `cancelled`.
         let hostCallingOffConfirmed = request.role(of: currentUserID) == .host && request.status == .accepted
         let event = hostCallingOffConfirmed
             ? StayEvent(kind: .hostCancelled, dateRange: request.dateRangeText, listingID: request.listingID)
@@ -53,7 +55,8 @@ struct MessagingRequestActions {
         post(StayEvent(kind: .declined, dateRange: request.dateRangeText), for: request)
     }
 
-    /// The event always goes to the other side of the stay; requests and offers point opposite ways, so neither ID can be hardcoded.
+    /// The event always goes to the other side of the stay; requests and offers point opposite ways, so
+    /// neither ID can be hardcoded.
     @MainActor
     private func post(_ event: StayEvent, for request: StayRequest) {
         messageStore.sendStayEvent(

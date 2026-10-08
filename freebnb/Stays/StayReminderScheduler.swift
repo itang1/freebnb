@@ -26,7 +26,8 @@ struct StayReminder: Equatable, Sendable {
     let title: String
     let body: String
 
-    /// Stable per (stay, kind), so rescheduling replaces; the `stay-` prefix lets the scheduler prune only its own.
+    /// Stable per (stay, kind), so rescheduling replaces; the `stay-` prefix lets the scheduler prune only
+    /// its own.
     var identifier: String { "stay-\(kind.rawValue)-\(stayID)" }
 }
 

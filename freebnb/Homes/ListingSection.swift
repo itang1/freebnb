@@ -2,7 +2,8 @@
 //  ListingSection.swift
 //  freebnb
 //
-//  The card container every block on HomeDetailPage sits in, so headings group with their rows instead of the page reading as one long list.
+//  The card container every block on HomeDetailPage sits in, so headings group with their rows instead of the
+//  page reading as one long list.
 //
 
 import SwiftUI

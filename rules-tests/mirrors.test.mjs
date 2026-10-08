@@ -146,7 +146,8 @@ describe("listing caps", () => {
 
 describe("notification categories", () => {
   it("Swift NotificationCategory cases match the functions' union type", () => {
-    // A renamed Swift case moves the stored preference under a new key; the server reads the old one and re-enables a muted category.
+    // A renamed Swift case moves the stored preference under a new key; the server reads the old one and
+    // re-enables a muted category.
     const swiftCases = swiftEnumCases(
       section(notificationPreferences, "enum NotificationCategory", "var id", "NotificationCategory")
     );
@@ -190,7 +191,8 @@ describe("stay request enums", () => {
   });
 });
 
-// The Circles policy bounds live in three places that can't share code (Swift model, rules, migration); a drifted bound is a policy a host saves and the rules refuse.
+// The Circles policy bounds live in three places that can't share code (Swift model, rules, migration); a
+// drifted bound is a policy a host saves and the rules refuse.
 describe("circles", () => {
   const circleSwift = read("freebnb/Friends/FriendCircle.swift");
 
@@ -394,10 +396,12 @@ describe("invite universal link", () => {
 
   it("the landing page hands the sender to the app's own scheme", () => {
     const html = read(`admin${webPath}/index.html`);
-    // The logic moved out of an inline <script> for the CSP; follow the page to what it loads rather than naming the file.
+    // The logic moved out of an inline <script> for the CSP; follow the page to what it loads rather than
+    // naming the file.
     const src = html.match(/<script[^>]+src="([^"]+)"/);
     assert.ok(src, "the landing page loads no script");
-    // Resolve the src as a browser would: hosting serves the page at `${webPath}` with trailingSlash:false, so a relative src lands at the site root, not the repo layout.
+    // Resolve the src as a browser would: hosting serves the page at `${webPath}` with trailingSlash:false,
+    // so a relative src lands at the site root, not the repo layout.
     const resolved = src[1].startsWith("/") ? src[1] : `/${src[1]}`;
     assert.ok(
       exists(`admin${resolved}`),

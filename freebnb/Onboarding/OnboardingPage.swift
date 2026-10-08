@@ -7,7 +7,8 @@ import SwiftUI
 
 struct OnboardingPage: View {
     @Binding var isPresented: Bool
-    /// Called on "List My Place"; the parent presents create-listing after this sheet dismisses (doing it here races the animation).
+    /// Called on "List My Place"; the parent presents create-listing after this sheet dismisses (doing it
+    /// here races the animation).
     var onChooseHost: () -> Void = {}
     @State private var currentPage = 0
 
@@ -17,7 +18,8 @@ struct OnboardingPage: View {
         let body: String
     }
 
-    // One slide per differentiator: the promise (free + trusted), trust made visible, privacy (no contacts grab; the network is friends, not the address book), then how a stay works.
+    // One slide per differentiator: the promise (free + trusted), trust made visible, privacy (no contacts
+    // grab; the network is friends, not the address book), then how a stay works.
     private let slides: [Slide] = [
         Slide(
             icon: "house.lodge.fill",
@@ -41,7 +43,8 @@ struct OnboardingPage: View {
         )
     ]
 
-    /// The hosting-intent ask follows the walkthrough: hosts are the scarce side, so the question to ask before a possibly thin feed is whether they have a couch to offer.
+    /// The hosting-intent ask follows the walkthrough: hosts are the scarce side, so the question to ask
+    /// before a possibly thin feed is whether they have a couch to offer.
     private var isHostStep: Bool { currentPage == slides.count }
 
     var body: some View {
@@ -72,7 +75,8 @@ struct OnboardingPage: View {
                             .foregroundColor(.onAccent)
                             .cornerRadius(12)
                     }
-                    // Fixed-height slot keeps layout stable: Skip on the walkthrough, the guest-only answer on the hosting step.
+                    // Fixed-height slot keeps layout stable: Skip on the walkthrough, the guest-only answer
+                    // on the hosting step.
                     Group {
                         if isHostStep {
                             Button("I'm just looking for now") { isPresented = false }

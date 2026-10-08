@@ -2,7 +2,8 @@
 //  QRCodeTests.swift
 //  freebnbTests
 //
-//  There's no camera round trip to assert, so these pin what would silently break the QR: the invite URL encodes at all, and the output is scaled up from the unscannable one-pixel-per-module bitmap.
+//  There's no camera round trip to assert, so these pin what would silently break the QR: the invite URL
+//  encodes at all, and the output is scaled up from the unscannable one-pixel-per-module bitmap.
 //
 
 import Foundation
@@ -24,7 +25,8 @@ struct QRCodeTests {
     }
 
     @Test func emptyStringStillEncodes() {
-        // CoreImage encodes an empty message rather than failing; guard a regression returning nil and blanking the invite sheet.
+        // CoreImage encodes an empty message rather than failing; guard a regression returning nil and
+        // blanking the invite sheet.
         #expect(QRCode.image(for: "") != nil)
     }
 }

@@ -23,7 +23,8 @@ struct UserSearchTermsTests {
 
     @Test func termsCoverEveryPrefixOfEveryWord() {
         let terms = Set(UserSearchTerms.terms(for: "SpongeBob SquarePants"))
-        // Leading edge of the first word and the second (a last-name search a whole-name prefix index couldn't serve).
+        // Leading edge of the first word and the second (a last-name search a whole-name prefix index
+        // couldn't serve).
         #expect(terms.isSuperset(of: ["s", "sp", "spo", "sponge", "spongebob"]))
         #expect(terms.isSuperset(of: ["sq", "squ", "square", "squarepants"]))
     }
@@ -111,7 +112,8 @@ struct UserSearchTermsTests {
         #expect(UserSearchTerms.matches(displayName: "SpongeBob SquarePants", query: "square sponge"))
     }
 
-    // The arrayContains lookup carries only the longest word, so without this "sponge square" would match every Square.
+    // The arrayContains lookup carries only the longest word, so without this "sponge square" would match
+    // every Square.
     @Test func aQueryWordThatMatchesNothingRejectsTheProfile() {
         #expect(!UserSearchTerms.matches(displayName: "Squidward Tentacles", query: "sponge square"))
         #expect(!UserSearchTerms.matches(displayName: "SpongeBob SquarePants", query: "patrick"))

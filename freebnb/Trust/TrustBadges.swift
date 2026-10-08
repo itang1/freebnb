@@ -46,7 +46,8 @@ struct TrustBadgeRow: View {
             if hasEarnedChips {
                 FlowRow(spacing: 6) {
                     if stats.isVerified {
-                        // Green, not brand teal, so identity assurance stays distinct from the teal "mutual friends" chip.
+                        // Green, not brand teal, so identity assurance stays distinct from the teal "mutual
+                        // friends" chip.
                         TrustChip(text: "ID verified", systemImage: "checkmark.seal.fill", tint: .success)
                     }
                     if let rating = stats.ratingText {

@@ -29,7 +29,8 @@ enum AvailabilityCalendar {
         return days
     }
 
-    /// The inverse: consecutive days collapse into half-open ranges, earliest first. `days` holds start-of-day values.
+    /// The inverse: consecutive days collapse into half-open ranges, earliest first. `days` holds
+    /// start-of-day values.
     static func ranges(from days: Set<Date>, calendar: Calendar = .current) -> [DateRange] {
         let sorted = days.sorted()
         var ranges: [DateRange] = []

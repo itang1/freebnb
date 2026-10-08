@@ -52,7 +52,8 @@ struct CheckInKit: Codable, Hashable, Sendable {
             .contains { !($0 ?? "").isEmpty }
     }
 
-    /// Builds a kit from the live documents; nil when there's nothing useful, so a half-loaded stay can't overwrite a good kit.
+    /// Builds a kit from the live documents; nil when there's nothing useful, so a half-loaded stay can't
+    /// overwrite a good kit.
     static func make(
         stay: StayRequest,
         home: Home,

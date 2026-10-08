@@ -3,7 +3,8 @@
 //  freebnbTests
 //
 //  Covers HomeStore's feed derivation: block filtering, the friends-only visibility check,
-//  and that the ordering is a total order (Swift's sort isn't stable, so a comparator reporting "equal" lets rows reshuffle).
+//  and that the ordering is a total order (Swift's sort isn't stable, so a comparator reporting "equal" lets
+//  rows reshuffle).
 //
 
 import Foundation

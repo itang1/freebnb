@@ -3,9 +3,11 @@
 // The cheap, deterministic half of content moderation: a term list that turns a
 // message or listing into an auto-filed report a human then triages in the admin
 // console. Deliberately not a blocker: nothing is deleted or hidden, since a silently dropped real message
-// is worse than a report a moderator dismisses. Image moderation needs the paid Cloud Vision API and is in TODO_MANUAL.md.
+// is worse than a report a moderator dismisses. Image moderation needs the paid Cloud Vision API and is in
+// TODO_MANUAL.md.
 
-// Matched case-insensitively against whole words ("assist" doesn't trip "ass"), grouped by what a hit suggests, which tells a moderator how urgent it is.
+// Matched case-insensitively against whole words ("assist" doesn't trip "ass"), grouped by what a hit
+// suggests, which tells a moderator how urgent it is.
 const TERM_GROUPS: Record<string, string[]> = {
   // Attempts to move money, which FreeBNB never does: the most reliable scam signal on a free-stay platform.
   payment: [
@@ -22,7 +24,8 @@ const TERM_GROUPS: Record<string, string[]> = {
     "escort", "sugar daddy", "sugar baby", "full service", "in exchange for sex",
     "sexual favors", "pay for sex",
   ],
-  // Threats and slurs, kept short: a long slur list in a public repo is its own problem and the human queue is the defence.
+  // Threats and slurs, kept short: a long slur list in a public repo is its own problem and the human queue
+  // is the defence.
   abuse: [
     "kill you", "kill yourself", "kys", "rape", "i will hurt you", "beat you up",
   ],
@@ -40,7 +43,8 @@ function escapeRegExp(term: string): string {
   return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Pre-compiled once at load; `\b` on both ends gives whole-word matching, and multi-word terms match across one space run.
+// Pre-compiled once at load; `\b` on both ends gives whole-word matching, and multi-word terms match across
+// one space run.
 const COMPILED: { category: string; term: string; pattern: RegExp }[] =
   Object.entries(TERM_GROUPS).flatMap(([category, terms]) =>
     terms.map((term) => ({

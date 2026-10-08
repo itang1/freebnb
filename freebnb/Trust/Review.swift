@@ -45,14 +45,16 @@ struct Review: Identifiable, Codable, Hashable, Sendable {
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
 
-    /// The one legal document id for this (stay, author) pair; the rules require it, so a second review overwrites the first.
+    /// The one legal document id for this (stay, author) pair; the rules require it, so a second review
+    /// overwrites the first.
     static func id(stayRequestID: String, authorUserID: String) -> String {
         "\(stayRequestID)_\(authorUserID)"
     }
 
     static let ratingRange = 1...5
 
-    /// Matches the `publicComment` cap in `firestore.rules`, so an over-long comment is a field error, not a permission denial.
+    /// Matches the `publicComment` cap in `firestore.rules`, so an over-long comment is a field error, not a
+    /// permission denial.
     static let commentMaxLength = 2000
 
     init(
@@ -86,11 +88,13 @@ struct Review: Identifiable, Codable, Hashable, Sendable {
 struct PrivateFeedback: Codable, Hashable, Sendable {
     var text: String
 
-    /// Matches the cap `firestore.rules` enforces, so the composer refuses an over-long note instead of an opaque permission denial.
+    /// Matches the cap `firestore.rules` enforces, so the composer refuses an over-long note instead of an
+    /// opaque permission denial.
     static let maxLength = 2000
 }
 
-/// A character reference one friend writes for another, independent of any stay; the rules require an accepted friend edge.
+/// A character reference one friend writes for another, independent of any stay; the rules require an
+/// accepted friend edge.
 struct CharacterReference: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let authorUserID: String

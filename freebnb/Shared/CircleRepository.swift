@@ -29,7 +29,8 @@ protocol CircleRepository: Sendable {
     ) -> RepositoryListener
 
     func saveCircle(hostID: String, _ circle: FriendCircle) async throws
-    /// Deletes a circle and moves its members back to Default, then refreshes their projections. Never for Default.
+    /// Deletes a circle and moves its members back to Default, then refreshes their projections. Never for
+    /// Default.
     func deleteCircle(hostID: String, circleID: String, movingMembers members: [String]) async throws
     /// Writes one friend's membership (assignment and/or override) and projection together.
     func saveMembership(hostID: String, _ membership: CircleMembership, resolvedPolicy: BookingPolicy) async throws

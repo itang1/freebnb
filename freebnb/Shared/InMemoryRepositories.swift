@@ -203,7 +203,8 @@ final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable 
 
 final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked Sendable {
     private var requests: [StayRequest] = []
-    /// Mirrors the `homes/{id}/accepted/{guestUserID}` markers, so tests can assert acceptance discloses the address and a terminal status revokes it.
+    /// Mirrors the `homes/{id}/accepted/{guestUserID}` markers, so tests can assert acceptance discloses the
+    /// address and a terminal status revokes it.
     private(set) var acceptedGuests: Set<String> = []
 
     private func markerKey(_ request: StayRequest) -> String {
@@ -449,7 +450,8 @@ final class InMemoryFriendEdgeRepository: FriendEdgeRepository, @unchecked Senda
 final class InMemoryCircleRepository: CircleRepository, @unchecked Sendable {
     private(set) var circlesByHost: [String: [String: FriendCircle]] = [:]
     private(set) var membersByHost: [String: [String: CircleMembership]] = [:]
-    /// The projections a guest would read, kept so tests can assert the fan-out happened (a stale one costs a guest a rejected write).
+    /// The projections a guest would read, kept so tests can assert the fan-out happened (a stale one costs a
+    /// guest a rejected write).
     var publishedByHost: [String: [String: BookingPolicy]] = [:]
 
     init(circles: [String: [FriendCircle]] = [:], memberships: [String: [CircleMembership]] = [:]) {
@@ -604,7 +606,8 @@ final class InMemoryFriendNoteRepository: FriendNoteRepository, @unchecked Senda
 
 // MARK: - Guest notes
 
-/// In-memory guest notes for previews and store tests, keyed by guest; the mirror of `InMemoryFriendNoteRepository`.
+/// In-memory guest notes for previews and store tests, keyed by guest; the mirror of
+/// `InMemoryFriendNoteRepository`.
 final class InMemoryGuestNoteRepository: GuestNoteRepository, @unchecked Sendable {
     private(set) var notesByGuest: [String: [String: GuestNote]] = [:]
     private(set) var promptsByGuest: [String: Set<String>] = [:]

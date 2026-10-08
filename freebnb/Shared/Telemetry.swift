@@ -16,13 +16,15 @@ import os
 enum Telemetry {
     private static let log = AppLog.logger("telemetry")
 
-    /// Key product funnels. Raw values are Analytics event names; keep them snake_case and stable (renaming resets the funnel).
+    /// Key product funnels. Raw values are Analytics event names; keep them snake_case and stable (renaming
+    /// resets the funnel).
     enum Event: String {
         case signInCompleted = "sign_in_completed"
         case signInFailed = "sign_in_failed"
         case createListingCompleted = "create_listing_completed"
         case stayRequestSent = "stay_request_sent"
-        /// A host offering unprompted. Counted apart from `stayRequestSent` so whether hosts start anything is visible.
+        /// A host offering unprompted. Counted apart from `stayRequestSent` so whether hosts start anything
+        /// is visible.
         case stayOfferSent = "stay_offer_sent"
         case stayRequestAccepted = "stay_request_accepted"
     }
@@ -42,7 +44,8 @@ enum Telemetry {
         if !enabled { log.debug("Telemetry collection disabled (emulator/UI test).") }
     }
 
-    /// Ties crash reports and analytics to the signed-in user; nil on sign-out (Crashlytics has no "clear", so "" stands in).
+    /// Ties crash reports and analytics to the signed-in user; nil on sign-out (Crashlytics has no "clear",
+    /// so "" stands in).
     static func setUserID(_ userID: String?) {
         Crashlytics.crashlytics().setUserID(userID ?? "")
         Analytics.setUserID(userID)
@@ -62,7 +65,8 @@ enum Telemetry {
 
     /// Counts a Firestore document that failed to decode. Repositories compactMap
     /// failures to nil, so a corrupt document would vanish; each drop becomes an Analytics
-    /// event (by collection) plus a breadcrumb. Kept off `record(error:)` so a corrupt doc doesn't flood non-fatals.
+    /// event (by collection) plus a breadcrumb. Kept off `record(error:)` so a corrupt doc doesn't flood
+    /// non-fatals.
     static func decodeFailure(collection: String, documentID: String, error: Error) {
         decodeFailure(collection: collection, documentID: documentID, reason: error.localizedDescription)
     }

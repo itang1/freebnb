@@ -9,7 +9,8 @@
 import SwiftUI
 
 struct ListingDashboardPage: View {
-    // The snapshot the caller navigated with; `listing` prefers the store's live copy so co-host changes show immediately.
+    // The snapshot the caller navigated with; `listing` prefers the store's live copy so co-host changes show
+    // immediately.
     private let passedListing: Home
 
     init(listing: Home) {
@@ -75,7 +76,8 @@ struct ListingDashboardPage: View {
                 coHostSection
             }
 
-            // The one thing a host can start; above the request sections, since the rest is things other people did.
+            // The one thing a host can start; above the request sections, since the rest is things other
+            // people did.
             if isHost {
                 Section {
                     Button {
@@ -87,7 +89,8 @@ struct ListingDashboardPage: View {
                 }
             }
 
-            // "None came in" and "still arriving" differ; on a cold start or account switch the inbox is briefly empty.
+            // "None came in" and "still arriving" differ; on a cold start or account switch the inbox is
+            // briefly empty.
             if requestStore.isLoadingIncoming && !hasContent {
                 Section {
                     HStack(spacing: 10) {

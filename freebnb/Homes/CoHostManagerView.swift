@@ -2,7 +2,8 @@
 //  CoHostManagerView.swift
 //  freebnb
 //
-//  Host-only sheet to add or remove co-hosts. The dashboard gates it on `isHostedBy`, and `firestore.rules` refuses
+//  Host-only sheet to add or remove co-hosts. The dashboard gates it on `isHostedBy`, and `firestore.rules`
+//  refuses
 //  a roster write from anyone else, so this is convenience over a boundary, not the boundary.
 //
 
@@ -20,14 +21,16 @@ struct CoHostManagerView: View {
     @State private var busyUserID: String?
     @State private var errorMessage: String?
 
-    /// The live listing, so the roster reflects changes without reopening; falls back to the passed snapshot until the managed listings arrive.
+    /// The live listing, so the roster reflects changes without reopening; falls back to the passed snapshot
+    /// until the managed listings arrive.
     private var current: Home {
         homeStore.managedListings.first { $0.id == listing.id } ?? listing
     }
 
     private var hostUserID: String { authManager.userID }
 
-    /// Accepted friends not already co-hosts; a co-host must be a friend (rules enforce it), so the picker offers no one else.
+    /// Accepted friends not already co-hosts; a co-host must be a friend (rules enforce it), so the picker
+    /// offers no one else.
     private var addableFriends: [String] {
         let roster = Set(current.coHosts)
         return friendStore.friendIDs.filter { !roster.contains($0) }

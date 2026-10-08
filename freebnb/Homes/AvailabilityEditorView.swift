@@ -19,7 +19,8 @@ struct AvailabilityEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var blockedDays: Set<Date> = []
-    /// The turnover gap held around every confirmed stay; `loadedBufferHours` is what it arrived as, so an untouched buffer costs no write.
+    /// The turnover gap held around every confirmed stay; `loadedBufferHours` is what it arrived as, so an
+    /// untouched buffer costs no write.
     @State private var bufferHours = ListingAvailability.defaultBufferHours
     @State private var loadedBufferHours = ListingAvailability.defaultBufferHours
     /// The server's half, loaded with the host's. Held apart because the listing
@@ -135,7 +136,8 @@ struct AvailabilityEditorView: View {
 
             let booked = bookedDays
 
-            // The host's own calendar is where the two are told apart, so the booked key appears only with a booking.
+            // The host's own calendar is where the two are told apart, so the booked key appears only with a
+            // booking.
             AvailabilityLegend(showsBooked: !booked.isEmpty)
 
             ForEach(AvailabilityCalendar.months(count: Self.monthsAhead), id: \.self) { month in
@@ -274,7 +276,8 @@ struct AvailabilityEditorView: View {
         errorMessage = nil
         defer { isSaving = false }
         let ranges = blockedRanges
-        // Buffer first when changed, so the blocked-range save republishes with the new padding. Skipped if untouched.
+        // Buffer first when changed, so the blocked-range save republishes with the new padding. Skipped if
+        // untouched.
         if bufferHours != loadedBufferHours {
             do {
                 try await homeStore.saveBufferHours(bufferHours, for: listing)

@@ -4,7 +4,8 @@
 //   - a host with no circles restricts nothing;
 //   - each of the three policy fields refuses a write;
 //   - an absent arrivalWindow reads as 'flexible', not unchecked;
-//   - the frequency cap can't be dodged by not advancing the counter, sliding its window or spending someone else's;
+//   - the frequency cap can't be dodged by not advancing the counter, sliding its window or spending someone
+//   else's;
 //   - moving a pending request's dates re-checks the notice rule;
 //   - a guest can't read circles or memberships, only the policy resolved for them;
 //   - Default can't be deleted and no other circle can claim to be it.
@@ -35,7 +36,8 @@ const FRIEND = "user-friend";
 const OTHER = "user-other";
 const LISTING = "listing-1";
 const DAY_MS = 86_400_000;
-// Reused where a test seeds a counter and writes it again: the rules pin windowStart across an increment, so Timestamps a millisecond apart are different windows.
+// Reused where a test seeds a counter and writes it again: the rules pin windowStart across an increment, so
+// Timestamps a millisecond apart are different windows.
 const OPEN_WINDOW_START = Timestamp.fromMillis(Date.now() - DAY_MS);
 const ELAPSED_WINDOW_START = Timestamp.fromMillis(Date.now() - 31 * DAY_MS);
 
@@ -424,7 +426,8 @@ describe("frequency cap", () => {
 
 // The engine allows 1000 expressions per evaluation, and the first draft spent them all on an ordinary
 // booking by re-reading documents from four helpers. These drive the longest chain (membership, override,
-// all three fields, counter advanced) and assert *success*, the only assertion telling "permitted" from "engine gave up" (an assertFails passes either way).
+// all three fields, counter advanced) and assert *success*, the only assertion telling "permitted" from
+// "engine gave up" (an assertFails passes either way).
 describe("the longest resolution chain still evaluates", () => {
   const everything = () =>
     policy({

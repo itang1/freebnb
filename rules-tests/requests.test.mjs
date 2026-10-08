@@ -150,7 +150,8 @@ describe("stayRequests/{id} create — the friends-only boundary", () => {
   });
 
   // listingCity and listingHostName were allowlisted but unchecked, so a hand-rolled client could put
-  // unbounded text in either; both are interpolated into push bodies and reminder copy (text on the other person's Lock Screen).
+  // unbounded text in either; both are interpolated into push bodies and reminder copy (text on the other
+  // person's Lock Screen).
   it("denies a request whose listingCity is unbounded text", async () => {
     await seedListing();
     await assertFails(createRequest(FRIEND, { listingCity: "x".repeat(101) }));
@@ -223,7 +224,8 @@ describe("stayRequests/{id} update — host cancels an accepted stay", () => {
   });
 });
 
-// `cancelledBy` tells the push trigger whom to notify (both parties can cancel), so it's only worth anything if it can't lie.
+// `cancelledBy` tells the push trigger whom to notify (both parties can cancel), so it's only worth anything
+// if it can't lie.
 describe("stayRequests/{id} update — cancelledBy names whoever cancelled", () => {
   it("denies a host cancel that blames the guest", async () => {
     await seedStay("accepted");
@@ -248,7 +250,8 @@ describe("stayRequests/{id} update — cancelledBy names whoever cancelled", () 
   });
 
   it("denies a cancel that omits cancelledBy", async () => {
-    // Without it the trigger can't tell who already knows and stays quiet, so an unattributed cancel would silence the notification.
+    // Without it the trigger can't tell who already knows and stays quiet, so an unattributed cancel would
+    // silence the notification.
     await seedStay("accepted");
     await assertFails(
       updateDoc(doc(as(FRIEND), "stayRequests", STAY), {
@@ -332,7 +335,8 @@ describe("stayRequests — the listing-scoped overlap query", () => {
     await seedStay("accepted");
   });
 
-  // The host manages their own listing so the scope is provable; they could already read these via `hostUserID == uid`, so no new reach.
+  // The host manages their own listing so the scope is provable; they could already read these via
+  // `hostUserID == uid`, so no new reach.
   it("allows the listing-scoped query to the host", async () => {
     await assertSucceeds(acceptedOnListing(HOST));
   });
@@ -351,7 +355,8 @@ describe("stayRequests — the listing-scoped overlap query", () => {
     await assertFails(acceptedOnListing(FRIEND));
   });
 
-  // The control: constraining the query to one party's requests is provable, so the denials above are about the missing constraint.
+  // The control: constraining the query to one party's requests is provable, so the denials above are about
+  // the missing constraint.
   it("allows a query constrained to the caller's own requests", async () => {
     await assertSucceeds(
       getDocs(

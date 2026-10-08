@@ -4,7 +4,8 @@
 // Several values are deliberately duplicated across those surfaces (caps,
 // enum whitelists, id formats), because rules, Swift and TypeScript can't share code. mirrors.test.mjs uses these
 // parsers to assert the copies agree, and messages.test.mjs to drive the rules with the client's real event kinds.
-// Every parser throws when its pattern stops matching, so a moved constant fails loudly instead of rotting into a vacuous pass.
+// Every parser throws when its pattern stops matching, so a moved constant fails loudly instead of rotting
+// into a vacuous pass.
 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

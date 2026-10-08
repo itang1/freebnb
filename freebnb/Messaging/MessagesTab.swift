@@ -119,9 +119,11 @@ struct MessagesTab: View {
     // MARK: - Body
 
     var body: some View {
-        // Resolved once per body pass: `visibleSummaries` filters the whole list on every read, and the body reads it four times.
+        // Resolved once per body pass: `visibleSummaries` filters the whole list on every read, and the body
+        // reads it four times.
         let summaries = visibleSummaries
-        // Skeletons stand in only for the unknown empty state; a search matching nothing is a result, not a pending load.
+        // Skeletons stand in only for the unknown empty state; a search matching nothing is a result, not a
+        // pending load.
         let showingSkeletons = messageStore.isLoadingConversations
             && summaries.isEmpty && searchQuery.isEmpty
         NavigationStack(path: $path) {

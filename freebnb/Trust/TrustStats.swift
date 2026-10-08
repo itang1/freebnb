@@ -30,7 +30,8 @@ struct TrustStats: Codable, Hashable, Sendable {
 }
 
 extension TrustStats {
-    /// Whole years since `createdAt`: "New here" / "1 year on FreeBNB" / "3 years on FreeBNB". Here so every trust number is phrased in one place.
+    /// Whole years since `createdAt`: "New here" / "1 year on FreeBNB" / "3 years on FreeBNB". Here so every
+    /// trust number is phrased in one place.
     static func tenureText(joinedAt: Date?, now: Date = Date()) -> String? {
         guard let joinedAt else { return nil }
         let years = Calendar.current.dateComponents([.year], from: joinedAt, to: now).year ?? 0
@@ -39,7 +40,8 @@ extension TrustStats {
     }
 }
 
-/// How many friends we have in common with one other user, from the `mutualFriends` callable (`friendEdges` is readable only by the two people).
+/// How many friends we have in common with one other user, from the `mutualFriends` callable (`friendEdges`
+/// is readable only by the two people).
 struct MutualFriends: Codable, Hashable, Sendable {
     var count: Int
     /// A few names to make the number concrete ("Priya, Sam and 3 others").

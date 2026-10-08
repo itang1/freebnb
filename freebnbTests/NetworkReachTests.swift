@@ -2,7 +2,8 @@
 //  NetworkReachTests.swift
 //  freebnbTests
 //
-//  Covers the per-friend home count in the Friends list. It must not over-claim: your own listings and unverifiable hosts don't count.
+//  Covers the per-friend home count in the Friends list. It must not over-claim: your own listings and
+//  unverifiable hosts don't count.
 //
 
 import Foundation
@@ -49,7 +50,8 @@ struct NetworkReachTests {
     @Test func excludesYourOwnAndUnverifiableHosts() {
         let reach = compute([
             HomeFixture.make(id: "mine", hostUserID: me),
-            // A stale ACL entry from an ended friendship: reachable, but not a connection the client can attribute.
+            // A stale ACL entry from an ended friendship: reachable, but not a connection the client can
+            // attribute.
             HomeFixture.make(id: "stranger", hostUserID: "nobody", allowedViewerIDs: [me]),
             HomeFixture.make(id: "friend", hostUserID: "priya"),
         ])

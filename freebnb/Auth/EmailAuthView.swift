@@ -5,7 +5,8 @@
 
 import SwiftUI
 
-/// Email + password sign-in and registration, a sheet from the welcome screen driving `AuthManager`; it only needs to close once signed in (ContentView swaps out the welcome flow).
+/// Email + password sign-in and registration, a sheet from the welcome screen driving `AuthManager`; it only
+/// needs to close once signed in (ContentView swaps out the welcome flow).
 struct EmailAuthView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss

@@ -256,7 +256,8 @@ struct FriendNoteComposerSheet: View {
 
 // MARK: - Entry point
 
-/// The row from a friend's screen into their notes, with a one-line preview of the latest; used on both host-side friend screens.
+/// The row from a friend's screen into their notes, with a one-line preview of the latest; used on both
+/// host-side friend screens.
 struct FriendNotesLink: View {
     let friendID: String
     let friendName: String
@@ -272,7 +273,8 @@ struct FriendNotesLink: View {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Private notes")
-                    // The preview is the note itself, not a count, which would invite reading a number over the sentence.
+                    // The preview is the note itself, not a count, which would invite reading a number over
+                    // the sentence.
                     Text(mostRecent?.text ?? "Just for you. \(friendName) never sees these.")
                         .font(.caption)
                         .foregroundColor(.secondaryText)

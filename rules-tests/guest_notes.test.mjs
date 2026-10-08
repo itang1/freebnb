@@ -93,7 +93,8 @@ describe("who can read a note", () => {
     await assertSucceeds(getDocs(notesOf(as(GUEST), GUEST)));
   });
 
-  // The whole feature in one assertion: the host knows the guest's uid and can guess a path; the rule, not a missing screen, stops them.
+  // The whole feature in one assertion: the host knows the guest's uid and can guess a path; the rule, not a
+  // missing screen, stops them.
   it("refuses the host the note is about", async () => {
     await assertFails(getDoc(noteDoc(as(HOST))));
   });

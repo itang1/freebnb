@@ -2,7 +2,8 @@
 //  StayWidgetTests.swift
 //  freebnbTests
 //
-//  The pure decisions behind the widgets: which stay `StayWidgetBridge` picks as "next", the pending counts and `StayPhase.current`; no App Group, WidgetKit or ActivityKit.
+//  The pure decisions behind the widgets: which stay `StayWidgetBridge` picks as "next", the pending counts
+//  and `StayPhase.current`; no App Group, WidgetKit or ActivityKit.
 //
 
 import Foundation
@@ -127,7 +128,8 @@ struct StayWidgetBridgeTests {
             viewerID: host,
             now: now
         )
-        // Sanity: with a viewer the trip is present; the empty-viewer teardown is in `publish`, not `makeSnapshot`.
+        // Sanity: with a viewer the trip is present; the empty-viewer teardown is in `publish`, not
+        // `makeSnapshot`.
         #expect(snap.nextTrip != nil)
     }
 }

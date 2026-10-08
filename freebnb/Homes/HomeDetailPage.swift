@@ -58,7 +58,8 @@ struct HomeDetailPage: View {
 
     var body: some View {
         ScrollView {
-            // Ordered the way someone decides: the place, the host's words, contents, location, cancellation, host.
+            // Ordered the way someone decides: the place, the host's words, contents, location, cancellation,
+            // host.
             // The one guest action is pinned below.
             VStack(alignment: .leading, spacing: 14) {
                 heroSection
@@ -152,7 +153,8 @@ struct HomeDetailPage: View {
                 houseManual = await homeStore.manual(for: home.id)
             }
         }
-        // The host's reputation: `trustStats` rides on the public user doc; mutual friends need the callable. Neither blocks the page.
+        // The host's reputation: `trustStats` rides on the public user doc; mutual friends need the callable.
+        // Neither blocks the page.
         .task {
             _ = await userProfileStore.fetchProfileOnce(userID: home.hostUserID)
             await reviewStore.loadMutualFriends(with: home.hostUserID)

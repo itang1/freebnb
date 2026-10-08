@@ -36,18 +36,22 @@ export const Subcollections = {
   bookingPolicies: "bookingPolicies",
   // A host's private notes on friends: users/{hostID}/friendNotes/{noteID}. Host-only; no function touches them.
   friendNotes: "friendNotes",
-  // Which post-stay note prompts a host dealt with: users/{hostID}/friendNotePrompts/{stayRequestID}. Only a timestamp.
+  // Which post-stay note prompts a host dealt with: users/{hostID}/friendNotePrompts/{stayRequestID}. Only a
+  // timestamp.
   friendNotePrompts: "friendNotePrompts",
-  // A guest's private notes on hosts and listings: users/{guestID}/guestNotes/{noteID}. Guest-only; no function touches them.
+  // A guest's private notes on hosts and listings: users/{guestID}/guestNotes/{noteID}. Guest-only; no
+  // function touches them.
   guestNotes: "guestNotes",
-  // Which post-trip note prompts a guest dealt with: users/{guestID}/guestNotePrompts/{stayRequestID}. Only a timestamp.
+  // Which post-trip note prompts a guest dealt with: users/{guestID}/guestNotePrompts/{stayRequestID}. Only a
+  // timestamp.
   guestNotePrompts: "guestNotePrompts",
 } as const;
 
 export const Docs = {
   // The listing's private street address: homes/{id}/private/location.
   location: "location",
-  // The listing's blocked and booked halves: homes/{id}/private/availability. The public listing carries only their union.
+  // The listing's blocked and booked halves: homes/{id}/private/availability. The public listing carries only
+  // their union.
   availability: "availability",
   // The user's private profile: users/{uid}/private/profile.
   profile: "profile",

@@ -178,7 +178,8 @@ struct DaysWithheldTests {
         #expect(withheld(.permissive).isEmpty)
     }
 
-    // 72 hours from 9am on the 10th lands on the 13th, which starts before that, so the first check-in day is the 14th.
+    // 72 hours from 9am on the 10th lands on the 13th, which starts before that, so the first check-in day is
+    // the 14th.
     @Test("notice withholds every day before the horizon, and none after")
     func noticeWithholdsThePrefix() {
         let days = withheld(BookingPolicy(minNoticeHours: 72))
@@ -240,7 +241,8 @@ struct StayCounterTests {
         #expect(open.spent(cap: cap, now: at(2026, 3, 10), calendar: utc) == 1)
     }
 
-    // The two shapes the rules accept: increment inside the window or open a new one after it; windowStart is pinned.
+    // The two shapes the rules accept: increment inside the window or open a new one after it; windowStart is
+    // pinned.
     @Test("advancing inside the window increments and keeps windowStart")
     func advanceIncrements() {
         let open = counter(start: at(2026, 3, 1), count: 1)

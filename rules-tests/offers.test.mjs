@@ -153,13 +153,15 @@ describe("stayRequests/{id} create — a host offering their place", () => {
 
   // The hole the ACL check couldn't close: the host writes `allowedViewerIDs`, so they could add
   // a uid to their own listing then offer to it, landing an unsolicited stay in anyone's trip list.
-  // The listing here names STRANGER in its ACL as that attack would; what they lack is a friend edge, now what's asked.
+  // The listing here names STRANGER in its ACL as that attack would; what they lack is a friend edge, now
+  // what's asked.
   it("denies a host offering to a non-friend they wrote into their own ACL", async () => {
     await seedListing({ allowedViewerIDs: [HOST, FRIEND, STRANGER] });
     await assertFails(createOffer(HOST, { guestUserID: STRANGER }));
   });
 
-  // The mirror, so the case above can't pass by denying every stranger: same ACL, and only the accepted edge differs.
+  // The mirror, so the case above can't pass by denying every stranger: same ACL, and only the accepted edge
+  // differs.
   it("allows the offer once that person is a real friend", async () => {
     await seedListing({ allowedViewerIDs: [HOST, FRIEND, STRANGER] });
     await seedFriendship(HOST, STRANGER);
@@ -210,7 +212,8 @@ describe("stayRequests/{id} create — a host offering their place", () => {
 });
 
 describe("stayRequests/{id} create — forging the other side", () => {
-  // The most important: a host writing status "pending" naming a friend as guest could accept it and count the stay toward their trust stats.
+  // The most important: a host writing status "pending" naming a friend as guest could accept it and count
+  // the stay toward their trust stats.
   it("denies a host manufacturing a pending request from a friend", async () => {
     await seedListing();
     await assertFails(createOffer(HOST, { status: "pending", initiatedBy: FRIEND }));
@@ -237,7 +240,8 @@ describe("stayRequests/{id} create — forging the other side", () => {
     await assertFails(createOffer(STRANGER));
   });
 
-  // The guest's words are theirs; a host writing a note, party size or arrival would put them in their friend's mouth.
+  // The guest's words are theirs; a host writing a note, party size or arrival would put them in their
+  // friend's mouth.
   it("denies a host writing the guest's note on an offer", async () => {
     await seedListing();
     await assertFails(createOffer(HOST, { guestNote: "I'd love to come!" }));

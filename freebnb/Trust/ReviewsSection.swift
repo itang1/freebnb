@@ -2,7 +2,8 @@
 //  ReviewsSection.swift
 //  freebnb
 //
-//  Renders the reviews and character references about one person, on the profile page and the listing detail page (the host's).
+//  Renders the reviews and character references about one person, on the profile page and the listing detail
+//  page (the host's).
 //
 
 import SwiftUI
@@ -32,7 +33,8 @@ struct ReviewsSection: View {
                 }
             }
 
-            // Spells out what a review is, apart from references below: only a completed stay produces one, in both directions.
+            // Spells out what a review is, apart from references below: only a completed stay produces one,
+            // in both directions.
             Text("From people who have actually stayed, in either direction: guests review their host; hosts review their guest.")
                 .font(.caption)
                 .foregroundColor(.secondaryText)
@@ -102,7 +104,8 @@ struct ReviewRow: View {
 
 // MARK: - Private feedback
 
-/// The notes reviewers left for you alone, shown only on your own profile: the half of a review that never becomes public, which makes honest public reviews possible.
+/// The notes reviewers left for you alone, shown only on your own profile: the half of a review that never
+/// becomes public, which makes honest public reviews possible.
 struct PrivateFeedbackSection: View {
     let subjectUserID: String
 
@@ -170,7 +173,8 @@ struct ReferencesSection: View {
             Text("References from friends")
                 .font(.headline)
 
-            // A reference is a vouch from someone who hasn't stayed, so it carries no rating and can speak to either side of a future stay.
+            // A reference is a vouch from someone who hasn't stayed, so it carries no rating and can speak to
+            // either side of a future stay.
             Text("Vouches from friends who haven't stayed with \(subjectName), speaking to them as a guest, a host, or both.")
                 .font(.caption)
                 .foregroundColor(.secondaryText)
@@ -187,7 +191,8 @@ struct ReferencesSection: View {
                     ReferenceRow(
                         reference: reference,
                         authorName: userProfileStore.displayName(for: reference.authorUserID) ?? "FreeBNB User",
-                        // A reference sits on your profile; you may remove one you didn't ask for, and its author may retract it.
+                        // A reference sits on your profile; you may remove one you didn't ask for, and its
+                        // author may retract it.
                         canDelete: authManager.userID == reference.authorUserID
                             || authManager.userID == reference.subjectUserID,
                         onDelete: {

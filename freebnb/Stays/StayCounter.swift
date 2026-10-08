@@ -16,11 +16,13 @@ import Foundation
 struct StayCounter: Codable, Hashable, Sendable {
     var hostUserID: String
     var guestUserID: String
-    /// When the current window opened. Pinned by the rules: update may increment inside it or open a fresh one after it elapses.
+    /// When the current window opened. Pinned by the rules: update may increment inside it or open a fresh
+    /// one after it elapses.
     var windowStart: Date
     var count: Int
 
-    /// `{hostID}_{guestID}`; deterministic so the rules find a pair's counter without a query, and pinned to the id fields.
+    /// `{hostID}_{guestID}`; deterministic so the rules find a pair's counter without a query, and pinned to
+    /// the id fields.
     static func documentID(hostUserID: String, guestUserID: String) -> String {
         "\(hostUserID)_\(guestUserID)"
     }

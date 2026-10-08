@@ -25,18 +25,22 @@ struct ListingAvailability: Codable, Hashable, Sendable {
     /// document, since a guest who knew the buffer could subtract it and recover the booking.
     var bufferHours: Int = ListingAvailability.defaultBufferHours
 
-    /// One turnover day: keeps a checkout and the next check-in off the same date; the default for listings that never set it.
+    /// One turnover day: keeps a checkout and the next check-in off the same date; the default for listings
+    /// that never set it.
     static let defaultBufferHours = 24
 
-    /// A week is more than a spare-couch host needs and keeps padded ranges small. Mirrors the `bufferHours` bound in `firestore.rules`.
+    /// A week is more than a spare-couch host needs and keeps padded ranges small. Mirrors the `bufferHours`
+    /// bound in `firestore.rules`.
     static let maxBufferHours = 168
 
-    /// What the public listing publishes, the only thing a guest sees: the booked half grown by the buffer, merged with blocked days.
+    /// What the public listing publishes, the only thing a guest sees: the booked half grown by the buffer,
+    /// merged with blocked days.
     var unavailableRanges: [DateRange] {
         blockedDateRanges + AvailabilityCalendar.buffered(bookedDateRanges, bufferHours: bufferHours)
     }
 
-    /// Absent fields decode as an empty calendar, since the document doesn't exist until a first block, buffer or accepted stay.
+    /// Absent fields decode as an empty calendar, since the document doesn't exist until a first block,
+    /// buffer or accepted stay.
     enum CodingKeys: String, CodingKey {
         case blockedDateRanges, bookedDateRanges, bufferHours
     }

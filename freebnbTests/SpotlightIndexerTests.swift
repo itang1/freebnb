@@ -2,7 +2,8 @@
 //  SpotlightIndexerTests.swift
 //  freebnbTests
 //
-//  The pure attribute builders behind saved-listing Spotlight indexing; the live CSSearchableIndex isn't driven, only what we hand it.
+//  The pure attribute builders behind saved-listing Spotlight indexing; the live CSSearchableIndex isn't
+//  driven, only what we hand it.
 //
 
 import Testing

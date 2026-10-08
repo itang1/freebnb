@@ -12,7 +12,8 @@ struct MessageInputBar: View {
     @Binding var draft: String
     @FocusState.Binding var isFocused: Bool
     let onSend: () -> Void
-    /// Offline, sending still works (Firestore queues and replays); the bar stays enabled with a caption so the user knows it isn't lost.
+    /// Offline, sending still works (Firestore queues and replays); the bar stays enabled with a caption so
+    /// the user knows it isn't lost.
     var isOffline: Bool = false
 
     private var isEmpty: Bool {
@@ -58,7 +59,8 @@ struct MessageInputBar: View {
 }
 
 /// Takes the composer's place once the friendship that opened the thread is gone. Messaging is friend-gated in the
-/// rules, so a live composer would accept and echo a message then fail the write unretryably; history stays readable.
+/// rules, so a live composer would accept and echo a message then fail the write unretryably; history stays
+/// readable.
 /// Blocking isn't mentioned (it's in the menu), since raising it here would read as a suggestion to escalate.
 struct MessageThreadClosedFooter: View {
     let otherName: String

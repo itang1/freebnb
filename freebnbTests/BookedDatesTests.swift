@@ -51,7 +51,8 @@ struct BookedDatesTests {
         #expect(restored.unavailableDateRanges?.first?.end == day(14))
     }
 
-    /// The union the private document hands to the public one: blocked and booked in one list, unmarked. Buffer zero pins the pure merge.
+    /// The union the private document hands to the public one: blocked and booked in one list, unmarked.
+    /// Buffer zero pins the pure merge.
     @Test func availabilityMergesBlockedAndBooked() {
         let availability = ListingAvailability(
             blockedDateRanges: [DateRange(start: day(1), end: day(3))],
@@ -118,7 +119,8 @@ struct BookedDatesTests {
 
     // MARK: - Reading a listing written before the split
 
-    /// The backfill runs after this ships, so legacy listings with the two public arrays must keep showing every closed day.
+    /// The backfill runs after this ships, so legacy listings with the two public arrays must keep showing
+    /// every closed day.
     @Test func legacyListingFallsBackToTheUnionOfBothFields() throws {
         let home = try JSONDecoder().decode(Home.self, from: Data(Self.legacyListingJSON(
             extraFields: """

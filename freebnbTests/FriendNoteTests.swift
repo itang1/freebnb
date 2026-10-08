@@ -47,7 +47,8 @@ struct FriendNoteTextTests {
         #expect(FriendNote.normalized("  kept the cat alive  ") == "kept the cat alive")
     }
 
-    /// The cap lives here, in `firestore.rules` and the composer; cutting to it makes an over-long note a field error.
+    /// The cap lives here, in `firestore.rules` and the composer; cutting to it makes an over-long note a
+    /// field error.
     @Test("text is cut to the cap the rules enforce")
     func clampsToCap() {
         let long = String(repeating: "x", count: FriendNote.maxLength + 500)
@@ -86,7 +87,8 @@ struct FriendNoteOrderingTests {
         #expect(all.about("nobody").isEmpty)
     }
 
-    /// Both timestamps are server-stamped in one commit, close but not identical; "edited" must mean a real later edit.
+    /// Both timestamps are server-stamped in one commit, close but not identical; "edited" must mean a real
+    /// later edit.
     @Test("a note is only 'edited' once it has actually been revised")
     func editedFlag() {
         #expect(note("a", created: day(1), updated: day(1)).wasEdited == false)

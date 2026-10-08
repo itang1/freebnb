@@ -8,7 +8,8 @@
 import Foundation
 
 enum CalendarInvite {
-    /// One all-day VEVENT; `endDay` is exclusive (departure day, or the day after the last blocked night), as iCalendar's DTEND means.
+    /// One all-day VEVENT; `endDay` is exclusive (departure day, or the day after the last blocked night), as
+    /// iCalendar's DTEND means.
     struct Event {
         var uid: String
         var title: String

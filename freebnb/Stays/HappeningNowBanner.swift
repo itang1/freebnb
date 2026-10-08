@@ -2,7 +2,8 @@
 //  HappeningNowBanner.swift
 //  freebnb
 //
-//  The in-app twin of the Live Activity: a banner atop the Stays tab whenever a stay is live, whichever pane is showing.
+//  The in-app twin of the Live Activity: a banner atop the Stays tab whenever a stay is live, whichever pane
+//  is showing.
 //  It reuses `StayPhase`, so the app and Lock Screen states can't disagree.
 //
 
@@ -53,7 +54,8 @@ struct HappeningNowBanner: View {
     }
 }
 
-/// A dot that pulses while a stay is under way, echoing the banner's "live" language; static on arrival/checkout days so only an in-progress stay animates.
+/// A dot that pulses while a stay is under way, echoing the banner's "live" language; static on
+/// arrival/checkout days so only an in-progress stay animates.
 private struct LiveDot: View {
     let animated: Bool
     @State private var pulsing = false

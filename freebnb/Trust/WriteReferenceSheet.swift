@@ -2,7 +2,8 @@
 //  WriteReferenceSheet.swift
 //  freebnb
 //
-//  A friend vouching for a friend, offered only with an accepted friend edge (the rules refuse otherwise), so the button's absence and the rule agree.
+//  A friend vouching for a friend, offered only with an accepted friend edge (the rules refuse otherwise), so
+//  the button's absence and the rule agree.
 //
 
 import SwiftUI

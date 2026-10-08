@@ -15,7 +15,8 @@ struct ExportFile: Identifiable {
     var id: String { url.path }
 }
 
-/// A sheet presenting the finished export with a ShareLink, presented from code once the async export completes (ShareLink alone can't be).
+/// A sheet presenting the finished export with a ShareLink, presented from code once the async export
+/// completes (ShareLink alone can't be).
 struct DataExportShareSheet: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss

@@ -117,7 +117,8 @@ function subscribe(status) {
     },
     (error) => {
       loading.hidden = true;
-      // Most likely a signed-in account without the `admin` claim; say so rather than echoing the raw permissions error.
+      // Most likely a signed-in account without the `admin` claim; say so rather than echoing the raw
+      // permissions error.
       teardown();
       consoleEl.hidden = true;
       gate.hidden = false;
@@ -171,7 +172,8 @@ function renderReport(snapshot) {
 
   const actions = document.createElement("div");
   actions.className = "actions";
-  // Only offer states the report isn't already in; a "mark new" on a new report is noise and a mis-click could reopen a case.
+  // Only offer states the report isn't already in; a "mark new" on a new report is noise and a mis-click
+  // could reopen a case.
   for (const status of STATUSES.filter((s) => s !== data.status)) {
     const button = document.createElement("button");
     button.textContent = label(status);
@@ -188,7 +190,8 @@ async function triage(reportID, status, note, item) {
   for (const button of item.querySelectorAll("button")) button.disabled = true;
   const trimmed = note.trim();
   try {
-    // The rules pin these four keys and `reviewedBy` to the caller, so nothing can rewrite what was reported or by whom.
+    // The rules pin these four keys and `reviewedBy` to the caller, so nothing can rewrite what was reported
+    // or by whom.
     await updateDoc(doc(db, "reports", reportID), {
       status,
       ...(trimmed ? { moderatorNote: trimmed } : {}),

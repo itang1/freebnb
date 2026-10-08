@@ -52,7 +52,8 @@ struct RequestStaySheet: View {
             ))
     }
 
-    /// The arrival times this guest may pick; a withheld one is simply absent (no disabled row or "ask your host").
+    /// The arrival times this guest may pick; a withheld one is simply absent (no disabled row or "ask your
+    /// host").
     private var arrivalChoices: [ArrivalWindow] {
         let allowed = resolvedPolicy.policy.allowedArrivalWindows
         return allowed.isEmpty ? ArrivalWindow.allCases : allowed

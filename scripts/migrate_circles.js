@@ -86,7 +86,8 @@ const PERMISSIVE_POLICY = {
   maxStaysPerPeriod: null,
 };
 
-// Mirrors FriendCircle.seeded(). The two beyond Default are ordinary circles, there so a host has somewhere to drag people.
+// Mirrors FriendCircle.seeded(). The two beyond Default are ordinary circles, there so a host has somewhere
+// to drag people.
 const SEEDED_CIRCLES = [
   { id: DEFAULT_CIRCLE_ID, name: "Everyone else", isDefault: true, sortOrder: 0 },
   { id: "closeFriend", name: "Close friend", isDefault: false, sortOrder: 1 },

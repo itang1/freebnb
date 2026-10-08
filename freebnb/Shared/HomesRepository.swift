@@ -108,7 +108,8 @@ struct FirestoreHomesRepository: HomesRepository {
         documents.compactMap { doc in
             do { return try doc.data(as: Home.self) }
             catch {
-                // Count dropped documents so a corrupt listing shows up as a decode-failure rate (query context in the id field).
+                // Count dropped documents so a corrupt listing shows up as a decode-failure rate (query
+                // context in the id field).
                 Telemetry.decodeFailure(collection: FirestorePaths.homes, documentID: "\(context)/\(doc.documentID)", error: error)
                 return nil
             }
@@ -138,7 +139,8 @@ struct FirestoreHomesRepository: HomesRepository {
             return NoopListener()
         }
 
-        // No cached-empty gating: an empty feed is legitimate for a viewer with no friends, and waiting would hang offline.
+        // No cached-empty gating: an empty feed is legitimate for a viewer with no friends, and waiting would
+        // hang offline.
         let allowedReg = allowedQuery(viewerID: viewerID)
             .limit(to: limit)
             .addSnapshotListener { snapshot, error in
@@ -195,7 +197,8 @@ struct FirestoreHomesRepository: HomesRepository {
     func save(_ home: Home) async throws {
         try await withRetry { [db] in
             var data = try Firestore.Encoder().encode(home)
-            // A new listing gets the server timestamp (the rules require it equal request.time); edits keep the existing value.
+            // A new listing gets the server timestamp (the rules require it equal request.time); edits keep
+            // the existing value.
             if home.createdAt == nil {
                 data["createdAt"] = FieldValue.serverTimestamp()
             }

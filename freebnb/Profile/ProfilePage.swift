@@ -332,7 +332,8 @@ struct ProfilePage: View {
     private var profileHeader: some View {
         VStack(spacing: 6) {
             Group {
-                // A guest has no stable identity to generate an avatar from; the crossed-out person says "not signed in" plainly.
+                // A guest has no stable identity to generate an avatar from; the crossed-out person says "not
+                // signed in" plainly.
                 if authManager.authMethod == .guest {
                     PersonAvatar(systemImage: "person.slash", size: 100)
                 } else {
@@ -442,7 +443,8 @@ struct ProfilePage: View {
 extension ProfilePage {
     // MARK: - Hosting section
 
-    /// Hosting lives on the Stays tab behind a segmented picker a would-be host wouldn't look under; surface it here too.
+    /// Hosting lives on the Stays tab behind a segmented picker a would-be host wouldn't look under; surface
+    /// it here too.
     var hostingSection: some View {
         Group {
             sectionLabel("Hosting")
@@ -477,7 +479,8 @@ extension ProfilePage {
 
     // MARK: - Help & info row
 
-    /// The former Info tab: reference content (guides, FAQ, safety) is too rarely visited to earn a tab but needs a findable home.
+    /// The former Info tab: reference content (guides, FAQ, safety) is too rarely visited to earn a tab but
+    /// needs a findable home.
     var helpAndInfoRow: some View {
         NavigationLink {
             InfoPage()

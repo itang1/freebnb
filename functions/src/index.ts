@@ -204,7 +204,8 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
     { merge: true }
   );
 
-  // The recipient's token and blocks are in their private subdocument; the sender's name is on the public user doc; mute is on the conversation doc.
+  // The recipient's token and blocks are in their private subdocument; the sender's name is on the public
+  // user doc; mute is on the conversation doc.
   const [recipientPrivate, senderDoc, convSnap] = await Promise.all([
     db.doc(privateProfilePath(recipientID)).get(),
     db.collection(Collections.users).doc(senderID).get(),
@@ -396,7 +397,8 @@ async function placeInDefaultCircle(hostID: string, friendID: string): Promise<v
     .doc(friendID);
   if ((await memberRef.get()).exists) return;
 
-  // No Default circle means no circles at all; their client seeds them on next launch, and until then nothing is restricted.
+  // No Default circle means no circles at all; their client seeds them on next launch, and until then nothing
+  // is restricted.
   const defaultCircle = await circlePath(hostID, Docs.defaultCircle).get();
   const policy = defaultCircle.data()?.policy as BookingPolicyData | undefined;
   if (!policy) return;
@@ -714,7 +716,8 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
     deleteQueryInChunks(db.collection(Collections.friendEdges).where("userA", "==", uid)),
     deleteQueryInChunks(db.collection(Collections.friendEdges).where("userB", "==", uid)),
     deleteQueryInChunks(db.collection(Collections.reports).where("reporterUserID", "==", uid)),
-    // Summaries carry the user's name and unread/mute state; drop them, and the other party's next message rebuilds each.
+    // Summaries carry the user's name and unread/mute state; drop them, and the other party's next message
+    // rebuilds each.
     deleteQueryInChunks(db.collection(Collections.conversations).where("participants", "array-contains", uid)),
   ]);
 
@@ -842,12 +845,14 @@ export const acceptStayRequest = onCall(callableOptions, async (request) => {
     } else {
       throw new HttpsError("failed-precondition", "This stay is no longer awaiting an answer.");
     }
-    // A hostNote is the host's to write; on an offer they wrote one at create time, which the guest mustn't overwrite.
+    // A hostNote is the host's to write; on an offer they wrote one at create time, which the guest mustn't
+    // overwrite.
     if (req.status === "offered" && typeof hostNote === "string") {
       throw new HttpsError("invalid-argument", "A guest cannot write the host's note.");
     }
 
-    // The listing must still exist and be live; accepting for a deleted listing would disclose an address nothing cleans up.
+    // The listing must still exist and be live; accepting for a deleted listing would disclose an address
+    // nothing cleans up.
     if (!listingSnap.exists || listingSnap.data()?.deletedAt) {
       throw new HttpsError("failed-precondition", "This listing is no longer available.");
     }
@@ -1275,7 +1280,8 @@ export const suggestFriends = onCall(callableOptions, async (request) => {
   }
   for (const blocked of (myPrivateSnap.data()?.blockedUserIDs ?? []) as string[]) connected.add(blocked);
 
-  // Tally which friends connect to each candidate, capping fan-out so a huge friend list can't cause thousands of reads.
+  // Tally which friends connect to each candidate, capping fan-out so a huge friend list can't cause
+  // thousands of reads.
   const FRIEND_CAP = 200;
   const connectors = new Map<string, string[]>();
   await Promise.all(

@@ -6,7 +6,8 @@
 import AuthenticationServices
 import UIKit
 
-// `ASAuthorizationController` calls back on the main queue and `signIn(nonce:)` is only called from the main actor,
+// `ASAuthorizationController` calls back on the main queue and `signIn(nonce:)` is only called from the main
+// actor,
 // so `continuation` is effectively single-threaded; `@MainActor` makes the compiler enforce that. The delegate
 // requirements aren't `@MainActor`, so they stay `nonisolated` and assert main-actor isolation at runtime.
 @MainActor

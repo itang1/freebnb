@@ -2,7 +2,8 @@
 //  FeedbackTests.swift
 //  freebnbTests
 //
-//  Pure-logic coverage for the feedback composer's validation and the "what's new" auto-present decision; the Google Form POST isn't exercised.
+//  Pure-logic coverage for the feedback composer's validation and the "what's new" auto-present decision; the
+//  Google Form POST isn't exercised.
 //
 
 import Testing

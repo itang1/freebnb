@@ -177,7 +177,8 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
     #expect(MutualFriends(count: 3, names: ["Priya", "Sam"]).countSummary == "3 mutual friends")
 }
 
-/// A suggestion row appears before any relationship exists, so it says how close someone is, not through whom; names stay on the model for the profile page.
+/// A suggestion row appears before any relationship exists, so it says how close someone is, not through
+/// whom; names stay on the model for the profile page.
 @Test func aFriendSuggestionCountsMutualsWithoutNamingThem() {
     let suggestion = FriendSuggestion(
         userID: "u1",
@@ -200,7 +201,8 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
 // MARK: - Friends-only visibility (feature 7)
 
 @Test func feedChecksTheFriendshipNotJustTheACL() {
-    // A stale ACL (a friend removed since the listing was written) mustn't keep showing it; this client check backs up the ACL-gated query.
+    // A stale ACL (a friend removed since the listing was written) mustn't keep showing it; this client check
+    // backs up the ACL-gated query.
     let home = makeHome(id: "h", hostUserID: "host", allowedViewerIDs: ["host", "me"])
     #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: [], blockedIDs: []).isEmpty)
     #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: ["host"], blockedIDs: []).count == 1)

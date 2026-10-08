@@ -49,7 +49,8 @@ enum InviteCopy {
         return components.url ?? URL(string: "\(customScheme)://invite")!
     }
 
-    /// The general "join me" invite, framed as vouching: the feed is empty until a friend shows up, offered not pressed.
+    /// The general "join me" invite, framed as vouching: the feed is empty until a friend shows up, offered
+    /// not pressed.
     static func vouch(inviterName: String?, senderID: String? = nil) -> String {
         intro(inviterName)
             + "FreeBNB is a free home-sharing app that only ever shows you places from your own friends. "
@@ -67,7 +68,8 @@ enum InviteCopy {
             + closing(inviterName, senderID: senderID)
     }
 
-    /// Sent from a feed with friends but no listings: an open question about hosting, choice left to the recipient.
+    /// Sent from a feed with friends but no listings: an open question about hosting, choice left to the
+    /// recipient.
     static func askToHost(inviterName: String?, senderID: String? = nil) -> String {
         intro(inviterName)
             + "Got a couch or a guest room? If you put it on FreeBNB, friends like me could stay with you without the group-chat scramble. "
@@ -76,7 +78,8 @@ enum InviteCopy {
             + closing(inviterName, senderID: senderID)
     }
 
-    /// "It's Maya. " once the profile has loaded, else nothing (a placeholder like "It's A friend" would read badly).
+    /// "It's Maya. " once the profile has loaded, else nothing (a placeholder like "It's A friend" would read
+    /// badly).
     private static func intro(_ inviterName: String?) -> String {
         inviterName.map { "It's \($0). " } ?? ""
     }

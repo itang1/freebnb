@@ -35,7 +35,8 @@ protocol FriendNoteRepository: Sendable {
     func updateNote(hostID: String, noteID: String, text: String, stayRequestID: String?) async throws
     func deleteNote(hostID: String, noteID: String) async throws
 
-    /// Marks one stay's post-stay prompt dealt with, whether the host wrote or waved it off: they were asked and answered.
+    /// Marks one stay's post-stay prompt dealt with, whether the host wrote or waved it off: they were asked
+    /// and answered.
     func markPromptSeen(hostID: String, stayRequestID: String) async throws
 }
 
@@ -55,7 +56,8 @@ struct FirestoreFriendNoteRepository: FriendNoteRepository {
         hostID: String,
         handler: @escaping @Sendable (Result<[FriendNote], Error>) -> Void
     ) -> RepositoryListener {
-        // Ordered server-side so the limit keeps the newest; `sortedByDate()` still runs since a note with no server timestamp sorts last here and belongs first.
+        // Ordered server-side so the limit keeps the newest; `sortedByDate()` still runs since a note with no
+        // server timestamp sorts last here and belongs first.
         let reg = notes(hostID)
             .order(by: "createdAt", descending: true)
             .limit(to: friendNotesFetchLimit)
@@ -102,7 +104,8 @@ struct FirestoreFriendNoteRepository: FriendNoteRepository {
 
     func updateNote(hostID: String, noteID: String, text: String, stayRequestID: String?) async throws {
         try await withRetry {
-            // A cleared stay link is removed, not written as null, as for review comments (an absent key is what nil encodes to).
+            // A cleared stay link is removed, not written as null, as for review comments (an absent key is
+            // what nil encodes to).
             let stay: Any = stayRequestID.map { $0 as Any } ?? FieldValue.delete()
             try await notes(hostID).document(noteID).updateData([
                 "text": text,

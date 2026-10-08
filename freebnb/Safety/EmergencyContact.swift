@@ -44,7 +44,8 @@ struct EmergencyContact: Codable, Hashable, Sendable {
 // MARK: - The message a guest sends
 
 enum SafetyCheckIn {
-    /// The "here is where I'll be" note, from only what this viewer may see; without an accepted stay it degrades to the city.
+    /// The "here is where I'll be" note, from only what this viewer may see; without an accepted stay it
+    /// degrades to the city.
     static func message(
         stay: StayRequest,
         guestName: String,

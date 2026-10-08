@@ -24,7 +24,8 @@ enum UserSearchTerms {
     /// Longer prefixes aren't stored; longer queries are truncated for the lookup
     /// and re-checked in full client-side.
     static let maxPrefixLength = 15
-    /// Bounds the document and what a modified client can stuff in; mirrors `isValidSearchTerms` in firestore.rules.
+    /// Bounds the document and what a modified client can stuff in; mirrors `isValidSearchTerms` in
+    /// firestore.rules.
     static let maxTerms = 60
 
     static func words(in name: String) -> [String] {
@@ -55,7 +56,8 @@ enum UserSearchTerms {
             .map { String($0.prefix(maxPrefixLength)) }
     }
 
-    /// True when every word of `query` prefixes some word of `displayName`; makes multi-word queries mean all words.
+    /// True when every word of `query` prefixes some word of `displayName`; makes multi-word queries mean all
+    /// words.
     static func matches(displayName: String, query: String) -> Bool {
         let nameWords = words(in: displayName)
         let queryWords = words(in: query)
@@ -178,7 +180,8 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             merger.setPublic(snapshot: snapshot, error: error)
         }
         let privateReg = privateDoc(userID).addSnapshotListener { snapshot, error in
-            // A missing private doc is normal for new or pre-split accounts; the public listener owns load failures.
+            // A missing private doc is normal for new or pre-split accounts; the public listener owns load
+            // failures.
             merger.setPrivate(snapshot: error == nil ? snapshot : nil)
         }
         return CompositeListener(listeners: [

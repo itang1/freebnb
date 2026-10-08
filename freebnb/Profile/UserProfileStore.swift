@@ -12,7 +12,8 @@ import os
 struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     @DocumentID var id: String?
     var displayName: String
-    // Reputation lives on the world-readable user document so listing cards render it without a fetch per host; server-written only.
+    // Reputation lives on the world-readable user document so listing cards render it without a fetch per
+    // host; server-written only.
     var trustStats: TrustStats?
     var email: String?
     var savedListingIDs: [String]?
@@ -196,7 +197,8 @@ final class UserProfileStore {
         try await setBlocked(userID, blocked: false)
     }
 
-    /// Optimistic like the saved-listings toggle; a failed write reverts so the UI never claims a block that didn't land.
+    /// Optimistic like the saved-listings toggle; a failed write reverts so the UI never claims a block that
+    /// didn't land.
     private func setBlocked(_ userID: String, blocked: Bool) async throws {
         guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         var ids = currentProfile?.blockedIDs ?? []

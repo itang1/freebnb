@@ -242,7 +242,8 @@ enum BookingPolicyGuestView {
         monthsAhead: Int,
         calendar: Calendar = .current
     ) -> Set<Date> {
-        // A spent frequency window closes the whole calendar until it rolls, so it reads as "the host has nothing free".
+        // A spent frequency window closes the whole calendar until it rolls, so it reads as "the host has
+        // nothing free".
         if let cap = policy.maxStaysPerPeriod, staysUsedInWindow >= cap.count {
             let reopens = windowEndsAt ?? calendar.date(byAdding: .day, value: cap.periodDays, to: from) ?? from
             return days(from: from, until: max(reopens, from), monthsAhead: monthsAhead, calendar: calendar)

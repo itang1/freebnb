@@ -2,7 +2,8 @@
 //  FeedSectionsTests.swift
 //  freebnbTests
 //
-//  Covers the derivation behind the feed's explanatory chips; the chip claims who knows whom, so the key cases are where it stays silent.
+//  Covers the derivation behind the feed's explanatory chips; the chip claims who knows whom, so the key
+//  cases are where it stays silent.
 //
 
 import Foundation
@@ -24,7 +25,8 @@ struct FeedReasonTests {
         #expect(FeedSections.reason(for: home, myID: me, friendIDs: friends) == .friend)
     }
 
-    /// A host who isn't a verified friend gets no chip even if the ACL names the viewer (an ended friendship); a wrong chip is a false statement.
+    /// A host who isn't a verified friend gets no chip even if the ACL names the viewer (an ended
+    /// friendship); a wrong chip is a false statement.
     @Test func unverifiableConnectionStaysSilent() {
         let staleACL = HomeFixture.make(id: "a", hostUserID: "stranger", allowedViewerIDs: [me])
         #expect(FeedSections.reason(for: staleACL, myID: me, friendIDs: friends) == nil)

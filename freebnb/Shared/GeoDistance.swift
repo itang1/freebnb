@@ -4,13 +4,15 @@
 //
 //  Distance between a listing and a searched place, and the radius scope the feed narrows by.
 //  Every coordinate here is the listing's public one, rounded to a neighbourhood by
-//  `Home.approximate(_:)`, so distances are honest to about a kilometre, as precise as the pre-acceptance map circle.
+//  `Home.approximate(_:)`, so distances are honest to about a kilometre, as precise as the pre-acceptance map
+//  circle.
 //
 
 import CoreLocation
 import Foundation
 
-/// A latitude/longitude pair that is `Equatable` and `Hashable` (`CLLocationCoordinate2D` isn't), so it can sit in SwiftUI state and drive `onChange`.
+/// A latitude/longitude pair that is `Equatable` and `Hashable` (`CLLocationCoordinate2D` isn't), so it can
+/// sit in SwiftUI state and drive `onChange`.
 struct Coordinate: Hashable, Sendable {
     var latitude: Double
     var longitude: Double
@@ -47,7 +49,8 @@ enum Geo {
         return a.distance(from: b) / metresPerMile
     }
 
-    /// "0.4 mi away", "12 mi away". Sub-mile distances keep a decimal so they don't read "0 mi"; under a mile is within the blur anyway.
+    /// "0.4 mi away", "12 mi away". Sub-mile distances keep a decimal so they don't read "0 mi"; under a mile
+    /// is within the blur anyway.
     static func distanceText(_ miles: Double) -> String {
         let value = miles < 10
             ? String(format: "%.1f", miles)
@@ -56,7 +59,8 @@ enum Geo {
     }
 }
 
-/// Where the user is searching from and how far they'll look; from geocoding the city query. A nil `radiusMiles` means any distance, still permitting distance sorting.
+/// Where the user is searching from and how far they'll look; from geocoding the city query. A nil
+/// `radiusMiles` means any distance, still permitting distance sorting.
 struct GeoScope: Equatable, Sendable {
     var center: Coordinate
     var radiusMiles: Double?

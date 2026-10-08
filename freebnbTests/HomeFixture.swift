@@ -3,7 +3,8 @@
 //  freebnbTests
 //
 //  A shared `Home` builder for tests whose fixtures differ by a few fields, replacing the drifted `makeHome`
-//  copies. Namespaced as `HomeFixture.make` because three tests keep a private `makeHome` tuned to their assertions
+//  copies. Namespaced as `HomeFixture.make` because three tests keep a private `makeHome` tuned to their
+//  assertions
 //  (ListingDraftTests, SpotlightIndexerTests, TrustAndSafetyTests), and a free function would be ambiguous.
 //
 

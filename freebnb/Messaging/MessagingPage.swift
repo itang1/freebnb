@@ -2,7 +2,8 @@
 //  MessagingPage.swift
 //  freebnb
 //
-//  The one-to-one chat view. It owns the thread's state and chrome; banners, bubbles, input bar, toolbar menu and actions live in sibling files.
+//  The one-to-one chat view. It owns the thread's state and chrome; banners, bubbles, input bar, toolbar menu
+//  and actions live in sibling files.
 //
 
 import SwiftUI
@@ -26,7 +27,8 @@ struct MessagingPage: View {
 
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
-    /// The listing a new stay request is for: set directly when the other person has one requestable home, else by the picker.
+    /// The listing a new stay request is for: set directly when the other person has one requestable home,
+    /// else by the picker.
     @State private var requestTarget: Home?
     @State private var showListingChoice = false
     @State private var respondingTo: StayRequest?
@@ -73,7 +75,8 @@ struct MessagingPage: View {
         }
     }
 
-    /// The saved arrival kit for a stay at this person's place when one is close enough to matter (guest stays only).
+    /// The saved arrival kit for a stay at this person's place when one is close enough to matter (guest
+    /// stays only).
     private var arrivalKit: CheckInKit? {
         let staysWithThem = requestStore.outgoingRequests.filter {
             $0.hostUserID == otherUserID && $0.status == .accepted
@@ -93,7 +96,8 @@ struct MessagingPage: View {
     @ObservationIgnored private let log = AppLog.logger("messaging")
 
     var body: some View {
-        // Read once per body pass; the toolbar gate and listing-choice dialog both read it, filtering every candidate.
+        // Read once per body pass; the toolbar gate and listing-choice dialog both read it, filtering every
+        // candidate.
         let requestable = requestableListings
         VStack(spacing: 0) {
             // Listing context, when a listing is associated.
@@ -306,7 +310,8 @@ struct MessagingPage: View {
         }
     }
 
-    /// The accept slot: a host accepting a request gets the note sheet; a guest accepting an offer accepts directly.
+    /// The accept slot: a host accepting a request gets the note sheet; a guest accepting an offer accepts
+    /// directly.
     private func accept(_ request: StayRequest) {
         if request.status == .offered {
             run { try await actions.accept(request, hostNote: nil) }

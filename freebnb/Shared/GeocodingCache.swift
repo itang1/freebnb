@@ -2,7 +2,8 @@
 //  GeocodingCache.swift
 //  freebnb
 //
-//  Actor-based cache for CLGeocoder lookups (limited to ~50 requests/minute), so browsing between listings doesn't re-resolve addresses; concurrent requests for one address coalesce.
+//  Actor-based cache for CLGeocoder lookups (limited to ~50 requests/minute), so browsing between listings
+//  doesn't re-resolve addresses; concurrent requests for one address coalesce.
 //
 
 import CoreLocation

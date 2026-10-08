@@ -2,7 +2,8 @@
 //  RepositorySupport.swift
 //  freebnb
 //
-//  Cross-cutting helpers for every Firestore repository: logging, listener cancellation, the write-batch cap and the transient-error retry wrapper.
+//  Cross-cutting helpers for every Firestore repository: logging, listener cancellation, the write-batch cap
+//  and the transient-error retry wrapper.
 //
 
 @preconcurrency import FirebaseFirestore
@@ -43,14 +44,16 @@ struct CompositeListener: RepositoryListener {
     func cancel() { listeners.forEach { $0.cancel() } }
 }
 
-/// Removes a `NotificationCenter` observer on cancel, so a derived listener can subscribe to local state like a Firestore snapshot.
+/// Removes a `NotificationCenter` observer on cancel, so a derived listener can subscribe to local state like
+/// a Firestore snapshot.
 final class NotificationObserverListener: RepositoryListener, @unchecked Sendable {
     private let observer: NSObjectProtocol
     init(observer: NSObjectProtocol) { self.observer = observer }
     func cancel() { NotificationCenter.default.removeObserver(observer) }
 }
 
-/// A mutable box for the latest message snapshot, so the snapshot callback and local-state notification can drive one emit without capturing a `var` across concurrency domains.
+/// A mutable box for the latest message snapshot, so the snapshot callback and local-state notification can
+/// drive one emit without capturing a `var` across concurrency domains.
 final class MessagesSnapshotCache: @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [Message] = []

@@ -133,10 +133,12 @@ describe("users/{id}.trustStats — server-owned reputation", () => {
     );
   });
 
-  // The control: a rename must still work with stats carried intact, or a rule denying every update would pass both cases above.
+  // The control: a rename must still work with stats carried intact, or a rule denying every update would
+  // pass both cases above.
   it("allows a rename that leaves stats untouched", async () => {
     const stats = { staysHosted: 1, idVerified: false };
-    // `createdAt` is immutable, so the rewrite carries the document's exact value (a fixed timestamp, not a sentinel).
+    // `createdAt` is immutable, so the rewrite carries the document's exact value (a fixed timestamp, not a
+    // sentinel).
     const createdAt = Timestamp.fromMillis(1_700_000_000_000);
     await seed((db) =>
       setDoc(doc(db, "users", HOST), {

@@ -17,7 +17,8 @@ struct MessageBubble: View {
     let onDiscard: () -> Void
     var onReport: () -> Void = {}
 
-    /// Routes a tapped "See other dates" on a host-cancellation card to the listing; navigation-only, so no confirmation.
+    /// Routes a tapped "See other dates" on a host-cancellation card to the listing; navigation-only, so no
+    /// confirmation.
     @Environment(DeepLinkRouter.self) private var router
 
     private var isFromMe: Bool { message.senderUserID == currentUserID }
@@ -34,7 +35,8 @@ struct MessageBubble: View {
         }
     }
 
-    /// Offered only on the guest's copy of a host cancellation whose event carried the listing; nil elsewhere hides the button.
+    /// Offered only on the guest's copy of a host cancellation whose event carried the listing; nil elsewhere
+    /// hides the button.
     private func seeOtherDatesAction(for event: StayEvent) -> (() -> Void)? {
         guard event.kind == .hostCancelled, !isFromMe, let listingID = event.listingID else {
             return nil

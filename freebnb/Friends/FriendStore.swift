@@ -34,12 +34,14 @@ struct FriendEdge: Identifiable, Codable, Hashable, Sendable {
 }
 
 /// A "people you may know" candidate from the `suggestFriends` callable: a friend-of-a-friend
-/// with shared friends. The only place one surfaces; their listings stay hidden until a friend request is accepted.
+/// with shared friends. The only place one surfaces; their listings stay hidden until a friend request is
+/// accepted.
 struct FriendSuggestion: Identifiable, Hashable, Sendable {
     let userID: String
     let displayName: String
     let mutualCount: Int
-    /// Up to two of your own friends connecting you to this person, resolved server-side; never their other friends.
+    /// Up to two of your own friends connecting you to this person, resolved server-side; never their other
+    /// friends.
     let mutualNames: [String]
     var id: String { userID }
 
@@ -102,7 +104,8 @@ final class FriendStore {
 
     var pendingCount: Int { pendingIncoming.count }
 
-    /// UIDs of the signed-in user's actual friends; stamped onto `allowedViewerIDs` on save so the rules can enforce friends-only.
+    /// UIDs of the signed-in user's actual friends; stamped onto `allowedViewerIDs` on save so the rules can
+    /// enforce friends-only.
     var friendIDs: [String] {
         guard let uid = Auth.auth().currentUser?.uid else { return [] }
         return friendEdges.map { $0.otherUserID(relativeTo: uid) }

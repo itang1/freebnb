@@ -5,7 +5,8 @@
 
 import SwiftUI
 
-/// One sheet, three modes: stacked `.sheet` modifiers resolve unreliably, so create, edit and duplicate share one presentation keyed by this value.
+/// One sheet, three modes: stacked `.sheet` modifiers resolve unreliably, so create, edit and duplicate share
+/// one presentation keyed by this value.
 private struct ListingSheet: Identifiable, Hashable {
     let mode: ListingFormMode
 
@@ -26,7 +27,8 @@ struct YourListingsPage<LeadingContent: View>: View {
     @State private var isDeleting = false
     @State private var errorMessage: String?
 
-    /// Extra sections above the properties list; the Stays tab folds hosting requests in here. Defaults to nothing.
+    /// Extra sections above the properties list; the Stays tab folds hosting requests in here. Defaults to
+    /// nothing.
     private var leadingContent: () -> LeadingContent
 
     /// The Stays tab overrides this to "My Listings" so the nav bar and back-button label match its switcher.
@@ -42,7 +44,8 @@ struct YourListingsPage<LeadingContent: View>: View {
 
     private var myID: String { authManager.userID }
 
-    /// Listings this user hosts, and separately those they co-host. Split because only the host may delete, duplicate or manage the roster.
+    /// Listings this user hosts, and separately those they co-host. Split because only the host may delete,
+    /// duplicate or manage the roster.
     private var hostedListings: [Home] {
         homeStore.managedListings.filter { $0.isHostedBy(myID) }
     }
@@ -155,7 +158,8 @@ struct YourListingsPage<LeadingContent: View>: View {
             }
             .tint(.accent)
         }
-        // Duplicating saves a host with several rooms retyping an address; also on long press, since swipe actions hide.
+        // Duplicating saves a host with several rooms retyping an address; also on long press, since swipe
+        // actions hide.
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
                 sheet = ListingSheet(mode: .duplicate(listing))

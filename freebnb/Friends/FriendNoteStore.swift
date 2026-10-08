@@ -22,7 +22,8 @@ final class FriendNoteStore {
     /// Stay ids whose post-stay prompt was answered or waved off.
     private(set) var seenPrompts: Set<String> = []
     private(set) var listenerError: String?
-    /// False until the first notes snapshot; the prompt waits on it so a host isn't asked about a stay they've already noted.
+    /// False until the first notes snapshot; the prompt waits on it so a host isn't asked about a stay
+    /// they've already noted.
     private(set) var hasLoaded = false
 
     @ObservationIgnored private let repository: FriendNoteRepository
@@ -59,7 +60,8 @@ final class FriendNoteStore {
         notes(about: friendID).first
     }
 
-    /// Whether this host already wrote something about `stayRequestID`; only to avoid asking twice, never surfaced.
+    /// Whether this host already wrote something about `stayRequestID`; only to avoid asking twice, never
+    /// surfaced.
     func hasNote(forStayRequestID stayRequestID: String) -> Bool {
         notes.contains { $0.stayRequestID == stayRequestID }
     }
@@ -137,7 +139,8 @@ final class FriendNoteStore {
         try await repository.deleteNote(hostID: hostID, noteID: id)
     }
 
-    /// Waves off the post-stay prompt for one stay ("don't ask again"), not a judgement of the friend; notes stay writable from their screen.
+    /// Waves off the post-stay prompt for one stay ("don't ask again"), not a judgement of the friend; notes
+    /// stay writable from their screen.
     func dismissPrompt(forStayRequestID stayRequestID: String) async {
         guard !hostID.isEmpty else { return }
         // Optimistic, so the row leaves under the tap; the listener confirms.

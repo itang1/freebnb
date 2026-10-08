@@ -4,7 +4,8 @@
 //
 //  Runs the real FirestoreHomesRepository against the emulator, covering what the in-memory doubles
 //  can't: the rules admitting a full member's listing and rejecting a guest's, and the recency cursor
-//  paging against a live composite index. Nested in EmulatorBackedTests (shares one Auth session with AuthEmulatorTests).
+//  paging against a live composite index. Nested in EmulatorBackedTests (shares one Auth session with
+//  AuthEmulatorTests).
 //
 
 import FirebaseFirestore
@@ -52,7 +53,8 @@ extension EmulatorBackedTests {
             #expect(secondPage.first?.id != first.id)
         }
 
-        // The guest-write boundary is a rules boundary: an anonymous create is denied, and permission-denied isn't retried.
+        // The guest-write boundary is a rules boundary: an anonymous create is denied, and permission-denied
+        // isn't retried.
         @Test func guestCannotCreateListing() async throws {
             let uid = try await EmulatorSupport.signInGuest()
             let home = makeHome(hostUserID: uid)

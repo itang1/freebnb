@@ -70,7 +70,8 @@ extension FilterOption {
         // Guests & Space
         FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.sleeping.numGuestRooms > 0 },
         FilterOption(id: "sleepingBed", label: "Guest has Bed", category: .guestsAndSpace) { ($0.sleeping.sleepingCounts[.bed] ?? 0) > 0 },
-        // A listing with no recorded bed size matches neither: a guest filtering for a queen wants more than a maybe.
+        // A listing with no recorded bed size matches neither: a guest filtering for a queen wants more than
+        // a maybe.
         FilterOption(id: "bedForTwo", label: "Queen or King Bed", category: .guestsAndSpace) { $0.sleeping.hasBedForTwo },
         FilterOption(id: "twoBathrooms", label: "2+ Bathrooms", category: .guestsAndSpace) { $0.sleeping.numBathrooms >= 2 },
         .bool("kidsAllowed", "Kids Allowed", .guestsAndSpace, \.guestPolicy.kidsAllowed),

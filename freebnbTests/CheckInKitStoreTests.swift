@@ -89,10 +89,12 @@ struct CheckInKitStoreTests {
         #expect(files.loadAll().map(\.stayID) == ["stay-1"])
     }
 
-    // The store's sign-out branch was fine; the view never reached it. These pin the change key that makes it reachable.
+    // The store's sign-out branch was fine; the view never reached it. These pin the change key that makes it
+    // reachable.
 
     @Test func signingOutChangesTheKeyEvenWithNoStays() {
-        // The regression: a signed-out user has no stays, so without the viewer id both sides are `[]`, no change, and door codes stay.
+        // The regression: a signed-out user has no stays, so without the viewer id both sides are `[]`, no
+        // change, and door codes stay.
         let signedIn = CheckInKitStore.changeKey(authResolved: true, viewerID: guestID, stays: [])
         let signedOut = CheckInKitStore.changeKey(authResolved: true, viewerID: "", stays: [])
         #expect(signedIn != signedOut)

@@ -59,7 +59,8 @@ final class freebnbUITests: XCTestCase {
         field.typeText(text)
     }
 
-    /// Dismisses the onboarding sheet after sign-in, which `-UITesting` re-shows and which covers the tab bar. No-op if absent.
+    /// Dismisses the onboarding sheet after sign-in, which `-UITesting` re-shows and which covers the tab
+    /// bar. No-op if absent.
     private func dismissOnboarding(_ app: XCUIApplication) {
         let skip = app.buttons["Skip"]
         if skip.waitForExistence(timeout: 15) {
@@ -139,7 +140,8 @@ final class freebnbUITests: XCTestCase {
         // canSave() needs a sleeping surface; match the bed stepper by label (the first stepper is "Guest rooms").
         let bedStepper = app.steppers
             .matching(NSPredicate(format: "label CONTAINS[c] %@", "bed")).firstMatch
-        // Scroll it into view: Form renders rows lazily and the keyboard covers the rest, so waiting on it only waits for nothing.
+        // Scroll it into view: Form renders rows lazily and the keyboard covers the rest, so waiting on it
+        // only waits for nothing.
         var stepperScrolls = 0
         while !bedStepper.exists && stepperScrolls < 6 {
             app.swipeUp()
@@ -152,7 +154,8 @@ final class freebnbUITests: XCTestCase {
         XCTAssertTrue(saveButton.isEnabled)
         saveButton.tap()
 
-        // Saving dismisses back to the Stays pane, titled "My Listings" (the default only holds when Profile pushes it).
+        // Saving dismisses back to the Stays pane, titled "My Listings" (the default only holds when Profile
+        // pushes it).
         XCTAssertTrue(app.navigationBars["My Listings"].waitForExistence(timeout: 10))
     }
 

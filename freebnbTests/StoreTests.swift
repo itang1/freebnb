@@ -26,7 +26,8 @@ struct HomeStoreTests {
     @Test func saveAddsListingToRepository() async throws {
         let repo = InMemoryHomesRepository()
         let store = HomeStore(repository: repo)
-        // The ACL names the host, as CreateListingViewModel stamps; the feed read is a pure "ACL contains me" query.
+        // The ACL names the host, as CreateListingViewModel stamps; the feed read is a pure "ACL contains me"
+        // query.
         let home = HomeFixture.make(hostUserID: "host1", allowedViewerIDs: ["host1"])
 
         try await store.save(home)
@@ -35,7 +36,8 @@ struct HomeStoreTests {
         #expect(saved.map(\.id) == [home.id])
     }
 
-    /// A friendship made after the listing was saved must reach its ACL; the Cloud Function isn't deployed, so the client does it.
+    /// A friendship made after the listing was saved must reach its ACL; the Cloud Function isn't deployed,
+    /// so the client does it.
     @Test func aclRefreshMakesTheListingVisibleToANewFriend() async throws {
         let repo = InMemoryHomesRepository()
         let store = HomeStore(repository: repo)

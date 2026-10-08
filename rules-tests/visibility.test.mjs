@@ -95,7 +95,8 @@ describe("homes/{id} — friends-only reads", () => {
     await assertFails(getDoc(listingDoc(asStranger())));
   });
 
-  // A pre-migration document (no ACL, maybe a stale tier) mustn't be world-readable while awaiting scripts/migrate_friends_only.js.
+  // A pre-migration document (no ACL, maybe a stale tier) mustn't be world-readable while awaiting
+  // scripts/migrate_friends_only.js.
   it("hides a pre-migration document with no ACL at all from a stranger", async () => {
     const body = listingBody({ visibility: "everyone" });
     delete body.allowedViewerIDs;
@@ -105,7 +106,8 @@ describe("homes/{id} — friends-only reads", () => {
 });
 
 describe("homes/{id} — the legacy visibility field is rejected on writes", () => {
-  // `createdAt` must be serverTimestamp() on create, so the passing sibling proves this rejection is about `visibility`.
+  // `createdAt` must be serverTimestamp() on create, so the passing sibling proves this rejection is about
+  // `visibility`.
   it("rejects a create that still carries the field", async () => {
     await assertFails(
       setDoc(
@@ -131,7 +133,8 @@ describe("homes/{id} — the legacy visibility field is rejected on writes", () 
 });
 
 describe("homes — list queries", () => {
-  // The feed's one query: rules reject a query unless every match provably passes the read gate, so this pins that the ACL filter is still provably safe...
+  // The feed's one query: rules reject a query unless every match provably passes the read gate, so this pins
+  // that the ACL filter is still provably safe...
   it("allows the feed query: allowedViewerIDs contains me", async () => {
     await seedListing();
     const feed = query(collection(asFriend(), "homes"), where("allowedViewerIDs", "array-contains", FRIEND));

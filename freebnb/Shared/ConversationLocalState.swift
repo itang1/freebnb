@@ -5,7 +5,8 @@
 //  Per-device read and mute state for conversations. These once lived on the `conversations`
 //  summary document, which only `onMessageCreated` writes (its create rule is `if false`) and
 //  prod deploys no functions, so marking a thread read wrote to a document that didn't exist.
-//  Keeping them on-device is the honest version; the cost is that reading on one device doesn't clear another's badge.
+//  Keeping them on-device is the honest version; the cost is that reading on one device doesn't clear
+//  another's badge.
 //
 
 import Foundation

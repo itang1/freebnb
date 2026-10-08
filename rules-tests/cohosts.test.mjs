@@ -106,7 +106,8 @@ describe("homes/{id} — the co-host roster", () => {
     await assertFails(updateDoc(listingDoc(asHost()), { coHostUserIDs: [COHOST] }));
   });
 
-  // Rules can't loop, so the friend check holds only if additions arrive one at a time; a batch of two would pass the second unchecked.
+  // Rules can't loop, so the friend check holds only if additions arrive one at a time; a batch of two would
+  // pass the second unchecked.
   it("refuses two co-hosts added in a single write, even if both are friends", async () => {
     await seedFriendship(HOST, COHOST);
     await seedFriendship(HOST, FRIEND);
@@ -140,10 +141,12 @@ describe("homes/{id} — the co-host roster", () => {
     );
   });
 
-  // Admitting a roster at create would need validating every name against the friend graph, which a loop-free rule can't do.
+  // Admitting a roster at create would need validating every name against the friend graph, which a loop-free
+  // rule can't do.
   //
   // `createdAt` must be serverTimestamp() (the create rule pins it to request.time), or the write
-  // fails for an unrelated reason and the assertion passes vacuously; the sibling test proves this one tests what it claims.
+  // fails for an unrelated reason and the assertion passes vacuously; the sibling test proves this one tests
+  // what it claims.
   it("refuses a listing created with co-hosts already on it", async () => {
     await seedFriendship(HOST, COHOST);
     await assertFails(
@@ -209,7 +212,8 @@ describe("homes/{id} — what a co-host may write", () => {
     await assertFails(updateDoc(listingDoc(asCoHost()), { coHostUserIDs: [COHOST] }));
   });
 
-  // The client rebuilds allowedViewerIDs from the saving user's friends; a co-host writing it would republish a friends-only listing to another graph.
+  // The client rebuilds allowedViewerIDs from the saving user's friends; a co-host writing it would republish
+  // a friends-only listing to another graph.
   it("refuses a co-host rewriting the read ACL", async () => {
     await seedCoHostedListing();
     await assertFails(
@@ -228,7 +232,8 @@ describe("homes/{id} — what a co-host may write", () => {
     await assertFails(deleteDoc(listingDoc(asCoHost())));
   });
 
-  // Refused the delete rule, a co-host mustn't reach the same end through the update rule (`deletedAt` is what the feed filters on).
+  // Refused the delete rule, a co-host mustn't reach the same end through the update rule (`deletedAt` is
+  // what the feed filters on).
   it("refuses a co-host soft-deleting the listing through an update", async () => {
     await seedCoHostedListing();
     await assertFails(updateDoc(listingDoc(asCoHost()), { deletedAt: Timestamp.now() }));
@@ -255,7 +260,8 @@ describe("homes/{id} — reading a co-hosted listing", () => {
     await assertSucceeds(getDoc(listingDoc(asCoHost())));
   });
 
-  // The roster is the grant: losing the friendship (and the ACL place) mustn't lock a co-host out; removing them from the roster is how the host takes it back.
+  // The roster is the grant: losing the friendship (and the ACL place) mustn't lock a co-host out; removing
+  // them from the roster is how the host takes it back.
   it("lets a co-host read a friends-only listing they have dropped out of the ACL of", async () => {
     await seedListing({ coHostUserIDs: [COHOST], allowedViewerIDs: [HOST] });
     await assertSucceeds(getDoc(listingDoc(asCoHost())));
@@ -396,7 +402,8 @@ describe("stayRequests — the co-host's half of the inbox", () => {
     }));
   });
 
-  // `cancelledBy` names the side, not the individual: the push trigger branches on it and the guest's trip row reads it.
+  // `cancelledBy` names the side, not the individual: the push trigger branches on it and the guest's trip
+  // row reads it.
   it("refuses a co-host stamping cancelledBy with their own id", async () => {
     await seedRequest({ status: "accepted" });
     await assertFails(updateDoc(requestDoc(asCoHost()), {
@@ -436,7 +443,8 @@ describe("stayRequests — the co-host's half of the inbox", () => {
     })));
   });
 
-  // A co-host may also ask to stay at a listing they manage, putting them on both sides; they may send it, and the callable refuses to let them answer it.
+  // A co-host may also ask to stay at a listing they manage, putting them on both sides; they may send it,
+  // and the callable refuses to let them answer it.
   it("lets a co-host decline a request from someone else, not their own", async () => {
     await seedCoHostedListing();
     await seed((db) => setDoc(requestDoc(db, "request-own"), requestBody({

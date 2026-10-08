@@ -11,7 +11,8 @@
 import SwiftUI
 
 struct StayDateGrid: View {
-    /// Days no stay may pass a night in: blocked plus accepted-stay ranges, merged and indistinguishable (see `Home.unavailableRanges`).
+    /// Days no stay may pass a night in: blocked plus accepted-stay ranges, merged and indistinguishable (see
+    /// `Home.unavailableRanges`).
     let unavailableDays: Set<Date>
     @Binding var checkIn: Date?
     @Binding var checkOut: Date?
@@ -22,7 +23,8 @@ struct StayDateGrid: View {
 
     @State private var visibleMonth: Date = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
 
-    /// Set when a second tap became a new check-in because the span would cross an unavailable day; without it the selection moves silently and reads as a bug.
+    /// Set when a second tap became a new check-in because the span would cross an unavailable day; without
+    /// it the selection moves silently and reads as a bug.
     @State private var restartedOnUnavailableDays = false
 
     private let calendar = Calendar.current
@@ -144,7 +146,8 @@ struct StayDateGrid: View {
 
     // MARK: - Cells
 
-    /// What one day looks like; the most restrictive wins, so past or ruled-out days grey the same inside a half-made selection.
+    /// What one day looks like; the most restrictive wins, so past or ruled-out days grey the same inside a
+    /// half-made selection.
     private enum CellState {
         case unavailable
         case endpoint

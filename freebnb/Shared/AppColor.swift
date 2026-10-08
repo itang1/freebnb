@@ -64,7 +64,8 @@ extension Color {
     static let onAccent = Color(AppColor.onAccent)
 }
 
-/// Makes roles available as implicit members wherever SwiftUI expects a `ShapeStyle`, e.g. `.foregroundStyle(.accent)`.
+/// Makes roles available as implicit members wherever SwiftUI expects a `ShapeStyle`, e.g.
+/// `.foregroundStyle(.accent)`.
 extension ShapeStyle where Self == Color {
     static var accent: Color { Color(AppColor.accent) }
     static var secondaryAccent: Color { Color(AppColor.secondaryAccent) }

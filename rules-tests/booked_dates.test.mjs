@@ -73,7 +73,8 @@ after(() => testEnv.cleanup());
 beforeEach(() => testEnv.clearFirestore());
 
 describe("homes/{id} — unavailableDateRanges", () => {
-  // Writes go through update, not create, whose other demands (full membership, server createdAt) would mask whether the field is allowed.
+  // Writes go through update, not create, whose other demands (full membership, server createdAt) would mask
+  // whether the field is allowed.
   it("accepts merged ranges written onto a listing", async () => {
     await seedListing();
     await assertSucceeds(
@@ -103,7 +104,8 @@ describe("homes/{id} — unavailableDateRanges", () => {
     );
   });
 
-  // It rides every feed document, so it carries the sum of the two former caps; 201 is rejected via update so the failure is the cap.
+  // It rides every feed document, so it carries the sum of the two former caps; 201 is rejected via update so
+  // the failure is the cap.
   it("rejects more merged ranges than the cap", async () => {
     await seedListing();
     const tooMany = Array.from({ length: 201 }, range);

@@ -40,7 +40,8 @@ struct StayInitiatorTests {
         #expect(stay(status: .pending, initiatedBy: guest).initiator == .guest)
     }
 
-    /// Requests predating offers have no `initiatedBy` and were the guest asking; reading them as host-initiated would misfile past trips.
+    /// Requests predating offers have no `initiatedBy` and were the guest asking; reading them as
+    /// host-initiated would misfile past trips.
     @Test func aRequestWithNoInitiatorIsTheGuestAsking() {
         #expect(stay(status: .pending, initiatedBy: nil).initiator == .guest)
         #expect(stay(status: .completed, initiatedBy: nil).initiator == .guest)
@@ -86,7 +87,8 @@ struct AwaitingReplyTests {
 }
 
 struct OfferAcceptanceTests {
-    /// Only whoever owes the answer can give it; a host accepting their own offer would book a friend into a stay they never agreed to.
+    /// Only whoever owes the answer can give it; a host accepting their own offer would book a friend into a
+    /// stay they never agreed to.
     @Test func onlyTheGuestCanAcceptAnOffer() {
         let offer = stay(status: .offered, initiatedBy: host)
         #expect(offer.canBeAccepted(by: guest))
@@ -113,7 +115,8 @@ struct OfferAcceptanceTests {
 }
 
 struct OfferStatusTests {
-    /// An offer is unresolved, so it must count as active, or `updateStatus` would revoke the guest's address grant.
+    /// An offer is unresolved, so it must count as active, or `updateStatus` would revoke the guest's address
+    /// grant.
     @Test func anOfferIsActiveAndAwaitingAReply() {
         #expect(StayRequestStatus.offered.isActive)
         #expect(StayRequestStatus.offered.isAwaitingReply)

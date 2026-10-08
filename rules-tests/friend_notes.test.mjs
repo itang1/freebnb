@@ -6,7 +6,8 @@
 //   - a host can't write into someone else's collection or a note about themselves;
 //   - an edit can't re-point a note or rewrite its date;
 //   - the shape holds: no extra fields, no empty/over-long text or non-string stay link;
-//   - a note about a former friend stays readable and deletable (the note explaining an unfriending is the one to keep);
+//   - a note about a former friend stays readable and deletable (the note explaining an unfriending is the
+//   one to keep);
 //   - the prompt marker is a timestamp only, and as unreadable to the friend.
 
 import { readFileSync } from "node:fs";
@@ -91,7 +92,8 @@ describe("who can read a note", () => {
     await assertSucceeds(getDocs(notesOf(as(HOST), HOST)));
   });
 
-  // The whole feature in one assertion: the friend knows the host's uid and can guess a path; the rule, not a missing screen, stops them.
+  // The whole feature in one assertion: the friend knows the host's uid and can guess a path; the rule, not a
+  // missing screen, stops them.
   it("refuses the friend the note is about", async () => {
     await assertFails(getDoc(noteDoc(as(FRIEND))));
   });

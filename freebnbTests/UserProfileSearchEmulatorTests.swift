@@ -20,7 +20,8 @@ extension EmulatorBackedTests {
             FirestoreUserProfileRepository(db: EmulatorSupport.firestore)
         }
 
-        /// Signs in a fresh member with a public profile under `name`; the rules let a user write only their own document.
+        /// Signs in a fresh member with a public profile under `name`; the rules let a user write only their
+        /// own document.
         @discardableResult
         private func createMember(named name: String) async throws -> String {
             let uid = try await EmulatorSupport.signInFullMember()
@@ -28,7 +29,8 @@ extension EmulatorBackedTests {
             return uid
         }
 
-        // The write path's terms must satisfy the rules on a real create; if they disagree, every new account fails to get a profile (the canary).
+        // The write path's terms must satisfy the rules on a real create; if they disagree, every new account
+        // fails to get a profile (the canary).
         @Test func creatingAProfileWritesTermsTheRulesAccept() async throws {
             let uid = try await createMember(named: "SpongeBob SquarePants")
             let doc = try await EmulatorSupport.firestore
@@ -54,7 +56,8 @@ extension EmulatorBackedTests {
             #expect(found.contains { $0.displayName == name })
         }
 
-        // The arrayContains lookup carries only the longest word, so without the client pass this returns every other Star.
+        // The arrayContains lookup carries only the longest word, so without the client pass this returns
+        // every other Star.
         @Test func everyWordOfAMultiWordQueryHasToLand() async throws {
             let tag = String(UUID().uuidString.prefix(6))
             let patrick = "Patrick Star\(tag)"

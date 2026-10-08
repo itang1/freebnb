@@ -350,7 +350,8 @@ describe("the listing's published calendar", () => {
   });
 
   it("lets the host reconcile the private booked half", async () => {
-    // Previously pinned because a trigger owned it; the host's reconciler does now, so this must be allowed (still managers-only).
+    // Previously pinned because a trigger owned it; the host's reconciler does now, so this must be allowed
+    // (still managers-only).
     await seed((db) =>
       setDoc(doc(db, "homes", LISTING, "private", "availability"), {
         blockedDateRanges: [], bookedDateRanges: [],

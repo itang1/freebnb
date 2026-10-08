@@ -36,7 +36,8 @@ extension EmulatorBackedTests {
             )
         }
 
-        /// A host with a listing shared with `guestUserID` and a pending request from that guest: as far as it gets
+        /// A host with a listing shared with `guestUserID` and a pending request from that guest: as far as
+        /// it gets
         /// through the real rules without the acceptStayRequest callable (the emulator project has no functions).
         private func makePendingRequest() async throws -> (guest: EmulatorSupport.Member, request: StayRequest) {
             let guest = try await EmulatorSupport.createFullMember()
@@ -100,7 +101,8 @@ extension EmulatorBackedTests {
             }
         }
 
-        // An unattributed cancellation would leave the trigger unable to tell who already knows, so the rules refuse it.
+        // An unattributed cancellation would leave the trigger unable to tell who already knows, so the rules
+        // refuse it.
         @Test func aCancelWithNoCancellerIsRejected() async throws {
             let (_, request) = try await makePendingRequest()
 

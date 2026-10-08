@@ -3,7 +3,8 @@
 //  freebnbTests
 //
 //  Covers the radius filter and nearest-first sort. The key cases are listings with no
-//  coordinate: a radius filter can't admit one that can't prove it's near, while an unfiltered sort should rank, not hide, it.
+//  coordinate: a radius filter can't admit one that can't prove it's near, while an unfiltered sort should
+//  rank, not hide, it.
 //
 
 import Foundation
@@ -32,7 +33,8 @@ struct GeoDistanceTests {
         #expect((525.0...545.0).contains(Geo.distanceMiles(from: sanFrancisco, to: portland)))
     }
 
-    /// Under a mile the integer form would read "0 mi away", wrong and more precise than the blurred coordinate supports.
+    /// Under a mile the integer form would read "0 mi away", wrong and more precise than the blurred
+    /// coordinate supports.
     @Test func distanceTextKeepsADecimalOnlyBelowTenMiles() {
         #expect(Geo.distanceText(0.42) == "0.4 mi away")
         #expect(Geo.distanceText(9.94) == "9.9 mi away")

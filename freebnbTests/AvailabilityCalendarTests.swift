@@ -365,7 +365,8 @@ struct MonthGridTests {
     }
 }
 
-// Serialized: icsFile writes fixed paths in the shared temp directory, so parallel tests could overwrite each other.
+// Serialized: icsFile writes fixed paths in the shared temp directory, so parallel tests could overwrite each
+// other.
 @Suite(.serialized)
 struct CalendarInviteTests {
     private func contents(_ url: URL) throws -> String {

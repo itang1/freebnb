@@ -85,7 +85,8 @@ struct SkeletonConversationRow: View {
     }
 }
 
-/// A placeholder chat bubble; `isMine` mirrors the thread's alignment so the skeleton settles without rows jumping sides.
+/// A placeholder chat bubble; `isMine` mirrors the thread's alignment so the skeleton settles without rows
+/// jumping sides.
 struct SkeletonMessageBubble: View {
     var isMine: Bool
     var width: CGFloat
@@ -99,7 +100,8 @@ struct SkeletonMessageBubble: View {
     }
 }
 
-/// Alternating placeholder bubbles for a thread awaiting its first snapshot, in fixed widths so the shape is stable across re-renders.
+/// Alternating placeholder bubbles for a thread awaiting its first snapshot, in fixed widths so the shape is
+/// stable across re-renders.
 struct SkeletonMessageThread: View {
     private static let bubbles: [(isMine: Bool, width: CGFloat)] = [
         (false, 180), (true, 140), (false, 220), (true, 96), (false, 160)
@@ -116,7 +118,8 @@ struct SkeletonMessageThread: View {
     }
 }
 
-/// Placeholder for the detail map while the address geocodes, matching its 250pt height and corner radius so the swap is a crossfade.
+/// Placeholder for the detail map while the address geocodes, matching its 250pt height and corner radius so
+/// the swap is a crossfade.
 struct SkeletonMapBlock: View {
     var body: some View {
         SkeletonBlock(height: 250, cornerRadius: 12)

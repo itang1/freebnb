@@ -63,7 +63,8 @@ struct LegacyListingDecodingTests {
         #expect(!amenities.hasAnyAccessibility)
     }
 
-    /// Encode-then-decode must preserve the new fields; the custom decoders sit beside a synthesized encoder and can drift on a key.
+    /// Encode-then-decode must preserve the new fields; the custom decoders sit beside a synthesized encoder
+    /// and can drift on a key.
     @Test func newFieldsSurviveAnEncodeDecodeRoundTrip() throws {
         var home = try decodeLegacy()
         home.sleeping.numBathrooms = 2
@@ -176,7 +177,8 @@ struct CapacityFilterTests {
         #expect(ids == ["stepFreeEntry", "elevator", "accessibleBathroom"])
     }
 
-    /// Ranking by accessibility would push accessible listings up for guests who never asked; it's a fact, not a perk.
+    /// Ranking by accessibility would push accessible listings up for guests who never asked; it's a fact,
+    /// not a perk.
     @Test func accessibilityDoesNotInflateTheAmenityCount() {
         let plain = home { _ in }
         let accessible = home {

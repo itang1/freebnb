@@ -59,7 +59,8 @@ extension ButtonStyle where Self == PressableButtonStyle {
 // MARK: - Transitions
 
 extension View {
-    /// Cross-fades this view against its replacement, keyed on `value`; carries no motion, so it's kept under Reduce Motion.
+    /// Cross-fades this view against its replacement, keyed on `value`; carries no motion, so it's kept under
+    /// Reduce Motion.
     func crossFades<V: Equatable>(on value: V) -> some View {
         transition(.opacity).animation(AppAnimation.contentSwap, value: value)
     }

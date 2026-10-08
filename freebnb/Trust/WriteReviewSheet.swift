@@ -28,7 +28,8 @@ struct WriteReviewSheet: View {
     private var canSubmit: Bool {
         Review.ratingRange.contains(rating)
             && !isSubmitting
-            // Both caps are rule-enforced; checking here disables Submit with a counter instead of a permission denial.
+            // Both caps are rule-enforced; checking here disables Submit with a counter instead of a
+            // permission denial.
             && trimmedComment.count <= Review.commentMaxLength
             && trimmedNote.count <= PrivateFeedback.maxLength
     }

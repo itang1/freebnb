@@ -23,7 +23,8 @@ final class GuestNoteStore {
     /// Stay ids whose post-trip prompt was answered or waved off.
     private(set) var seenPrompts: Set<String> = []
     private(set) var listenerError: String?
-    /// False until the first notes snapshot; the prompt waits on it so a guest isn't asked about a trip they've already noted.
+    /// False until the first notes snapshot; the prompt waits on it so a guest isn't asked about a trip
+    /// they've already noted.
     private(set) var hasLoaded = false
 
     @ObservationIgnored private let repository: GuestNoteRepository
@@ -60,12 +61,14 @@ final class GuestNoteStore {
         notes(about: type, subjectID).first
     }
 
-    /// Whether this guest already wrote something about `stayRequestID`; only to avoid asking twice, never surfaced.
+    /// Whether this guest already wrote something about `stayRequestID`; only to avoid asking twice, never
+    /// surfaced.
     func hasNote(forStayRequestID stayRequestID: String) -> Bool {
         notes.contains { $0.stayRequestID == stayRequestID }
     }
 
-    /// Whether the post-trip prompt still has anything to ask about this stay; done for good once a note is written or waved off.
+    /// Whether the post-trip prompt still has anything to ask about this stay; done for good once a note is
+    /// written or waved off.
     func shouldPrompt(forStayRequestID stayRequestID: String) -> Bool {
         hasLoaded
             && !seenPrompts.contains(stayRequestID)
@@ -146,7 +149,8 @@ final class GuestNoteStore {
         try await repository.deleteNote(guestID: guestID, noteID: id)
     }
 
-    /// Waves off the post-trip prompt for one stay ("don't ask again"), not a judgement of the host; notes stay writable elsewhere.
+    /// Waves off the post-trip prompt for one stay ("don't ask again"), not a judgement of the host; notes
+    /// stay writable elsewhere.
     func dismissPrompt(forStayRequestID stayRequestID: String) async {
         guard !guestID.isEmpty else { return }
         // Optimistic, so the row leaves under the tap; the listener confirms.

@@ -199,7 +199,8 @@ const homes = [
     id: "seed-home-squidward-1",
     hostUserID: "seed-host-squidward",
     hostName: "Squidward Tentacles",
-    // A host with two listings collides on the "<hostName>'s place" fallback, so each doubled-up host carries a title.
+    // A host with two listings collides on the "<hostName>'s place" fallback, so each doubled-up host carries
+    // a title.
     title: "The Clarinet Suite",
     address: { city: "New Orleans", state: "LA", zip: "70116" },
     location: { street: "1132 Royal Street", latitude: 29.9614606, longitude: -90.0615030 },
@@ -323,7 +324,8 @@ const homes = [
     guestPolicy: { maxGuests: 2, maxStayDays: 5, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "moderate",
-    // The ACL below is only the first degree, all a client can compute; it behaves as friends-only, the safe direction to be wrong in.
+    // The ACL below is only the first degree, all a client can compute; it behaves as friends-only, the safe
+    // direction to be wrong in.
   },
   {
     id: "seed-home-squidward-2",
@@ -695,7 +697,8 @@ const reviews = [
     role: "hostReviewingGuest", rating: 5, publicComment: "Finally, a guest who understands the clarinet is not optional listening." })
 ];
 
-// Friend-written references, one per (subject, author); the rules need an accepted edge, which seedFriendEdges creates for every pair.
+// Friend-written references, one per (subject, author); the rules need an accepted edge, which
+// seedFriendEdges creates for every pair.
 const references = [
   { id: "seed-host-spongebob_seed-guest-patrick", subjectUserID: "seed-host-spongebob", authorUserID: "seed-guest-patrick",
     text: "SpongeBob is my best friend and he has never once let me down. He also makes breakfast." },
@@ -708,7 +711,8 @@ const references = [
 async function seedStayRequests() {
   for (const request of stayRequests) {
     await db.collection("stayRequests").doc(request.id).set(request, { merge: true });
-    // An accepted stay discloses the host's street address; the app writes this marker on accept, so the seed does too.
+    // An accepted stay discloses the host's street address; the app writes this marker on accept, so the seed
+    // does too.
     if (request.status === "accepted") {
       await db.collection("homes").doc(request.listingID)
         .collection("accepted").doc(request.guestUserID)
@@ -815,7 +819,8 @@ async function seedThread(a, b, msgs, mutedBy = []) {
   }, { merge: true });
 }
 
-// Each thread: participants, messages oldest-to-newest, and an optional mutedBy list; plain data so it validates without Firestore.
+// Each thread: participants, messages oldest-to-newest, and an optional mutedBy list; plain data so it
+// validates without Firestore.
 const conversationThreads = [
   {
     a: "seed-guest-patrick", b: "seed-host-spongebob", msgs: [

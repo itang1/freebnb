@@ -97,7 +97,8 @@ struct FreeBNBApp: App {
                     requestPushPermission()
                 }
                 .onOpenURL { url in handleIncomingURL(url) }
-                // An invite link tapped in Messages or Mail arrives as a browsing activity, not a URL, so `onOpenURL` alone would open Safari.
+                // An invite link tapped in Messages or Mail arrives as a browsing activity, not a URL, so
+                // `onOpenURL` alone would open Safari.
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     guard let url = activity.webpageURL else { return }
                     handleIncomingURL(url)
@@ -111,7 +112,8 @@ struct FreeBNBApp: App {
         }
     }
 
-    // Points Auth and Firestore at the emulator (see EmulatorEnvironment) so automated runs never write real data. DEBUG-only.
+    // Points Auth and Firestore at the emulator (see EmulatorEnvironment) so automated runs never write real
+    // data. DEBUG-only.
 #if DEBUG
     private static func configureEmulatorIfRequested() {
         guard EmulatorEnvironment.isActive else { return }

@@ -36,7 +36,8 @@ struct OfferStaySheet: View {
         max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
     }
 
-    /// Friends who can see this listing; the rules require the recipient in its read ACL, so offering to others would be rejected.
+    /// Friends who can see this listing; the rules require the recipient in its read ACL, so offering to
+    /// others would be rejected.
     private var offerableFriends: [String] {
         let viewers = Set(listing.allowedViewerIDs ?? [])
         return friendStore.friendIDs.filter { viewers.contains($0) }

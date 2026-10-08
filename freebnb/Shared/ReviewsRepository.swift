@@ -3,7 +3,8 @@
 //  freebnb
 //
 //  Reviews, private feedback, character references and the mutual-friend count. Reads are one-shot
-//  since a profile's reviews change about once per stay; a listener per viewed profile would cost more than it earns.
+//  since a profile's reviews change about once per stay; a listener per viewed profile would cost more than
+//  it earns.
 //
 
 @preconcurrency import FirebaseFirestore
@@ -30,7 +31,8 @@ protocol ReviewsRepository: Sendable {
     func submitReference(_ reference: CharacterReference) async throws
     func deleteReference(id: String) async throws
 
-    /// Friends the caller and `userID` share, from the `mutualFriends` callable (`friendEdges` is unreadable to third parties).
+    /// Friends the caller and `userID` share, from the `mutualFriends` callable (`friendEdges` is unreadable
+    /// to third parties).
     func fetchMutualFriends(userID: String) async throws -> MutualFriends
 }
 

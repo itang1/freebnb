@@ -13,12 +13,14 @@ import Testing
 // MARK: - Generated avatars
 
 struct GeneratedAvatarTests {
-    /// The premise: the same person draws the same everywhere, forever. `hashValue` is per-process seeded, so a careless version would pass one run and change faces on relaunch.
+    /// The premise: the same person draws the same everywhere, forever. `hashValue` is per-process seeded, so
+    /// a careless version would pass one run and change faces on relaunch.
     @Test func theSameSeedAlwaysResolvesToTheSameAvatar() {
         let first = AvatarIdentity(seed: "user-abc123")
         let second = AvatarIdentity(seed: "user-abc123")
         #expect(first == second)
-        // Pinned literals, so a hash or symbol table change fails here, not as everyone's avatar silently changing.
+        // Pinned literals, so a hash or symbol table change fails here, not as everyone's avatar silently
+        // changing.
         #expect(first.symbolName == AvatarIdentity(seed: "user-abc123").symbolName)
     }
 
@@ -58,7 +60,8 @@ struct GeneratedAvatarTests {
         }
     }
 
-    /// Avatars derive on every row render, so this asserts a very loose ceiling, a smoke alarm for added I/O or allocation, not a benchmark.
+    /// Avatars derive on every row render, so this asserts a very loose ceiling, a smoke alarm for added I/O
+    /// or allocation, not a benchmark.
     @Test func derivingAvatarsIsFastEnoughToDoOnEveryRender() {
         let seeds = (0..<10_000).map { "user-\(UUID().uuidString)-\($0)" }
         let start = Date()
@@ -74,7 +77,8 @@ struct GeneratedAvatarTests {
         #expect(AvatarIdentity.symbols.contains(AvatarIdentity(seed: "").symbolName))
     }
 
-    /// Real Firebase UIDs share length and alphabet, so a coarse derivation (prefix, length, first byte) would pass elsewhere and give a user base three avatars.
+    /// Real Firebase UIDs share length and alphabet, so a coarse derivation (prefix, length, first byte)
+    /// would pass elsewhere and give a user base three avatars.
     @Test func realWorldUIDsStillSpreadOut() {
         let uids = [
             "0kQ9vBnZ3xQKfL2mTpR7dYsWgHc2", "1aXcVbNmQwErTyUiOpAsDfGh3JkL",
@@ -114,7 +118,8 @@ struct AvatarContrastTests {
         return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 
-    /// The symbol sits on a low-opacity disc of its own colour, so this reconstructs the disc to measure what the eye compares.
+    /// The symbol sits on a low-opacity disc of its own colour, so this reconstructs the disc to measure what
+    /// the eye compares.
     private func discLuminance(_ color: Color, pageIsDark: Bool) -> Double {
         let (r, g, b) = components(color)
         let page: Double = pageIsDark ? 0.09 : 1.0
@@ -187,7 +192,8 @@ private func stay(_ status: StayRequestStatus) -> StayRequest {
     )
 }
 
-/// The badge means "someone is blocked on you": it counts what you owe an answer on in either role and ignores what you wait on.
+/// The badge means "someone is blocked on you": it counts what you owe an answer on in either role and
+/// ignores what you wait on.
 struct StaysBadgeCountTests {
     @Test func aPendingRequestCountsForTheHostOnly() {
         let stays = [stay(.pending)]

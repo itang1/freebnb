@@ -25,7 +25,8 @@ struct MessageThread: View {
     }
 
     var body: some View {
-        // Read once per body pass; `messages(for:)` re-sorts the thread on every call, which cost three sorts on the longest collection.
+        // Read once per body pass; `messages(for:)` re-sorts the thread on every call, which cost three sorts
+        // on the longest collection.
         let allMessages = messageStore.messages(for: conversationID)
         let messages = filtered(allMessages)
         ScrollViewReader { proxy in

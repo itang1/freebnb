@@ -16,7 +16,8 @@ struct ListingsMapView: View {
     // Coordinates resolved at display time; keyed by listing ID.
     @State private var resolvedCoords: [String: CLLocationCoordinate2D] = [:]
     @State private var isGeocoding = false
-    // The camera's region and the one locked in with "Search this area"; while `appliedRegion` is set only pins inside it show, making the map a proximity filter.
+    // The camera's region and the one locked in with "Search this area"; while `appliedRegion` is set only
+    // pins inside it show, making the map a proximity filter.
     @State private var currentRegion: MKCoordinateRegion?
     @State private var appliedRegion: MKCoordinateRegion?
 
@@ -93,7 +94,8 @@ struct ListingsMapView: View {
         }
     }
 
-    // Geocodes listings without stored coordinates, from the public address only, so it lands on the city, not the door.
+    // Geocodes listings without stored coordinates, from the public address only, so it lands on the city,
+    // not the door.
     private func geocodeMissing() async {
         let missing = listings.filter { $0.latitude == nil || $0.longitude == nil }
         guard !missing.isEmpty else { return }

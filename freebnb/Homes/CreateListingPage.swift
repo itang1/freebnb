@@ -182,7 +182,8 @@ struct CreateListingPage: View {
         }
     }
 
-    /// Only once the listing has a bed (a couch's size isn't worth naming); the save drops these if the last bed goes.
+    /// Only once the listing has a bed (a couch's size isn't worth naming); the save drops these if the last
+    /// bed goes.
     @ViewBuilder
     private var bedSizesSection: some View {
         if (vm.sleepingCounts[.bed] ?? 0) > 0 {

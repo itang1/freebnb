@@ -59,7 +59,8 @@ struct InviteLinkTests {
         #expect(DeepLinkRouter.route(for: URL(string: "freebnb://stays")!) == .stays)
     }
 
-    /// Host and path are checked, not trusted: a pasted string can arrive, and a look-alike host mustn't count as an invite.
+    /// Host and path are checked, not trusted: a pasted string can arrive, and a look-alike host mustn't
+    /// count as an invite.
     @Test func foreignAndUnknownURLsAreIgnored() {
         #expect(DeepLinkRouter.route(for: URL(string: "https://example.com/i?from=x")!) == nil)
         #expect(DeepLinkRouter.route(for: URL(string: "https://\(InviteCopy.webHost)/elsewhere?from=x")!) == nil)
@@ -77,7 +78,8 @@ struct InviteLinkTests {
         #expect(router.pendingConversationUserID == nil)
     }
 
-    /// The "don't clobber a deep link on sign-in" guard must cover both handler orders: an intent not yet acted on, and one that was.
+    /// The "don't clobber a deep link on sign-in" guard must cover both handler orders: an intent not yet
+    /// acted on, and one that was.
     @Test func aPendingInviteIsVisibleBeforeItIsConsumed() {
         let router = DeepLinkRouter()
         #expect(router.hasPendingIntent == false)

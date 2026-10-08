@@ -190,7 +190,8 @@ struct FirestoreMessagesRepository: MessagesRepository {
         return FirestoreListenerBox(reg)
     }
 
-    // Window and cap for the write rate limit; must match the rules' windowSeconds()/messageCap() and MessageStore.
+    // Window and cap for the write rate limit; must match the rules' windowSeconds()/messageCap() and
+    // MessageStore.
     private static let rateWindow: TimeInterval = 60
 
     func send(_ message: Message, onError: @escaping @Sendable (Error) -> Void) throws {

@@ -21,7 +21,8 @@ final class CircleStore {
     private(set) var circles: [FriendCircle] = []
     private(set) var membershipsByFriendID: [String: CircleMembership] = [:]
     private(set) var listenerError: String?
-    /// False until both listeners delivered a first snapshot; reconciliation waits so it doesn't seed circles the host already has.
+    /// False until both listeners delivered a first snapshot; reconciliation waits so it doesn't seed circles
+    /// the host already has.
     private(set) var hasLoaded = false
 
     @ObservationIgnored private let repository: CircleRepository
@@ -245,7 +246,8 @@ final class CircleStore {
         try await repository.saveMembership(hostID: hostID, membership, resolvedPolicy: policy)
     }
 
-    /// Sets or clears one friend's policy. An override supersedes their circle until cleared, so the projection is rewritten from the resolved value.
+    /// Sets or clears one friend's policy. An override supersedes their circle until cleared, so the
+    /// projection is rewritten from the resolved value.
     func setOverride(_ policy: BookingPolicy?, forFriendID friendID: String) async throws {
         guard !hostID.isEmpty else { return }
         var membership = membershipsByFriendID[friendID] ?? CircleMembership(id: friendID)

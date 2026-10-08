@@ -3,7 +3,8 @@
 //  freebnb
 //
 //  The sheet for a host calling off a stay the guest was given: it says plainly what the guest will be told and
-//  offers (never demands) a note to suggest other dates. There's no reason field, so a host with nothing to add just cancels.
+//  offers (never demands) a note to suggest other dates. There's no reason field, so a host with nothing to
+//  add just cancels.
 //
 
 import SwiftUI
@@ -12,7 +13,8 @@ struct HostCancelStaySheet: View {
     let request: StayRequest
     /// The guest's display name, so the sheet names who hears about this.
     let guestName: String
-    /// Performs the cancel with the host's optional note; nil on success, else the message to show (the presenting page is behind the sheet).
+    /// Performs the cancel with the host's optional note; nil on success, else the message to show (the
+    /// presenting page is behind the sheet).
     let onConfirm: (_ note: String?) async -> String?
 
     @State private var note = ""

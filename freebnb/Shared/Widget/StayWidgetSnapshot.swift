@@ -2,7 +2,8 @@
 //  StayWidgetSnapshot.swift
 //  freebnb (shared with the freebnbWidgets extension)
 //
-//  The payload the app writes to the App Group and widgets read: a small value type with no Firebase or app dependencies, so it compiles into the extension.
+//  The payload the app writes to the App Group and widgets read: a small value type with no Firebase or app
+//  dependencies, so it compiles into the extension.
 //
 
 import Foundation

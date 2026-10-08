@@ -54,7 +54,8 @@ struct FriendshipControl: View {
         case .incoming(let edge):
             incomingControls(edge)
         case .friends:
-            // Once friends, the status and the (buried) way to end it live at the bottom, beside Report and Block (see `FriendStatusButton`).
+            // Once friends, the status and the (buried) way to end it live at the bottom, beside Report and
+            // Block (see `FriendStatusButton`).
             EmptyView()
         }
     }
@@ -131,7 +132,8 @@ struct FriendshipControl: View {
 
     // MARK: - Actions
 
-    /// Runs a friend-graph mutation with a shared busy flag and inline error, so every button disables and fails alike.
+    /// Runs a friend-graph mutation with a shared busy flag and inline error, so every button disables and
+    /// fails alike.
     private func perform(_ action: @escaping () async throws -> Void) {
         errorMessage = nil
         isWorking = true
@@ -196,7 +198,8 @@ struct FriendStatusButton: View {
                 isPresented: $confirming,
                 titleVisibility: .visible
             ) {
-                // No unfriend while a stay is on the books; the dialog still opens and says why, since a vanished option reads as a bug.
+                // No unfriend while a stay is on the books; the dialog still opens and says why, since a
+                // vanished option reads as a bug.
                 if case .available = unfriendAvailability {
                     Button("Unfriend \(displayName)", role: .destructive) {
                         errorMessage = nil
@@ -210,7 +213,8 @@ struct FriendStatusButton: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                // Blocking stays available from the row below and isn't mentioned here; offering it for "unfriend" would suggest escalating.
+                // Blocking stays available from the row below and isn't mentioned here; offering it for
+                // "unfriend" would suggest escalating.
                 switch unfriendAvailability {
                 case .available:
                     Text("Unfriending means you'll no longer see each other's homes. To reconnect, one of you will need to send a new friend request.")

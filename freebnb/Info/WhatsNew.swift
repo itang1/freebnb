@@ -14,14 +14,16 @@ struct ReleaseHighlight: Identifiable, Hashable {
     let icon: String
     let title: String
     let detail: String
-    /// An optional deeper explanation (why, not just what). With a `longRead` the highlight is a tappable card that pushes a reader page; otherwise a plain row.
+    /// An optional deeper explanation (why, not just what). With a `longRead` the highlight is a tappable
+    /// card that pushes a reader page; otherwise a plain row.
     var longRead: String? = nil
     var id: String { title }
 }
 
 /// A single app version's worth of highlights.
 struct Release: Identifiable, Hashable {
-    /// Marketing version, matched against `Bundle.main.appVersionString` to decide auto-presentation; the first release is "current".
+    /// Marketing version, matched against `Bundle.main.appVersionString` to decide auto-presentation; the
+    /// first release is "current".
     let version: String
     let date: String
     /// Optional welcome blurb above the highlights, used for the first release.

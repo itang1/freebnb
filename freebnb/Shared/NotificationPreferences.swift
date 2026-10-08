@@ -3,7 +3,8 @@
 //  freebnb
 //
 //  Per-category push preferences, stored in the owner's private profile so a mute silences the push (the Cloud
-//  Functions read them) and syncs across devices. A missing map or key means enabled; only turned-off categories persist.
+//  Functions read them) and syncs across devices. A missing map or key means enabled; only turned-off
+//  categories persist.
 //
 
 import Foundation
@@ -48,7 +49,8 @@ enum NotificationCategory: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// Enabled/disabled state per category. Codable so it rides on `UserProfile`, round-tripping to a Firestore map via `firestoreValue`.
+/// Enabled/disabled state per category. Codable so it rides on `UserProfile`, round-tripping to a Firestore
+/// map via `firestoreValue`.
 struct NotificationPreferences: Codable, Hashable, Sendable {
     var messages: Bool
     var stayRequests: Bool
@@ -67,7 +69,8 @@ struct NotificationPreferences: Codable, Hashable, Sendable {
         self.friendRequests = friendRequests
     }
 
-    /// Builds from the raw Firestore map; an absent map or key is `true`, matching the functions' `!== false` check.
+    /// Builds from the raw Firestore map; an absent map or key is `true`, matching the functions' `!== false`
+    /// check.
     init(firestore map: [String: Any]?) {
         func flag(_ key: String) -> Bool { (map?[key] as? Bool) ?? true }
         self.init(

@@ -2,7 +2,8 @@
 // `unavailableDateRanges`; the halves live here, because Firestore grants reads per document, so
 // publishing both would let anyone subtract one from the other and learn the occupied nights. The
 // cases keep the halves apart and the server's half the server's:
-//   - an accepted guest, who may read the street, must NOT read this (one accepted stay would make bookings legible);
+//   - an accepted guest, who may read the street, must NOT read this (one accepted stay would make bookings
+//   legible);
 //   - `bookedDateRanges` derives from accepted stays and must survive every client write, including a delete;
 //   - the host's own half stays writable, or the editor stops working.
 
@@ -97,7 +98,8 @@ describe("homes/{id}/private/availability read — who sees the halves", () => {
     await assertFails(getDoc(availability(as(GUEST))));
   });
 
-  // The control for the case above: same guest and marker, sibling document; otherwise it would prove only "guests can't read subcollections".
+  // The control for the case above: same guest and marker, sibling document; otherwise it would prove only
+  // "guests can't read subcollections".
   it("still allows that guest the street address", async () => {
     await assertSucceeds(getDoc(location(as(GUEST))));
   });
@@ -157,7 +159,8 @@ describe("homes/{id}/private/availability write — the server's half", () => {
   });
 
   // The turnover buffer: stored here, not on the public listing, so a guest can't subtract a known buffer from an
-  // unavailable stretch. The rule validates the field but can't range-check it (no loops); the double-booking and buffer guards live in the accept path.
+  // unavailable stretch. The rule validates the field but can't range-check it (no loops); the double-booking
+  // and buffer guards live in the accept path.
   it("allows the host to set a valid turnover buffer", async () => {
     await assertSucceeds(
       setDoc(availability(as(HOST)), { bufferHours: 48 }, { merge: true })

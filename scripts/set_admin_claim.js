@@ -4,7 +4,8 @@
 // checks, which is what lets an account read and triage the `reports` collection
 // through the moderation console (feature 6).
 //
-// The claim needs Admin SDK credentials, never the app, so a moderator is someone an operator deliberately made one.
+// The claim needs Admin SDK credentials, never the app, so a moderator is someone an operator deliberately
+// made one.
 //
 // Usage:
 //   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json \
@@ -17,7 +18,8 @@
 //   FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
 //   GCLOUD_PROJECT=freebnb-6814a node scripts/set_admin_claim.js dev@freebnb.test
 //
-// The user must sign out and back in (or refresh their ID token) for a changed claim to apply; claims ride in the token until it expires.
+// The user must sign out and back in (or refresh their ID token) for a changed claim to apply; claims ride in
+// the token until it expires.
 
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");

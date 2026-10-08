@@ -3,7 +3,8 @@
 //  freebnb
 //
 //  Where a host manages circles: create, rename, delete and set booking rules. Reached from the
-//  Friends list. Every screen is the host's own and unreachable by a guest, who learning circles exist is the failure to avoid.
+//  Friends list. Every screen is the host's own and unreachable by a guest, who learning circles exist is the
+//  failure to avoid.
 //
 
 import SwiftUI
@@ -224,7 +225,8 @@ struct CircleDetailPage: View {
 
 // MARK: - One friend
 
-/// Which circle a friend is in, and the policy the host can set directly: a rule for this one person that wins over their circle's; clearing it hands them back.
+/// Which circle a friend is in, and the policy the host can set directly: a rule for this one person that
+/// wins over their circle's; clearing it hands them back.
 struct FriendCirclePage: View {
     let friendID: String
     let friendName: String
@@ -249,7 +251,8 @@ struct FriendCirclePage: View {
     private var overrideBinding: Binding<Bool> {
         Binding(
             get: { overridePolicy != nil },
-            // Starts from whatever governs them today, so turning it on is a place to edit from, not a reset to permissive.
+            // Starts from whatever governs them today, so turning it on is a place to edit from, not a reset
+            // to permissive.
             set: { on in
                 overridePolicy = on ? (circleStore.circle(id: currentCircleID)?.policy ?? .permissive) : nil
             }
@@ -302,7 +305,8 @@ struct FriendCirclePage: View {
                 ))
             }
 
-            // Below the rules, the order a host works in (change what someone can book, notes remind why). Nothing above reads notes.
+            // Below the rules, the order a host works in (change what someone can book, notes remind why).
+            // Nothing above reads notes.
             Section {
                 FriendNotesLink(friendID: friendID, friendName: friendName)
             } footer: {

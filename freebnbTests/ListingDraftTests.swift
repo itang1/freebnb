@@ -267,7 +267,8 @@ struct DuplicationTests {
         #expect(vm.draft.isPristine)
     }
 
-    /// The repository save overwrites the whole document, so fields the form doesn't manage must ride along from the stored listing.
+    /// The repository save overwrites the whole document, so fields the form doesn't manage must ride along
+    /// from the stored listing.
     @Test func editingKeepsTheFieldsTheFormDoesNotManage() {
         var home = makeHome()
         home.unavailableDateRanges = [DateRange(start: Date(timeIntervalSince1970: 2_000_000),
@@ -380,7 +381,8 @@ struct ListingDraftPersistenceTests {
         #expect(store.load(userID: "host-a")?.street == "123 Oak St")
     }
 
-    /// A signed-out or anonymous session has no user id to key a draft by, and a street address shouldn't be stored under a shared one.
+    /// A signed-out or anonymous session has no user id to key a draft by, and a street address shouldn't be
+    /// stored under a shared one.
     @Test func anonymousSessionStoresNothing() {
         let store = ListingDraftStore(defaults: makeDefaults())
         var draft = ListingDraft()
@@ -420,7 +422,8 @@ struct ListingDraftPersistenceTests {
         #expect(store.load(userID: userID)?.city == "Portland")
     }
 
-    /// `Home`'s explicit CodingKeys drive the encoder too, and `title` was missing, so titles were dropped on save.
+    /// `Home`'s explicit CodingKeys drive the encoder too, and `title` was missing, so titles were dropped on
+    /// save.
     @Test func aListingTitleSurvivesARoundTrip() throws {
         var home = HomeFixture.make()
         home.title = "The Clarinet Suite"

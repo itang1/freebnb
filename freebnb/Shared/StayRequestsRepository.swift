@@ -164,7 +164,8 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
                 try db.collection(FirestorePaths.stayRequests).document(request.id).setData(from: request)
                 return
             }
-            // One batch: a request without its counter advance is rejected, and an advance without its request wastes a slot.
+            // One batch: a request without its counter advance is rejected, and an advance without its
+            // request wastes a slot.
             let batch = db.batch()
             try batch.setData(
                 from: request,
@@ -227,7 +228,8 @@ struct FirestoreStayRequestsRepository: StayRequestsRepository {
         try await withRetry { [db] in
             let batch = db.batch()
             batch.updateData(payload, forDocument: db.collection(FirestorePaths.stayRequests).document(request.id))
-            // Declined or cancelled stays must not leave the guest the address; deleting a missing marker is a no-op.
+            // Declined or cancelled stays must not leave the guest the address; deleting a missing marker is
+            // a no-op.
             if !status.isActive {
                 batch.deleteDocument(
                     FirestorePaths.acceptedGuest(db, homeID: request.listingID, guestUserID: request.guestUserID)

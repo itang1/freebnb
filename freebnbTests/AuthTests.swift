@@ -37,7 +37,8 @@ struct AuthErrorMappingTests {
 // MARK: - Auth flows against the emulator
 
 extension EmulatorBackedTests {
-    // Nested in EmulatorBackedTests, which supplies the opt-in gate and the serialization for the shared Auth session.
+    // Nested in EmulatorBackedTests, which supplies the opt-in gate and the serialization for the shared Auth
+    // session.
     @Suite
     struct AuthEmulatorTests {
 
@@ -47,21 +48,24 @@ extension EmulatorBackedTests {
             "\(tag)-\(UUID().uuidString.prefix(8))@emulator.test"
         }
 
-        // Registration is create + profile stamp: the account carries the display name and derives as an email member.
+        // Registration is create + profile stamp: the account carries the display name and derives as an
+        // email member.
         @Test func registrationCreatesAnEmailMemberWithADisplayName() async throws {
             try? auth.signOut()
             let result = try await auth.createUser(withEmail: freshEmail("reg"), password: "password123")
             let change = result.user.createProfileChangeRequest()
             change.displayName = "New Member"
             try await change.commitChanges()
-            // commitChanges doesn't reliably refresh the in-memory user (esp. on the emulator); reload before reading the name.
+            // commitChanges doesn't reliably refresh the in-memory user (esp. on the emulator); reload before
+            // reading the name.
             try await result.user.reload()
 
             #expect(AuthManager.method(for: result.user) == .email)
             #expect(result.user.displayName == "New Member")
         }
 
-        // The real SDK error for a duplicate email must still map to .emailInUse (the integration half of AuthErrorMappingTests).
+        // The real SDK error for a duplicate email must still map to .emailInUse (the integration half of
+        // AuthErrorMappingTests).
         @Test func duplicateRegistrationSurfacesEmailInUse() async throws {
             let email = freshEmail("dupe")
             _ = try await auth.createUser(withEmail: email, password: "password123")
@@ -85,7 +89,8 @@ extension EmulatorBackedTests {
             }
         }
 
-        // The Google path minus the GIDSignIn sheet: exchanging a credential yields a .google user; the emulator accepts an unsigned JSON claim set.
+        // The Google path minus the GIDSignIn sheet: exchanging a credential yields a .google user; the
+        // emulator accepts an unsigned JSON claim set.
         @Test func googleCredentialDerivesTheGoogleMethod() async throws {
             try? auth.signOut()
             let claims = #"{"sub": "google-uid-1", "email": "google-member@emulator.test", "email_verified": true}"#

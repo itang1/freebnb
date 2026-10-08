@@ -5,7 +5,8 @@
 //  The pure half of a guest's private notes plus the repository seam. `firestore.rules`
 //  (rules-tests/guest_notes.test.mjs) is what enforces privacy; this covers what the
 //  client owns: ordering, subject matching, normalization and the "ask once" arithmetic.
-//  `GuestNoteStore` binds its id from an Auth listener and isn't constructible here, so its inputs and repository are covered.
+//  `GuestNoteStore` binds its id from an Auth listener and isn't constructible here, so its inputs and
+//  repository are covered.
 //
 
 import Foundation
@@ -49,7 +50,8 @@ struct GuestNoteTextTests {
         #expect(GuestNote.normalized("  quiet street, thin walls  ") == "quiet street, thin walls")
     }
 
-    /// The cap lives here, in `firestore.rules` and the composer; cutting to it makes an over-long note a field error.
+    /// The cap lives here, in `firestore.rules` and the composer; cutting to it makes an over-long note a
+    /// field error.
     @Test("text is cut to the cap the rules enforce")
     func clampsToCap() {
         let long = String(repeating: "x", count: GuestNote.maxLength + 500)
@@ -100,7 +102,8 @@ struct GuestNoteOrderingTests {
         #expect(all.about(.listing, shared).map(\.id) == ["l"])
     }
 
-    /// Both timestamps are server-stamped in one commit, close but not identical; "edited" must mean a real later edit.
+    /// Both timestamps are server-stamped in one commit, close but not identical; "edited" must mean a real
+    /// later edit.
     @Test("a note is only 'edited' once it has actually been revised")
     func editedFlag() {
         #expect(note("a", created: day(1), updated: day(1)).wasEdited == false)

@@ -60,7 +60,8 @@ describe("users/{uid}.searchTerms", () => {
     await assertSucceeds(setDoc(myDoc(asMe()), profileBody()));
   });
 
-  // The backfill exists because these documents are out there; if the rules stopped admitting them, legacy profiles would be frozen out of their own updates.
+  // The backfill exists because these documents are out there; if the rules stopped admitting them, legacy
+  // profiles would be frozen out of their own updates.
   it("still accepts a profile with no searchTerms at all", async () => {
     await assertSucceeds(
       setDoc(myDoc(asMe()), { displayName: NAME, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
@@ -68,17 +69,20 @@ describe("users/{uid}.searchTerms", () => {
   });
 
   it("rejects terms that omit the name they claim to index", async () => {
-    // The one catchable dishonesty: terms not carrying the lowercased displayName, which would let a profile index under any words.
+    // The one catchable dishonesty: terms not carrying the lowercased displayName, which would let a profile
+    // index under any words.
     await assertFails(setDoc(myDoc(asMe()), profileBody({ searchTerms: ["spongebob", "squarepants"] })));
   });
 
   it("rejects a name change that leaves the old terms behind", async () => {
     await assertSucceeds(setDoc(myDoc(asMe()), profileBody()));
-    // createdAt is immutable on update, so a rename sends only what changes, as UserProfileRepository.updateDisplayName writes.
+    // createdAt is immutable on update, so a rename sends only what changes, as
+    // UserProfileRepository.updateDisplayName writes.
     const rename = (extra) =>
       setDoc(myDoc(asMe()), { displayName: "Patrick Star", updatedAt: serverTimestamp(), ...extra }, { merge: true });
 
-    // Renaming without reindexing would leave the user findable under the old name, so the client rebuilds on every rename.
+    // Renaming without reindexing would leave the user findable under the old name, so the client rebuilds on
+    // every rename.
     await assertFails(rename({}));
     await assertSucceeds(rename({ searchTerms: searchTerms("Patrick Star") }));
   });

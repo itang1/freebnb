@@ -2,7 +2,8 @@
 //  StayWidgetBridge.swift
 //  freebnb
 //
-//  Publishes the widget snapshot: turns the stores' live `StayRequest` arrays into `StayWidgetSnapshot`, writes it to the App Group
+//  Publishes the widget snapshot: turns the stores' live `StayRequest` arrays into `StayWidgetSnapshot`,
+//  writes it to the App Group
 //  and reloads WidgetKit. Pure translation plus one side effect, so `makeSnapshot` is unit-testable.
 //
 
@@ -14,7 +15,8 @@ import os
 enum StayWidgetBridge {
     private static let log = AppLog.logger("widgets")
 
-    /// Recomputes the snapshot and hands it to the widgets; cheap and idempotent, so safe on every Firestore snapshot.
+    /// Recomputes the snapshot and hands it to the widgets; cheap and idempotent, so safe on every Firestore
+    /// snapshot.
     static func publish(incoming: [StayRequest], outgoing: [StayRequest], viewerID: String) {
         guard !viewerID.isEmpty else {
             // Signed out: clear the widgets rather than leave a stale trip.
@@ -28,7 +30,8 @@ enum StayWidgetBridge {
         log.debug("published widget snapshot: nextTrip=\(snapshot.nextTrip != nil, privacy: .public) pendingIn=\(snapshot.pendingIncomingCount, privacy: .public)")
     }
 
-    /// The next stay worth surfacing plus the two pending counts: the under-way stay, else the soonest upcoming accepted one, across hosting and travelling.
+    /// The next stay worth surfacing plus the two pending counts: the under-way stay, else the soonest
+    /// upcoming accepted one, across hosting and travelling.
     static func makeSnapshot(
         incoming: [StayRequest],
         outgoing: [StayRequest],

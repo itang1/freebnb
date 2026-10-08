@@ -424,7 +424,8 @@ struct AcceptSheet: View {
 
 struct ModifyStaySheet: View {
     let request: StayRequest
-    /// The listing when cached, so the same max-stay and blocked-date guards apply; nil still allows a date change.
+    /// The listing when cached, so the same max-stay and blocked-date guards apply; nil still allows a date
+    /// change.
     let listing: Home?
     let onSave: (_ checkIn: Date, _ checkOut: Date) async -> Void
 

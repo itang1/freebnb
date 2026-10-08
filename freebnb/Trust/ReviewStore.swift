@@ -20,9 +20,11 @@ final class ReviewStore {
     private(set) var referencesBySubject: [String: [CharacterReference]] = [:]
     /// Mutual-friend counts against the signed-in user, keyed by the other user.
     private(set) var mutualFriendsByUser: [String: MutualFriends] = [:]
-    /// Private notes on reviews, keyed by review id; only populated for reviews the user authored or is the subject of (the rules refuse others).
+    /// Private notes on reviews, keyed by review id; only populated for reviews the user authored or is the
+    /// subject of (the rules refuse others).
     private(set) var privateFeedbackByReview: [String: PrivateFeedback] = [:]
-    /// Stay-request ids the user already reviewed; must load before "needs your review" can honestly claim a stay is unreviewed.
+    /// Stay-request ids the user already reviewed; must load before "needs your review" can honestly claim a
+    /// stay is unreviewed.
     private(set) var reviewedStayIDs: Set<String> = []
     private(set) var hasLoadedOwnReviews = false
 
@@ -67,7 +69,8 @@ final class ReviewStore {
     func hasLoadedReviews(about userID: String) -> Bool { reviewsBySubject[userID] != nil }
     func hasLoadedReferences(about userID: String) -> Bool { referencesBySubject[userID] != nil }
 
-    /// True once the answer is "not yet"; false while the user's own reviews load, so the UI never nags about an already-reviewed stay.
+    /// True once the answer is "not yet"; false while the user's own reviews load, so the UI never nags about
+    /// an already-reviewed stay.
     func needsReview(stayRequestID: String) -> Bool {
         hasLoadedOwnReviews && !reviewedStayIDs.contains(stayRequestID)
     }
@@ -86,7 +89,8 @@ final class ReviewStore {
 
     func privateFeedback(reviewID: String) -> PrivateFeedback? { privateFeedbackByReview[reviewID] }
 
-    /// Loads the private notes on the given reviews, one document each. A denial is expected (only the two parties read one), so `once` swallows it.
+    /// Loads the private notes on the given reviews, one document each. A denial is expected (only the two
+    /// parties read one), so `once` swallows it.
     func loadPrivateFeedback(for reviews: [Review]) async {
         for review in reviews {
             await once("feedback:\(review.id)") {
@@ -128,7 +132,8 @@ final class ReviewStore {
             throw error
         }
         reviewedStayIDs.insert(review.stayRequestID)
-        // The subject's cached list is stale. Re-fetch rather than splice, since the server owns the rating average, and not a bare invalidation (the view's `.task` won't re-run).
+        // The subject's cached list is stale. Re-fetch rather than splice, since the server owns the rating
+        // average, and not a bare invalidation (the view's `.task` won't re-run).
         invalidate(reviewsBySubject: review.subjectUserID)
     }
 

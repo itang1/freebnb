@@ -2,7 +2,8 @@
 //  StayEventCard.swift
 //  freebnb
 //
-//  The centered system card a thread renders for a stay-lifecycle event, replacing the emoji-prefixed bubble; the message keeps its `text`.
+//  The centered system card a thread renders for a stay-lifecycle event, replacing the emoji-prefixed bubble;
+//  the message keeps its `text`.
 //
 
 import SwiftUI
@@ -10,12 +11,14 @@ import SwiftUI
 struct StayEventCard: View {
     let event: StayEvent
     let timestamp: Date?
-    /// Whether the signed-in user did this, and who the other is; the card has no side, so its title says who acted.
+    /// Whether the signed-in user did this, and who the other is; the card has no side, so its title says who
+    /// acted.
     let isFromMe: Bool
     let otherName: String
     /// Pending while the send is in flight, failed if it never committed.
     var state: MessageState = .sent
-    /// Set only for a `hostCancelled` event shown to the guest: opens the listing for its other dates, a quiet button they can ignore.
+    /// Set only for a `hostCancelled` event shown to the guest: opens the listing for its other dates, a
+    /// quiet button they can ignore.
     var onSeeOtherDates: (() -> Void)?
 
     var body: some View {

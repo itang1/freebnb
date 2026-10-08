@@ -160,7 +160,8 @@ describe("messages/{id} create — stay event", () => {
   });
 
   it("allows a hostCancelled event carrying the listing it points back to", async () => {
-    // The exact payload StaysTab.hostCancel and MessagingRequestActions build; the kind loop sends only kind+dateRange and missed it.
+    // The exact payload StaysTab.hostCancel and MessagingRequestActions build; the kind loop sends only
+    // kind+dateRange and missed it.
     await assertSucceeds(
       sendMessageWithEvent(asSender(), SENDER, "e2b", {
         kind: "hostCancelled",
@@ -243,7 +244,8 @@ describe("messages/{id} create — friendship", () => {
     await assertSucceeds(sendMessage(asSender(), SENDER, "f3"));
   });
 
-  // The edge id sorts its participants and rules can't sort, so `areFriends` probes both orders; a message from the second uid must clear the same gate.
+  // The edge id sorts its participants and rules can't sort, so `areFriends` probes both orders; a message
+  // from the second uid must clear the same gate.
   it("allows a message from the other side of the same edge", async () => {
     await seedFriendship(SENDER, RECIPIENT);
     const db = testEnv.authenticatedContext(RECIPIENT).firestore();

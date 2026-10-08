@@ -30,12 +30,14 @@ struct UserProfilePage: View {
     private var displayName: String { profile?.displayName ?? fallbackName }
     private var isSelf: Bool { authManager.userID == userID }
 
-    /// This person's listings the viewer may see; `visibleListings` is already privacy-filtered, keyed on `hostUserID` like the Friends "N homes" count.
+    /// This person's listings the viewer may see; `visibleListings` is already privacy-filtered, keyed on
+    /// `hostUserID` like the Friends "N homes" count.
     private var hostHomes: [Home] {
         homeStore.visibleListings.filter { $0.hostUserID == userID }
     }
 
-    /// Only an accepted friend may write a reference (as the rules enforce); checked here so the button doesn't offer a rejected write.
+    /// Only an accepted friend may write a reference (as the rules enforce); checked here so the button
+    /// doesn't offer a rejected write.
     private var canWriteReference: Bool {
         !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
     }
@@ -45,7 +47,8 @@ struct UserProfilePage: View {
         !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
     }
 
-    /// Messaging is friend-gated, so the thread opens only once the friendship exists; earlier would offer a composer the rules refuse.
+    /// Messaging is friend-gated, so the thread opens only once the friendship exists; earlier would offer a
+    /// composer the rules refuse.
     private var canMessage: Bool {
         !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
     }
@@ -106,7 +109,8 @@ struct UserProfilePage: View {
                     .buttonStyle(.pressable)
                 }
 
-                // The quietest control on the page (grey, below what reaches the other person): private shouldn't invite broadcast.
+                // The quietest control on the page (grey, below what reaches the other person): private
+                // shouldn't invite broadcast.
                 if canKeepNotes {
                     NavigationLink {
                         FriendNotesPage(friendID: userID, friendName: displayName)
@@ -178,7 +182,8 @@ struct UserProfilePage: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task {
-            // The public doc carries trustStats, so this fetch fills the badge row; mutual friends need the callable.
+            // The public doc carries trustStats, so this fetch fills the badge row; mutual friends need the
+            // callable.
             _ = await userProfileStore.fetchProfileOnce(userID: userID)
             await reviewStore.loadMutualFriends(with: userID)
         }

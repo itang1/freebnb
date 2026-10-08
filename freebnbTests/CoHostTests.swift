@@ -86,7 +86,8 @@ struct CoHostStoreTests {
         return try #require(all.first { $0.id == id })
     }
 
-    // Fixtures read through the feed carry `allowedViewerIDs` naming the host, as CreateListingViewModel stamps; the feed has no host fallback.
+    // Fixtures read through the feed carry `allowedViewerIDs` naming the host, as CreateListingViewModel
+    // stamps; the feed has no host fallback.
     @Test func addCoHostAppendsOneToTheRoster() async throws {
         let home = HomeFixture.make(allowedViewerIDs: ["host"])
         let (store, repo) = store([home])

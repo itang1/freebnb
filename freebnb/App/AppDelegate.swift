@@ -67,7 +67,8 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let info = response.notification.request.content.userInfo
-        // Delivered on the main thread and DeepLinkRouter is @MainActor, so assume isolation; hopping would race the completionHandler below.
+        // Delivered on the main thread and DeepLinkRouter is @MainActor, so assume isolation; hopping would
+        // race the completionHandler below.
         MainActor.assumeIsolated {
             switch info["type"] as? String {
             case "message":
@@ -75,7 +76,8 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
                     router?.pendingConversationUserID = senderID
                 }
             case "friend_request", "friend_accepted":
-                // Both land on Friends: requests are answered there, and an acceptance is worth meeting the sender.
+                // Both land on Friends: requests are answered there, and an acceptance is worth meeting the
+                // sender.
                 router?.pendingFriendsTab = true
             case "stay_request", "stay_update", "stay_reminder":
                 // Stay pushes and local reminders land on the Stays tab, where the stay is already visible.
