@@ -2,10 +2,8 @@
 //  InviteLinkTests.swift
 //  freebnbTests
 //
-//  The invite link is the only bridge between an invited person and the app,
-//  which is empty until they connect to the friend who invited them. These
-//  cover the round trip (build a link, parse it back) and the two things the
-//  link must never do: name nobody when it can, or act on its own.
+//  The invite link bridges an invited person to the app. These cover the build/parse round
+//  trip and what the link must never do: name nobody when it can, or act on its own.
 //
 
 import Testing
@@ -14,9 +12,7 @@ import Foundation
 
 @MainActor
 struct InviteLinkTests {
-    /// An invite is an https Universal Link now, so that it resolves on a phone
-    /// that does not have the app: the custom scheme did nothing at all there,
-    /// which is exactly the person being invited.
+    /// An invite is an https Universal Link so it resolves on a phone without the app, unlike the custom scheme.
     @Test func inviteURLIsAUniversalLinkCarryingTheSender() {
         let url = InviteCopy.inviteURL(senderID: "uid-maya")
         #expect(url.scheme == "https")
@@ -43,8 +39,7 @@ struct InviteLinkTests {
                 == .invite(senderID: "uid-maya")
         )
         #expect(DeepLinkRouter.route(for: URL(string: "freebnb://invite")!) == .invite(senderID: nil))
-        // The web page hands the app this form when the Universal Link didn't
-        // open it, so it has to round-trip too.
+        // The web page hands the app this form when the Universal Link didn't open it, so it must round-trip.
         #expect(
             DeepLinkRouter.route(for: InviteCopy.customSchemeInviteURL(senderID: "uid-maya"))
                 == .invite(senderID: "uid-maya")
@@ -64,9 +59,7 @@ struct InviteLinkTests {
         #expect(DeepLinkRouter.route(for: URL(string: "freebnb://stays")!) == .stays)
     }
 
-    /// The host and path are checked here rather than trusted: a Universal Link
-    /// is only delivered for the claimed domain, but the same string can arrive
-    /// pasted, and a look-alike host must not be treated as an invite.
+    /// Host and path are checked, not trusted: a pasted string can arrive, and a look-alike host mustn't count as an invite.
     @Test func foreignAndUnknownURLsAreIgnored() {
         #expect(DeepLinkRouter.route(for: URL(string: "https://example.com/i?from=x")!) == nil)
         #expect(DeepLinkRouter.route(for: URL(string: "https://\(InviteCopy.webHost)/elsewhere?from=x")!) == nil)
@@ -74,8 +67,7 @@ struct InviteLinkTests {
         #expect(DeepLinkRouter.route(for: URL(string: "freebnb://elsewhere")!) == nil)
     }
 
-    /// Following an invite navigates and nothing more: no edge, no write. The
-    /// recipient still has to tap Add, and the sender still has to accept.
+    /// Following an invite only navigates: no edge, no write; the recipient still taps Add and the sender accepts.
     @Test func handlingAnInviteOnlyNavigates() {
         let router = DeepLinkRouter()
         router.handle(.invite(senderID: "uid-maya"))
@@ -85,9 +77,7 @@ struct InviteLinkTests {
         #expect(router.pendingConversationUserID == nil)
     }
 
-    /// The two halves of the "don't clobber a deep link on sign-in" guard, which
-    /// have to cover the transition whichever order the two handlers run in: an
-    /// intent not yet acted on, and one that already has been.
+    /// The "don't clobber a deep link on sign-in" guard must cover both handler orders: an intent not yet acted on, and one that was.
     @Test func aPendingInviteIsVisibleBeforeItIsConsumed() {
         let router = DeepLinkRouter()
         #expect(router.hasPendingIntent == false)
@@ -99,8 +89,7 @@ struct InviteLinkTests {
         // What ContentView does when it acts on the intent.
         router.pendingFriendsTab = false
         router.didRouteSinceSignIn = true
-        // The inviter is still pending until FriendsPage resolves it, so the
-        // guard holds on either field alone.
+        // The inviter is pending until FriendsPage resolves it, so the guard holds on either field alone.
         router.pendingInviterID = nil
         #expect(router.hasPendingIntent == false)
         #expect(router.didRouteSinceSignIn)
@@ -131,8 +120,7 @@ struct InviteLinkTests {
         #expect(message.contains("open my profile in the app"))
     }
 
-    /// Without an ID there is no card to open onto, so the copy has to fall back
-    /// to asking them to search, and it must still name who to search for.
+    /// Without an ID there's no card to open, so the copy asks them to search and names who.
     @Test func vouchCopyFallsBackToSearchWithoutASender() {
         let message = InviteCopy.vouch(inviterName: "Maya")
         #expect(message.contains("search for Maya"))

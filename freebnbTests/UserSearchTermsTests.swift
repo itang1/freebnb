@@ -2,9 +2,8 @@
 //  UserSearchTermsTests.swift
 //  freebnbTests
 //
-//  The name-search index (R1). These pin the contract three other things depend
-//  on: firestore.rules' isValidSearchTerms, scripts/search_terms.js (the Node
-//  twin used by the backfill and the seed), and the query in searchProfiles.
+//  The name-search index. These pin the contract three things depend on: firestore.rules'
+//  isValidSearchTerms, scripts/search_terms.js (the Node twin) and the query in searchProfiles.
 //
 
 import Foundation
@@ -16,9 +15,7 @@ struct UserSearchTermsTests {
 
     // MARK: - terms(for:)
 
-    // The rules require the whole lowercased name among the terms, so a document
-    // can't claim search terms while hiding the name they came from. If this
-    // breaks, every profile write starts failing the rules.
+    // The rules require the whole lowercased name among the terms; breaking this fails every profile write.
     @Test func termsAlwaysCarryTheWholeLowercasedName() {
         #expect(UserSearchTerms.terms(for: "SpongeBob SquarePants").contains("spongebob squarepants"))
         #expect(UserSearchTerms.terms(for: "Devna").contains("devna"))
@@ -26,23 +23,18 @@ struct UserSearchTermsTests {
 
     @Test func termsCoverEveryPrefixOfEveryWord() {
         let terms = Set(UserSearchTerms.terms(for: "SpongeBob SquarePants"))
-        // Leading edge of the first word, and of the second — the last-name
-        // search that a whole-name prefix index could not have served.
+        // Leading edge of the first word and the second (a last-name search a whole-name prefix index couldn't serve).
         #expect(terms.isSuperset(of: ["s", "sp", "spo", "sponge", "spongebob"]))
         #expect(terms.isSuperset(of: ["sq", "squ", "square", "squarepants"]))
     }
 
-    // A mid-word fragment is deliberately not indexed: every substring would be
-    // quadratic in the name's length. Pinned so the omission stays a decision.
+    // Mid-word fragments aren't indexed (every substring is quadratic); pinned so the omission stays a decision.
     @Test func termsOmitMidWordFragments() {
         #expect(!UserSearchTerms.terms(for: "SpongeBob").contains("ponge"))
     }
 
-    // The exact array scripts/search_terms.js produces for the same name. The
-    // client writes these terms and the backfill/seed write them from Node; a
-    // profile indexed by one and queried against the other is a user search
-    // cannot find. If this fails, the two implementations have drifted — fix
-    // both, then re-run the backfill.
+    // The exact array scripts/search_terms.js produces for the same name. A profile indexed by one
+    // implementation and queried by the other can't be found; if this fails, fix both and re-run the backfill.
     @Test func termsMatchTheNodeTwinExactly() {
         #expect(UserSearchTerms.terms(for: "SpongeBob SquarePants") == [
             "spongebob squarepants",
@@ -98,8 +90,7 @@ struct UserSearchTermsTests {
         #expect(UserSearchTerms.queryTerm(for: "SpongeBob") == "spongebob")
     }
 
-    // Or the query would ask for a term longer than anything ever indexed, and
-    // match nothing.
+    // Or the query would ask for a term longer than anything indexed and match nothing.
     @Test func queryTermIsCappedLikeTheStoredPrefixes() {
         #expect(UserSearchTerms.queryTerm(for: "Bartholomewshirington") == "bartholomewshir")
     }
@@ -120,9 +111,7 @@ struct UserSearchTermsTests {
         #expect(UserSearchTerms.matches(displayName: "SpongeBob SquarePants", query: "square sponge"))
     }
 
-    // The whole point of the client-side pass: the arrayContains lookup only
-    // carried the longest word, so without this "sponge square" would also
-    // return every other Square in the directory.
+    // The arrayContains lookup carries only the longest word, so without this "sponge square" would match every Square.
     @Test func aQueryWordThatMatchesNothingRejectsTheProfile() {
         #expect(!UserSearchTerms.matches(displayName: "Squidward Tentacles", query: "sponge square"))
         #expect(!UserSearchTerms.matches(displayName: "SpongeBob SquarePants", query: "patrick"))

@@ -2,12 +2,9 @@
 //  WhatsNew.swift
 //  freebnb
 //
-//  A static, hand-curated list of what shipped, newest first. `WhatsNewPage` renders
-//  it, and `ContentView` auto-presents the latest entry once per version bump.
-//  Keeping it here (not fetched) means the changelog ships with the build it
-//  describes and needs no network or billing. A highlight can carry a `longRead` for
-//  a deeper explanation, folding in what used to be the separate "Feature Spotlight"
-//  page.
+//  A hand-curated list of what shipped, newest first. `WhatsNewPage` renders it and
+//  `ContentView` auto-presents the latest once per version bump. It ships with the build, so
+//  it needs no network. A highlight can carry a `longRead` for a deeper explanation.
 //
 
 import Foundation
@@ -17,36 +14,26 @@ struct ReleaseHighlight: Identifiable, Hashable {
     let icon: String
     let title: String
     let detail: String
-    /// An optional deeper explanation of this highlight: why it works the way it does,
-    /// not just what it does. A highlight with a `longRead` renders as a tappable card
-    /// that pushes a reader page; one without renders as a plain row. This absorbed
-    /// the old, separate "Feature Spotlight" column, since both were the same idea
-    /// (an evergreen note about one feature) wearing two different pages.
+    /// An optional deeper explanation (why, not just what). With a `longRead` the highlight is a tappable card that pushes a reader page; otherwise a plain row.
     var longRead: String? = nil
     var id: String { title }
 }
 
 /// A single app version's worth of highlights.
 struct Release: Identifiable, Hashable {
-    /// Marketing version, matched against `Bundle.main.appVersionString` to decide
-    /// whether to auto-present. The first element of `WhatsNew.releases` is treated
-    /// as "current".
+    /// Marketing version, matched against `Bundle.main.appVersionString` to decide auto-presentation; the first release is "current".
     let version: String
     let date: String
-    /// Optional welcome blurb shown above the highlights. Used for the very first
-    /// release to greet the reader; later releases can leave it nil.
+    /// Optional welcome blurb above the highlights, used for the first release.
     var intro: String? = nil
     let highlights: [ReleaseHighlight]
     var id: String { version }
 }
 
 enum WhatsNew {
-    /// Newest first. `latest` is the head of this list and must carry the current
-    /// marketing version so `shouldPresent` still fires on a real version bump. The
-    /// entries below it are the pre-launch history: FreeBNB hasn't shipped an update
-    /// to real users yet, so they're dated milestones rather than App Store releases,
-    /// numbered 0.x to mark that. The next actual version bump prepends a new
-    /// `Release` above "1.0".
+    /// Newest first. `latest` must carry the current marketing version so `shouldPresent`
+    /// fires on a bump. Entries below are pre-launch milestones (0.x); the next real bump
+    /// prepends a new `Release` above "1.0".
     static let releases: [Release] = [
         Release(
             version: "1.0",
@@ -233,10 +220,8 @@ enum WhatsNew {
     /// The current release, or nil if the list is somehow empty.
     static var latest: Release? { releases.first }
 
-    /// Whether the changelog should auto-present: true when the current build is a
-    /// release we have notes for and the user hasn't seen that version's notes yet.
-    /// A first-ever launch (`lastSeenVersion == nil`) is treated as "already seen"
-    /// so onboarding, not the changelog, greets a brand-new user.
+    /// Whether the changelog auto-presents: the build has notes the user hasn't seen. A
+    /// first launch (`lastSeenVersion == nil`) counts as seen, so onboarding greets new users.
     static func shouldPresent(currentVersion: String, lastSeenVersion: String?) -> Bool {
         guard let latest, latest.version == currentVersion else { return false }
         guard let lastSeenVersion else { return false }

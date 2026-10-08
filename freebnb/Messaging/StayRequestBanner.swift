@@ -2,24 +2,21 @@
 //  StayRequestBanner.swift
 //  freebnb
 //
-//  The accept/decline/cancel strip pinned above a chat thread for one active
-//  stay request. A thread stacks one of these per active request, so a request
-//  in each direction shows as two strips. Split out of MessagingPage.swift (A2).
+//  The accept/decline/cancel strip pinned above a chat thread for one active stay request;
+//  a thread stacks one per active request (two directions show two strips).
 //
 
 import SwiftUI
 
 struct StayRequestBanner: View {
     let request: StayRequest
-    /// The signed-in user, so the banner can say which side of the stay they're
-    /// on and offer the actions that side actually has.
+    /// The signed-in user, so the banner knows their side and offers its actions.
     let viewerID: String
     /// The other participant's display name, used in the headline.
     let otherName: String
     /// True while an action is in flight; disables every button.
     let isBusy: Bool
-    /// Cancel for a request the viewer sent, withdraw for an offer they made,
-    /// or call off an accepted stay. The parent maps the label to the right write.
+    /// Cancel for a sent request, withdraw for an offer, or call off an accepted stay; the parent maps the label to the write.
     let onCancel: () -> Void
     let onDecline: () -> Void
     let onAccept: () -> Void
@@ -27,15 +24,11 @@ struct StayRequestBanner: View {
     private var viewerIsHost: Bool { request.role(of: viewerID) == .host }
     private var tint: Color { request.status == .accepted ? .success : .warning }
 
-    /// How the headline names the home. A thread is shared across all of a host's
-    /// listings, so an unnamed "your place" leaves a host with two homes guessing
-    /// which one a request is for. The title answers that when the host set one,
-    /// and hosts with a second listing now have to (see CreateListingPage).
+    /// How the headline names the home. A thread spans all of a host's listings, so an unnamed "your place" is ambiguous; the title answers when set.
     private var hostPlace: String { request.namedListingTitle ?? "your place" }
     private var guestPlace: String { request.namedListingTitle ?? "\(otherName)'s place" }
 
-    /// Says which way the stay points, because status, dates, and a home name
-    /// alone read identically from both sides.
+    /// Says which way the stay points, since status, dates and home name read identically from both sides.
     private var headline: String {
         switch request.status {
         case .offered:
@@ -63,9 +56,7 @@ struct StayRequestBanner: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(headline)
                     .font(.subheadline.weight(.semibold))
-                    // Naming the home made the headline long enough to be
-                    // truncated by the action buttons beside it, which cut off
-                    // the very part that says which home. Let it wrap instead.
+                    // A named home made the headline truncate under the buttons; let it wrap.
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
                     StatusBadge(status: request.status)
@@ -73,8 +64,7 @@ struct StayRequestBanner: View {
                         .font(.subheadline)
                         .foregroundColor(.secondaryText)
                 }
-                // Where the home is. Naming which home is the headline's job now,
-                // so this stays the city rather than repeating the title back.
+                // Naming the home is the headline's job, so this stays the city.
                 Label(request.listingCity, systemImage: "house.fill")
                     .font(.caption)
                     .foregroundColor(.secondaryText)
@@ -111,8 +101,7 @@ struct StayRequestBanner: View {
             if viewerIsHost {
                 cancelButton(title: "Withdraw")
             } else {
-                // The guest answering an offer, worded like the Stays tab: an
-                // invitation is turned down, not rejected.
+                // Worded like the Stays tab: an invitation is turned down, not rejected.
                 answerButtons(declineTitle: "No thanks", acceptTitle: "Yes please")
             }
         case .accepted:

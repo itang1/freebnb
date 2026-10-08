@@ -67,9 +67,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let info = response.notification.request.content.userInfo
-        // This callback is delivered on the main thread, and DeepLinkRouter is
-        // @MainActor, so assume the isolation rather than hopping asynchronously
-        // (which would race the completionHandler call below).
+        // Delivered on the main thread and DeepLinkRouter is @MainActor, so assume isolation; hopping would race the completionHandler below.
         MainActor.assumeIsolated {
             switch info["type"] as? String {
             case "message":
@@ -77,13 +75,10 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
                     router?.pendingConversationUserID = senderID
                 }
             case "friend_request", "friend_accepted":
-                // Both land on Friends: the request is answered there, and an
-                // acceptance is worth arriving next to the person who sent it.
+                // Both land on Friends: requests are answered there, and an acceptance is worth meeting the sender.
                 router?.pendingFriendsTab = true
             case "stay_request", "stay_update", "stay_reminder":
-                // Stay pushes and the local check-in / checkout reminders (feature 22)
-                // all land the user on the Stays tab, where the relevant stay is
-                // already visible in its section.
+                // Stay pushes and local reminders land on the Stays tab, where the stay is already visible.
                 router?.pendingStayEvent = true
             default:
                 break
@@ -98,17 +93,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 extension AppDelegate: MessagingDelegate {
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
-        // Not guaranteed to arrive on the main thread, and userProfileStore is
-        // main-actor isolated, so hop explicitly.
+        // Not guaranteed on the main thread, and userProfileStore is main-actor isolated, so hop explicitly.
         Task { @MainActor in
             await saveFCMToken(token)
         }
     }
 
-    /// Saves the token, retrying with backoff. A token whose save fails is gone
-    /// until FCM next rotates it, which can be weeks; every push in between
-    /// would silently not arrive. Retries stop once a newer token supersedes
-    /// this one.
+    /// Saves the token, retrying with backoff: a failed save loses it until FCM rotates it (weeks),
+    /// so pushes would silently not arrive. Retries stop once a newer token supersedes it.
     @MainActor
     private func saveFCMToken(_ token: String) async {
         latestFCMToken = token
