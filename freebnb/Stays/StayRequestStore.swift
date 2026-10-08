@@ -11,8 +11,8 @@ import os
 @MainActor
 @Observable
 final class StayRequestStore {
-    /// Requests awaiting this user as a host: the ones aimed at listings they own,
-    /// merged with the ones aimed at listings they co-host (feature 14).
+    /// Requests awaiting this user as a host: those for listings they own plus
+    /// those for listings they co-host.
     var incomingRequests: [StayRequest] {
         var seen = Set<String>()
         return (hostedRequests + coHostedRequests)
@@ -20,74 +20,51 @@ final class StayRequestStore {
             .sortedByDate()
     }
 
-    /// Requests naming this user in `hostUserID` — the listings they own.
+    /// Requests naming this user in `hostUserID` (listings they own).
     private(set) var hostedRequests: [StayRequest] = []
-    /// Requests for listings this user co-hosts. Kept apart from `hostedRequests`
-    /// because they arrive from a different query keyed on the listing, and the
-    /// two listeners settle independently.
+    /// Requests for listings this user co-hosts. Separate from `hostedRequests`
+    /// because they come from a different query and settle independently.
     private(set) var coHostedRequests: [StayRequest] = []
     private(set) var outgoingRequests: [StayRequest] = []
 
-    /// True until every listener feeding `incomingRequests` has delivered its
-    /// first snapshot for the current user. Host surfaces read this to tell
-    /// "still arriving" from "none came in": on an account switch the lists above
-    /// are cleared synchronously and refill a round trip later, and an empty
-    /// inbox rendered during that window reads as though a request that exists
-    /// never arrived.
-    ///
-    /// Both halves count, not just the owned one. A pure co-host owns no
-    /// listings, so the hosted listener answers "none" instantly while the
-    /// listing-scoped query is still in flight — exactly the person for whom a
-    /// premature "no requests yet" is the whole bug.
+    /// True until every listener feeding `incomingRequests` has delivered its first
+    /// snapshot. Lets host surfaces tell "still arriving" from "none came in", since
+    /// the lists are cleared on an account switch and refill a round trip later.
+    /// Both halves count: a pure co-host's owned listener answers "none" instantly
+    /// while the listing-scoped query is still in flight.
     var isLoadingIncoming: Bool { isLoadingHosted || isLoadingCoHosted }
 
-    /// Whether the lists above can be trusted to say a stay does *not* exist.
-    /// False while any listener is still delivering its first snapshot, and false
-    /// when one has failed, because in both cases an empty list is the absence of
-    /// an answer rather than an answer. Callers that only render what is there
-    /// can ignore this; callers that act on nothing being there cannot.
+    /// Whether the lists can be trusted to say a stay does *not* exist. False
+    /// while any listener awaits its first snapshot or has failed. Only callers
+    /// that act on nothing being there need this.
     var hasLoadedRequests: Bool {
         !isLoadingIncoming && !isLoadingOutgoing && listenerError == nil
     }
 
-    // True from birth, not false. The listeners are bound from an auth callback,
-    // so between init and that callback nothing has been asked yet, and starting
-    // at false would call that empty window a loaded, empty inbox: a skeleton
-    // replaced by "no requests" for a frame, and `hasLoadedRequests` vouching for
-    // a list that has never been fetched.
+    // True from birth: listeners bind from an auth callback, so starting false
+    // would call that unbound window a loaded, empty inbox.
     private var isLoadingHosted = true
     private var isLoadingOutgoing = true
-    // The exception, and it stays false: no co-hosted listener exists until
-    // ContentView supplies the roster, so there is nothing to wait for yet.
+    // Stays false: no co-hosted listener exists until ContentView supplies the roster.
     private var isLoadingCoHosted = false
-    /// Who the requests above belong to. Observed rather than ignored: the tab
-    /// badge is derived from it, so it has to invalidate the view when it changes.
-    /// Empty while signed out.
+    /// Who the requests belong to. Observed because the tab badge derives from it. Empty when signed out.
     private(set) var viewerID: String = ""
-    /// Set when a Firestore listener fails — most commonly because security
-    /// rules haven't been deployed yet. Cleared when the listener recovers.
+    /// Set when a listener fails (commonly undeployed rules); cleared on recovery.
     private(set) var listenerError: String?
 
     @ObservationIgnored private let repository: StayRequestsRepository
-    /// Schedules the on-device check-in / checkout reminders (feature 22) from the
-    /// accepted stays below. Kept in sync on every snapshot so a cancellation or a
-    /// date change withdraws or moves its reminders without any extra plumbing.
+    /// Schedules on-device check-in/checkout reminders from accepted stays, synced on every snapshot.
     @ObservationIgnored private let reminderScheduler = StayReminderScheduler()
-    /// The in-flight reminder reconcile, held so the next one can wait for it.
-    /// See `syncReminders` for why overlapping them is not safe.
+    /// The in-flight reminder reconcile, so the next can wait for it (see `syncReminders`).
     @ObservationIgnored private var reminderSyncTask: Task<Void, Never>?
-    /// Keeps the current-stay Live Activity (feature 21) in step with the accepted
-    /// stays below, the same way `reminderScheduler` keeps the local reminders in
-    /// step. Reconciled on every snapshot.
+    /// Keeps the current-stay Live Activity in step with accepted stays, like `reminderScheduler`.
     @ObservationIgnored private let liveActivityController = StayLiveActivityController()
     @ObservationIgnored nonisolated(unsafe) private var incomingListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var outgoingListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var coHostedListener: RepositoryListener?
-    /// The co-hosted listing ids the listener above is currently bound to. Held so
-    /// a repeat of the same set is a no-op rather than a listener churn.
+    /// Co-hosted listing ids the listener is bound to; a repeat of the same set is a no-op.
     @ObservationIgnored private var coHostedListingIDs: [String] = []
-    // `nonisolated(unsafe)` for the same reason as other stores: deinit is
-    // nonisolated but must tear down these handles, which are thread-safe.
+    // `nonisolated(unsafe)`: deinit is nonisolated but must tear down these thread-safe handles.
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("stays")
 
@@ -112,26 +89,22 @@ final class StayRequestStore {
         outgoingListener?.cancel(); outgoingListener = nil
         coHostedListener?.cancel(); coHostedListener = nil
         hostedRequests = []; coHostedRequests = []; outgoingRequests = []
-        // The co-hosted set belongs to the user who just left; the next user's
-        // arrives from HomeStore once their managed listings load.
+        // The co-hosted set belongs to the previous user; HomeStore supplies the next one.
         coHostedListingIDs = []
         viewerID = userID ?? ""
         guard let userID else {
             isLoadingHosted = false
             isLoadingCoHosted = false
             isLoadingOutgoing = false
-            // Signed out: take down the widgets, any running Live Activity, and
-            // the scheduled reminders, so nothing of the last user's stay
-            // lingers on the Lock Screen. The reminders outlive the app process,
-            // so they are the one of the three that nobody would notice.
+            // Signed out: clear widgets, any Live Activity and scheduled reminders,
+            // so nothing lingers on the Lock Screen (reminders outlive the process).
             publishToWidgetsAndActivities(viewerID: "")
             syncReminders(viewerID: "")
             return
         }
         isLoadingHosted = true
         isLoadingOutgoing = true
-        // No co-hosted listener is bound yet; ContentView supplies the roster
-        // once HomeStore has it, and binding flips this back on.
+        // No co-hosted listener yet; binding flips this back on.
         isLoadingCoHosted = false
 
         incomingListener = repository.listenToRequests(userID: userID, role: .host) { [weak self] result in
@@ -140,8 +113,7 @@ final class StayRequestStore {
                 case .failure(let error):
                     self?.log.error("incoming snapshot error: \(error.localizedDescription, privacy: .public)")
                     self?.listenerError = error.localizedDescription
-                    // The inbox is no longer loading; it failed. Leaving the flag
-                    // set would spin a skeleton forever over an error nobody sees.
+                    // Failed, not loading; leaving the flag set would spin a skeleton forever.
                     self?.isLoadingHosted = false
                 case .success(let requests):
                     self?.listenerError = nil
@@ -171,14 +143,10 @@ final class StayRequestStore {
         }
     }
 
-    // MARK: - Co-hosted listings (feature 14)
+    // MARK: - Co-hosted listings
 
-    /// Points the co-hosted listener at the listings this user co-hosts.
-    ///
-    /// Driven from `ContentView` rather than from here, for the same reason the
-    /// check-in kit sync is: which listings a user co-hosts is `HomeStore`'s
-    /// question, and a store that answered it itself would need a second copy of
-    /// that listener. Idempotent — an unchanged set rebinds nothing.
+    /// Points the co-hosted listener at the listings this user co-hosts. Driven
+    /// from `ContentView` because `HomeStore` owns that question. Idempotent.
     func setCoHostedListingIDs(_ listingIDs: [String]) {
         let sorted = listingIDs.sorted()
         guard sorted != coHostedListingIDs else { return }
@@ -206,9 +174,7 @@ final class StayRequestStore {
                     self?.isLoadingCoHosted = false
                 case .success(let requests):
                     self?.listenerError = nil
-                    // A co-host is not a party to the stay, so their own outgoing
-                    // request for the listing they co-host must not double back
-                    // into their host inbox as something to answer.
+                    // A co-host's own outgoing request mustn't appear in their host inbox.
                     self?.coHostedRequests = requests
                         .filter { $0.guestUserID != userID }
                         .sortedByDate()
@@ -220,18 +186,10 @@ final class StayRequestStore {
         }
     }
 
-    /// Re-reconciles the local reminder schedule with the currently-accepted
-    /// stays across both directions. Cheap and idempotent, so calling it on every
-    /// snapshot (from either listener) is fine.
-    ///
-    /// Serialized against the previous call rather than fired and forgotten. The
-    /// scheduler decides what it wants *before* it awaits the pending list, so
-    /// two overlapping syncs can finish in the wrong order: a snapshot that
-    /// arrives just before sign-out computes the departing user's reminders,
-    /// suspends, and can resume after the sign-out sync has cleared everything —
-    /// putting "You check in tomorrow in Lisbon" back on the next person's Lock
-    /// Screen, which is the leak this is here to prevent. Chaining makes the last
-    /// caller the last writer.
+    /// Re-reconciles reminders with the accepted stays in both directions.
+    /// Cheap and idempotent. Chained after the previous call so the last caller
+    /// is the last writer; otherwise a snapshot arriving just before sign-out
+    /// could resume afterwards and leak the departing user's reminders.
     private func syncReminders(viewerID: String) {
         let accepted = (incomingRequests + outgoingRequests).filter { $0.status == .accepted }
         let previous = reminderSyncTask
@@ -241,9 +199,8 @@ final class StayRequestStore {
         }
     }
 
-    /// Republishes the home-screen widget snapshot and reconciles the current-stay
-    /// Live Activity. Called on every snapshot (and on sign-out with an empty
-    /// viewerID to tear both down). Cheap and idempotent, like `syncReminders`.
+    /// Republishes the widget snapshot and reconciles the Live Activity. Runs on
+    /// every snapshot, and on sign-out with an empty viewerID to tear both down.
     private func publishToWidgetsAndActivities(viewerID: String) {
         StayWidgetBridge.publish(
             incoming: incomingRequests,
@@ -258,8 +215,7 @@ final class StayRequestStore {
 
     // MARK: - Reload
 
-    /// Restart both listeners with the current authenticated user. Call this
-    /// from UI when the listener previously failed (e.g. rules not yet deployed).
+    /// Restarts both listeners for the current user; call after a listener failed.
     func reload() {
         restartListeners(userID: Auth.auth().currentUser?.uid)
     }
@@ -302,9 +258,8 @@ final class StayRequestStore {
         }
     }
 
-    /// Either party may call off a stay, so the write records which one did:
-    /// the rules pin `cancelledBy` to the caller, and the push trigger reads it
-    /// to tell the other party.
+    /// Records who cancelled: the rules pin `cancelledBy` to the caller and the
+    /// push trigger reads it to notify the other party.
     func cancel(_ request: StayRequest) async throws {
         guard let uid = Auth.auth().currentUser?.uid else {
             throw StayRequestError.notSignedIn
@@ -312,9 +267,7 @@ final class StayRequestStore {
         try await update(request, status: .cancelled, hostNote: nil, cancelledBy: uid)
     }
 
-    /// Changes the dates on a still-pending request (feature 23). Only the guest
-    /// who created it may call this, and only while it is pending — the same
-    /// bounds `firestore.rules` enforces.
+    /// Changes the dates on a pending request; guest only, as `firestore.rules` enforces.
     func modifyDates(_ request: StayRequest, checkIn: Date, checkOut: Date) async throws {
         do {
             try await repository.updateDates(request, checkIn: checkIn, checkOut: checkOut)
@@ -324,8 +277,7 @@ final class StayRequestStore {
         }
     }
 
-    /// Propagates a host's display-name change to `listingHostName` on every
-    /// request they host, so trip rows don't keep showing the old name (L7).
+    /// Propagates a host's display-name change to `listingHostName` on their requests.
     func updateHostName(for hostUserID: String, newName: String) async throws {
         do {
             try await repository.updateListingHostName(hostUserID: hostUserID, newName: newName)
@@ -337,12 +289,8 @@ final class StayRequestStore {
 
     // MARK: - Host actions
 
-    /// Offers the listing to a friend for specific dates (feature 43): the mirror
-    /// of `send(listing:...)`, originated by the host.
-    ///
-    /// The document is the same shape a guest's request has — same two parties,
-    /// same dates — because it becomes the same stay. Only `status` and
-    /// `initiatedBy` record which way it was pointing when it started.
+    /// Offers the listing to a friend for specific dates. The document has the
+    /// same shape as a guest's request; only `status` and `initiatedBy` differ.
     func offer(
         listing: Home,
         guestUserID: String,
@@ -368,10 +316,7 @@ final class StayRequestStore {
             initiatedBy: listing.hostUserID
         )
         do {
-            // No counter: a circle policy governs what a friend may *ask* for,
-            // and a host offering their own place is not asking. The rules apply
-            // the policy to the guest branch of `create` only, for the same
-            // reason.
+            // No counter: a circle policy limits what a friend may ask for, not what a host offers.
             try await repository.create(request, advancing: nil)
             Telemetry.log(.stayOfferSent)
         } catch {
@@ -382,9 +327,8 @@ final class StayRequestStore {
 
     // MARK: - Answering (either side)
 
-    /// Says yes. The host accepting a guest's request, or the guest accepting a
-    /// host's offer — the callable works out which and runs the same atomic
-    /// double-booking guard either way, because an offer books the same room.
+    /// Says yes: a host accepting a request or a guest accepting an offer. Both
+    /// run the same double-booking guard.
     func accept(_ request: StayRequest, hostNote: String? = nil) async throws {
         do {
             try await repository.accept(request, hostNote: hostNote)
@@ -395,25 +339,19 @@ final class StayRequestStore {
         }
     }
 
-    /// A host turns down a guest's request, with an optional note explaining why.
+    /// A host turns down a guest's request, with an optional note.
     func decline(_ request: StayRequest, hostNote: String? = nil) async throws {
         try await update(request, status: .declined, hostNote: hostNote)
     }
 
-    /// A guest turns down a host's offer (feature 43).
-    ///
-    /// Separate from `decline` rather than one role-sniffing method, because the
-    /// two writes are not the same write: the note lands on `guestNote` here and
-    /// `hostNote` there, and the rules pin each branch to its own key. Naming the
-    /// caller's role at the call site is also what keeps this store from having to
-    /// ask `Auth` who is holding the phone.
+    /// A guest turns down a host's offer. Separate from `decline` because the note
+    /// lands on `guestNote` rather than `hostNote` and the rules pin each to its own key.
     func declineOffer(_ request: StayRequest, guestNote: String? = nil) async throws {
         try await update(request, status: .declined, hostNote: nil, guestNote: guestNote)
     }
 
-    /// A host takes back an offer the guest hasn't answered. Cancelled, not
-    /// declined: it was the host's to retract, and "declined" would read on the
-    /// guest's trip list as though they had turned it down.
+    /// A host retracts an unanswered offer. Cancelled, not declined, so the guest
+    /// doesn't see it as their own refusal.
     func withdrawOffer(_ request: StayRequest, hostNote: String? = nil) async throws {
         guard let uid = Auth.auth().currentUser?.uid else {
             throw StayRequestError.notSignedIn
@@ -421,10 +359,9 @@ final class StayRequestStore {
         try await update(request, status: .cancelled, hostNote: hostNote, cancelledBy: uid)
     }
 
-    // MARK: - Completion (feature 4)
+    // MARK: - Completion
 
-    /// Closes out a stay that has begun, from either side. Completion is what
-    /// unlocks reviews and what the server counts into both parties' trust stats.
+    /// Closes out a stay that has begun, from either side; unlocks reviews and trust stats.
     func markCompleted(_ request: StayRequest) async throws {
         do {
             try await repository.markCompleted(request)
@@ -434,14 +371,12 @@ final class StayRequestStore {
         }
     }
 
-    /// Stays either side may close out right now: accepted, and under way.
+    /// Accepted stays that are under way.
     var completableStays: [StayRequest] {
         (incomingRequests + outgoingRequests).filter { $0.canBeMarkedComplete() }
     }
 
-    /// Finished stays, newest first — the ones that can be reviewed. Whether a
-    /// given one *still needs* a review is `ReviewStore`'s question, not this
-    /// store's; it depends on what the signed-in user has already written.
+    /// Finished stays, newest first. Whether one still needs a review is `ReviewStore`'s call.
     var completedStays: [StayRequest] {
         (incomingRequests + outgoingRequests)
             .filter { $0.status == .completed }
@@ -450,8 +385,7 @@ final class StayRequestStore {
 
     // MARK: - Convenience
 
-    /// Returns the most recent active (pending or accepted) request the guest
-    /// has sent for a given listing, if any.
+    /// The guest's most recent active (pending or accepted) request for a listing.
     func activeRequest(for listingID: String, guestUserID: String) -> StayRequest? {
         outgoingRequests.first {
             $0.listingID == listingID &&
@@ -460,31 +394,23 @@ final class StayRequestStore {
         }
     }
 
-    /// Unresolved stays on listings this user hosts: guests' requests they owe an
-    /// answer to, plus offers they made that a friend hasn't answered.
+    /// Unresolved stays on listings this user hosts: requests and offers awaiting an answer.
     var pendingIncomingCount: Int {
         incomingRequests.filter { $0.status.isAwaitingReply }.count
     }
 
-    /// Unresolved stays where this user is the guest: requests they sent that a
-    /// host hasn't answered, plus offers a host made them (feature 43).
+    /// Unresolved stays where this user is the guest: requests awaiting a host and offers made to them.
     var pendingOutgoingCount: Int {
         outgoingRequests.filter { $0.status.isAwaitingReply }.count
     }
 
-    /// The Stays tab badge: stays waiting on *this user's* answer, and nothing
-    /// else. A badge is a claim that someone is blocked on you, so a request you
-    /// sent and are waiting to hear back on doesn't earn one — you can't clear it,
-    /// and a number that won't go down however much you tap it teaches people to
-    /// ignore the badge entirely. Both directions still count: a host owes an
-    /// answer on an incoming request, and a guest owes one on an offer.
+    /// The Stays tab badge: only stays waiting on this user's answer. Requests
+    /// they sent don't count, since they can't clear them.
     var pendingStaysTabCount: Int {
         (incomingRequests + outgoingRequests).awaitingReplyCount(from: viewerID)
     }
 
-    /// Offers a host made this user that they haven't answered. The host-initiated
-    /// mirror of the incoming requests a host answers, and what the Stays tab's
-    /// "Needs your response" section shows a guest (feature 43).
+    /// Offers a host made this user that they haven't answered.
     func offersAwaiting(_ userID: String) -> [StayRequest] {
         outgoingRequests.filter { $0.status == .offered && $0.awaitsReply(from: userID) }.sortedByDate()
     }

@@ -2,9 +2,8 @@
 //  CreateListingViewModel.swift
 //  freebnb
 //
-//  Form state and save pipeline for creating, editing, or duplicating a
-//  listing. Split from CreateListingPage.swift so the 400-line model and the
-//  400-line form type-check in parallel.
+//  Form state and save pipeline for creating, editing or duplicating a listing.
+//  Split from CreateListingPage.swift so the two type-check in parallel.
 //
 
 import CoreLocation
@@ -14,9 +13,8 @@ import Observation
 @MainActor
 @Observable
 final class CreateListingViewModel {
-    // Whether the form creates, edits, or duplicates. `mode.source` seeds the
-    // fields; `mode.target` is the listing a save overwrites, and is nil for both
-    // create and duplicate.
+    // Create, edit or duplicate. `mode.source` seeds the fields; `mode.target` is
+    // the listing a save overwrites (nil for create and duplicate).
     let mode: ListingFormMode
 
     // Location
@@ -64,8 +62,7 @@ final class CreateListingViewModel {
     var foodProvision: FoodProvision
 
     // Host and contact
-    // Optional short label so a host running more than one home can tell them
-    // apart; blank means "use <hostName>'s place" (see Home.displayTitle).
+    // Optional short label to tell a host's homes apart; blank means "<hostName>'s place".
     var title: String
     var description: String
     var contactPreference: HostContactPreference
@@ -76,21 +73,17 @@ final class CreateListingViewModel {
     // Save state
     var isSaving = false
     var errorMessage: String?
-    // Set when geocoding the address returned nothing. The listing is still
-    // saveable without a map pin, but the host is told rather than left to
-    // wonder why their listing never shows on the map (L6).
+    // Set when geocoding found nothing. The listing can still save without a pin,
+    // but the host is told.
     var geocodeFailed = false
-    // True once an unfinished draft has been restored into this form, so the view
-    // can say so and offer a way out of it (feature 13).
+    // True once an unfinished draft was restored, so the view can say so and offer a way out.
     var restoredDraft = false
 
     init(mode: ListingFormMode = .create) {
         self.mode = mode
         let source = mode.source
-        // The street is not on the public listing document; when a listing seeds
-        // the form it has to be loaded from the private location subdoc (see
-        // `loadStreet`). Until it arrives `canSave` is false, so an edit can never
-        // blank out the address.
+        // The street isn't on the public document; it loads from the private
+        // location subdoc (`loadStreet`), and `canSave` stays false until then so an edit can't blank it.
         street = ""
         city = source?.address.city ?? ""
         stateField = source?.address.state ?? ""
@@ -124,9 +117,7 @@ final class CreateListingViewModel {
         providesToiletries = source?.amenities.providesToiletries ?? false
         foodProvision = source?.amenities.foodProvision ?? .none
         title = source?.title ?? ""
-        // An edit keeps the name the host already chose. A duplicate must not:
-        // the copy would collide with the listing it came from, so it starts
-        // untouched and takes a fresh suggestion instead.
+        // An edit keeps its name; a duplicate starts fresh and takes a new suggestion.
         if case .edit = mode, source?.title?.isEmpty == false {
             titleWasEdited = true
         }
@@ -137,21 +128,16 @@ final class CreateListingViewModel {
         cancellationPolicy = source?.cancellationPolicy ?? .flexible
     }
 
-    /// Pulls the street address of the listing seeding the form out of its private
-    /// location document. A host always has read access to their own — and both an
-    /// edit and a duplicate are of the host's own listing.
-    ///
-    /// No-ops once `street` is set, which is what lets a restored draft's address
-    /// survive this call.
+    /// Loads the street from the seed listing's private location document (the
+    /// host can always read their own). No-ops once `street` is set, so a restored draft's address survives.
     func loadStreet(homeStore: HomeStore) async {
         guard let source = mode.source, street.isEmpty else { return }
         street = await homeStore.location(for: source.id)?.street ?? ""
     }
 
-    // MARK: - Drafts (feature 13)
+    // MARK: - Drafts
 
-    /// The form as a storable snapshot, and the inverse. Kept adjacent so a field
-    /// added to one is conspicuously missing from the other.
+    /// The form as a storable snapshot, and the inverse; keep them adjacent so a missing field stands out.
     var draft: ListingDraft {
         get {
             var draft = ListingDraft()
@@ -239,8 +225,7 @@ final class CreateListingViewModel {
         }
     }
 
-    /// Restores an unfinished from-scratch listing, if one is stored. Called once,
-    /// before `loadStreet`, so a restored address is not overwritten.
+    /// Restores an unfinished from-scratch listing, if stored. Call before `loadStreet`.
     func restoreDraft(from store: ListingDraftStore, userID: String) {
         guard mode.isDraftBacked, let stored = store.load(userID: userID) else { return }
         draft = stored
@@ -259,9 +244,7 @@ final class CreateListingViewModel {
         store.clear(userID: userID)
     }
 
-    /// Cap on the optional listing title. Mirrors `isOptionalString(data,
-    /// 'title', 60)` in firestore.rules, which is what actually enforces it; the
-    /// client checks the same bound so a save never round-trips only to bounce.
+    /// Cap on the optional title; mirrors `isOptionalString(data, 'title', 60)` in firestore.rules.
     static let titleMaxLength = 60
 
     /// The title, trimmed, or nil when the host left it blank.
@@ -270,19 +253,13 @@ final class CreateListingViewModel {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// Every listing needs a name, so the form fills one in and the host only
-    /// types if they want something better. Suggestions stop the moment they do:
-    /// `titleWasEdited` latches on the first keystroke and never unlatches, so
-    /// nothing the form computes later overwrites what they wrote.
+    /// Every listing needs a name, so the form suggests one. Suggestions stop at
+    /// the host's first keystroke (`titleWasEdited` never unlatches).
     var titleWasEdited = false
 
-    /// The suggested name for this listing: "<Host>'s Place in <City>", made
-    /// distinct when the host already used that name for another home. A second
-    /// place in a new city is distinct on the city alone; a second place in the
-    /// same city takes an ordinal ("<Host>'s Second Place in Pasadena").
-    ///
-    /// `taken` is the host's other listing titles, which is why this can't be a
-    /// plain computed property: only the view can see them.
+    /// The suggested name: "<Host>'s Place in <City>", made distinct from the
+    /// host's other titles (`taken`, which only the view can see) with an ordinal
+    /// when the city repeats ("<Host>'s Second Place in Pasadena").
     func suggestedTitle(hostName: String, taken: Set<String>) -> String {
         let name = hostName.trimmingCharacters(in: .whitespaces)
         let place = city.trimmingCharacters(in: .whitespaces)
@@ -293,8 +270,7 @@ final class CreateListingViewModel {
         let plain = "\(name)'s Place\(suffix)"
         if !lowercasedTaken.contains(plain.lowercased()) { return plain }
 
-        // Ordinals read better than "(2)" for the handful of homes anyone
-        // realistically lists; past that, fall back to counting.
+        // Ordinals read better than "(2)" for realistic counts; past that, count.
         let ordinals = ["Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth"]
         for ordinal in ordinals {
             let candidate = "\(name)'s \(ordinal) Place\(suffix)"
@@ -305,13 +281,10 @@ final class CreateListingViewModel {
         return "\(plain) (\(n))"
     }
 
-    /// The last value this form wrote into `title` itself, so `noteTitleChanged`
-    /// can tell the host's typing apart from its own suggestion.
+    /// The last value this form wrote into `title`, to tell typing from its own suggestion.
     private var lastSuggestion: String?
 
-    /// Fills in a suggested title, unless the host has already typed one. Called
-    /// as the form loads and as the city changes, so the suggestion tracks the
-    /// address until the moment the host takes the field over.
+    /// Fills in a suggested title unless the host already typed one; tracks the city until then.
     func applySuggestedTitleIfUntouched(hostName: String, taken: Set<String>) {
         guard !titleWasEdited else { return }
         let suggestion = suggestedTitle(hostName: hostName, taken: taken)
@@ -320,17 +293,13 @@ final class CreateListingViewModel {
         lastSuggestion = suggestion
     }
 
-    /// Call when the title field changes. Latches `titleWasEdited` only for a
-    /// change this form didn't make, so applying a suggestion doesn't count as
-    /// the host editing it and stop later suggestions.
+    /// Call when the title changes. Latches `titleWasEdited` only for changes this form didn't make.
     func noteTitleChanged() {
         if title != lastSuggestion { titleWasEdited = true }
     }
 
-    /// Why a title is not acceptable, or nil when it is. `taken` is the host's
-    /// other listings' titles; two homes sharing a name would leave the request
-    /// sheet and the chat banner unable to say which is which, which is the whole
-    /// point of the field.
+    /// Why a title is unacceptable, or nil. `taken` is the host's other titles;
+    /// duplicates would leave the request sheet and chat banner ambiguous.
     func titleProblem(taken: Set<String>) -> String? {
         guard let trimmed = trimmedTitle else {
             return "Give this listing a name so you and your guests can tell it from your other homes."
@@ -344,8 +313,7 @@ final class CreateListingViewModel {
         return nil
     }
 
-    /// `taken` comes from the view, which is the only side that can see the
-    /// host's other listings.
+    /// `taken` comes from the view, which can see the host's other listings.
     func canSave(displayName: String, takenTitles: Set<String> = []) -> Bool {
         guard !isSaving else { return false }
         guard !displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
@@ -360,12 +328,9 @@ final class CreateListingViewModel {
         return true
     }
 
-    /// Persists the listing. Returns `true` when the sheet should dismiss.
-    ///
-    /// When geocoding the address fails and `allowMissingCoordinates` is false,
-    /// nothing is written: `geocodeFailed` is set and the view offers the host a
-    /// retry or an explicit "save without a map pin". Passing
-    /// `allowMissingCoordinates: true` is that second choice.
+    /// Persists the listing; true when the sheet should dismiss. If geocoding
+    /// fails and `allowMissingCoordinates` is false, nothing is written and
+    /// `geocodeFailed` is set so the view can offer a retry or "save without a map pin".
     @discardableResult
     func save(
         homeStore: HomeStore,
@@ -382,11 +347,8 @@ final class CreateListingViewModel {
         let trimmedStreet = street.trimmingCharacters(in: .whitespaces)
         var home = makeHome(hostUserID: hostUserID, hostName: hostName, friendIDs: friendIDs)
 
-        // Geocode so the map view can place a pin. The exact coordinate is private
-        // — publishing it would give away the street the address split just hid —
-        // so the listing document carries a rounded copy. Routed through the
-        // shared cache (not a fresh CLGeocoder) so browsing and re-saves respect
-        // CLGeocoder's rate limit (L6).
+        // Geocode for the map pin via the shared cache (respecting CLGeocoder's rate
+        // limit). The listing carries a rounded copy; the exact one stays private.
         let addressString = "\(trimmedStreet), \(city.trimmingCharacters(in: .whitespaces)), \(stateField.trimmingCharacters(in: .whitespaces)) \(zip.trimmingCharacters(in: .whitespaces))"
         var location = ListingLocation(street: trimmedStreet, latitude: nil, longitude: nil)
         do {
@@ -395,14 +357,12 @@ final class CreateListingViewModel {
             location.longitude = coordinate.longitude
             home.latitude  = Home.approximate(coordinate.latitude)
             home.longitude = Home.approximate(coordinate.longitude)
-            // Index the blurred coordinate for proximity queries (feature 11).
+            // Index the blurred coordinate for proximity queries.
             if let lat = home.latitude, let lon = home.longitude {
                 home.geohash = Geohash.encode(latitude: lat, longitude: lon)
             }
         } catch {
-            // Don't save a listing with no coordinates behind the host's back.
-            // Surface the failure so they can fix the address and retry, or
-            // knowingly save without a map pin.
+            // Don't save without coordinates behind the host's back; surface the failure.
             guard allowMissingCoordinates else {
                 geocodeFailed = true
                 return false
@@ -419,11 +379,8 @@ final class CreateListingViewModel {
         }
     }
 
-    /// Builds the `Home` document a save would write: the form fields, the read
-    /// ACL, and (when editing) every stored field the form does not manage.
-    /// Split out of `save` so the assembly is testable without geocoding or
-    /// persistence, and so each function stays within lint's length limit.
-    /// Internal, not private, for exactly that testability.
+    /// Builds the `Home` a save would write: form fields, read ACL and (when
+    /// editing) stored fields the form doesn't manage. Internal for testability.
     func makeHome(hostUserID: String, hostName: String, friendIDs: [String]) -> Home {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -431,9 +388,7 @@ final class CreateListingViewModel {
         let sleepingRaw = sleepingCounts.reduce(into: [String: Int]()) { acc, pair in
             acc[pair.key.rawValue] = pair.value
         }
-        // Bed sizes describe the beds in `sleepingRaw`, so they are dropped along
-        // with the beds. Leaving "1 queen" on a listing whose last bed just became
-        // a couch would be a claim the arrangements contradict (feature 17).
+        // Bed sizes describe the beds in `sleepingRaw`; drop them with the beds.
         let bedSizesRaw = (sleepingCounts[.bed] ?? 0) > 0
             ? bedSizeCounts.reduce(into: [String: Int]()) { acc, pair in acc[pair.key.rawValue] = pair.value }
             : [:]
@@ -489,46 +444,26 @@ final class CreateListingViewModel {
             cancellationPolicy: cancellationPolicy
         )
 
-        // Recomputed on every save rather than carried over from `editing`, so an
-        // edit picks up friends added since the listing was created. The
-        // `onFriendEdgeWritten` function keeps it current between saves.
+        // Recomputed every save so an edit picks up friends added since creation.
         home.allowedViewerIDs = Home.viewerIDs(hostUserID: hostUserID, friendIDs: friendIDs)
 
-        // Preserve identity and creation time when editing so an edit keeps the
-        // listing's feed position instead of jumping to the top (L3). A duplicate
-        // has no target, so it keeps neither: it is a new listing that happens to
-        // start out looking like an old one, and it belongs at the top of the feed.
+        // Editing preserves identity and creation time (feed position); a duplicate keeps neither.
         if let existing = mode.target {
             home.id = existing.id
             home.createdAt = existing.createdAt
-            // The roster is never rewritten by an edit. Only `HomeStore.addCoHost`
-            // and `removeCoHost` touch it, one addition per write, because that is
-            // all a loop-free rule can check against the friend graph.
+            // Edits never rewrite the roster; only `HomeStore.addCoHost`/`removeCoHost`
+            // do, one addition per write, as the loop-free rule requires.
             home.coHostUserIDs = existing.coHostUserIDs
-            // The form has no photo or availability controls, and the repository
-            // save is a full-document overwrite: anything not carried over here is
-            // erased from the stored listing. Losing these would silently reopen
-            // every date the availability editor blocked, drop the bookings the
-            // server had filled in (until the next stay change rewrote them), and
-            // strip the listing's photos.
+            // The form has no photo or availability controls and the repository save
+            // overwrites the whole document, so these must be carried over or they're erased.
             home.photoURLs = existing.photoURLs
-            // The merged calendar the public document publishes. Its two halves
-            // live in `homes/{id}/private/availability` and this form never
-            // touches them, but the published union still has to survive a
-            // full-document overwrite: dropping it would silently reopen every day
-            // the host had closed and every night an accepted stay had taken, and
-            // nothing would rewrite it until the next stay change or availability
-            // edit.
+            // The merged public calendar; the form doesn't touch its private halves,
+            // but dropping the union would reopen every closed day until the next rewrite.
             home.unavailableDateRanges = existing.unavailableDateRanges
 
-            // A co-host is editing (feature 14). Every field `firestore.rules`
-            // pins to the host is carried over from the stored listing rather than
-            // rebuilt from this session. Two of these would otherwise be actively
-            // wrong, not merely rejected: `hostName` would become the co-host's own
-            // name, and `allowedViewerIDs` (recomputed above from the *saving*
-            // user's friends) would republish a friends-only listing to the
-            // co-host's social graph. The rules reject the write either way; this
-            // is what stops it from being attempted.
+            // A co-host is editing: fields the rules pin to the host are carried over
+            // from the stored listing, else `hostName` would become the co-host's and
+            // `allowedViewerIDs` would republish the listing to the co-host's friends.
             if !existing.isHostedBy(hostUserID) {
                 home.hostUserID = existing.hostUserID
                 home.hostName = existing.hostName

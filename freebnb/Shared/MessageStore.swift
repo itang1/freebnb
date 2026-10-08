@@ -15,12 +15,9 @@ struct Message: Identifiable, Codable, Hashable, Sendable {
     let text: String
     @ServerTimestamp var timestamp: Date?
     let participants: [String]  // always sorted [userA, userB]
-    /// Present on system messages (stay requested / accepted / declined /
-    /// cancelled). When set, the thread renders a structured card instead of the
-    /// plain-text bubble (item 29). `text` stays populated with `event.fallbackText`
-    /// so the conversation preview, the push body, and clients that predate the
-    /// field still read correctly. The Firestore encoder omits it when nil, so an
-    /// ordinary chat message never carries the key.
+    /// Present on system messages (stay requested / accepted / etc.); the thread
+    /// renders a card instead of a bubble. `text` carries `event.fallbackText`
+    /// for previews, pushes and older clients. Omitted from the encoding when nil.
     var event: StayEvent?
 
     init(
@@ -40,33 +37,25 @@ struct Message: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-/// A structured stay-lifecycle event carried on a system message so the thread
-/// can render it as a card rather than an emoji-prefixed string (item 29).
+/// A structured stay-lifecycle event on a system message, rendered as a card.
 struct StayEvent: Codable, Hashable, Sendable {
     enum Kind: String, Codable, Sendable {
-        /// `offered` is the host-initiated mirror of `requested` (feature 43).
+        /// `offered` is the host-initiated mirror of `requested`.
         case requested, offered, accepted, declined, cancelled, modified
-        /// A host calling off a stay the guest had already been given: the one
-        /// cancellation the guest was counting on. Kept apart from `cancelled`
-        /// (which also covers a guest backing out and a host taking back an
-        /// unanswered offer) so the guest's card can read as the host having to
-        /// cancel and can offer a way back to the listing's other dates.
+        /// A host calling off a stay the guest was already given. Kept apart from
+        /// `cancelled` so the card can offer a way back to the listing's other dates.
         case hostCancelled
     }
 
     let kind: Kind
     /// Human-readable dates for the stay, e.g. "Mar 3 – Mar 6 · 3 nights".
     let dateRange: String
-    /// The host's optional note. Set on `accepted`, and on `hostCancelled` when
-    /// the host offered a word or suggested other dates on the way out.
+    /// The host's optional note, set on `accepted` and `hostCancelled`.
     var note: String?
-    /// The listing the stay was on, carried only on `hostCancelled` so the
-    /// guest's card can point back to its availability. Absent everywhere else.
+    /// The listing, carried only on `hostCancelled` so the card can link back to its availability.
     var listingID: String?
 
-    /// The plain string stored in the message's `text`: the conversation-list
-    /// preview, the push body, and what a client that doesn't understand `event`
-    /// falls back to. Kept in sync with the card by construction.
+    /// The plain string stored in `text`: list preview, push body and fallback for older clients.
     var fallbackText: String {
         var base: String
         switch kind {
@@ -91,9 +80,7 @@ struct ConversationLastMessage: Hashable, Sendable {
 }
 
 /// The denormalized `conversations/{id}` summary maintained by the
-/// `onMessageCreated` Cloud Function. The conversation list, unread counts, and
-/// mute state all derive from this document (L2/L4) rather than from a global
-/// window over recent messages.
+/// `onMessageCreated` Cloud Function; the list, unread counts and mutes derive from it.
 struct Conversation: Identifiable, Hashable, Sendable {
     let id: String                    // conversationID = sorted participants joined by "_"
     let participants: [String]
@@ -102,9 +89,8 @@ struct Conversation: Identifiable, Hashable, Sendable {
     let unreadCounts: [String: Int]
     let mutedBy: [String]
 
-    /// Parses a Firestore conversation document. Returns nil only when the shape
-    /// is unusable (missing participant pair); every other field defaults so a
-    /// summary written before mutes/reads exist still decodes.
+    /// Parses a conversation document. Nil only when the participant pair is
+    /// missing; other fields default so older summaries still decode.
     init?(document id: String, data: [String: Any]) {
         guard let participants = data["participants"] as? [String],
               participants.count == 2
@@ -133,7 +119,7 @@ struct Conversation: Identifiable, Hashable, Sendable {
         self.mutedBy = data["mutedBy"] as? [String] ?? []
     }
 
-    // Memberwise init for tests / in-memory construction.
+    // Memberwise init for tests and in-memory construction.
     init(
         id: String,
         participants: [String],
@@ -166,69 +152,49 @@ enum MessageState: Hashable {
 @MainActor
 @Observable
 final class MessageStore {
-    /// True from launch until the conversation-list listener delivers its first
-    /// snapshot (or the user turns out to be signed out). Lets the UI show
-    /// skeleton rows instead of flashing the "No conversations yet" empty state.
+    /// True from launch until the first list snapshot (or sign-out), so the UI shows skeletons, not the empty state.
     private(set) var isLoadingConversations = true
     private(set) var pendingIDs: Set<String> = []
     private(set) var failedIDs: Set<String> = []
-    /// True when the most recent send was blocked by the client-side rate limit,
-    /// so the UI can show a "slow down" notice. Reset on the next allowed send.
+    /// True when the last send hit the client-side rate limit; reset on the next allowed send.
     private(set) var isSendRateLimited = false
 
-    /// The conversation list, newest first. Derived from `conversationDocs` plus
-    /// the optimistic overlay by `rebuildConversationSummaries()`, which every
-    /// mutation of those inputs calls. Stored rather than computed so that
-    /// reading it — which the list does several times per body pass, on every
-    /// tab that is still resident — is a plain array read.
+    /// The conversation list, newest first, rebuilt by `rebuildConversationSummaries()`
+    /// whenever its inputs change. Stored so the list's repeated reads are cheap.
     private(set) var conversationSummaries: [ConversationSummary] = []
 
-    // The denormalized conversation summaries the list is built from, keyed by
-    // conversationID. Maintained server-side by the onMessageCreated trigger.
+    // Server-maintained conversation summaries, keyed by conversationID.
     private var conversationDocs: [String: Conversation] = [:]
-    // Per-conversation message snapshots opened when a thread is on screen.
+    // Per-conversation message snapshots for threads on screen.
     private var threadMessages: [String: [Message]] = [:]
     private var threadHasMore: [String: Bool] = [:]
     private var threadLimits: [String: Int] = [:]
     /// Conversations whose per-thread listener has replied at least once.
     private var threadResolvedIDs: Set<String> = []
 
-    // Optimistic overlays over the server state, cleared once a snapshot catches
-    // up. `pendingReadIDs`: conversations the user just opened (unread shown as
-    // cleared before the write round-trips). `pendingMuteToggles`: mute/unmute
-    // the user just tapped (cid → desired muted state).
+    // Optimistic overlays cleared once a snapshot catches up: `pendingReadIDs`
+    // (just-opened conversations) and `pendingMuteToggles` (cid → desired muted state).
     private var pendingReadIDs: Set<String> = []
     private var pendingMuteToggles: [String: Bool] = [:]
 
     private var failedMessages: [String: Message] = [:]
-    // Optimistically-shown sends whose transaction has not yet committed. A
-    // rate-limited send commits through a Firestore transaction, which (unlike a
-    // plain setData) produces no local-cache echo, so the message would otherwise
-    // not appear until the server round-trips. Cleared once the conversation
-    // thread listener delivers the committed copy, or moved to `failedMessages`
-    // on error. Also drives an optimistic conversation-list entry so a brand-new
-    // thread appears before the summary trigger writes its doc.
+    // Optimistic sends whose transaction hasn't committed (transactions produce no
+    // local echo). Cleared when the thread listener delivers the copy, or moved to
+    // `failedMessages` on error; also drives an optimistic list entry for new threads.
     private var pendingMessages: [String: Message] = [:]
     private var currentUserID: String?
 
     @ObservationIgnored private let repository: MessagesRepository
-    // `nonisolated(unsafe)` because `deinit` is nonisolated and must tear
-    // these down. Both are only assigned from @MainActor contexts, and
-    // Firebase's `ListenerRegistration.remove()` and
-    // `Auth.removeStateDidChangeListener(_:)` are thread-safe.
+    // `nonisolated(unsafe)`: deinit is nonisolated but must tear these down; both are thread-safe.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
-    // Per-conversation listeners; keyed by conversationID. nonisolated(unsafe)
-    // for the same reason as activeListener above.
+    // Per-conversation listeners keyed by conversationID.
     @ObservationIgnored nonisolated(unsafe) private var threadListeners: [String: RepositoryListener] = [:]
     @ObservationIgnored private let log = AppLog.logger("messaging")
     @ObservationIgnored private let conversationListLimit = 50
     @ObservationIgnored private let threadPageSize = 50
-    // Client-side advisory rate limit (30 messages / 60s). A fast-path UX guard
-    // that blocks obvious spamming before it reaches Firestore; the real
-    // enforcement is in firestore.rules, which gates every message create on the
-    // sender's rateLimits counter (see FirestoreMessagesRepository). Keep these
-    // values in sync with the rules' messageCap()/windowSeconds().
+    // Advisory client rate limit (30 messages / 60s). The real limit is in
+    // firestore.rules; keep the values in sync with messageCap()/windowSeconds().
     @ObservationIgnored private let sendRateLimit = 30
     @ObservationIgnored private let sendRateWindow: TimeInterval = 60
     @ObservationIgnored private var recentSendTimestamps: [Date] = []
@@ -263,9 +229,7 @@ final class MessageStore {
         for (_, l) in threadListeners { l.cancel() }
         threadListeners = [:]
         guard let userID else {
-            // Read/mute state now lives on the device, so signing out has to drop
-            // it here — otherwise the next account signed in on this phone inherits
-            // the last one's badges and mutes.
+            // Read/mute state is on-device, so drop it or the next account inherits the badges and mutes.
             if let previousUserID {
                 ConversationLocalState.shared.clear(userID: previousUserID)
             }
@@ -281,7 +245,7 @@ final class MessageStore {
             failedMessages = [:]
             pendingMessages = [:]
             rebuildConversationSummaries()
-            // Signed out: nothing is coming, so stop showing skeletons.
+            // Signed out: stop showing skeletons.
             isLoadingConversations = false
             return
         }
@@ -294,8 +258,7 @@ final class MessageStore {
     }
 
     private func applyConversations(result: Result<[Conversation], Error>) {
-        // Either outcome ends the initial load; on failure the empty state is a
-        // more honest answer than an indefinite skeleton.
+        // Either outcome ends the initial load; an empty state beats an endless skeleton.
         isLoadingConversations = false
         switch result {
         case .failure(let error):
@@ -307,8 +270,7 @@ final class MessageStore {
         }
     }
 
-    /// Drop optimistic read/mute overlays the server snapshot has now caught up
-    /// to, so stale toggles cannot fight a later legitimate change.
+    /// Drops optimistic read/mute overlays the server has caught up to.
     private func reconcileOptimistic() {
         guard let uid = currentUserID else { return }
         for cid in pendingReadIDs where (conversationDocs[cid]?.unreadCounts[uid] ?? 0) == 0 {
@@ -340,19 +302,14 @@ final class MessageStore {
         threadResolvedIDs.remove(conversationID)
     }
 
-    /// True until the thread's listener has replied at least once.
-    ///
-    /// Deliberately not a flag flipped on in `openConversation`: the thread view
-    /// renders once *before* its `.task` opens the conversation, so such a flag
-    /// would read `false` on that first frame and flash the empty state before
-    /// the skeleton. Starting from "unresolved" makes the first frame correct.
-    ///
-    /// Paging in older messages keeps the conversation resolved.
+    /// True until the thread's listener has replied once. Not a flag set in
+    /// `openConversation`: the view renders once before its `.task` runs, which
+    /// would flash the empty state. Paging in older messages keeps it resolved.
     func isLoadingThread(_ conversationID: String) -> Bool {
         !threadResolvedIDs.contains(conversationID)
     }
 
-    /// Extend the thread by one page. Call when user taps "Load older messages".
+    /// Extends the thread by one page ("Load older messages").
     func loadMoreMessages(_ conversationID: String, participants: [String]) {
         guard threadHasMore[conversationID] == true else { return }
         let newLimit = (threadLimits[conversationID] ?? threadPageSize) + threadPageSize
@@ -375,7 +332,7 @@ final class MessageStore {
     }
 
     private func applyThread(conversationID: String, result: Result<(messages: [Message], hasMore: Bool), Error>) {
-        // Either outcome means the thread's contents are now known.
+        // Either outcome means the thread's contents are known.
         threadResolvedIDs.insert(conversationID)
         switch result {
         case .failure(let error):
@@ -387,13 +344,11 @@ final class MessageStore {
         }
     }
 
-    /// Drops the optimistic and pending-id bookkeeping for messages the server
-    /// has now confirmed, so `messages(for:)` shows the committed copy alone.
+    /// Drops optimistic and pending bookkeeping for messages the server confirmed.
     private func clearOptimistic(delivered: [Message]) {
         let ids = Set(delivered.map(\.id))
         pendingIDs.subtract(ids)
-        // Only rebuild when an optimistic entry actually went away. Every thread
-        // snapshot lands here, and most of them clear nothing.
+        // Rebuild only when an entry went away; most snapshots clear nothing.
         var clearedAny = false
         for id in ids where pendingMessages.removeValue(forKey: id) != nil {
             clearedAny = true
@@ -403,9 +358,8 @@ final class MessageStore {
 
     // MARK: - Unread tracking
 
-    /// Mark a conversation as read by clearing the caller's server-side unread
-    /// count. Optimistically flips the local unread state so the badge updates
-    /// before the write round-trips. No-op when there is nothing unread.
+    /// Marks a conversation read by clearing the server-side unread count,
+    /// flipping the local state first. No-op when nothing is unread.
     func markRead(conversationID: String) {
         guard let uid = currentUserID,
               (conversationDocs[conversationID]?.unreadCounts[uid] ?? 0) > 0,
@@ -415,7 +369,7 @@ final class MessageStore {
         repository.markConversationRead(conversationID: conversationID, userID: uid) { [weak self] error in
             Task { @MainActor [weak self] in
                 self?.log.error("markRead \(conversationID, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                // Let a later snapshot or re-open retry rather than pinning it read.
+                // Let a later snapshot or re-open retry.
                 self?.pendingReadIDs.remove(conversationID)
             }
         }
@@ -427,9 +381,8 @@ final class MessageStore {
     private func setMuted(_ conversationID: String, muted: Bool) {
         guard let uid = currentUserID else { return }
         pendingMuteToggles[conversationID] = muted
-        // A summary doc only exists once a thread has at least one message, and
-        // rules forbid the client creating one. Muting an empty thread therefore
-        // stays purely local until the first message writes the doc.
+        // The summary doc exists only after the first message and rules forbid the
+        // client creating it, so muting an empty thread stays local until then.
         guard conversationDocs[conversationID] != nil else { return }
         repository.setConversationMuted(conversationID: conversationID, userID: uid, muted: muted) { [weak self] error in
             Task { @MainActor [weak self] in
@@ -445,16 +398,13 @@ final class MessageStore {
         return conversationDocs[conversationID]?.mutedBy.contains(uid) ?? false
     }
 
-    /// True when the conversation has unread messages for the caller and is not
-    /// muted. Reads the server-maintained unread counter, honouring the local
-    /// optimistic read overlay.
+    /// True when the conversation has unread messages and isn't muted.
     func isUnread(_ conversationID: String, currentUserID: String) -> Bool {
         guard !isMuted(conversationID), !pendingReadIDs.contains(conversationID) else { return false }
         return (conversationDocs[conversationID]?.unreadCounts[currentUserID] ?? 0) > 0
     }
 
-    /// Number of non-muted conversations with unread messages. Matches the APNs
-    /// badge the onMessageCreated trigger computes.
+    /// Number of unmuted conversations with unread messages; matches the APNs badge.
     var unreadCount: Int {
         guard let currentUserID else { return 0 }
         return conversationDocs.keys.filter {
@@ -464,10 +414,7 @@ final class MessageStore {
 
     // MARK: - Public interface
 
-    /// True once a thread with `otherUserID` exists, meaning a message has been
-    /// sent either way (including an optimistic send not yet echoed by the
-    /// server). Lets a listing offer "Open conversation" the moment contact has
-    /// been made, rather than waiting on a stay request.
+    /// True once a thread with `otherUserID` exists (including an unechoed optimistic send).
     func hasConversation(with otherUserID: String) -> Bool {
         guard let currentUserID else { return false }
         let cid = MessageStore.conversationID(userIDs: [currentUserID, otherUserID])
@@ -477,12 +424,8 @@ final class MessageStore {
         }
     }
 
-    /// Rebuilds `conversationSummaries` from the current server docs and the
-    /// optimistic overlay. Called at the few points those inputs change rather
-    /// than on every read: this was a computed property, so a single body pass
-    /// of the conversation list rebuilt the dictionary and re-sorted it four
-    /// times, and every tab still resident in the TabView paid that cost again
-    /// on each snapshot — including tabs nobody was looking at.
+    /// Rebuilds `conversationSummaries` from the server docs and optimistic
+    /// overlay. Called when inputs change rather than on every read.
     private func rebuildConversationSummaries() {
         guard let currentUserID else {
             conversationSummaries = []
@@ -505,8 +448,7 @@ final class MessageStore {
             )
         }
 
-        // Overlay optimistic sends the summary trigger has not yet reflected, so
-        // a just-sent message (or a brand-new thread) shows immediately.
+        // Overlay optimistic sends the trigger hasn't reflected yet.
         for pending in pendingMessages.values {
             let cid = MessageStore.conversationID(userIDs: pending.participants)
             let existingKey = summaries[cid].map { Self.sortKey($0.lastMessage) } ?? .distantPast
@@ -522,8 +464,7 @@ final class MessageStore {
 
     func messages(for conversationID: String) -> [Message] {
         let sent = threadMessages[conversationID] ?? []
-        // Once the committed copy has arrived it wins, so drop any optimistic or
-        // failed entry sharing its id to avoid showing the message twice.
+        // Once the committed copy arrives it wins; drop optimistic or failed entries with its id.
         let sentIDs = Set(sent.map(\.id))
         func inConversation(_ m: Message) -> Bool {
             MessageStore.conversationID(userIDs: m.participants) == conversationID
@@ -545,9 +486,7 @@ final class MessageStore {
         m.timestamp ?? .distantFuture
     }
 
-    /// Send a structured stay event (item 29). The card the thread renders and the
-    /// `text` the list/push fall back to are produced from the one `StayEvent`, so
-    /// they can never drift.
+    /// Sends a structured stay event; the card and its `text` fallback both come from the one `StayEvent`.
     @discardableResult
     func sendStayEvent(_ event: StayEvent, senderUserID: String, recipientUserID: String) -> Bool {
         send(text: event.fallbackText, senderUserID: senderUserID, recipientUserID: recipientUserID, event: event)
@@ -559,8 +498,7 @@ final class MessageStore {
               !senderUserID.isEmpty, !recipientUserID.isEmpty
         else { return false }
 
-        // Advisory client-side rate limit; blocks obvious spamming before it
-        // reaches Firestore. firestore.rules is the server-side counterpart.
+        // Advisory rate limit; firestore.rules is the server-side counterpart.
         if isOverSendRateLimit() {
             isSendRateLimited = true
             log.error("send blocked: client rate limit of \(self.sendRateLimit) per \(Int(self.sendRateWindow))s reached")
@@ -578,9 +516,7 @@ final class MessageStore {
             event: event
         )
         pendingIDs.insert(msg.id)
-        // Show the message immediately. The stored timestamp is a client stamp so
-        // it sorts to the end of the thread; the committed copy (server timestamp)
-        // replaces it when the listener delivers it.
+        // Show the message immediately with a client stamp; the committed copy replaces it.
         var optimistic = msg
         optimistic.timestamp = Date()
         pendingMessages[msg.id] = optimistic
