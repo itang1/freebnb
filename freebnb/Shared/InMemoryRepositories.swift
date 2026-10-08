@@ -2,8 +2,7 @@
 //  InMemoryRepositories.swift
 //  freebnb
 //
-//  Lightweight in-memory implementations of the repository protocols for use
-//  in SwiftUI previews and unit tests. They do not talk to Firestore.
+//  In-memory repository implementations for previews and unit tests; they don't talk to Firestore.
 //
 
 import Foundation
@@ -15,10 +14,7 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
     private var availability: [String: ListingAvailability] = [:]
     init(homes: [Home] = []) { self.homes = homes }
 
-    /// Mirrors what Firestore's rules would return for `viewerID`: only listings
-    /// naming the viewer in `allowedViewerIDs`. Every listing is friends-only,
-    /// so a listing not naming the viewer is simply not readable, exactly as
-    /// server-side.
+    /// Mirrors the rules: only listings naming the viewer in `allowedViewerIDs`.
     private func visible(to viewerID: String) -> [Home] {
         homes.filter { home in
             !viewerID.isEmpty && (home.allowedViewerIDs ?? []).contains(viewerID)
@@ -118,8 +114,7 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
         availability[homeID] = current
     }
 
-    /// The synchronous form, so a test can put a listing in the state an accepted
-    /// stay would leave it in without awaiting.
+    /// The synchronous form, so a test can put a listing in an accepted stay's state without awaiting.
     func setBookedRanges(homeID: String, booked: [DateRange]) {
         var current = availability[homeID] ?? ListingAvailability()
         current.bookedDateRanges = booked
@@ -129,8 +124,7 @@ final class InMemoryHomesRepository: HomesRepository, @unchecked Sendable {
 
 final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable {
     private var messages: [Message]
-    // Mirrors the server-side conversation summaries the onMessageCreated trigger
-    // would maintain: per-user read state and mutes for tests and previews.
+    // Stands in for the server-side conversation summaries: per-user read state and mutes.
     private var readCounts: [String: [String: Int]] = [:]  // cid → uid → unread
     private var mutedBy: [String: [String]] = [:]          // cid → [uid]
     init(messages: [Message] = []) { self.messages = messages }
@@ -140,8 +134,7 @@ final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable 
         limit: Int,
         handler: @escaping @Sendable (Result<[Conversation], Error>) -> Void
     ) -> RepositoryListener {
-        // Group the user's messages into per-conversation summaries, standing in
-        // for the denormalized docs a Cloud Function would maintain.
+        // Group the user's messages into per-conversation summaries, standing in for the Cloud Function's docs.
         let grouped = Dictionary(grouping: messages.filter { $0.participants.contains(userID) }) {
             MessageStore.conversationID(userIDs: $0.participants)
         }
@@ -210,8 +203,7 @@ final class InMemoryMessagesRepository: MessagesRepository, @unchecked Sendable 
 
 final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked Sendable {
     private var requests: [StayRequest] = []
-    /// Mirrors the `homes/{id}/accepted/{guestUserID}` markers, so tests can
-    /// assert that acceptance discloses the address and a terminal status revokes it.
+    /// Mirrors the `homes/{id}/accepted/{guestUserID}` markers, so tests can assert acceptance discloses the address and a terminal status revokes it.
     private(set) var acceptedGuests: Set<String> = []
 
     private func markerKey(_ request: StayRequest) -> String {
@@ -246,8 +238,7 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         return NoopListener()
     }
 
-    /// Records the advanced counter alongside the request so a test can assert
-    /// a slot was spent; the cap itself is the rules' business, not this one's.
+    /// Records the advanced counter so a test can assert a slot was spent; the cap is the rules' business.
     private(set) var counters: [String: StayCounter] = [:]
 
     func create(_ request: StayRequest, advancing counter: StayCounter?) async throws {
@@ -289,8 +280,7 @@ final class InMemoryStayRequestsRepository: StayRequestsRepository, @unchecked S
         guard let i = requests.firstIndex(where: { $0.id == request.id }) else { return }
         requests[i].status = .completed
         requests[i].completedAt = Date()
-        // The address marker survives, exactly as it does server-side: the
-        // nightly sweep, not completion, is what revokes it.
+        // The address marker survives, as server-side: the nightly sweep revokes it, not completion.
     }
 
     func accept(_ request: StayRequest, hostNote: String?) async throws {
@@ -369,8 +359,7 @@ final class InMemoryReviewsRepository: ReviewsRepository, @unchecked Sendable {
     private var reviews: [String: Review] = [:]
     private var feedback: [String: PrivateFeedback] = [:]
     private var references: [String: CharacterReference] = [:]
-    /// Stands in for the `mutualFriends` callable, which has no client-side
-    /// equivalent: tests seed the answer they expect.
+    /// Stands in for the `mutualFriends` callable; tests seed the answer.
     var mutualFriends: [String: MutualFriends] = [:]
 
     init(reviews: [Review] = [], references: [CharacterReference] = []) {
@@ -456,15 +445,11 @@ final class InMemoryFriendEdgeRepository: FriendEdgeRepository, @unchecked Senda
 
 // MARK: - Circles
 
-/// In-memory Circles, for previews and for the unit tests that exercise the
-/// store's reconciliation without a backend. Holds one host's world at a time,
-/// keyed by host id so a test can still stand up two.
+/// In-memory Circles for previews and store reconciliation tests, keyed by host id so a test can stand up two.
 final class InMemoryCircleRepository: CircleRepository, @unchecked Sendable {
     private(set) var circlesByHost: [String: [String: FriendCircle]] = [:]
     private(set) var membersByHost: [String: [String: CircleMembership]] = [:]
-    /// The projections a guest would read. Kept so a test can assert the fan-out
-    /// actually happened — the projection going stale is the failure mode that
-    /// costs a guest a rejected write.
+    /// The projections a guest would read, kept so tests can assert the fan-out happened (a stale one costs a guest a rejected write).
     var publishedByHost: [String: [String: BookingPolicy]] = [:]
 
     init(circles: [String: [FriendCircle]] = [:], memberships: [String: [CircleMembership]] = [:]) {
@@ -541,15 +526,12 @@ final class InMemoryCircleRepository: CircleRepository, @unchecked Sendable {
 
 // MARK: - Friend notes
 
-/// In-memory private notes, for previews and for the tests that exercise the
-/// store without a backend. Keyed by host, because the whole point of the
-/// feature is that one host's notes are not another's.
+/// In-memory private notes for previews and store tests, keyed by host since one host's notes aren't another's.
 final class InMemoryFriendNoteRepository: FriendNoteRepository, @unchecked Sendable {
     private(set) var notesByHost: [String: [String: FriendNote]] = [:]
     private(set) var promptsByHost: [String: Set<String>] = [:]
 
-    /// Emits on every mutation so a store under test sees a write land the way
-    /// it would with a real snapshot listener.
+    /// Emits on every mutation, as a real snapshot listener would.
     private var noteHandlers: [String: [@Sendable (Result<[FriendNote], Error>) -> Void]] = [:]
     private var promptHandlers: [String: [@Sendable (Result<Set<String>, Error>) -> Void]] = [:]
 
@@ -592,8 +574,7 @@ final class InMemoryFriendNoteRepository: FriendNoteRepository, @unchecked Senda
         let id = note.id ?? UUID().uuidString
         var stored = note
         stored.id = id
-        // The server stamps these; a fake that leaves them nil would make every
-        // note in a test sort as "still in flight".
+        // The server stamps these; leaving them nil would make every test note sort as in flight.
         stored.createdAt = note.createdAt ?? Date()
         stored.updatedAt = stored.createdAt
         notesByHost[hostID, default: [:]][id] = stored
@@ -623,16 +604,12 @@ final class InMemoryFriendNoteRepository: FriendNoteRepository, @unchecked Senda
 
 // MARK: - Guest notes
 
-/// In-memory guest notes, for previews and for the tests that exercise the store
-/// without a backend. Keyed by guest, because the whole point of the feature is
-/// that one guest's notes are not another's — the mirror of
-/// `InMemoryFriendNoteRepository`, keyed by the other party to the same stay.
+/// In-memory guest notes for previews and store tests, keyed by guest; the mirror of `InMemoryFriendNoteRepository`.
 final class InMemoryGuestNoteRepository: GuestNoteRepository, @unchecked Sendable {
     private(set) var notesByGuest: [String: [String: GuestNote]] = [:]
     private(set) var promptsByGuest: [String: Set<String>] = [:]
 
-    /// Emits on every mutation so a store under test sees a write land the way it
-    /// would with a real snapshot listener.
+    /// Emits on every mutation, as a real snapshot listener would.
     private var noteHandlers: [String: [@Sendable (Result<[GuestNote], Error>) -> Void]] = [:]
     private var promptHandlers: [String: [@Sendable (Result<Set<String>, Error>) -> Void]] = [:]
 
@@ -675,8 +652,7 @@ final class InMemoryGuestNoteRepository: GuestNoteRepository, @unchecked Sendabl
         let id = note.id ?? UUID().uuidString
         var stored = note
         stored.id = id
-        // The server stamps these; a fake that leaves them nil would make every
-        // note in a test sort as "still in flight".
+        // The server stamps these; leaving them nil would make every test note sort as in flight.
         stored.createdAt = note.createdAt ?? Date()
         stored.updatedAt = stored.createdAt
         notesByGuest[guestID, default: [:]][id] = stored

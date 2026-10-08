@@ -2,9 +2,7 @@
 //  MessagingPage.swift
 //  freebnb
 //
-//  The one-to-one chat view. It owns the thread's state and chrome; the
-//  banners, bubble list, input bar, toolbar menu, and request actions all live
-//  in sibling files (A2).
+//  The one-to-one chat view. It owns the thread's state and chrome; banners, bubbles, input bar, toolbar menu and actions live in sibling files.
 //
 
 import SwiftUI
@@ -13,8 +11,7 @@ import os
 struct MessagingPage: View {
     let otherUserID: String
     let otherName: String
-    /// Passed when navigating from a listing page; enables the Request to Stay
-    /// toolbar action and provides listing context at the top of the thread.
+    /// Passed from a listing page; enables Request to Stay and shows listing context.
     var listing: Home? = nil
 
     @Environment(MessageStore.self) private var messageStore
@@ -29,8 +26,7 @@ struct MessagingPage: View {
 
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
-    /// The listing a new stay request is being composed for. Set directly when
-    /// the other person has one requestable home, or by the picker when several.
+    /// The listing a new stay request is for: set directly when the other person has one requestable home, else by the picker.
     @State private var requestTarget: Home?
     @State private var showListingChoice = false
     @State private var respondingTo: StayRequest?
@@ -49,15 +45,11 @@ struct MessagingPage: View {
     private var isMuted: Bool { messageStore.isMuted(conversationID) }
     private var isBlocked: Bool { userProfileStore.isBlocked(otherUserID) }
 
-    /// Whether the composer belongs on screen. The same gate `UserProfilePage`
-    /// applies before offering the thread at all, applied again here because a
-    /// thread outlives the friendship that opened it: it stays in the messages
-    /// list, and the friend-gated send rule refuses anything typed into it.
+    /// Whether the composer belongs on screen: the gate `UserProfilePage` applies,
+    /// repeated since a thread outlives its friendship and the send rule refuses typing.
     private var canMessage: Bool { friendStore.isFriend(otherUserID) }
 
-    /// Every active stay between the two participants, in both directions. Their
-    /// request for my place and my request for theirs can be open at once, and
-    /// each gets its own banner; picking one would hide the other.
+    /// Every active stay between the two, both directions; each gets its own banner.
     private var activeRequests: [StayRequest] {
         let outgoing = requestStore.outgoingRequests.filter {
             $0.hostUserID == otherUserID && $0.status.isActive
@@ -68,10 +60,8 @@ struct MessagingPage: View {
         return (outgoing + incoming).sortedByDate()
     }
 
-    /// The other person's homes I could send a stay request for right now: their
-    /// listings visible to me (plus the one this thread was opened from), minus
-    /// any I already have an active request on. Same per-listing rule the
-    /// listing page applies; their requests for my place don't block anything.
+    /// The other person's homes I could request now: those visible to me (plus the one
+    /// this thread came from) minus any with an active request. Their requests for my place don't block.
     private var requestableListings: [Home] {
         var candidates = homeStore.visibleListings.filter { $0.hostUserID == otherUserID }
         if let listing, listing.hostUserID == otherUserID,
@@ -83,9 +73,7 @@ struct MessagingPage: View {
         }
     }
 
-    /// The saved arrival kit for a stay at this person's place, when one is close
-    /// enough to matter. Only the guest's own stays produce a kit, so this is
-    /// naturally absent when the roles are the other way round.
+    /// The saved arrival kit for a stay at this person's place when one is close enough to matter (guest stays only).
     private var arrivalKit: CheckInKit? {
         let staysWithThem = requestStore.outgoingRequests.filter {
             $0.hostUserID == otherUserID && $0.status == .accepted
@@ -105,19 +93,16 @@ struct MessagingPage: View {
     @ObservationIgnored private let log = AppLog.logger("messaging")
 
     var body: some View {
-        // Read once per body pass: the toolbar gate and the listing-choice dialog
-        // both read it, and each read filters the visible listings and asks the
-        // request store about every candidate.
+        // Read once per body pass; the toolbar gate and listing-choice dialog both read it, filtering every candidate.
         let requestable = requestableListings
         VStack(spacing: 0) {
-            // Listing context — shown when a specific listing is associated.
+            // Listing context, when a listing is associated.
             if let listing {
                 ListingContextBanner(listing: listing, isMuted: isMuted)
                 Divider()
             }
 
-            // Above the request banners: on arrival day this is the only thing on
-            // screen the guest is actually trying to reach.
+            // Above the request banners: on arrival day this is what the guest is trying to reach.
             if let arrivalKit {
                 CheckInKitBanner(kit: arrivalKit)
                 Divider()
@@ -157,9 +142,7 @@ struct MessagingPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search messages")
         .toolbar {
-            // Primary action: Request a Stay, whenever the other person has a
-            // home this user could request. Their open request for this user's
-            // place is a different stay and doesn't take the button away.
+            // Primary action: Request a Stay whenever the other person has a home this user could request.
             if !requestable.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Request a Stay") {
@@ -170,14 +153,11 @@ struct MessagingPage: View {
                         }
                     }
                     .font(.subheadline.weight(.semibold))
-                    // Coral, the palette's call-to-action color: this is the
-                    // thread's primary action and the only coral in the toolbar.
+                    // Coral, the call-to-action color: the thread's primary action and the toolbar's only coral.
                     .foregroundColor(Color.callToAction)
                 }
             }
-            // Tapping the name opens the profile — the thread's bridge to the
-            // person hub, where relationship actions (unfriend) and the full
-            // safety controls live.
+            // Tapping the name opens the profile, the bridge to relationship actions and safety controls.
             ToolbarItem(placement: .principal) {
                 NavigationLink {
                     UserProfilePage(userID: otherUserID, fallbackName: otherName)
@@ -263,8 +243,7 @@ struct MessagingPage: View {
             } else {
                 Button("Block", role: .destructive) {
                     Task {
-                        // Dismiss only once the block has actually landed;
-                        // closing the thread is what tells the user it worked.
+                        // Dismiss only once the block landed; closing the thread tells the user it worked.
                         do {
                             try await userProfileStore.blockUser(otherUserID)
                             dismiss()
@@ -309,8 +288,7 @@ struct MessagingPage: View {
         }
     }
 
-    /// The banner's cancel slot: a host taking back their own offer withdraws
-    /// it; everything else (a guest's request, an accepted stay) is a cancel.
+    /// The cancel slot: a host taking back their own offer withdraws it; everything else is a cancel.
     private func cancelOrWithdraw(_ request: StayRequest) async throws {
         if request.status == .offered {
             try await actions.withdraw(request)
@@ -319,8 +297,7 @@ struct MessagingPage: View {
         }
     }
 
-    /// The banner's decline slot: a guest turning down an offer and a host
-    /// turning down a request are different writes with the same button.
+    /// The decline slot: a guest turning down an offer and a host turning down a request are different writes.
     private func decline(_ request: StayRequest) async throws {
         if request.status == .offered {
             try await actions.declineOffer(request)
@@ -329,8 +306,7 @@ struct MessagingPage: View {
         }
     }
 
-    /// The banner's accept slot. A host accepting a request gets the note sheet;
-    /// a guest saying yes to an offer accepts directly, like the Stays tab.
+    /// The accept slot: a host accepting a request gets the note sheet; a guest accepting an offer accepts directly.
     private func accept(_ request: StayRequest) {
         if request.status == .offered {
             run { try await actions.accept(request, hostNote: nil) }
@@ -339,9 +315,8 @@ struct MessagingPage: View {
         }
     }
 
-    /// Returns nil on success, or the failure message for `AcceptSheet` to show.
-    /// Routed to the sheet rather than through `perform`, whose alert would be
-    /// swallowed behind the presented sheet. The sheet self-dismisses on success.
+    /// Returns nil on success, or the failure message for `AcceptSheet`. Routed to the
+    /// sheet rather than `perform`, whose alert would be hidden behind it.
     private func accept(_ request: StayRequest, hostNote: String?) async -> String? {
         do {
             try await actions.accept(request, hostNote: hostNote)

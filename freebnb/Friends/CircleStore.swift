@@ -2,19 +2,11 @@
 //  CircleStore.swift
 //  freebnb
 //
-//  The host's own view of Circles: their circles, who is in each, and the
-//  per-friend overrides. Host-side only — nothing here is ever read by a guest,
-//  and no screen a guest can reach touches this store.
-//
-//  It also owns the two pieces of reconciliation that keep the model's promises
-//  true without a deployed server:
-//
-//    - a host with no circles gets the three starter ones on first sight;
-//    - a friend with no membership document gets one naming Default, which is
-//      what "new friends land in Default automatically" means in practice.
-//
-//  Both are idempotent, both run from the host's own device, and both are
-//  mirrored by `onFriendEdgeWritten` for the day functions are deployed.
+//  The host's view of Circles: their circles, members and per-friend overrides.
+//  Host-side only; no screen a guest reaches touches it. It also owns two idempotent
+//  reconciliations run from the host's device (mirrored by `onFriendEdgeWritten`):
+//    - a host with no circles gets the three starter ones;
+//    - a friend with no membership document gets one naming Default.
 //
 
 import FirebaseAuth
@@ -29,10 +21,7 @@ final class CircleStore {
     private(set) var circles: [FriendCircle] = []
     private(set) var membershipsByFriendID: [String: CircleMembership] = [:]
     private(set) var listenerError: String?
-    /// False until both listeners have delivered a first snapshot. The
-    /// reconciliation below waits on it: seeding circles because an empty
-    /// snapshot has not arrived yet would write three documents the host
-    /// already has.
+    /// False until both listeners delivered a first snapshot; reconciliation waits so it doesn't seed circles the host already has.
     private(set) var hasLoaded = false
 
     @ObservationIgnored private let repository: CircleRepository
@@ -42,8 +31,7 @@ final class CircleStore {
     @ObservationIgnored private var hostID: String = ""
     @ObservationIgnored private var didLoadCircles = false
     @ObservationIgnored private var didLoadMembers = false
-    /// Friend ids a membership write is already in flight for, so a snapshot
-    /// arriving mid-write doesn't start a second one.
+    /// Friend ids with a membership write in flight, so a mid-write snapshot doesn't start a second.
     @ObservationIgnored private var reconciling: Set<String> = []
     @ObservationIgnored private var isSeeding = false
     @ObservationIgnored private let log = AppLog.logger("circles")
@@ -77,14 +65,12 @@ final class CircleStore {
         membershipsByFriendID[friendID]
     }
 
-    /// The policy governing `friendID`, and where it came from. The host-facing
-    /// twin of what `firestore.rules` resolves on every booking.
+    /// The policy governing `friendID` and where it came from; the host-facing twin of the rules' resolution.
     func resolved(for friendID: String) -> (policy: BookingPolicy, source: CirclePolicyResolver.Source) {
         CirclePolicyResolver.resolve(membership: membershipsByFriendID[friendID], circles: circles)
     }
 
-    /// Friend ids currently filed under `circleID`, including the ones resolving
-    /// there by fallback when that circle is Default.
+    /// Friend ids filed under `circleID`, including those resolving there by fallback when it is Default.
     func memberIDs(of circleID: String, among friendIDs: [String]) -> [String] {
         friendIDs.filter { friendID in
             guard let membership = membershipsByFriendID[friendID] else {
@@ -95,7 +81,7 @@ final class CircleStore {
         }
     }
 
-    /// How many friends each circle holds, for the circle list's subtitle.
+    /// Friends per circle, for the list subtitle.
     func memberCounts(among friendIDs: [String]) -> [String: Int] {
         var counts: [String: Int] = [:]
         for friendID in friendIDs {
@@ -158,15 +144,10 @@ final class CircleStore {
 
     // MARK: - Reconciliation
 
-    /// Seeds a host's starter circles and files any friend who has no membership
-    /// under Default. Safe to call on every appearance of the friends screen:
-    /// it writes only what is missing, and it does nothing at all until both
-    /// listeners have reported.
-    ///
-    /// Placing a friend explicitly, rather than treating an absent document as
-    /// "in Default", is the point: Default is a real circle carrying a real
-    /// policy, and a membership nobody wrote is a gap to close, not a state to
-    /// read.
+    /// Seeds starter circles and files any friend lacking a membership under Default.
+    /// Safe on every appearance: writes only what's missing and waits for both
+    /// listeners. Placement is explicit because Default is a real circle with a real
+    /// policy, and a missing membership is a gap to close.
     func reconcile(friendIDs: [String]) async {
         guard hasLoaded, !hostID.isEmpty else { return }
 
@@ -221,8 +202,7 @@ final class CircleStore {
         try await repository.saveCircle(hostID: hostID, updated)
     }
 
-    /// Saves a circle's policy and republishes it to everyone the circle governs
-    /// — everyone in it who has no override of their own.
+    /// Saves a circle's policy and republishes it to everyone it governs (members without their own override).
     func updatePolicy(of circle: FriendCircle, to policy: BookingPolicy, friendIDs: [String]) async throws {
         guard !hostID.isEmpty, let circleID = circle.id else { return }
         var updated = circle
@@ -237,16 +217,14 @@ final class CircleStore {
         )
     }
 
-    /// Deletes a circle, moving everyone in it back to Default. Refused for
-    /// Default itself, which the rules refuse too.
+    /// Deletes a circle, moving its members back to Default; refused for Default, as the rules do.
     func delete(_ circle: FriendCircle, friendIDs: [String]) async throws {
         guard !hostID.isEmpty, let circleID = circle.id, circle.isDeletable else { return }
         let members = memberIDs(of: circleID, among: friendIDs)
             .filter { membershipsByFriendID[$0]?.circleID == circleID }
         try await repository.deleteCircle(hostID: hostID, circleID: circleID, movingMembers: members)
 
-        // The moved members are now governed by Default, so their projections
-        // have to say so. Anyone with an override keeps theirs.
+        // Moved members are now governed by Default, so their projections must say so; overrides stay.
         if let fallback = defaultCircle {
             let governed = members.filter { membershipsByFriendID[$0]?.overridePolicy == nil }
             try await repository.publishPolicies(
@@ -267,10 +245,7 @@ final class CircleStore {
         try await repository.saveMembership(hostID: hostID, membership, resolvedPolicy: policy)
     }
 
-    /// Sets or clears the policy on one friend directly. An override supersedes
-    /// their circle for as long as it exists; clearing it hands them back to
-    /// whichever circle they are in, which is why the projection is rewritten
-    /// from the resolved value rather than from the override.
+    /// Sets or clears one friend's policy. An override supersedes their circle until cleared, so the projection is rewritten from the resolved value.
     func setOverride(_ policy: BookingPolicy?, forFriendID friendID: String) async throws {
         guard !hostID.isEmpty else { return }
         var membership = membershipsByFriendID[friendID] ?? CircleMembership(id: friendID)
