@@ -2,10 +2,9 @@
 //  ListingDraftTests.swift
 //  freebnbTests
 //
-//  Covers listing drafts and duplication (feature 13). The load-bearing
-//  distinction is between the listing that *seeds* the form and the listing a
-//  save *overwrites*: duplication is the one mode where those differ, and getting
-//  it wrong would silently overwrite the listing the host meant to copy.
+//  Covers listing drafts and duplication. The key distinction is the listing that
+//  seeds the form versus the one a save overwrites: duplication differs, and getting
+//  it wrong would overwrite the listing meant to be copied.
 //
 
 import Foundation
@@ -42,12 +41,10 @@ private func makeHome(id: String = "home-1") -> Home {
     return home
 }
 
-/// A `UserDefaults` suite of its own per test, so a draft written by one test is
-/// never visible to another and nothing touches the app's real defaults.
+/// A `UserDefaults` suite per test, so drafts never leak between tests or touch the real defaults.
 private func makeDefaults() -> UserDefaults {
     let suite = "listingDraftTests.\(UUID().uuidString)"
-    // A fresh suite name cannot fail to open, but a nil here would silently fall
-    // back to the standard defaults, which the tests must never write to.
+    // A nil suite would silently fall back to standard defaults, which tests must never write.
     guard let defaults = UserDefaults(suiteName: suite) else {
         fatalError("could not open a private UserDefaults suite")
     }
@@ -67,17 +64,14 @@ struct ListingFormModeTests {
         #expect(ListingFormMode.edit(home).target == home)
     }
 
-    /// The whole point of duplication: keep the fields, drop the identity. A
-    /// `target` here would overwrite the listing being copied.
+    /// Duplication keeps the fields and drops the identity; a `target` would overwrite the source.
     @Test func duplicateSeedsFromTheListingButOverwritesNothing() {
         let home = makeHome()
         #expect(ListingFormMode.duplicate(home).source == home)
         #expect(ListingFormMode.duplicate(home).target == nil)
     }
 
-    /// An edit has a saved document behind it, and a duplicate is one tap from
-    /// being recreated. Restoring a stale draft over either would discard exactly
-    /// the listing the host just asked for.
+    /// Edits and duplicates must not restore a stale draft over the listing the host asked for.
     @Test func onlyAFromScratchListingIsDraftBacked() {
         let home = makeHome()
         #expect(!ListingFormMode.edit(home).isDraftBacked)
@@ -111,8 +105,7 @@ struct DuplicationTests {
         #expect(vm.cancellationPolicy == .strict)
     }
 
-    /// The street is not on the public listing document, so it arrives later from
-    /// the private location subdoc. Until it does, the form cannot be saved.
+    /// The street arrives later from the private location subdoc; until then the form can't be saved.
     @Test func duplicateStartsWithNoStreetAndCannotBeSavedYet() {
         let vm = CreateListingViewModel(mode: .duplicate(makeHome()))
         #expect(vm.street.isEmpty)
@@ -131,9 +124,7 @@ struct DuplicationTests {
         return vm
     }
 
-    /// Every listing carries a name now. Without one the request sheet and the
-    /// chat banner fall back to "<hostName>'s place", which says nothing once a
-    /// host has a second home.
+    /// Every listing needs a name, or surfaces fall back to "<hostName>'s place" and can't tell homes apart.
     @Test func aListingCannotBeSavedWithoutATitle() {
         let vm = readyToSave()
         #expect(vm.canSave(displayName: "Host"))
@@ -146,8 +137,7 @@ struct DuplicationTests {
         #expect(!vm.canSave(displayName: "Host"))
     }
 
-    /// Two homes sharing a name leaves every surface that names one of them
-    /// unable to say which, which is the whole point of the field.
+    /// Two homes sharing a name can't be told apart on any surface.
     @Test func aListingCannotReuseAnotherListingsTitle() {
         let vm = readyToSave()
         #expect(!vm.canSave(displayName: "Host", takenTitles: ["The Attic Room"]))
@@ -168,8 +158,7 @@ struct DuplicationTests {
         #expect(vm.title == "Devna's Place in Pasadena")
     }
 
-    /// A second home in the same city can't take the same suggestion as the
-    /// first, so the suggestion counts instead.
+    /// A second home in the same city counts rather than repeating the suggestion.
     @Test func laterListingsInOneCityGetOrdinalSuggestions() {
         let vm = CreateListingViewModel(mode: .create)
         vm.city = "Pasadena"
@@ -184,8 +173,7 @@ struct DuplicationTests {
         #expect(vm.title == "Devna's Third Place in Pasadena")
     }
 
-    /// A second home in a different city is already distinct, so it keeps the
-    /// plain form rather than being counted.
+    /// A second home in a different city is already distinct, so it keeps the plain form.
     @Test func aListingInANewCityKeepsThePlainSuggestion() {
         let vm = CreateListingViewModel(mode: .create)
         vm.city = "Ojai"
@@ -193,8 +181,7 @@ struct DuplicationTests {
         #expect(vm.title == "Devna's Place in Ojai")
     }
 
-    /// The suggestion follows the city while the field is untouched, and stops
-    /// the moment the host makes the name their own.
+    /// The suggestion follows the city until the host makes the name their own.
     @Test func aTypedTitleIsNeverOverwrittenByASuggestion() {
         let vm = CreateListingViewModel(mode: .create)
         vm.city = "Pasadena"
@@ -216,9 +203,7 @@ struct DuplicationTests {
         #expect(vm.title == "The Attic Room")
     }
 
-    /// The form names the listing the moment it opens. That must not count as
-    /// work in progress, or opening the sheet and closing it would leave a draft
-    /// claiming the host had started one.
+    /// The form naming the listing on open mustn't count as work in progress.
     @Test func aSuggestedNameAloneLeavesTheDraftPristine() {
         let vm = CreateListingViewModel(mode: .create)
         vm.applySuggestedTitleIfUntouched(hostName: "Devna", taken: [])
@@ -230,10 +215,7 @@ struct DuplicationTests {
         #expect(!vm.draft.isPristine)
     }
 
-    /// Restoring a draft has to remember whether the host wrote the name or the
-    /// form suggested it. Inferring it from "the title isn't empty" made every
-    /// restored draft look host-written, which froze the suggestion so it stopped
-    /// following the city.
+    /// A restored draft must remember whether the host wrote the name or the form suggested it.
     @Test func aRestoredDraftRemembersWhoWroteTheTitle() {
         let userID = "host"
         let store = ListingDraftStore(defaults: makeDefaults())
@@ -263,9 +245,7 @@ struct DuplicationTests {
         #expect(second.title == "The Attic Room")
     }
 
-    /// A duplicate copies the source listing's name, which is exactly the one
-    /// name it may not keep. It starts untouched so a fresh suggestion replaces
-    /// it; an edit keeps the name the host already chose.
+    /// A duplicate starts untouched so a fresh suggestion replaces the copied name; an edit keeps its name.
     @Test func aDuplicateTakesAFreshNameButAnEditKeepsItsOwn() {
         var home = makeHome()
         home.title = "The Attic Room"
@@ -287,10 +267,7 @@ struct DuplicationTests {
         #expect(vm.draft.isPristine)
     }
 
-    /// The repository save is a full-document overwrite, so anything the form
-    /// doesn't manage must ride along from the stored listing. Losing these
-    /// once meant an edit silently reopened every blocked date and stripped the
-    /// listing's photos.
+    /// The repository save overwrites the whole document, so fields the form doesn't manage must ride along from the stored listing.
     @Test func editingKeepsTheFieldsTheFormDoesNotManage() {
         var home = makeHome()
         home.unavailableDateRanges = [DateRange(start: Date(timeIntervalSince1970: 2_000_000),
@@ -310,8 +287,7 @@ struct DuplicationTests {
         #expect(rebuilt.allowedViewerIDs == ["host", "friend-1"])
     }
 
-    /// A duplicate is a new listing that starts out looking like an old one; it
-    /// must not inherit the source's identity, photos, or blocked dates.
+    /// A duplicate is a new listing and must not inherit the source's identity, photos or blocked dates.
     @Test func duplicatingKeepsNoIdentityOrUnmanagedFields() {
         var home = makeHome()
         home.unavailableDateRanges = [DateRange(start: Date(timeIntervalSince1970: 2_000_000),
@@ -359,8 +335,7 @@ struct ListingDraftPersistenceTests {
         #expect(restored.description == "Spare couch.")
     }
 
-    /// An untouched form is not a draft. Storing one would make the next open
-    /// announce a "restored draft" that contains nothing.
+    /// An untouched form isn't a draft; storing one would announce an empty "restored draft".
     @Test func pristineFormIsNeverStored() {
         let store = ListingDraftStore(defaults: makeDefaults())
         let vm = CreateListingViewModel(mode: .create)
@@ -368,8 +343,7 @@ struct ListingDraftPersistenceTests {
         #expect(store.load(userID: userID) == nil)
     }
 
-    /// Emptying the form clears the draft behind it, rather than leaving the old
-    /// one to reappear on the next open.
+    /// Emptying the form clears the draft behind it.
     @Test func savingAPristineDraftClearsAStoredOne() {
         let store = ListingDraftStore(defaults: makeDefaults())
         var draft = ListingDraft()
@@ -406,8 +380,7 @@ struct ListingDraftPersistenceTests {
         #expect(store.load(userID: "host-a")?.street == "123 Oak St")
     }
 
-    /// A signed-out or anonymous session has no user id to key a draft by, and a
-    /// street address is not something to store under a shared one.
+    /// A signed-out or anonymous session has no user id to key a draft by, and a street address shouldn't be stored under a shared one.
     @Test func anonymousSessionStoresNothing() {
         let store = ListingDraftStore(defaults: makeDefaults())
         var draft = ListingDraft()
@@ -447,11 +420,7 @@ struct ListingDraftPersistenceTests {
         #expect(store.load(userID: userID)?.city == "Portland")
     }
 
-    /// `Home` declares an explicit CodingKeys, which drives the encoder as well as
-    /// the decoder, and `title` was missing from it. So a host could name their
-    /// listing and have the name dropped on save, and every stored title decoded
-    /// as nil — which took the name out of the request sheet, the chat banner, and
-    /// the listing card all at once.
+    /// `Home`'s explicit CodingKeys drive the encoder too, and `title` was missing, so titles were dropped on save.
     @Test func aListingTitleSurvivesARoundTrip() throws {
         var home = HomeFixture.make()
         home.title = "The Clarinet Suite"
@@ -473,8 +442,7 @@ struct ListingDraftPersistenceTests {
         #expect(restored.displayTitle == "\(home.hostName)'s place")
     }
 
-    /// A draft is a convenience. If its stored form no longer decodes, the right
-    /// answer is an empty form, not an error the host has to dismiss.
+    /// If a stored draft no longer decodes, the answer is an empty form, not an error.
     @Test func undecodableDraftIsDiscardedRatherThanThrown() {
         let defaults = makeDefaults()
         defaults.set(Data("not json".utf8), forKey: "listingDraft.\(userID)")

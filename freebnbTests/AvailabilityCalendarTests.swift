@@ -2,21 +2,17 @@
 //  AvailabilityCalendarTests.swift
 //  freebnbTests
 //
-//  Covers the availability calendar's arithmetic (feature 16): the round trip
-//  between stored `DateRange`s and the flat set of days a tappable grid needs.
-//
-//  `DateRange` is half-open — `start` is blocked, `end` is not — which is what
-//  `overlaps(checkIn:checkOut:)` assumes. Every off-by-one here is a day a guest
-//  could book into a blocked night, or a day a host blocked without meaning to,
-//  so the boundaries are pinned explicitly.
+//  Covers the availability calendar's arithmetic: the round trip between stored
+//  half-open `DateRange`s (`start` blocked, `end` not) and the flat set of days a
+//  tappable grid needs. Boundaries are pinned because each off-by-one is a wrongly
+//  bookable or blocked night.
 //
 
 import Foundation
 import Testing
 @testable import freebnb
 
-/// A fixed calendar in UTC. `Calendar.current` would make these assertions depend
-/// on the machine's time zone and first weekday.
+/// A fixed UTC calendar, so assertions don't depend on the machine's time zone or first weekday.
 private var utc: Calendar {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
@@ -40,9 +36,7 @@ private func date(_ year: Int, _ month: Int, _ dayOfMonth: Int) -> Date {
     day(year, month, dayOfMonth, in: utc)
 }
 
-/// `CalendarInvite` formats DTSTART/DTEND in the device's own time zone, so the
-/// iCalendar tests must build their dates there too. A UTC midnight is the
-/// previous afternoon in California, and would format as the day before.
+/// `CalendarInvite` formats in the device's time zone, so iCalendar tests must build dates there too.
 private func localDate(_ year: Int, _ month: Int, _ dayOfMonth: Int) -> Date {
     day(year, month, dayOfMonth, in: .current)
 }
@@ -143,9 +137,8 @@ struct BlockedDayRoundTripTests {
     }
 }
 
-/// `merging` is what "apply to all my homes" runs against each other listing, so
-/// its one job is to be additive: never drop a date a home already had.
-/// The rules behind the guest's tappable grid: which spans it will draw at all.
+/// `merging` is what "apply to all my homes" runs on each other listing, so it must be additive.
+/// The rules behind the guest's tappable grid: which spans it will draw.
 struct StaySelectabilityTests {
     /// The nights a stay occupies stop before the check-out day, which is why a
     /// three-night stay from the 5th ends on the 8th.
@@ -244,11 +237,8 @@ struct MergeBlockedRangesTests {
     }
 }
 
-/// The turnover buffer's arithmetic (feature: turnover buffer): the padding the
-/// published calendar carries around every confirmed stay. Mirrored on the
-/// server by `bufferedStoredRanges` in functions/src/index.ts; an off-by-one here
-/// is a day a guest could book onto a host's turnover, or a day closed for no
-/// reason.
+/// The turnover buffer's arithmetic: the padding the published calendar carries around
+/// each confirmed stay. Mirrored by `bufferedStoredRanges` in functions/src/index.ts.
 struct TurnoverBufferTests {
     /// Whole days round up: any positive buffer rules out same-day turnover, so
     /// even an hour costs a day, and a day and one hour costs two.
@@ -375,10 +365,7 @@ struct MonthGridTests {
     }
 }
 
-// Serialized: icsFile writes to fixed paths in the shared temporary directory
-// (deliberately — a stable filename is what the share sheet presents), so two
-// tests running in parallel can overwrite each other's file between the write
-// and the read-back.
+// Serialized: icsFile writes fixed paths in the shared temp directory, so parallel tests could overwrite each other.
 @Suite(.serialized)
 struct CalendarInviteTests {
     private func contents(_ url: URL) throws -> String {

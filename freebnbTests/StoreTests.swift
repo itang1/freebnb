@@ -2,14 +2,9 @@
 //  StoreTests.swift
 //  freebnbTests
 //
-//  Exercises the @MainActor stores themselves (not just the repository seam
-//  covered in freebnbTests.swift), by injecting the in-memory repository
-//  doubles from InMemoryRepositories.swift instead of the Firestore-backed
-//  defaults. This target is hosted by the freebnb app (TEST_HOST), so by the
-//  time these tests run, FreeBNBApp.init() has already called
-//  FirebaseApp.configure() — Auth.auth() is safe to touch here without extra
-//  setup. Every store method under test writes only through its injected
-//  repository, so nothing here reaches Firestore or production data.
+//  Exercises the @MainActor stores themselves by injecting the in-memory repository
+//  doubles. The target is app-hosted, so FirebaseApp.configure() has already run and
+//  Auth.auth() is safe. Nothing here reaches Firestore or production data.
 //
 
 import FirebaseFirestore
@@ -31,9 +26,7 @@ struct HomeStoreTests {
     @Test func saveAddsListingToRepository() async throws {
         let repo = InMemoryHomesRepository()
         let store = HomeStore(repository: repo)
-        // The ACL names the host, as CreateListingViewModel stamps on every save;
-        // the feed read below is a pure "ACL contains me" query with no host
-        // fallback, in memory just like in Firestore.
+        // The ACL names the host, as CreateListingViewModel stamps; the feed read is a pure "ACL contains me" query.
         let home = HomeFixture.make(hostUserID: "host1", allowedViewerIDs: ["host1"])
 
         try await store.save(home)
@@ -42,9 +35,7 @@ struct HomeStoreTests {
         #expect(saved.map(\.id) == [home.id])
     }
 
-    /// A friendship made after the listing was saved has to reach the listing's
-    /// ACL, or the new friend never sees it. The Cloud Function that did this
-    /// isn't deployed, so the client does it.
+    /// A friendship made after the listing was saved must reach its ACL; the Cloud Function isn't deployed, so the client does it.
     @Test func aclRefreshMakesTheListingVisibleToANewFriend() async throws {
         let repo = InMemoryHomesRepository()
         let store = HomeStore(repository: repo)
@@ -79,8 +70,7 @@ struct HomeStoreTests {
         #expect(friendSees.isEmpty)
     }
 
-    /// A co-hosted listing is someone else's to publish: the ACL belongs to the
-    /// host's friend graph, not to whoever happens to open the app.
+    /// A co-hosted listing's ACL belongs to the host's friend graph, not whoever opens the app.
     @Test func aclRefreshLeavesCoHostedListingsAlone() async throws {
         let repo = InMemoryHomesRepository()
         let store = HomeStore(repository: repo)
@@ -239,10 +229,8 @@ struct StayRequestStoreTests {
         #expect(boxAfterDecline.value.first?.status == .declined)
     }
 
-    /// A co-host's inbox is queried by listing, not by party, because a stay
-    /// request names only the listing's owner (feature 14). The security boundary
-    /// is proven against the emulator in rules-tests/cohosts.test.mjs; this pins
-    /// the query contract the client depends on.
+    /// A co-host's inbox is queried by listing, since requests name only the owner.
+    /// The boundary is proven in rules-tests/cohosts.test.mjs; this pins the client's query contract.
     @Test func coHostedListenerReturnsOnlyTheNamedListingsRequests() async throws {
         let repo = InMemoryStayRequestsRepository()
         let store = StayRequestStore(repository: repo)
@@ -258,8 +246,7 @@ struct StayRequestStoreTests {
         #expect(box.value.map(\.listingID) == ["L1"])
     }
 
-    /// An empty roster must not degenerate into "every request": a user who
-    /// co-hosts nothing has to get nothing, not an unfiltered query.
+    /// An empty roster must yield nothing, not an unfiltered query.
     @Test func coHostedListenerWithNoListingsEmitsNothing() async throws {
         let repo = InMemoryStayRequestsRepository()
         let store = StayRequestStore(repository: repo)
@@ -329,9 +316,7 @@ struct StayTimelineTests {
         #expect(stay(offsetIn: -1, offsetOut: 2, status: .completed).isUnderway(now: now) == false)
     }
 
-    // `isOutstanding` backs the unfriend guard: messaging is friend-gated, so
-    // ending a friendship mid-stay takes away the thread the two of them need.
-    // It is `isUnderway` without the lower bound — an upcoming stay counts.
+    // `isOutstanding` backs the unfriend guard (messaging is friend-gated): `isUnderway` without the lower bound.
 
     @Test func outstandingCoversUpcomingAndCurrentButNotFinished() {
         let now = Date()
@@ -342,17 +327,14 @@ struct StayTimelineTests {
 
     @Test func outstandingRequiresAnAcceptedStay() {
         let now = Date()
-        // A request nobody answered, or one that was turned down, is not a
-        // reason to keep two people connected.
+        // Unanswered or turned-down requests aren't a reason to keep people connected.
         #expect(stay(offsetIn: 3, offsetOut: 6, status: .pending).isOutstanding(now: now) == false)
         #expect(stay(offsetIn: 3, offsetOut: 6, status: .declined).isOutstanding(now: now) == false)
         #expect(stay(offsetIn: 3, offsetOut: 6, status: .cancelled).isOutstanding(now: now) == false)
     }
 
     @Test func outstandingSurvivesASweepThatNeverRan() {
-        // The gate is bounded at checkout, not at `.completed`, because the
-        // sweep that completes a stay is a Cloud Function and production
-        // deploys none. Waiting for it would be a gate that never opens.
+        // Bounded at checkout, not `.completed`, since the completing sweep isn't deployed in production.
         let now = Date()
         #expect(stay(offsetIn: -9, offsetOut: -6).isOutstanding(now: now) == false)
     }
@@ -374,8 +356,7 @@ struct StayTimelineTests {
     }
 
     @Test func outstandingStayIgnoresAFinishedStayWithTheSamePerson() {
-        // The control for the guard: having hosted someone once must not lock
-        // the friendship forever.
+        // Control: having hosted someone once mustn't lock the friendship forever.
         let now = Date()
         #expect([stay(offsetIn: -5, offsetOut: -2)].outstandingStay(between: "h", and: "g", now: now) == nil)
     }
@@ -383,9 +364,7 @@ struct StayTimelineTests {
 
 @MainActor
 struct FriendStoreTests {
-    // sendRequest reads Auth.auth().currentUser for the initiator, which this
-    // test host doesn't control deterministically, so accept/decline (which
-    // only need an existing edge) are exercised instead.
+    // sendRequest reads Auth's current user nondeterministically here, so accept/decline are exercised instead.
     @Test func acceptThenDeclineUpdatesEdgeViaRepository() async throws {
         let repo = InMemoryFriendEdgeRepository()
         let store = FriendStore(repository: repo)
@@ -415,9 +394,7 @@ struct FriendStoreTests {
 
 @MainActor
 struct UserProfileStoreTests {
-    // updateDisplayName also requires a signed-in Auth user before it ever
-    // touches the repository; only the validation that runs before that guard
-    // is deterministic in this environment.
+    // updateDisplayName needs a signed-in user first; only the validation before that guard is deterministic here.
     @Test func updateDisplayNameRejectsBlankName() async throws {
         let repo = InMemoryUserProfileRepository()
         let store = UserProfileStore(repository: repo)
@@ -482,8 +459,7 @@ struct MessageStoreTests {
         let repo = InMemoryMessagesRepository()
         let store = MessageStore(repository: repo)
 
-        // The host's optional suggestion and the listing to look at both ride the
-        // event, so the guest's card can show the note and offer a way back.
+        // The note and the listing to look at both ride the event.
         let event = StayEvent(
             kind: .hostCancelled,
             dateRange: "Mar 3 – Mar 6 · 3 nights",
@@ -554,10 +530,8 @@ struct MessageStoreTests {
     }
 }
 
-/// The production path builds the thread list from the messages themselves,
-/// because the `conversations` summaries the trigger used to write don't exist
-/// here. These exercise that grouping directly, with an isolated local-state
-/// store so read/mute state doesn't leak between tests or into standard defaults.
+/// The production path builds the thread list from messages themselves (the trigger's
+/// summaries don't exist here). These test that grouping with an isolated local-state store.
 struct ConversationSummaryTests {
     private func isolatedState() -> ConversationLocalState {
         let suite = "test.\(UUID().uuidString)"
