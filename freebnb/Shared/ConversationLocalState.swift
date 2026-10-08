@@ -2,30 +2,19 @@
 //  ConversationLocalState.swift
 //  freebnb
 //
-//  Per-device read and mute state for conversations.
-//
-//  These used to live on the `conversations` summary document, where they were
-//  shared across a user's devices and maintained server-side. That document is
-//  written by `onMessageCreated` and by nothing else — its create rule is
-//  literally `if false` — and this project deploys no Cloud Functions, so in
-//  production no summary document has ever existed. Marking a thread read wrote
-//  to a document that wasn't there.
-//
-//  Keeping them on the device is the honest version of what was already true:
-//  unread state that only this phone knows about, rather than unread state that
-//  silently failed to persist anywhere. The cost is that reading a thread on one
-//  device doesn't clear its badge on another.
+//  Per-device read and mute state for conversations. These once lived on the `conversations`
+//  summary document, which only `onMessageCreated` writes (its create rule is `if false`) and
+//  prod deploys no functions, so marking a thread read wrote to a document that didn't exist.
+//  Keeping them on-device is the honest version; the cost is that reading on one device doesn't clear another's badge.
 //
 
 import Foundation
 
-/// Read and mute state, scoped per signed-in user so two accounts on one device
-/// don't inherit each other's badges.
+/// Read and mute state per signed-in user, so two accounts on one device don't inherit each other's badges.
 final class ConversationLocalState: @unchecked Sendable {
     static let shared = ConversationLocalState()
 
-    /// Posted after any mutation, so a derived conversation list can recompute
-    /// without waiting for a message to arrive.
+    /// Posted after any mutation, so a derived conversation list can recompute without a new message.
     static let didChange = Notification.Name("ConversationLocalStateDidChange")
 
     private let defaults: UserDefaults
@@ -72,8 +61,7 @@ final class ConversationLocalState: @unchecked Sendable {
         NotificationCenter.default.post(name: Self.didChange, object: nil)
     }
 
-    /// Drops everything for a user, so signing out doesn't leave their read state
-    /// for whoever signs in next.
+    /// Drops everything for a user, so sign-out doesn't leave their read state to the next account.
     func clear(userID: String) {
         lock.lock()
         defaults.removeObject(forKey: readKey(userID))

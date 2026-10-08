@@ -2,13 +2,8 @@
 //  CirclesPage.swift
 //  freebnb
 //
-//  Where a host manages their circles: create, rename, delete, and set each
-//  one's booking rules. Reached from the Friends list, which is the only place
-//  the host already thinks about these people.
-//
-//  Every screen in this file is the host's own. None of it is reachable from a
-//  listing, a request, or any other surface a guest can open — a guest learning
-//  that circles exist is the failure this feature is built to avoid.
+//  Where a host manages circles: create, rename, delete and set booking rules. Reached from the
+//  Friends list. Every screen is the host's own and unreachable by a guest, who learning circles exist is the failure to avoid.
 //
 
 import SwiftUI
@@ -115,8 +110,7 @@ struct CircleDetailPage: View {
     @State private var isSaving = false
     @State private var showingDeleteConfirm = false
     @State private var actionError: String?
-    /// Nil until the circle's stored values have been loaded into the fields, so
-    /// a snapshot arriving mid-edit can't reset what the host is typing.
+    /// Nil until stored values load into the fields, so a mid-edit snapshot can't reset what's being typed.
     @State private var loadedCircleID: String?
 
     private var friendIDs: [String] { friendStore.friendIDs }
@@ -173,8 +167,7 @@ struct CircleDetailPage: View {
                 Section {
                     EmptyView()
                 } footer: {
-                    // The one thing about Default that is not editable, said
-                    // once, where a host would look for the delete button.
+                    // The one thing about Default that isn't editable, said where a host would look for delete.
                     Text("This circle can't be deleted — new friends land here, so there always has to be one. Everything else about it, its name and all of its rules, is yours to change.")
                 }
             }
@@ -231,9 +224,7 @@ struct CircleDetailPage: View {
 
 // MARK: - One friend
 
-/// Which circle a friend is in, and the policy the host can set on them
-/// directly. The override is presented as what it is — a rule for this one
-/// person that wins over their circle's — and clearing it hands them back.
+/// Which circle a friend is in, and the policy the host can set directly: a rule for this one person that wins over their circle's; clearing it hands them back.
 struct FriendCirclePage: View {
     let friendID: String
     let friendName: String
@@ -258,8 +249,7 @@ struct FriendCirclePage: View {
     private var overrideBinding: Binding<Bool> {
         Binding(
             get: { overridePolicy != nil },
-            // Starts from whatever governs them today, so turning it on is a
-            // place to edit from rather than a reset to permissive.
+            // Starts from whatever governs them today, so turning it on is a place to edit from, not a reset to permissive.
             set: { on in
                 overridePolicy = on ? (circleStore.circle(id: currentCircleID)?.policy ?? .permissive) : nil
             }
@@ -312,10 +302,7 @@ struct FriendCirclePage: View {
                 ))
             }
 
-            // Below the rules, because that is the order a host actually works
-            // in: they come here to change what somebody can book, and the notes
-            // are what reminds them why. Nothing above reads them — moving
-            // someone between circles stays a decision the host makes.
+            // Below the rules, the order a host works in (change what someone can book, notes remind why). Nothing above reads notes.
             Section {
                 FriendNotesLink(friendID: friendID, friendName: friendName)
             } footer: {

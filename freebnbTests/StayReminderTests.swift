@@ -2,10 +2,8 @@
 //  StayReminderTests.swift
 //  freebnbTests
 //
-//  The scheduling *decisions* behind feature 22's local reminders: which
-//  reminders exist, when they fire, and whose point of view the copy takes.
-//  UNUserNotificationCenter is never touched here — that's the whole point of
-//  keeping `StayReminder.reminders(for:...)` pure.
+//  The scheduling decisions behind local reminders: which exist, when they fire and whose
+//  point of view the copy takes; UNUserNotificationCenter is never touched (`reminders(for:...)` is pure).
 //
 
 import Foundation
@@ -69,8 +67,7 @@ private func stay(
     }
 
     @Test func inProgressStayOnlySchedulesCheckout() {
-        // Checked in two days ago, checks out in two days: the evening-before
-        // check-in reminder is in the past, so only checkout survives.
+        // Checked in two days ago: the evening-before reminder is past, so only checkout survives.
         let now = Date()
         let s = stay(checkInOffset: -2, checkOutOffset: 2, from: now)
         let reminders = StayReminder.reminders(for: [s], viewerID: guest, now: now)

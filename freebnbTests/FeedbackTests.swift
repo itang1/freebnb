@@ -2,9 +2,7 @@
 //  FeedbackTests.swift
 //  freebnbTests
 //
-//  Pure-logic coverage for the feedback composer's validation (feature 43) and
-//  the "what's new" auto-present decision. Delivery is a Google Form POST
-//  (see FeedbackService); its network round trip is not exercised here.
+//  Pure-logic coverage for the feedback composer's validation and the "what's new" auto-present decision; the Google Form POST isn't exercised.
 //
 
 import Testing
@@ -36,8 +34,7 @@ struct FeedbackDraftTests {
     }
 
     @Test func remainingCharactersCountsTrimmedLength() {
-        // Surrounding whitespace is not counted against the cap, since it is
-        // trimmed before the note is sent.
+        // Surrounding whitespace isn't counted against the cap, since it's trimmed before sending.
         let draft = FeedbackDraft(message: "  hi  ")
         #expect(draft.remainingCharacters == FeedbackDraft.maxLength - 2)
     }
@@ -55,8 +52,7 @@ struct WhatsNewTests {
     }
 
     @Test func doesNotPresentOnFirstEverLaunch() {
-        // nil last-seen is a brand-new install; onboarding, not the changelog,
-        // greets them.
+        // nil last-seen is a new install; onboarding, not the changelog, greets them.
         #expect(WhatsNew.shouldPresent(currentVersion: current, lastSeenVersion: nil) == false)
     }
 
