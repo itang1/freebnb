@@ -3,14 +3,9 @@
 // The `searchTerms` index on the public user doc, in Node.
 //
 // This is the twin of `UserSearchTerms` in freebnb/Shared/UserProfileRepository.swift
-// — the client writes these terms on every name change, and the backfill and the
-// seed write the same ones. The two implementations must agree exactly: a
-// document indexed one way and queried the other is a user nobody can find.
-// If you change the rules here, change them there, and re-run the backfill.
-//
-// The firestore.rules `isValidSearchTerms` check enforces two of these
-// properties server-side: at most MAX_TERMS entries, and the whole lowercased
-// displayName among them.
+// — the client writes these terms on every name change, and the backfill and seed write the same ones. The two
+// implementations must agree exactly (a document indexed one way and queried the other is unfindable); change both
+// and re-run the backfill. firestore.rules `isValidSearchTerms` enforces at most MAX_TERMS and the whole lowercased displayName.
 
 const MAX_PREFIX_LENGTH = 15;
 const MAX_TERMS = 60;
@@ -34,10 +29,8 @@ function searchTerms(displayName) {
   }
   const fullName = displayName.toLowerCase();
   terms.delete(fullName);
-  // Sorted for a stable array: an unordered set would rewrite the field on
-  // every save. Order is not load-bearing — arrayContains doesn't care, and
-  // Swift's Unicode-aware sort and this code-unit sort can disagree on
-  // non-ASCII names — but the *set* of terms must match.
+  // Sorted for a stable array (a set would rewrite the field every save). Order isn't load-bearing, since arrayContains ignores it
+  // and Swift's sort can differ on non-ASCII, but the set of terms must match.
   return [fullName, ...[...terms].sort().slice(0, MAX_TERMS - 1)];
 }
 

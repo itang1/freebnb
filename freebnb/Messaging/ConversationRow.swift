@@ -2,23 +2,20 @@
 //  ConversationRow.swift
 //  freebnb
 //
-//  A row in the conversations list (MessagesTab). Split out of the former
-//  732-line MessagingPage.swift (A2).
+//  A row in the conversations list (MessagesTab).
 //
 
 import SwiftUI
 
 struct ConversationRow: View {
     let otherName: String
-    /// Seeds the avatar. The ID rather than the name, so the person keeps the
-    /// same avatar here as everywhere else even if they rename themselves.
+    /// Seeds the avatar by ID, not name, so a renamed person keeps the same avatar everywhere.
     let otherUserID: String
     let lastMessage: Message
     let currentUserID: String
     var isMuted: Bool = false
     var isUnread: Bool = false
-    /// The live stay between these two, if any. Nil for a plain friend chat,
-    /// which keeps its row exactly as it was.
+    /// The live stay between these two, if any; nil for a plain friend chat.
     var stayContext: ConversationStayContext?
 
     var body: some View {
@@ -75,9 +72,7 @@ struct ConversationRow: View {
                     .font(.caption)
                     .foregroundColor(.secondaryText)
                 if isUnread {
-                    // Coral rather than teal: teal is everywhere as chrome, so
-                    // an attention marker needs the palette's warm color to
-                    // register as "needs you".
+                    // Coral, not teal (everywhere as chrome), so the attention marker reads as "needs you".
                     Circle()
                         .fill(Color.callToAction)
                         .frame(width: 8, height: 8)

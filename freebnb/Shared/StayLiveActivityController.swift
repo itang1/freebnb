@@ -2,10 +2,8 @@
 //  StayLiveActivityController.swift
 //  freebnb
 //
-//  Drives the current-stay Live Activity (feature 21) off the same accepted-stay
-//  set the store already syncs. It keeps at most one activity running — for the
-//  most imminent live stay — starting it when a stay reaches its check-in day,
-//  moving it through its phases, and ending it after checkout.
+//  Drives the current-stay Live Activity from the accepted-stay set: at most one activity, for the most imminent live
+//  stay, started at check-in day, moved through phases and ended after checkout.
 //
 
 import ActivityKit
@@ -16,17 +14,14 @@ import os
 final class StayLiveActivityController {
     private let log = AppLog.logger("liveactivity")
 
-    /// Reconciles the running Live Activity with `stays`. Idempotent: safe to call
-    /// on every snapshot. Picks the single stay that should be live now, then
-    /// starts / updates / ends activities so exactly that one is showing.
+    /// Reconciles the running Live Activity with `stays`; idempotent, so safe on every snapshot. Picks the one live stay and starts/updates/ends to match.
     func sync(activeStays stays: [StayRequest], viewerID: String, now: Date = Date()) {
         guard !viewerID.isEmpty else {
             Task { await endAll() }
             return
         }
 
-        // The stay that should own the Live Activity right now: has a live phase,
-        // and among those the soonest check-in.
+        // The stay that owns the activity now: has a live phase, soonest check-in among those.
         let target = stays
             .filter { $0.status == .accepted }
             .compactMap { stay -> (StayRequest, StayPhase)? in
@@ -52,8 +47,7 @@ final class StayLiveActivityController {
             return
         }
 
-        // End any activity that isn't for the target stay (dates changed, a
-        // different stay took over, or a stale one lingered).
+        // End any activity not for the target stay (dates changed, another took over, or a stale one lingered).
         for activity in running where activity.attributes.stayID != stay.id {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
