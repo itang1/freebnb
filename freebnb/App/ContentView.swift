@@ -26,9 +26,7 @@ struct ContentView: View {
     @AppStorage(UserDefaultsKey.selectedTab) private var selectedTab = 0
     @State private var messagesDeepLinkUserID: String? = nil
 
-    // The viewer identity, friend set, and block set the feed is filtered and
-    // ranked against. Cheap to build; pushing it into HomeStore only recomputes
-    // the feed when this value actually changes (A1).
+    // The viewer, friend set and block set the feed is built from; HomeStore recomputes only when it changes.
     private var feedContext: FeedContext {
         let myID = authManager.userID
         return FeedContext(
@@ -38,20 +36,15 @@ struct ContentView: View {
         )
     }
 
-    // The loaded listings the user has saved — the set mirrored into Spotlight.
-    // A saved id that isn't in the current feed can't be described, so it's
-    // skipped; it re-indexes the next time it loads.
+    // Loaded listings the user has saved, mirrored into Spotlight; unloaded ids re-index when they load.
     private var savedHomesForSpotlight: [Home] {
         let saved = Set(userProfileStore.currentProfile?.savedListingIDs ?? [])
         guard !saved.isEmpty else { return [] }
         return homeStore.listings.filter { saved.contains($0.id) }
     }
 
-    /// Cheap change key for the check-in kit sync: who is viewing, plus their
-    /// accepted stays and dates. Changes when one is accepted, moved, or
-    /// cancelled, and stays still when an unrelated snapshot arrives. Derived by
-    /// `CheckInKitStore.changeKey` so the sign-out property it carries is pinned
-    /// by a test rather than by this comment.
+    /// Change key for the check-in kit sync: the viewer plus their accepted stays
+    /// and dates. Derived by `CheckInKitStore.changeKey`, where a test pins its sign-out property.
     private var acceptedStayKey: [String] {
         CheckInKitStore.changeKey(
             authResolved: authManager.hasResolvedAuthState,
@@ -60,15 +53,12 @@ struct ContentView: View {
         )
     }
 
-    // Cheap change key for the Spotlight sync: the saved-and-loaded listing ids.
-    // Re-indexes when the saved set changes or a saved listing loads in.
+    // Change key for the Spotlight sync: the saved-and-loaded listing ids.
     private var spotlightIndexKey: [String] {
         savedHomesForSpotlight.map(\.id)
     }
 
-    /// The listings this user co-hosts rather than owns (feature 14). A stay
-    /// request names only the owner, so this is the handle the request store
-    /// needs to find the ones aimed at a co-hosted home.
+    /// The listings this user co-hosts; requests name only the owner, so this is how the request store finds them.
     private var coHostedListingIDs: [String] {
         let myID = authManager.userID
         return homeStore.managedListings
@@ -77,10 +67,7 @@ struct ContentView: View {
             .sorted()
     }
 
-    /// Change key for the booked-range reconciler: the incoming accepted stays and
-    /// their dates. Changes when the host accepts a request, a guest accepts the
-    /// host's offer, or an accepted stay is cancelled — each of which should move
-    /// the listing's booked dates. Steady when an unrelated snapshot arrives.
+    /// Change key for the booked-range reconciler: incoming accepted stays and their dates.
     private var incomingAcceptedStayKey: [String] {
         stayRequestStore.incomingRequests
             .filter { $0.status == .accepted }
@@ -122,8 +109,7 @@ struct ContentView: View {
                     .badge(stayRequestStore.pendingStaysTabCount)
                     .tag(1)
 
-                    // MessagesTab owns its own NavigationStack so deep links
-                    // can push onto the path programmatically.
+                    // MessagesTab owns its NavigationStack so deep links can push programmatically.
                     MessagesTab(
                         listings: homeStore.listings,
                         deepLinkUserID: $messagesDeepLinkUserID
@@ -146,18 +132,14 @@ struct ContentView: View {
                     .tag(4)
                 }
                 .tint(.accent)
-                // Keep HomeStore's derived feed in sync with who the viewer is,
-                // who they're friends with, and who they've blocked. Fires on
-                // appear (initial) and whenever any of those change.
+                // Keeps HomeStore's derived feed in sync with the viewer, friends and blocks.
                 .onChange(of: feedContext, initial: true) { _, context in
                     homeStore.updateFeedContext(
                         myID: context.myID,
                         friendIDs: context.friendIDs,
                         blockedIDs: context.blockedIDs
                     )
-                    // The same friend set decides who may *see* this user's
-                    // listings, and the trigger that used to maintain that is a
-                    // Cloud Function this project does not deploy.
+                    // The friend set also decides who may see this user's listings, which no Cloud Function does here.
                     Task {
                         await homeStore.refreshOwnListingACLs(
                             myID: context.myID,
@@ -167,9 +149,7 @@ struct ContentView: View {
                 }
                 .sheet(isPresented: $showOnboarding, onDismiss: {
                     hasSeenOnboarding = true
-                    // A brand-new user has just seen every feature in onboarding;
-                    // stamp the current version so the changelog only ever
-                    // auto-presents on a later *update*, never right after install.
+                    // Stamp the version for new users so the changelog shows only on later updates.
                     lastSeenWhatsNewVersion = Bundle.main.appVersionString
                     if pendingHostListing {
                         pendingHostListing = false
@@ -189,18 +169,12 @@ struct ContentView: View {
                     WhatsNewSheet { showWhatsNew = false }
                 }
                 .onAppear {
-                    // selectedTab is persisted; a stale value pointing past the last
-                    // tab (from before Friends was added, or before Info was folded
-                    // into Profile) would leave the tab bar with nothing selected —
-                    // land on Listings instead.
+                    // selectedTab is persisted; a stale value past the last tab would leave nothing selected.
                     if selectedTab > 4 { selectedTab = 0 }
                     if !hasSeenOnboarding {
                         showOnboarding = true
                     } else if lastSeenWhatsNewVersion.isEmpty {
-                        // An existing user who predates this feature: catch them up
-                        // silently so the changelog auto-presents on the *next*
-                        // update, not this one (and isn't suppressed forever for
-                        // want of a stamped version).
+                        // An existing user predating this: stamp silently so the changelog shows next update.
                         lastSeenWhatsNewVersion = Bundle.main.appVersionString
                     } else if WhatsNew.shouldPresent(
                         currentVersion: Bundle.main.appVersionString,
@@ -228,14 +202,11 @@ struct ContentView: View {
                     router.pendingFriendsTab = false
                     router.didRouteSinceSignIn = true
                 }
-                // Keep the Spotlight index in step with the saved set (feature 40).
-                // Fires on appear and whenever a listing is saved/unsaved or the
-                // loaded feed changes what we can describe.
+                // Keeps the Spotlight index in step with the saved set and the loaded feed.
                 .onChange(of: spotlightIndexKey, initial: true) { _, _ in
                     SpotlightIndexer.sync(savedHomes: savedHomesForSpotlight)
                 }
-                // A saved listing opened from Spotlight: switch to Listings and
-                // push it if it's currently loaded (drop silently otherwise).
+                // A saved listing opened from Spotlight: switch to Listings and push it if loaded.
                 .onChange(of: router.pendingListingID, initial: true) { _, listingID in
                     guard let listingID else { return }
                     selectedTab = 0
@@ -251,35 +222,20 @@ struct ContentView: View {
                 }
             }
         }
-        // Point the request store at the listings this user co-hosts, so requests
-        // aimed at a co-hosted home reach the person managing it (feature 14).
-        // Driven from here for the same reason the check-in kit sync is: only
-        // HomeStore knows the roster, and the alternative is a second copy of
-        // that listener inside StayRequestStore. On the outer chain rather than
-        // the signed-in branch's, which the type-checker already finds long.
+        // Points the request store at co-hosted listings so their requests reach the manager.
+        // Driven from here because only HomeStore knows the roster; on the outer chain
+        // because the signed-in branch already type-checks slowly.
         .onChange(of: coHostedListingIDs, initial: true) { _, listingIDs in
             stayRequestStore.setCoHostedListingIDs(listingIDs)
         }
-        // Write the arrival essentials to disk while there is still a network to
-        // fetch them with. Driven from here rather than from StayRequestStore
-        // because building a kit needs the listing's address and manual, which
-        // only HomeStore can fetch. Keyed on the accepted stays themselves, so a
-        // new acceptance, a date change, or a cancellation each re-reconcile.
+        // Writes arrival essentials to disk while there's a network. Driven from here
+        // because building a kit needs HomeStore's address and manual.
         //
-        // On the outer chain, not the signed-in branch's, and that placement is
-        // the whole point: the branch is torn down on sign-out, so a modifier
-        // inside it never sees the transition, and the store's "signed out, take
-        // the kits off the device" path was unreachable for as long as it lived
-        // there. Out here the key goes empty, the sync runs, and the door codes
-        // of whoever just left get deleted.
-        //
-        // Gated on a resolved auth state, and that is not belt and braces. The
-        // uid arrives from an async listener callback, so on the `initial: true`
-        // pass it is still empty — which the store reads as "signed out" and
-        // answers by deleting every kit, the stay list notwithstanding. That is
-        // a signed-in guest cold-launching offline at the door and finding the
-        // code gone. The key changes when the state resolves, so the sync we
-        // skip here runs a moment later with a real answer.
+        // On the outer chain deliberately: the signed-in branch is torn down on
+        // sign-out, so a modifier inside it never sees the transition and the
+        // sign-out cleanup of door codes would be unreachable. Gated on a resolved
+        // auth state, since the uid arrives async and an empty one reads as
+        // "signed out", deleting every kit for a guest cold-launching offline at the door.
         .onChange(of: acceptedStayKey, initial: true) { _, _ in
             guard authManager.hasResolvedAuthState else { return }
             Task {
@@ -289,19 +245,15 @@ struct ContentView: View {
                 ) { listingID in
                     guard let home = homeStore.listings.first(where: { $0.id == listingID })
                     else { return nil }
-                    // Both are cached after the first call, so a repeat
-                    // reconcile costs nothing.
+                    // Both are cached after the first call.
                     async let location = homeStore.location(for: listingID)
                     async let manual = homeStore.manual(for: listingID)
                     return await (home, location, manual)
                 }
             }
         }
-        // Keep each hosted listing's booked dates in step with its accepted stays
-        // — the client stand-in for the onStayRequestWritten trigger. Fires when
-        // the host accepts a request, when a guest accepts the host's offer (the
-        // path that cannot record its own booking), and on launch. Driven from
-        // here because it needs both stores: the accepted stays and the roster.
+        // Keeps each hosted listing's booked dates in step with its accepted stays
+        // (stand-in for the onStayRequestWritten trigger). Needs both the stays and the roster.
         .onChange(of: incomingAcceptedStayKey, initial: true) { _, _ in
             Task {
                 await homeStore.reconcileBookedRanges(
@@ -310,13 +262,9 @@ struct ContentView: View {
                 )
             }
         }
-        // Land on the Listings tab after signing in. selectedTab is persisted,
-        // so without this a returning user would reopen on whatever tab they
-        // last used before signing out.
-        //
-        // Unless a deep link is waiting, or was just acted on: someone who signed
-        // in by following an invite asked for the Friends tab, and this default
-        // would drop them on an empty feed instead. See `didRouteSinceSignIn`.
+        // Lands on Listings after sign-in, since selectedTab is persisted. Unless a
+        // deep link is waiting or was acted on (an invite asked for Friends); see
+        // `didRouteSinceSignIn`.
         .onChange(of: authManager.isSignedIn) { _, signedIn in
             guard signedIn else {
                 router.didRouteSinceSignIn = false

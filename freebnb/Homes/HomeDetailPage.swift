@@ -18,18 +18,15 @@ struct HomeDetailPage: View {
     @State private var region = MKCoordinateRegion()
     @State private var mapItems: [MKMapItem] = []
     @State private var mapState: MapState = .loading
-    /// Non-nil once the exact address has been disclosed to this viewer: they are
-    /// the host, or the host accepted their stay. Everyone else sees the city and
-    /// a blurred coordinate.
+    /// Non-nil once the exact address is disclosed to this viewer (host or accepted guest).
     @State private var exactLocation: ListingLocation?
     @State private var isExactCoordinate = false
-    /// The host's house manual, loaded only once disclosure resolves (host or
-    /// accepted guest). nil while loading or when none exists / not entitled.
+    /// The house manual, loaded once disclosure resolves; nil while loading, absent or not entitled.
     @State private var houseManual: HouseManual?
     @State private var showManualEditor = false
     @State private var showReport = false
     @State private var showBlockConfirm = false
-    // Bridge @Observable → @State so the toolbar re-renders reliably.
+    // Bridge @Observable to @State so the toolbar re-renders reliably.
     @State private var isListingSaved = false
     @State private var saveError: String?
     @State private var blockError: String?
@@ -42,16 +39,14 @@ struct HomeDetailPage: View {
 
     private var isHost: Bool { authManager.userID == home.hostUserID }
 
-    /// The viewer's own confirmed stay at this listing, if any — drives the
-    /// guest-facing logistics card.
+    /// The viewer's own confirmed stay here, if any; drives the logistics card.
     private var acceptedStay: StayRequest? {
         requestStore.outgoingRequests.first {
             $0.listingID == home.id && $0.status == .accepted
         }
     }
 
-    /// Host sees the manual editor entry point; an accepted guest sees their
-    /// confirmed-stay card. Everyone else sees nothing here.
+    /// Hosts get the manual editor entry point; accepted guests get their stay card.
     @ViewBuilder
     private var stayLogisticsSection: some View {
         if isHost {
@@ -63,29 +58,21 @@ struct HomeDetailPage: View {
 
     var body: some View {
         ScrollView {
-            // Ordered the way someone actually decides: what is this place, what
-            // did the host say about it, what's in it, where is it, what happens
-            // if plans change, who is the host. The one action a guest can take
-            // is pinned below instead of sitting third from the top, where it
-            // interrupted the reading before there was anything to decide on.
+            // Ordered the way someone decides: the place, the host's words, contents, location, cancellation, host.
+            // The one guest action is pinned below.
             VStack(alignment: .leading, spacing: 14) {
                 heroSection
 
-                // Anything already settled between these two people outranks the
-                // description: a confirmed stay's logistics, or the host's own
-                // manual when they're looking at their own listing.
+                // Anything settled between these two people outranks the description.
                 stayLogisticsSection
 
-                // Where a pending or accepted request stands, near the top where
-                // "is this already in motion?" gets answered before anything is
-                // read about the place.
+                // Where a pending or accepted request stands, near the top.
                 if !isHost,
                    let existing = requestStore.activeRequest(for: home.id, guestUserID: authManager.userID) {
                     existingRequestBanner(existing)
                 }
 
-                // The host's own words, directly under the header, rather than
-                // next-to-last where "Memo" sat below every checklist.
+                // The host's own words, directly under the header.
                 if let description = home.description, !description.isEmpty {
                     ListingSection("From \(home.hostName)", systemImage: "quote.bubble") {
                         Text(description)
@@ -98,9 +85,7 @@ struct HomeDetailPage: View {
                 amenitiesSection
                 provisionsSection
 
-                // Only rendered when the host claimed something. A grid of grey
-                // crosses would read as "this home is inaccessible", which is not
-                // what an unanswered question means.
+                // Only when the host claimed something; a grid of grey crosses would read as "inaccessible".
                 if home.amenities.hasAnyAccessibility {
                     ListingSection("Accessibility", systemImage: "figure.roll") {
                         VStack(alignment: .leading, spacing: 6) {
@@ -118,7 +103,7 @@ struct HomeDetailPage: View {
                     }
                 }
 
-                // Only the off-app hosts land here; the in-app button is pinned.
+                // Off-app hosts only; the in-app button is pinned.
                 if authManager.userID != home.hostUserID && !pinsContactAction {
                     contactSection
                 }
@@ -126,16 +111,11 @@ struct HomeDetailPage: View {
                 locationSection
                 cancellationSection
 
-                // What past guests said about this host (feature 1). Capped, with
-                // the full list one tap away on their profile.
+                // What past guests said about this host, capped; the rest is on their profile.
                 ReviewsSection(subjectUserID: home.hostUserID, subjectName: home.hostName, limit: 3)
 
-                // A private note the guest can keep about this listing, at any
-                // time and whether or not they have ever stayed. Deliberately the
-                // quietest control on the page — grey, below everything that
-                // reaches the host — because what only you can read should not
-                // look like an invitation to broadcast. Full members only: an
-                // anonymous browser has nowhere to store one.
+                // A private note about this listing, quietest control on the page.
+                // Full members only; anonymous browsers have nowhere to store one.
                 if authManager.userID != home.hostUserID && authManager.authMethod != .guest {
                     GuestNotesLink(
                         subjectType: .listing,
@@ -150,8 +130,7 @@ struct HomeDetailPage: View {
             }
             .padding()
         }
-        // Pinned so no amount of detail stands between a guest and the one thing
-        // this screen exists for.
+        // Pinned so the screen's one action is always reachable.
         .safeAreaInset(edge: .bottom) {
             if pinsContactAction {
                 contactSection
@@ -164,21 +143,16 @@ struct HomeDetailPage: View {
         .onAppear {
             isListingSaved = userProfileStore.isSaved(home.id)
         }
-        // Disclosure has to resolve before the map does: an accepted guest gets a
-        // pin on the front door, everyone else gets a circle over the neighbourhood.
+        // Disclosure resolves before the map: accepted guests get a pin, everyone else a circle.
         .task {
             exactLocation = await homeStore.location(for: home.id)
             await resolveMapLocation()
-            // The manual shares the location's accepted-guest gate, so only fetch
-            // it once the viewer is entitled: the host, or a guest whose stay was
-            // accepted (a disclosed address is the same entitlement).
+            // The manual shares the location's gate, so fetch it only once entitled.
             if isHost || acceptedStay != nil || exactLocation != nil {
                 houseManual = await homeStore.manual(for: home.id)
             }
         }
-        // The host's reputation (feature 2). `trustStats` rides on the public
-        // user document, so one fetch fills the chips; mutual friends need the
-        // callable, and neither is worth blocking the page on.
+        // The host's reputation: `trustStats` rides on the public user doc; mutual friends need the callable. Neither blocks the page.
         .task {
             _ = await userProfileStore.fetchProfileOnce(userID: home.hostUserID)
             await reviewStore.loadMutualFriends(with: home.hostUserID)
@@ -189,10 +163,7 @@ struct HomeDetailPage: View {
         .navigationTitle(home.hostName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // A long name (e.g. "Spongebob Squarepants") has no room to breathe
-            // next to the save/share buttons in the nav bar; shrink rather than
-            // truncate so it's always fully readable. Tapping it is now the only
-            // way to the host's profile, since the redundant pill in the body is gone.
+            // Shrink rather than truncate long names; tapping is the only way to the host's profile.
             ToolbarItem(placement: .principal) {
                 if isHost {
                     Text(home.hostName)
@@ -300,17 +271,13 @@ struct HomeDetailPage: View {
     }
 }
 
-// Kept as an extension in the same file (not a separate one) so these stay
-// under SwiftLint's type_body_length cap without losing access to the
-// struct's `private` state — private is file-scoped, so same-file
-// extensions still see it.
+// An extension in the same file keeps these under SwiftLint's type_body_length
+// cap while still seeing the struct's file-scoped `private` state.
 extension HomeDetailPage {
 
-    // MARK: - Trust signals (feature 2)
+    // MARK: - Trust signals
 
-    /// Stays hosted, rating, response rate, tenure, mutual friends. Rendered from
-    /// the host's public user document, which carries `trustStats`, so this costs
-    /// the one profile fetch the page already makes.
+    /// Stays hosted, rating, response rate, tenure and mutual friends, from the host's public user document.
     @ViewBuilder
     private var hostTrustSignals: some View {
         TrustBadgeRow(
@@ -322,13 +289,8 @@ extension HomeDetailPage {
 
     // MARK: - Hero
 
-    /// Photos, the listing's name, and the trust signals — the identity of the
-    /// place, before any of its specifics.
-    ///
-    /// The title is the point: `displayTitle` is what the feed card, the chat
-    /// banner, and the request sheet all call this listing, and the detail page
-    /// was the one surface that never said it. Tapping a card labelled "Guest
-    /// room by the Rose Bowl" landed on a page headed only by the host's name.
+    /// Photos, the listing's name and the trust signals. The page shows
+    /// `displayTitle`, as the feed card, chat banner and request sheet do.
     @ViewBuilder
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -365,8 +327,7 @@ extension HomeDetailPage {
         }
     }
 
-    /// The listing's photos, which the detail page never showed at all: the feed
-    /// card drew the first one and tapping through lost it.
+    /// The listing's photos.
     private var photoCarousel: some View {
         TabView {
             ForEach(Array(home.photos.enumerated()), id: \.offset) { _, urlString in
@@ -398,15 +359,12 @@ extension HomeDetailPage {
 
     // MARK: - The space
 
-    /// Rooms, beds, and capacity in one card. These were split across "Details"
-    /// and "Guests & Space" with no line between them: how many rooms and how
-    /// many guests are the same question asked twice.
+    /// Rooms, beds and capacity in one card.
     private var spaceSection: some View {
         ListingSection("The space", systemImage: "bed.double") {
             VStack(alignment: .leading, spacing: 8) {
                 detailRow("Guest rooms", "\(home.sleeping.numGuestRooms)")
-                // Omitted rather than shown as zero: an unanswered question,
-                // not an answer of "none" (feature 17).
+                // Omitted rather than zero: unanswered, not "none".
                 if home.sleeping.numBathrooms > 0 {
                     detailRow("Bathrooms", "\(home.sleeping.numBathrooms)")
                 }
@@ -436,9 +394,7 @@ extension HomeDetailPage {
         }
     }
 
-    /// "Amenities" and "Rooms & Laundry" were two headings over one list of
-    /// facilities, so they're one card now. Parking joins them as a footnote
-    /// rather than a heading of its own over a single line of text.
+    /// Amenities and rooms/laundry in one card; parking is a footnote.
     private var amenitiesSection: some View {
         ListingSection("Amenities", systemImage: "sparkles") {
             VStack(alignment: .leading, spacing: 6) {
@@ -491,8 +447,7 @@ extension HomeDetailPage {
 
     // MARK: - Location
 
-    /// The address, the disclosure notice, the map, and the Maps handoff, which
-    /// were four loose blocks taking the prime slot near the top of the page.
+    /// The address, disclosure notice, map and Maps handoff.
     private var locationSection: some View {
         ListingSection("Where you'll be", systemImage: "mappin.and.ellipse") {
             VStack(alignment: .leading, spacing: 10) {
@@ -512,9 +467,7 @@ extension HomeDetailPage {
                 mapSection
 
                 Button(action: openInMaps) {
-                    // Teal, not coral: opening Maps is a utility, and coral is
-                    // reserved for the one action this screen exists for
-                    // (messaging the host, pinned at the bottom).
+                    // Teal, not coral: opening Maps is a utility; coral is reserved for messaging the host.
                     Text("Open in Apple Maps")
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -570,8 +523,7 @@ extension HomeDetailPage {
 
     // MARK: - Map section
 
-    /// Roughly the blur `Home.approximate(_:)` applies, so the circle honestly
-    /// covers where the listing could be rather than implying a smaller area.
+    /// Roughly the blur `Home.approximate(_:)` applies, so the circle covers where the listing could be.
     private static let approximateRadiusMeters: CLLocationDistance = 1_200
 
     @ViewBuilder
@@ -612,9 +564,8 @@ extension HomeDetailPage {
 
     // MARK: - Geocoding
 
-    /// Resolves the best coordinate this viewer is entitled to, preferring the
-    /// exact one from the private location document, then the blurred public one,
-    /// and only geocoding for listings saved before coordinates were stored.
+    /// Resolves the best coordinate this viewer may have: the exact private one,
+    /// then the blurred public one, geocoding only for listings saved before coordinates existed.
     private func resolveMapLocation() async {
         guard mapState == .loading else { return }
 
@@ -627,9 +578,7 @@ extension HomeDetailPage {
             return
         }
 
-        // Legacy listing with no stored coordinate. `formattedAddress` already
-        // reflects what this viewer may see, so geocoding it can't leak a street
-        // they weren't given.
+        // Legacy listing with no stored coordinate; `formattedAddress` already respects what this viewer may see.
         let address = formattedAddress
         let exact = exactLocation != nil
         do {
@@ -647,8 +596,7 @@ extension HomeDetailPage {
         item.name = home.hostName
         mapItems = [item]
         isExactCoordinate = exact
-        // A blurred point deserves a wider frame; zooming to a street on a
-        // kilometre-accurate coordinate would imply precision that isn't there.
+        // A blurred point gets a wider frame so the zoom doesn't imply precision.
         let span = exact ? 0.01 : 0.05
         region = MKCoordinateRegion(
             center: coordinate,
@@ -665,10 +613,8 @@ extension HomeDetailPage {
 
     // MARK: - Contact section
 
-    /// True when the contact affordance is a single button worth pinning. A host
-    /// who takes contact off-app gets a card in the page flow instead: their
-    /// details are something to read, not a button, and pinning the box would
-    /// park a third of the screen behind a permanent bar.
+    /// True when contact is a single button worth pinning. Off-app hosts get a
+    /// card in the page flow instead.
     var pinsContactAction: Bool {
         home.contactPreference == .inApp && authManager.userID != home.hostUserID
     }
@@ -684,14 +630,9 @@ extension HomeDetailPage {
                     .multilineTextAlignment(.center)
             } else {
                 let existing = requestStore.activeRequest(for: home.id, guestUserID: authManager.userID)
-                // "Open conversation" the moment a thread exists, not only once a
-                // request does: sending a plain message already starts the chat, so
-                // the button shouldn't keep inviting a first message after one.
+                // "Open conversation" as soon as a thread exists, not only once a request does.
                 let hasThread = messageStore.hasConversation(with: home.hostUserID)
-                // The banner that used to ride along here now sits in the page
-                // flow: pinning a status readout costs a quarter of the screen
-                // on every scroll, and it says the same thing whether or not it
-                // is on screen.
+                // The status banner sits in the page flow; pinning it would cost a quarter of the screen.
                 Group {
                     NavigationLink {
                         MessagingPage(
@@ -700,9 +641,7 @@ extension HomeDetailPage {
                             listing: home
                         )
                     } label: {
-                        // Requesting a stay isn't a separate button; it happens
-                        // inside the conversation. The label carries that so nobody
-                        // has to hunt for a request action or read fine print.
+                        // Requesting a stay happens inside the conversation; the label says so.
                         Label(
                             (existing == nil && !hasThread) ? "Message \(home.hostName) to request a stay" : "Open conversation",
                             systemImage: "message.fill"
@@ -710,8 +649,7 @@ extension HomeDetailPage {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        // Coral marks the screen's one primary action; everything
-                        // else on the page stays in brand teal.
+                        // Coral marks the screen's one primary action.
                         .background(Color.callToAction)
                         .foregroundColor(.onAccent)
                         .cornerRadius(10)
@@ -765,8 +703,7 @@ extension HomeDetailPage {
         mapItems.first?.openInMaps(launchOptions: nil)
     }
 
-    /// A label/value pair for facts that aren't yes-or-no, so they line up as a
-    /// table instead of reading as "Guest Rooms: 1" sentences.
+    /// A label/value pair for non-yes/no facts, so they line up as a table.
     private func detailRow(_ label: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(label)

@@ -2,47 +2,33 @@
 //  GeneratedAvatar.swift
 //  freebnb
 //
-//  Every person gets a distinct avatar without anybody uploading a photo
-//  (uploading a face is a bigger privacy decision than launch needs, and a
-//  stored image is a bytes-and-moderation problem this app doesn't have yet).
-//
-//  The avatar is *derived*, not stored: a symbol and a colour picked from a hash
-//  of the user's ID, so the same person draws identically on every screen, on
-//  every device, forever, at zero storage and zero network cost. Nothing to
-//  migrate, nothing to cache, nothing to garbage-collect when an account is
-//  deleted.
+//  Every person gets a distinct avatar without uploading a photo. The avatar is
+//  derived, not stored: a symbol and colour picked from a hash of the user's ID,
+//  so it draws identically everywhere with no storage, migration or cleanup.
 //
 
 import SwiftUI
 
-/// A person's generated avatar: a soft tinted circle holding a symbol, both
-/// chosen from `seed`.
-///
-/// Pass the user's Firestore ID as the seed wherever it is known. A display name
-/// works, but it is a weaker key: two people called Alex collide, and an avatar
-/// that changes when somebody edits their name defeats the point of having one.
+/// A person's generated avatar: a tinted circle holding a symbol, both chosen
+/// from `seed`. Pass the user's Firestore ID where known; a display name
+/// collides and changes when edited.
 struct GeneratedAvatar: View {
     let seed: String
     var size: CGFloat = 40
-    /// Announced by VoiceOver where the avatar stands alone. Rows that already
-    /// read the person's name leave this nil and keep the avatar decorative.
+    /// Announced by VoiceOver where the avatar stands alone; nil keeps it decorative.
     var accessibilityName: String?
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        // Derived once per render, not once per use: reading a computed
-        // `identity` for both the colour and the symbol would hash the seed
-        // twice on every pass over every row of a scrolling list.
+        // Derived once per render rather than hashing the seed for both colour and symbol.
         let identity = AvatarIdentity(seed: seed)
         let color = AvatarPalette.color(for: identity, in: colorScheme)
 
         return ZStack {
             Circle()
                 .fill(
-                    // Two stops of the same hue rather than two hues: the circle
-                    // reads as one object with a light on it, and a grid of them
-                    // stays calm instead of turning into confetti.
+                    // Two stops of one hue read as a lit object and keep a grid calm.
                     LinearGradient(
                         colors: [color.opacity(0.26), color.opacity(0.14)],
                         startPoint: .topLeading,
@@ -58,8 +44,7 @@ struct GeneratedAvatar: View {
     }
 }
 
-/// Applies the label when there is one and hides the avatar outright when there
-/// isn't, so a decorative avatar never adds a stop to the VoiceOver rotor.
+/// Applies the label if there is one, else hides the avatar from VoiceOver.
 private struct AvatarAccessibility: ViewModifier {
     let name: String?
 
@@ -74,38 +59,26 @@ private struct AvatarAccessibility: ViewModifier {
     }
 }
 
-/// The (symbol, hue, shade) an avatar resolves to. Pure and cheap, and split out
-/// from the view so the derivation can be unit-tested without rendering.
+/// The (symbol, hue, shade) an avatar resolves to; split from the view so it's unit-testable.
 ///
-/// **On collisions.** These are drawn from a fixed space, so two users can share
-/// an avatar; the question is only how often that happens *on one screen*, since
-/// a name is always printed beside it. The three axes multiply out to 1,920
-/// combinations, which puts two identical avatars in a 20-person friends list at
-/// roughly 9% (it was 49% at 288, hence the third axis). Global uniqueness is not
-/// the goal and isn't reachable without storing a per-user assignment, which is
-/// exactly the storage and migration cost this design exists to avoid.
+/// Collisions: the three axes give 1,920 combinations, so two identical avatars
+/// in a 20-person friends list happen roughly 9% of the time (49% at 288). A
+/// name is always printed beside it, and global uniqueness would need stored assignments.
 struct AvatarIdentity: Equatable {
     let symbolName: String
     let hueIndex: Int
     let shadeIndex: Int
 
-    /// Sixteen hues rather than a continuous spectrum. A free hue per user gives
-    /// near-identical teals sitting next to each other and reads as noise; a
-    /// fixed wheel keeps a screenful of avatars looking like a set.
+    /// Sixteen hues, not a continuous spectrum, so a screenful reads as a set.
     static let hueCount = 16
 
-    /// Three washes of whichever hue was picked. Saturation carries the variation
-    /// while brightness stays in a narrow band, so all three sit at a similar
-    /// luminance and the symbol keeps its contrast on both the light and the dark
-    /// background. A brightness-driven axis would have made the palest shade
-    /// unreadable in light mode.
+    /// Three washes of the hue: saturation varies while brightness stays in a
+    /// narrow band so the symbol keeps contrast in light and dark.
     static let shades: [(saturation: Double, brightness: Double)] = [
         (0.45, 0.68), (0.65, 0.66), (0.85, 0.64)
     ]
 
-    /// Objects, not faces or initials: an avatar that shows a letter competes
-    /// with the name printed beside it, and every "A" looks like every other.
-    /// All available since SF Symbols 1, so no availability gate is needed.
+    /// Objects, not faces or initials, which would compete with the name beside them.
     static let symbols = [
         "leaf.fill", "star.fill", "moon.fill", "sun.max.fill",
         "bolt.fill", "flame.fill", "drop.fill", "sparkles",
@@ -120,13 +93,10 @@ struct AvatarIdentity: Equatable {
     ]
 
     init(seed: String) {
-        // An empty seed would send every anonymous placeholder to the same
-        // symbol, which looks like a bug rather than an absence. Give it its own
-        // stable identity instead.
+        // An empty seed gets its own stable identity so anonymous placeholders don't all match.
         let key = seed.isEmpty ? "freebnb.anonymous" : seed
         var hash = AvatarIdentity.hash(key)
-        // Independent slices of the hash, so the three axes vary freely instead
-        // of marching in lockstep (every leaf turning up teal).
+        // Independent slices of the hash so the axes don't march in lockstep.
         symbolName = AvatarIdentity.symbols[Int(hash % UInt64(AvatarIdentity.symbols.count))]
         hash /= UInt64(AvatarIdentity.symbols.count)
         hueIndex = Int(hash % UInt64(AvatarIdentity.hueCount))
@@ -134,12 +104,10 @@ struct AvatarIdentity: Equatable {
         shadeIndex = Int(hash % UInt64(AvatarIdentity.shades.count))
     }
 
-    /// Where this identity sits in the flattened palette table.
+    /// Position in the flattened palette table.
     var paletteIndex: Int { hueIndex * AvatarIdentity.shades.count + shadeIndex }
 
-    /// FNV-1a. Swift's `hashValue` is seeded per process, so it would hand the
-    /// same user a different avatar on every launch; this has to be stable
-    /// across launches and devices.
+    /// FNV-1a; Swift's `hashValue` is seeded per process and wouldn't be stable across launches.
     private static func hash(_ string: String) -> UInt64 {
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for byte in string.utf8 {
@@ -152,28 +120,14 @@ struct AvatarIdentity: Equatable {
 
 // MARK: - Palette
 
-/// The colours the avatars are actually drawn in, one table per appearance.
-///
-/// Picking a hue off a wheel and holding brightness constant looks reasonable in
-/// a swatch and fails on screen, because equal HSB brightness is nowhere near
-/// equal *perceived* luminance: at the same brightness a yellow is roughly ten
-/// times as luminous as a blue. Held constant, the yellows washed out on white
-/// and the blues disappeared on black — the worst pairing measured 1.5:1, where
-/// 3:1 is the floor for a graphic you are meant to be able to make out.
-///
-/// So brightness isn't fixed; the *luminance* is. For each hue this solves for
-/// the brightness that lands on a target luminance — dark on a pale disc in light
-/// mode, bright on a deep disc in dark mode — which brings the worst pairing to
-/// 4.9:1 in light and 4.2:1 in dark. Some hues (blue, violet) cannot reach the
-/// dark-mode target at any brightness while fully saturated, so those desaturate
-/// until they can.
-///
-/// Both tables are built once, on first use, and read by index thereafter: the
-/// solve involves a handful of `pow` calls per entry, which is nothing once but
-/// would be wasteful on every row of a scrolling list.
+/// The avatar colours, one table per appearance. Equal HSB brightness isn't
+/// equal perceived luminance, so yellows washed out on white and blues vanished
+/// on black (worst pairing 1.5:1). Instead each hue solves for the brightness
+/// that hits a target luminance, giving worst pairings of 4.9:1 (light) and
+/// 4.2:1 (dark). Hues that can't reach the dark target desaturate until they can.
+/// Tables are built once on first use.
 enum AvatarPalette {
-    /// Aimed low in light mode (a dark glyph on a near-white disc) and high in
-    /// dark mode (a bright glyph on a near-black disc).
+    /// Aimed low in light mode (dark glyph on a pale disc) and high in dark mode.
     private static let lightTargetLuminance = 0.10
     private static let darkTargetLuminance = 0.28
 
@@ -194,11 +148,8 @@ enum AvatarPalette {
             for shade in AvatarIdentity.shades {
                 var saturation = shade.saturation
 
-                // A fully saturated blue tops out well below the dark-mode
-                // target however bright it gets, so trade saturation for
-                // luminance until it can reach it. Light mode needs no such
-                // step: a hue too dark to hit a *low* target is simply darker
-                // still, which only helps against a pale disc.
+                // Saturated blue can't reach the dark target at any brightness, so
+                // trade saturation for luminance. Light mode needs no such step.
                 if desaturateToReachTarget {
                     while saturation > 0.08, luminance(hue: hue, saturation: saturation, brightness: 1) < target {
                         saturation -= 0.02
@@ -206,8 +157,7 @@ enum AvatarPalette {
                 }
 
                 let ceiling = luminance(hue: hue, saturation: saturation, brightness: 1)
-                // Luminance rises with brightness on roughly a gamma curve, so
-                // this inverts it in one step instead of searching for the value.
+                // Luminance rises on roughly a gamma curve; invert it in one step.
                 let brightness = ceiling > 0 ? min(1, pow(target / ceiling, 1 / 2.2)) : 1
                 colors.append(Color(hue: hue, saturation: saturation, brightness: brightness))
             }
@@ -215,8 +165,7 @@ enum AvatarPalette {
         return colors
     }
 
-    /// Relative luminance of an HSB colour, per the sRGB definition the contrast
-    /// ratio is built on.
+    /// Relative luminance of an HSB colour (sRGB definition).
     private static func luminance(hue: Double, saturation: Double, brightness: Double) -> Double {
         let (r, g, b) = rgb(hue: hue, saturation: saturation, brightness: brightness)
         func linear(_ channel: Double) -> Double {
@@ -243,8 +192,7 @@ enum AvatarPalette {
     }
 }
 
-/// The person-in-a-circle placeholder, for the one spot with no identity to
-/// generate from: a signed-out guest.
+/// The placeholder for the one spot with no identity: a signed-out guest.
 struct PersonAvatar: View {
     var systemImage: String = "person.fill"
     var size: CGFloat = 72
