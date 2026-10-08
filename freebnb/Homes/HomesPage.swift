@@ -2,8 +2,7 @@
 //  HomesPage.swift
 //  freebnb
 //
-//  Shows a list of Home listings. Lets the user filter them. Lets the user
-//  sort them. Tells its parent which home was tapped.
+//  The list of listings with filtering and sorting; reports which home was tapped.
 //
 
 import SwiftUI
@@ -18,30 +17,24 @@ struct HomesPage: View {
     @State private var citySearch: String = ""
     @State private var showSavedOnly: Bool = false
     @State private var showMap: Bool = false
-    /// Pages fetched on behalf of the active query, reset whenever the query
-    /// changes. Bounds the exhaustion loop below.
+    /// Pages fetched for the active query, reset when it changes; bounds the exhaustion loop.
     @State private var searchPagesLoaded = 0
-    /// The geocoded city query, and how far from it the user will look
-    /// (feature 11). Nil until a query resolves to somewhere real.
+    /// The geocoded city query and the radius around it; nil until a query resolves.
     @State private var searchCenter: Coordinate?
     @State private var radiusMiles: Double?
 
     /// A pathological feed shouldn't page forever behind one keystroke.
     private static let maxSearchPages = 20
 
-    /// CLGeocoder is rate-limited to roughly 50 requests a minute, and a city
-    /// name arrives one keystroke at a time. Each keystroke cancels the pending
-    /// task, so only a pause in typing actually reaches the geocoder.
+    /// CLGeocoder allows about 50 requests a minute, so each keystroke cancels
+    /// the pending task and only a pause reaches it.
     private static let geocodeDebounce = Duration.milliseconds(500)
 
-    // `listings` arrives already ordered newest-first (with friends' listings
-    // grouped ahead) by HomeStore.feed, so the feed no longer shuffles it — a
-    // random order buried the recency signal L3 added. The default sort preserves
-    // that incoming order; the other sorts reorder it explicitly.
+    // `listings` arrives ordered by HomeStore.feed (newest first, friends ahead);
+    // the default sort keeps that order and the others reorder it.
     var listings: [Home]
-    /// Viewer identity and friend set, supplied by `ContentView` from the same
-    /// `FeedContext` that ranks the feed. Used to explain each card (feature 18).
-    /// Empty for a signed-out or anonymous viewer, which collapses that to nothing.
+    /// Viewer identity and friend set from `ContentView`'s `FeedContext`, used to
+    /// explain each card. Empty for signed-out or anonymous viewers.
     var viewerID: String = ""
     var friendIDs: Set<String> = []
     var isLoading: Bool = false
@@ -79,12 +72,8 @@ struct HomesPage: View {
         .accessibilityHint("Opens listing details")
     }
 
-    // Single derived source of truth for the visible list: filter + sort + saved
-    // applied to the incoming `listings`. Computed rather than mirrored into
-    // @State so it recomputes automatically whenever any input changes (filters,
-    // sort, search, the saved-only toggle, or the user's saved-listing set) and
-    // can never go stale from a missing onChange trigger. This is what makes the
-    // "Saved" filter update the instant a listing is bookmarked or unbookmarked.
+    // The visible list: filter, sort and saved applied to `listings`. Computed,
+    // not mirrored into @State, so it can't go stale and "Saved" updates instantly.
     private var filteredListings: [Home] {
         filterAndSort(
             listings,
@@ -97,35 +86,25 @@ struct HomesPage: View {
         )
     }
 
-    /// The active search center and radius, or nil when the query has not
-    /// geocoded (or there is no query at all).
+    /// The active search center and radius, or nil when the query hasn't geocoded.
     private var geoScope: GeoScope? {
         searchCenter.map { GeoScope(center: $0, radiusMiles: radiusMiles) }
     }
 
-    /// Placeholders stand in only before the first page arrives. Once any listing
-    /// is on screen, a filter that matches nothing is a result, not a load.
+    /// Placeholders show only before the first page; afterwards, no matches is a result.
     private var showingSkeletons: Bool { isLoading && filteredListings.isEmpty }
 
-    // Search, filters, and the saved-only toggle all narrow `listings`, which
-    // holds only the pages fetched so far. So a query matching nothing on page
-    // one used to render "No homes found" while its matches sat unfetched on
-    // page two, and the load-more sentinel — which only appears beneath a
-    // non-empty list — never fired to go get them (L3).
-    //
-    // Firestore can't answer a substring query, and the feed's ordering and
-    // ACL gating leave no room for a prefix range. So while a
-    // narrowing control is active we simply pull the remaining pages and let
-    // the client-side predicate see the whole feed.
+    // Search, filters and the saved toggle narrow only the pages fetched so far,
+    // so a query could show "No homes found" while its matches sat unfetched and
+    // the load-more sentinel never fired. Firestore can't do substring queries,
+    // so while a narrowing control is active we pull the remaining pages.
     private var isNarrowingFeed: Bool {
         !citySearch.trimmingCharacters(in: .whitespaces).isEmpty
             || !selectedFilters.isEmpty
             || showSavedOnly
     }
 
-    /// Doubles as the id the exhaustion loop restarts on: each fetch flips
-    /// `isLoadingMore` and bumps `searchPagesLoaded`, so the task re-runs and
-    /// pulls the next page until one of `FeedSearchPaging`'s stops trips.
+    /// Also the id the exhaustion loop restarts on, so the task re-runs for the next page until a `FeedSearchPaging` stop trips.
     private var paging: FeedSearchPaging {
         FeedSearchPaging(
             isNarrowing: isNarrowingFeed,
@@ -173,9 +152,7 @@ struct HomesPage: View {
                 .padding(.horizontal)
             }
 
-            // Scrollable because the controls are wider than a small screen once
-            // the radius menu joins them and the sort label spells out a choice
-            // as long as "Most Flexible Cancellation".
+            // Scrollable: the controls outgrow a small screen with the radius menu and long sort labels.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     filterMenu
@@ -274,10 +251,7 @@ struct HomesPage: View {
                         }
                     }
                     .animation(AppAnimation.contentSwap, value: showingSkeletons)
-                    // Filtering, sorting, and the saved-only toggle all rewrite this
-                    // list in place; animate on identity so rows slide rather than
-                    // pop. Keyed on IDs, not the Homes themselves, so an unrelated
-                    // field change does not re-run the transition.
+                    // Animate on IDs so rows slide rather than pop, without re-running for unrelated field changes.
                     .animatesListChanges(on: filteredListings.map(\.id))
                 }
             }
@@ -287,8 +261,7 @@ struct HomesPage: View {
         .padding(.horizontal, 16)
         .padding(.top, 16)
         .background(.primaryBackground)
-        // A new query gets a fresh page budget; the pages themselves stay in the
-        // store, so this only re-arms how far the next search may reach.
+        // A new query gets a fresh page budget; the fetched pages stay in the store.
         .onChange(of: citySearch) { _, _ in searchPagesLoaded = 0 }
         .onChange(of: selectedFilters) { _, _ in searchPagesLoaded = 0 }
         .onChange(of: showSavedOnly) { _, _ in searchPagesLoaded = 0 }
@@ -297,11 +270,9 @@ struct HomesPage: View {
             searchPagesLoaded += 1
             onLoadMore()
         }
-        // Resolves the city query to a point to measure from (feature 11).
-        // Restarted — and so cancelled — on every keystroke.
+        // Resolves the city query to a point; restarted (cancelled) on every keystroke.
         .task(id: citySearch) { await resolveSearchCenter() }
-        // Losing the center strands both geo controls: a radius with nothing to
-        // be within, and a sort that would silently stop sorting.
+        // Losing the center would strand the radius and the nearest sort.
         .onChange(of: searchCenter) { _, center in
             guard center == nil else { return }
             radiusMiles = nil
@@ -328,9 +299,8 @@ struct HomesPage: View {
         }
     }
 
-    /// Geocodes the trimmed city query after a pause in typing. A query that
-    /// names nowhere leaves `searchCenter` nil, which disables the radius menu and
-    /// the nearest sort rather than emptying the feed.
+    /// Geocodes the trimmed city query after a typing pause. A query naming nowhere
+    /// leaves `searchCenter` nil, disabling the radius menu and nearest sort.
     private func resolveSearchCenter() async {
         let query = citySearch.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else {
@@ -340,15 +310,13 @@ struct HomesPage: View {
         try? await Task.sleep(for: Self.geocodeDebounce)
         guard !Task.isCancelled else { return }
         let resolved = try? await GeocodingCache.shared.coordinate(for: query)
-        // The query may have moved on while the geocoder was working; the task is
-        // cancelled in that case, and a late answer must not overwrite the new one.
+        // The query may have moved on; a late answer must not overwrite the new one.
         guard !Task.isCancelled else { return }
         searchCenter = resolved.map { Coordinate($0) }
     }
 }
 
-// The filter chips and empty state live in an extension so the struct body —
-// state, feed derivation, and `body` — stays within lint's type-length limit.
+// The filter chips and empty state live in an extension to keep the struct body under lint's type-length limit.
 private extension HomesPage {
     var emptyStateView: some View {
         VStack(spacing: 16) {
@@ -360,8 +328,7 @@ private extension HomesPage {
             emptyStateMessage
         }
         .padding()
-        // The suggestions bridge in the unfiltered branch needs the FoF list,
-        // which otherwise only loads once the Friends tab is opened.
+        // The suggestions bridge needs the friends-of-friends list, which otherwise loads only with the Friends tab.
         .task {
             if isUnfilteredEmptyFeed {
                 await friendStore.loadSuggestions()
@@ -387,8 +354,7 @@ private extension HomesPage {
         .menuActionDismissBehavior(.disabled)
     }
 
-    /// Only rendered once `searchCenter` resolves: a radius with nothing at its
-    /// center is a filter the user cannot reason about.
+    /// Only once `searchCenter` resolves; a radius with no center is meaningless.
     var radiusMenu: some View {
         Menu {
             Button(SearchRadius.label(nil)) { radiusMiles = nil }
@@ -433,8 +399,7 @@ private extension HomesPage {
         }
     }
 
-    /// True when nothing is narrowing the feed and it is still empty: the
-    /// emptiness is about the viewer's network, not their query.
+    /// True when nothing narrows the feed and it's still empty: the viewer's network is the cause.
     var isUnfilteredEmptyFeed: Bool {
         !showSavedOnly && selectedFilters.isEmpty && citySearch.isEmpty
     }
@@ -443,8 +408,7 @@ private extension HomesPage {
         citySearch.trimmingCharacters(in: .whitespaces)
     }
 
-    /// "3 people you may know are on FreeBNB", grammatical at one. Bridges an
-    /// empty feed to the friend suggestions that would fill it.
+    /// "3 people you may know are on FreeBNB" (grammatical at one); bridges an empty feed to suggestions.
     var suggestionBridgeLabel: String {
         let count = friendStore.suggestions.count
         return count == 1
@@ -469,8 +433,7 @@ private extension HomesPage {
             Button("Show all listings") { showSavedOnly = false }
                 .capsuleChip()
         } else if isUnfilteredEmptyFeed && friendStore.friendEdges.isEmpty {
-            // The feed is empty because the friend list is: every listing on
-            // FreeBNB is friends-only, so the fix lives on the Friends page.
+            // The feed is empty because the friend list is (all listings are friends-only).
             Text("Your feed shows your friends' places, and only they can see yours. Add your first friend to get started.")
                 .font(.subheadline)
                 .foregroundColor(.secondaryText)
@@ -502,8 +465,7 @@ private extension HomesPage {
                 }
             }
         } else if !trimmedCityQuery.isEmpty {
-            // A trip with nowhere to stay is the highest-intent invite moment:
-            // the user already knows whose couch they want in that city.
+            // A trip with nowhere to stay is the highest-intent invite moment.
             Text("No friends with a place near \"\(trimmedCityQuery)\" yet. Who would you normally text for a couch there? If they join, their place shows up here.")
                 .font(.subheadline)
                 .foregroundColor(.secondaryText)
@@ -526,7 +488,7 @@ private extension HomesPage {
         }
     }
 
-    // Selected filters sorted in the same order as the filter menu.
+    // Selected filters in the filter menu's order.
     var sortedSelectedFilters: [FilterOption] {
         FilterOption.all.filter { selectedFilters.contains($0) }
     }

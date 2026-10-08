@@ -15,15 +15,12 @@ struct FriendsPage: View {
 
     @State private var showInvite = false
     @State private var actionError: String?
-    /// The person whose invite link opened the app, resolved to a profile. Shown
-    /// as a card at the top of the list with an Add button; adding is still an
-    /// explicit tap, and it is the same request search would send.
+    /// The person whose invite link opened the app, shown as a card with an Add
+    /// button; adding is still an explicit tap, like search.
     @State private var inviter: UserProfile?
 
-    // Finding new friends lives on the page itself: the search bar is always
-    // present rather than hidden behind an "Add friend" sheet. An active query
-    // swaps the friend-management list for name-search results; the graph is only
-    // ever changed by an explicit tap on "Add", never automatically.
+    // Search is always present rather than behind an "Add friend" sheet. A query
+    // swaps the list for results; the graph changes only on an explicit "Add".
     @State private var query = ""
     @State private var searchResults: [UserProfile] = []
     @State private var isSearching = false
@@ -47,8 +44,7 @@ struct FriendsPage: View {
         .textInputAutocapitalization(.words)
         .autocorrectionDisabled()
         .task { await friendStore.loadSuggestions() }
-        // Seeds this host's starter circles and files any new friend under
-        // Default. Idempotent, and it writes only what is missing.
+        // Seeds starter circles and files new friends under Default. Idempotent.
         .task(id: friendStore.friendIDs) { await circleStore.reconcile(friendIDs: friendStore.friendIDs) }
         .task(id: trimmedQuery) { await performSearch() }
         .task(id: router.pendingInviterID) { await resolveInviter() }
@@ -96,11 +92,8 @@ struct FriendsPage: View {
                 }
             }
         } else {
-            // A search that finds nobody is the likeliest reason someone stalls
-            // here: the app is empty until a friend is added, and the two ways to
-            // get no result — they spell their name differently, or they aren't
-            // on FreeBNB — both leave the searcher with nothing to do next. Name
-            // both, and offer the invite, which is the answer to the second one.
+            // An empty search is a likely stall point: the name may be spelled
+            // differently or the person isn't on FreeBNB. Name both and offer the invite.
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("No one found for \"\(trimmedQuery)\".")
@@ -132,8 +125,7 @@ struct FriendsPage: View {
             Section { InlineErrorLabel(message: error) }
         }
 
-        // Above Requests, because this is the one thing the person who just
-        // followed an invite came here to do.
+        // Above Requests: the one thing someone arriving by invite came to do.
         if let inviter, let inviterID = inviter.id {
             Section {
                 SearchResultRow(profile: inviter, state: rowState(for: inviter)) {
@@ -172,10 +164,7 @@ struct FriendsPage: View {
         }
 
         if !friendStore.friendEdges.isEmpty {
-            // Circles sit above the friend list, because the list below is where
-            // a host acts on one of them and this is the thing that explains
-            // what the subtitle on each row means. Host-only, like everything
-            // behind it — a guest has no way to reach this screen at all.
+            // Circles sit above the list that acts on them and explain the row subtitles. Host-only.
             Section {
                 NavigationLink {
                     CirclesPage()
@@ -199,9 +188,7 @@ struct FriendsPage: View {
                 ForEach(friendStore.friendEdges) { edge in
                     let otherID = edge.otherUserID(relativeTo: authManager.userID)
                     let name = userProfileStore.displayName(for: otherID) ?? "FreeBNB User"
-                    // Tapping through to the profile is the only way to unfriend:
-                    // ending a friendship (and the home access it grants) is a
-                    // deliberate act on their profile, not a stray swipe here.
+                    // Unfriending is only via the profile, a deliberate act rather than a stray swipe.
                     NavigationLink {
                         UserProfilePage(userID: otherID, fallbackName: name)
                     } label: {
@@ -252,10 +239,7 @@ struct FriendsPage: View {
         }
     }
 
-    /// What this friend's row says under their name: the circle they're in, and
-    /// whether the host has set rules on them directly. Only ever shown to the
-    /// host — this is their own Friends list, and the friend it names has no
-    /// route to this screen.
+    /// What a friend's row says: their circle and whether rules are set on them directly. Host-only.
     private func circleLabel(for friendID: String) -> String? {
         switch circleStore.resolved(for: friendID).source {
         case .override:
@@ -270,10 +254,8 @@ struct FriendsPage: View {
         }
     }
 
-    /// How many visible listings each friend hosts, keyed by friend UID, so the
-    /// Friends list can show a "2 homes" count beside each name. Reuses
-    /// `NetworkReach`'s tested derivation (own listings excluded, only verified
-    /// friends counted). Pure and cheap, so deriving it in the body is fine.
+    /// Visible listings each friend hosts, keyed by UID, for the "2 homes" count.
+    /// Reuses `NetworkReach`'s tested derivation; cheap enough for the body.
     private var homeCountsByFriend: [String: Int] {
         let reach = NetworkReach.compute(
             homes: homeStore.visibleListings,
@@ -286,12 +268,8 @@ struct FriendsPage: View {
 
     // MARK: - Search actions
 
-    /// Runs the debounced name search for the current query. Driven by
-    /// `.task(id: trimmedQuery)`, so SwiftUI cancels the previous run and starts a
-    /// fresh one on every change: the newest query always owns the loading state,
-    /// and an empty query clears it, so the spinner can never outlive a search
-    /// (including one that finds no one). An empty query drops back to the
-    /// friend-management list.
+    /// Runs the debounced name search, driven by `.task(id: trimmedQuery)` so the
+    /// newest query owns the loading state and an empty one clears it and returns to the friend list.
     private func performSearch() async {
         let needle = trimmedQuery
         guard !needle.isEmpty else {
@@ -304,8 +282,7 @@ struct FriendsPage: View {
         isSearching = true
         searchError = nil
 
-        // Debounce: a newer keystroke changes the task id and cancels this run
-        // during the pause, so only a lull in typing reaches the network.
+        // Debounce: a newer keystroke cancels this run, so only a lull reaches the network.
         do {
             try await Task.sleep(nanoseconds: 300_000_000)
         } catch {
@@ -327,16 +304,12 @@ struct FriendsPage: View {
         isSearching = false
     }
 
-    /// Resolves the pending invite link to a profile, then clears the router so a
-    /// second tap on the same link resolves again. An invite naming the viewer,
-    /// or naming nobody the directory knows, simply leaves the card off.
+    /// Resolves the pending invite link to a profile, then clears the router so the
+    /// same link can resolve again. An invite naming the viewer or no known user leaves the card off.
     private func resolveInviter() async {
         guard let inviterID = router.pendingInviterID else { return }
         router.pendingInviterID = nil
-        // A leftover query from an earlier visit swaps this whole list for search
-        // results, which would hide the card the link was followed to show. The
-        // search bar keeps its text across tab switches, so this is the ordinary
-        // case, not an edge one.
+        // A leftover query would swap in search results and hide the invite card; the search text persists across tab switches.
         query = ""
         guard inviterID != authManager.userID else { return }
         inviter = await userProfileStore.fetchProfileOnce(userID: inviterID)
@@ -398,8 +371,7 @@ private struct FriendRow: View {
     let name: String
     let userID: String
     let homeCount: Int
-    /// The circle this friend is in, for the host's eyes. Nil before circles
-    /// exist for this host, which is when there is nothing to say.
+    /// The friend's circle, for the host's eyes; nil before circles exist.
     let circleLabel: String?
 
     var body: some View {
@@ -497,9 +469,7 @@ private struct FriendRequestRow: View {
                 }
                 .buttonStyle(.pressable)
                 Button(action: onAccept) {
-                    // Coral for the answer a pending request is waiting on;
-                    // "Add" and "Share Invite" elsewhere stay teal so coral
-                    // keeps meaning "someone is waiting on you".
+                    // Coral for the answer a request waits on; other actions stay teal so coral means "someone is waiting on you".
                     Text("Accept")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
@@ -552,11 +522,7 @@ private struct SearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Seeded by ID only. Falling back to the display name would draw this
-            // person one way in search and another way on their own profile,
-            // which is worse than the neutral placeholder an ID-less document
-            // gets — and such a document can't be friended anyway (`sendSearchRequest`
-            // requires the id), so it is already a broken record, not a person.
+            // Seeded by ID only, so the avatar matches the person's own profile; a document without an id can't be friended anyway.
             GeneratedAvatar(seed: profile.id ?? "")
             Text(profile.displayName)
                 .font(.body)
@@ -593,8 +559,7 @@ struct InviteSheet: View {
     @Environment(UserProfileStore.self) private var userProfileStore
     @Environment(\.dismiss) private var dismiss
 
-    // The message and link live in InviteCopy so every invite surface (this
-    // sheet, the feed's empty states) sends the same vouching story.
+    // The message and link live in InviteCopy so every invite surface sends the same story.
     /// The sender's own ID, so the link opens on their card at the other end.
     private var senderID: String? { userProfileStore.currentProfile?.id }
 
