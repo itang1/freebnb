@@ -2,10 +2,8 @@
 //  ReviewStore.swift
 //  freebnb
 //
-//  Reviews, references, and mutual-friend counts, cached per user (features 1
-//  and 2). Unlike the other stores this holds no snapshot listeners: a profile's
-//  reviews change once per stay, so pages fetch on appear and the cache keeps a
-//  second visit instant.
+//  Reviews, references and mutual-friend counts, cached per user. It holds no snapshot
+//  listeners: reviews change once per stay, so pages fetch on appear and the cache makes revisits instant.
 //
 
 import FirebaseAuth
@@ -22,13 +20,9 @@ final class ReviewStore {
     private(set) var referencesBySubject: [String: [CharacterReference]] = [:]
     /// Mutual-friend counts against the signed-in user, keyed by the other user.
     private(set) var mutualFriendsByUser: [String: MutualFriends] = [:]
-    /// Private notes attached to reviews, keyed by review id. Only ever populated
-    /// for reviews the signed-in user authored or is the subject of — the rules
-    /// refuse anyone else, so an absent entry here is also the honest answer.
+    /// Private notes on reviews, keyed by review id; only populated for reviews the user authored or is the subject of (the rules refuse others).
     private(set) var privateFeedbackByReview: [String: PrivateFeedback] = [:]
-    /// Stay-request ids the signed-in user has already reviewed. Drives the
-    /// "needs your review" prompt, so it must be loaded before that prompt can
-    /// honestly claim a stay is unreviewed.
+    /// Stay-request ids the user already reviewed; must load before "needs your review" can honestly claim a stay is unreviewed.
     private(set) var reviewedStayIDs: Set<String> = []
     private(set) var hasLoadedOwnReviews = false
 
@@ -50,8 +44,7 @@ final class ReviewStore {
         if let authHandle { Auth.auth().removeStateDidChangeListener(authHandle) }
     }
 
-    /// Everything here is scoped to the signed-in user (mutual friends literally
-    /// are), so a sign-out must not leave the next account looking at it.
+    /// Everything is scoped to the signed-in user, so a sign-out mustn't leave the next account seeing it.
     private func reset(userID: String?) {
         reviewsBySubject = [:]
         referencesBySubject = [:]
@@ -70,14 +63,11 @@ final class ReviewStore {
     func references(about userID: String) -> [CharacterReference] { referencesBySubject[userID] ?? [] }
     func mutualFriends(with userID: String) -> MutualFriends? { mutualFriendsByUser[userID] }
 
-    /// Whether the fetch has come back. "No reviews yet" and "still loading" look
-    /// identical in an empty array, and only one of them is a claim about a person.
+    /// Whether the fetch came back; an empty array can't tell "no reviews" from "still loading".
     func hasLoadedReviews(about userID: String) -> Bool { reviewsBySubject[userID] != nil }
     func hasLoadedReferences(about userID: String) -> Bool { referencesBySubject[userID] != nil }
 
-    /// True once we know the answer and the answer is "not yet". Returns false
-    /// while the signed-in user's own reviews are still loading, so the UI never
-    /// nags someone to review a stay they already reviewed.
+    /// True once the answer is "not yet"; false while the user's own reviews load, so the UI never nags about an already-reviewed stay.
     func needsReview(stayRequestID: String) -> Bool {
         hasLoadedOwnReviews && !reviewedStayIDs.contains(stayRequestID)
     }
@@ -96,9 +86,7 @@ final class ReviewStore {
 
     func privateFeedback(reviewID: String) -> PrivateFeedback? { privateFeedbackByReview[reviewID] }
 
-    /// Loads the private notes on the given reviews, one document each. Only the
-    /// reviewer and the reviewed can read one, so a denial is expected rather than
-    /// exceptional — `once` swallows it and the note simply doesn't render.
+    /// Loads the private notes on the given reviews, one document each. A denial is expected (only the two parties read one), so `once` swallows it.
     func loadPrivateFeedback(for reviews: [Review]) async {
         for review in reviews {
             await once("feedback:\(review.id)") {
@@ -109,8 +97,7 @@ final class ReviewStore {
         }
     }
 
-    /// A count of shared friends, or nothing at all: this is a nice-to-have chip,
-    /// and a failed callable should never surface an error to the user.
+    /// A shared-friend count or nothing: a nice-to-have chip that should never surface an error.
     func loadMutualFriends(with userID: String) async {
         guard let me = Auth.auth().currentUser?.uid, me != userID else { return }
         await once("mutual:\(userID)") {
@@ -141,10 +128,7 @@ final class ReviewStore {
             throw error
         }
         reviewedStayIDs.insert(review.stayRequestID)
-        // The subject's cached list is now stale. Re-fetching beats splicing the
-        // new review in locally, because the server owns the rating average — and
-        // it has to be a re-fetch rather than a bare invalidation: the view that
-        // shows this list already ran its `.task`, and won't run it again.
+        // The subject's cached list is stale. Re-fetch rather than splice, since the server owns the rating average, and not a bare invalidation (the view's `.task` won't re-run).
         invalidate(reviewsBySubject: review.subjectUserID)
     }
 
@@ -180,14 +164,9 @@ final class ReviewStore {
         Task { await loadReferences(about: userID) }
     }
 
-    /// Runs `work` unless a fetch with the same key already ran or is running.
-    /// SwiftUI calls `.task` again on every re-appearance, and each of these
-    /// fetches is a billed read.
-    ///
-    /// A failure releases the key, so the next appearance retries. Keeping it
-    /// would cache a network blip as "this person has no reviews" for the rest
-    /// of the session, which is exactly the wrong thing to say about a stranger
-    /// whose home someone is deciding to sleep in.
+    /// Runs `work` unless a fetch with the same key ran or is running (`.task` re-fires on every
+    /// appearance and each fetch is a billed read). A failure releases the key so the next
+    /// appearance retries; keeping it would cache a blip as "no reviews" for a stranger's home.
     private func once(_ key: String, _ work: () async throws -> Void) async {
         guard !inFlight.contains(key) else { return }
         inFlight.insert(key)

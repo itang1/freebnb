@@ -2,16 +2,10 @@
 //  FriendNoteStore.swift
 //  freebnb
 //
-//  The host's own notes on their friends. Host-side only, in the strong sense:
-//  no screen a guest can reach touches this store, and there is no derived
-//  value here that any other user's device could observe.
-//
-//  What this store deliberately does not do is as much of the design as what it
-//  does. It does not count notes into a score, does not expose "how many notes
-//  about X" to anything that ranks or sorts friends, does not tell the friend
-//  anything, and does not touch `CircleStore`. A note is something the host
-//  reads and then decides for themselves; the moment it feeds a number, it has
-//  become the rating system this feature exists instead of.
+//  The host's own notes on friends. Host-side only: no guest-reachable screen touches
+//  this store and nothing derived is observable from another device. It doesn't count
+//  notes into a score, expose counts to anything that ranks friends, tell the friend,
+//  or touch `CircleStore`; a note that feeds a number becomes the rating system this feature replaces.
 //
 
 import FirebaseAuth
@@ -23,15 +17,12 @@ import os
 @MainActor
 @Observable
 final class FriendNoteStore {
-    /// Every note this host has written, newest first, across all friends.
+    /// Every note this host wrote, newest first, across all friends.
     private(set) var notes: [FriendNote] = []
-    /// Stay ids whose post-stay prompt the host has already answered or waved
-    /// off.
+    /// Stay ids whose post-stay prompt was answered or waved off.
     private(set) var seenPrompts: Set<String> = []
     private(set) var listenerError: String?
-    /// False until the notes listener has delivered a first snapshot. The
-    /// post-stay prompt waits on it, so a host isn't asked about a stay they
-    /// already wrote a note for while that note is still in flight.
+    /// False until the first notes snapshot; the prompt waits on it so a host isn't asked about a stay they've already noted.
     private(set) var hasLoaded = false
 
     @ObservationIgnored private let repository: FriendNoteRepository
@@ -58,28 +49,22 @@ final class FriendNoteStore {
 
     // MARK: - Derived views
 
-    /// The notes about one friend, newest first. The only accessor any screen
-    /// needs, and the only shape a note is ever read in.
+    /// The notes about one friend, newest first; the only shape a note is read in.
     func notes(about friendID: String) -> [FriendNote] {
         notes.about(friendID)
     }
 
-    /// The most recent note about one friend, for the one-line preview on their
-    /// screen. Nil when there are none.
+    /// The most recent note about one friend, for their one-line preview; nil when none.
     func mostRecentNote(about friendID: String) -> FriendNote? {
         notes(about: friendID).first
     }
 
-    /// Whether this host has already written something about `stayRequestID`.
-    /// Used only to stop asking twice — never to mark a stay as "reviewed", and
-    /// never surfaced to the other party.
+    /// Whether this host already wrote something about `stayRequestID`; only to avoid asking twice, never surfaced.
     func hasNote(forStayRequestID stayRequestID: String) -> Bool {
         notes.contains { $0.stayRequestID == stayRequestID }
     }
 
-    /// Whether the lightweight post-stay prompt still has anything to ask about
-    /// this stay. Once the host writes a note or waves the prompt off, it is
-    /// done for good.
+    /// Whether the post-stay prompt still has anything to ask; done for good once a note is written or waved off.
     func shouldPrompt(forStayRequestID stayRequestID: String) -> Bool {
         hasLoaded
             && !seenPrompts.contains(stayRequestID)
@@ -105,9 +90,7 @@ final class FriendNoteStore {
                     self.notes = notes
                     self.listenerError = nil
                 case .failure(let error):
-                    // Never logs a note's text or its subject: the log is the one
-                    // place a private note could leak to somewhere the rules
-                    // don't reach.
+                    // Never logs a note's text or subject: the log is the one place a private note could leak.
                     self.log.error("notes listener: \(error.localizedDescription, privacy: .public)")
                     self.listenerError = error.localizedDescription
                 }
@@ -125,18 +108,14 @@ final class FriendNoteStore {
 
     // MARK: - Actions
 
-    /// Writes a note about a friend. `stayRequestID` is context, not a
-    /// requirement: a host noticing something in March should not have to find a
-    /// visit to file it under.
+    /// Writes a note about a friend. `stayRequestID` is context, not required.
     func addNote(about friendID: String, text: String, stayRequestID: String? = nil) async throws {
         guard !hostID.isEmpty, friendID != hostID, let body = FriendNote.normalized(text) else { return }
         try await repository.createNote(
             hostID: hostID,
             FriendNote(subjectUserID: friendID, text: body, stayRequestID: stayRequestID)
         )
-        // Writing about a stay answers that stay's prompt, so it never comes
-        // back. Best-effort: a failure here costs one redundant prompt, which is
-        // not worth failing the note the host actually wrote.
+        // Writing answers the stay's prompt for good; best-effort, since failure costs only a redundant prompt.
         if let stayRequestID {
             try? await repository.markPromptSeen(hostID: hostID, stayRequestID: stayRequestID)
         }
@@ -158,14 +137,10 @@ final class FriendNoteStore {
         try await repository.deleteNote(hostID: hostID, noteID: id)
     }
 
-    /// Waves off the post-stay prompt for one stay. Not a decision about the
-    /// friend and not recorded as one — it means "don't ask me about this stay
-    /// again", and the host can still add a note from that friend's screen
-    /// whenever they like.
+    /// Waves off the post-stay prompt for one stay ("don't ask again"), not a judgement of the friend; notes stay writable from their screen.
     func dismissPrompt(forStayRequestID stayRequestID: String) async {
         guard !hostID.isEmpty else { return }
-        // Optimistic, so the row leaves under the tap rather than after a round
-        // trip. The listener confirms it a moment later.
+        // Optimistic, so the row leaves under the tap; the listener confirms.
         seenPrompts.insert(stayRequestID)
         do { try await repository.markPromptSeen(hostID: hostID, stayRequestID: stayRequestID) }
         catch { log.error("dismiss note prompt: \(error.localizedDescription, privacy: .public)") }

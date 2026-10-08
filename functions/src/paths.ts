@@ -17,8 +17,7 @@ export const Collections = {
   // Friend-written character references on a profile, one per (subject, author).
   references: "references",
   // Per-(host, guest) frequency counters behind a circle's booking policy, keyed
-  // "{hostID}_{guestID}". Advanced by the guest in the same commit as the stay
-  // request; see docs/internal/CIRCLES.md.
+  // "{hostID}_{guestID}"; advanced with the stay request (docs/internal/CIRCLES.md).
   stayCounters: "stayCounters",
 } as const;
 
@@ -32,43 +31,30 @@ export const Subcollections = {
   // Which circle each friend is in, plus any per-friend override:
   // users/{hostID}/circleMembers/{friendUID}. Host-only.
   circleMembers: "circleMembers",
-  // The resolved policy projected for one guest:
-  // users/{hostID}/bookingPolicies/{guestUID}. The only part of Circles a guest
-  // may read, and it carries no circle id and no circle name.
+  // The resolved policy for one guest: users/{hostID}/bookingPolicies/{guestUID}. The
+  // only part of Circles a guest reads; no circle id or name.
   bookingPolicies: "bookingPolicies",
-  // A host's private notes on their friends:
-  // users/{hostID}/friendNotes/{noteID}. Host-only, with no projection for
-  // anyone else, and no function reads or writes one.
+  // A host's private notes on friends: users/{hostID}/friendNotes/{noteID}. Host-only; no function touches them.
   friendNotes: "friendNotes",
-  // Which post-stay note prompts a host has already dealt with:
-  // users/{hostID}/friendNotePrompts/{stayRequestID}. Host-only, and carries
-  // only a timestamp.
+  // Which post-stay note prompts a host dealt with: users/{hostID}/friendNotePrompts/{stayRequestID}. Only a timestamp.
   friendNotePrompts: "friendNotePrompts",
-  // A guest's private notes on the hosts they stay with and the listings they
-  // consider: users/{guestID}/guestNotes/{noteID}. The symmetric twin of
-  // friendNotes, guest-only, with no projection for anyone else, and no function
-  // reads or writes one.
+  // A guest's private notes on hosts and listings: users/{guestID}/guestNotes/{noteID}. Guest-only; no function touches them.
   guestNotes: "guestNotes",
-  // Which post-trip note prompts a guest has already dealt with:
-  // users/{guestID}/guestNotePrompts/{stayRequestID}. Guest-only, and carries
-  // only a timestamp.
+  // Which post-trip note prompts a guest dealt with: users/{guestID}/guestNotePrompts/{stayRequestID}. Only a timestamp.
   guestNotePrompts: "guestNotePrompts",
 } as const;
 
 export const Docs = {
   // The listing's private street address: homes/{id}/private/location.
   location: "location",
-  // The listing's calendar with blocked and booked still apart:
-  // homes/{id}/private/availability. The public listing document carries only
-  // their union, so no guest can tell one from the other.
+  // The listing's blocked and booked halves: homes/{id}/private/availability. The public listing carries only their union.
   availability: "availability",
   // The user's private profile: users/{uid}/private/profile.
   profile: "profile",
   // The reviewer's note to the reviewed: reviews/{reviewID}/private/feedback.
   feedback: "feedback",
-  // The circle every host has and cannot delete, at a fixed id so a security
-  // rule can always reach it — rules cannot ask which circle carries a flag.
-  // Mirrors FriendCircle.defaultID in the Swift client.
+  // The circle every host has and cannot delete, at a fixed id so rules can reach it
+  // (they can't query for a flag). Mirrors FriendCircle.defaultID.
   defaultCircle: "default",
 } as const;
 
@@ -90,7 +76,6 @@ export const messageDocPattern = `${Collections.messages}/{messageID}`;
 export const friendEdgeDocPattern = `${Collections.friendEdges}/{edgeID}`;
 export const stayRequestDocPattern = `${Collections.stayRequests}/{requestID}`;
 // Reviews are keyed "{stayRequestID}_{authorUserID}" and references
-// "{subjectUserID}_{authorUserID}". Those deterministic ids are what make
-// "exactly one per pair" enforceable in firestore.rules rather than by a query
-// the client could skip; the functions only ever read them, never mint them.
+// "{subjectUserID}_{authorUserID}", which makes "one per pair" enforceable in
+// firestore.rules; functions only read these ids.
 export const reviewDocPattern = `${Collections.reviews}/{reviewID}`;

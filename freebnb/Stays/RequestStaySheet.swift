@@ -14,17 +14,12 @@ struct RequestStaySheet: View {
     @Environment(BookingPolicyStore.self) private var policyStore
     @Environment(\.dismiss) private var dismiss
 
-    // The host's booking rules for this guest, resolved once when the sheet
-    // opens (see BookingPolicyStore). Everything it changes about this screen is
-    // a subtraction — an arrival option that isn't listed, a day drawn the way a
-    // booked day is drawn. Nothing here says a rule exists, because the guest
-    // being restricted is exactly the person who must not be told.
+    // The host's booking rules for this guest, resolved once when the sheet opens
+    // (see BookingPolicyStore). They only subtract options; nothing says a rule exists,
+    // since the restricted guest is who must not be told.
     @State private var resolvedPolicy: BookingPolicyStore.Resolved = .unrestricted
 
-    // Nil until the guest taps. Nothing is pre-filled because the grid knows which
-    // days are gone and a default has no way to: tomorrow may be the middle of a
-    // week the host blocked, and opening on an error the guest didn't cause is a
-    // poor way to start.
+    // Nil until the guest taps: the grid knows which days are gone and a default doesn't.
     @State private var checkIn: Date?
     @State private var checkOut: Date?
     @State private var note = ""
@@ -38,22 +33,15 @@ struct RequestStaySheet: View {
         return max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
     }
 
-    // Any date the listing isn't free: the host's blocked ranges and the ranges an
-    // accepted stay has taken, together (`unavailableRanges`). The grid already
-    // refuses to select across these, so this is the second lock on the same door:
-    // the listing can change under an open sheet.
+    // Any unavailable date (blocked plus accepted-stay ranges). The grid already refuses
+    // to select across them; this is the second lock, since the listing can change under an open sheet.
     private var unavailableConflict: DateRange? {
         guard let checkIn, let checkOut else { return nil }
         return listing.unavailableRanges.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
     }
 
-    // The days the grid greys out, computed once per listing rather than per cell.
-    //
-    // Three sources, one set, and that is the point: the host's blocked days,
-    // the days somebody else's accepted stay took, and the days this guest's own
-    // booking rules withhold all arrive here indistinguishable from one another.
-    // The grid draws a member of this set one way and has no idea which source
-    // it came from, so there is nothing for a restricted guest to compare.
+    // The greyed days, computed once per listing. Blocked days, other stays and this
+    // guest's withheld days arrive indistinguishable, so a restricted guest has nothing to compare.
     private var unavailableDays: Set<Date> {
         AvailabilityCalendar.blockedDays(in: listing.unavailableRanges)
             .union(BookingPolicyGuestView.daysWithheld(
@@ -64,10 +52,7 @@ struct RequestStaySheet: View {
             ))
     }
 
-    /// The arrival times this guest may pick. A policy that withholds one simply
-    /// leaves it out of the picker — there is no disabled row, no footnote, and
-    /// no "ask your host" — so the menu reads as the whole of what was ever on
-    /// offer.
+    /// The arrival times this guest may pick; a withheld one is simply absent (no disabled row or "ask your host").
     private var arrivalChoices: [ArrivalWindow] {
         let allowed = resolvedPolicy.policy.allowedArrivalWindows
         return allowed.isEmpty ? ArrivalWindow.allCases : allowed
@@ -86,11 +71,8 @@ struct RequestStaySheet: View {
         guard let checkIn, let checkOut else { return false }
         return !isSending && checkOut > checkIn && nights <= listing.guestPolicy.maxStayDays
             && unavailableConflict == nil && acceptedConflict == nil
-            // The grid refuses to select across an unavailable day, but the set
-            // can grow under an open sheet — the policy resolves a moment after
-            // the sheet appears, and a frequency window can close while it sits
-            // there. Re-checking the selection against the live set is what keeps
-            // the Send button from offering a write the rules would refuse.
+            // The set can grow under an open sheet (policy resolving, a frequency window
+            // closing); re-checking keeps Send from offering a write the rules would refuse.
             && AvailabilityCalendar.isStaySelectable(
                 checkIn: checkIn, checkOut: checkOut, unavailableDays: unavailableDays
             )
@@ -99,9 +81,7 @@ struct RequestStaySheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                // Which place this request is for. A host can list more than one
-                // home and the thread is shared across all of them, so "Request a
-                // Stay" alone wouldn't say which one you're asking about.
+                // Which place this request is for; one host may list several homes sharing a thread.
                 Section {
                     HStack(spacing: 12) {
                         Image(systemName: "house.fill")
@@ -148,12 +128,9 @@ struct RequestStaySheet: View {
                             .font(.caption)
                             .foregroundColor(.danger)
                     }
-                    // The own-stay message is more specific, so it wins: an overlap
-                    // that is the guest's own confirmed stay names itself, where any
-                    // other conflict falls to the neutral, causeless line the grid
-                    // and the date-change sheet already use. A booked night, a
-                    // blocked one, and a stay's turnover buffer all read the same
-                    // here, and none of them names the span it took.
+                    // The own-stay message wins: an overlap with the guest's own confirmed stay
+                    // names itself, while any other conflict (booked, blocked, buffer) gets the
+                    // neutral line, naming no span.
                     if let conflict = acceptedConflict {
                         let f = AppDateFormatters.shortDay
                         Label("You already have an accepted stay here \(f.string(from: conflict.checkIn)) – \(f.string(from: conflict.checkOut))", systemImage: "calendar.badge.exclamationmark")
@@ -220,7 +197,7 @@ struct RequestStaySheet: View {
         }
     }
 
-    /// What the grid is waiting for, so the two taps it takes are never a guess.
+    /// What the grid is waiting for, so the two taps are never a guess.
     private var selectionPrompt: String {
         let formatter = AppDateFormatters.shortDay
         guard let checkIn else { return "Tap a day to set your check in" }
@@ -228,10 +205,8 @@ struct RequestStaySheet: View {
         return "\(formatter.string(from: checkIn)) – \(formatter.string(from: checkOut))"
     }
 
-    /// Loads the host's rules for this guest and re-points the arrival picker if
-    /// its default is one of the ones withheld. Selecting a value the picker no
-    /// longer lists would leave the row blank, which is the one way this could
-    /// draw attention to itself.
+    /// Loads the host's rules for this guest and re-points the arrival picker if its
+    /// default was withheld (a missing selection would blank the row and draw attention).
     private func loadPolicy() async {
         resolvedPolicy = await policyStore.resolve(
             hostID: listing.hostUserID,
@@ -256,8 +231,7 @@ struct RequestStaySheet: View {
                 guestNote: note.isEmpty ? nil : note,
                 guestCount: guestCount,
                 arrivalWindow: arrivalWindow,
-                // Spends a slot against the host's frequency cap, in the same
-                // commit as the request. Nil when there is no cap.
+                // Spends a slot against the host's frequency cap in the same commit; nil when there's no cap.
                 advancing: policyStore.advancedCounter(
                     for: resolvedPolicy,
                     hostID: listing.hostUserID,
