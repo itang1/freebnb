@@ -2,20 +2,11 @@
 //  GuestNotesPage.swift
 //  freebnb
 //
-//  Where a guest reads and writes their private notes about one host or one
-//  listing.
-//
-//  Every screen in this file is the guest's own, in the same sense
-//  `FriendNotesPage` is the host's: nothing here is reachable from a screen the
-//  host can open, and no note is ever rendered for anybody but its author. The
-//  copy says so plainly and exactly once per screen, because a guest who is
-//  unsure who can see this writes a note they'd have written for an audience,
-//  which is the wrong note.
-//
-//  There is no rating, no count, no summary, and no path to a report here on
-//  purpose. A note is something the guest reads and then decides for themselves;
-//  reporting a host is a separate, deliberate action that lives on the profile
-//  and listing pages, and this is not it.
+//  Where a guest reads and writes private notes about one host or listing. Every
+//  screen here is the guest's own (like `FriendNotesPage` for hosts): nothing is
+//  reachable from the host's side, and the copy says so once per screen, since a
+//  guest unsure of the audience writes the wrong note. There is deliberately no
+//  rating, count, summary or report path; reporting lives on the profile and listing pages.
 //
 
 import SwiftUI
@@ -23,7 +14,7 @@ import SwiftUI
 struct GuestNotesPage: View {
     let subjectType: GuestNoteSubjectType
     let subjectID: String
-    /// The host's name or the listing's label, for the copy and the title.
+    /// The host's name or the listing's label, for copy and title.
     let subjectName: String
 
     @Environment(GuestNoteStore.self) private var noteStore
@@ -34,9 +25,7 @@ struct GuestNotesPage: View {
 
     private var notes: [GuestNote] { noteStore.notes(about: subjectType, subjectID) }
 
-    /// What a note here is about, in a form that fits mid-sentence: "staying with
-    /// Maya" for a host, "this listing" for a listing. Keeps the copy honest
-    /// about which of the two kinds of note the guest is writing.
+    /// What a note is about, mid-sentence: "staying with Maya" or "this listing".
     private var aboutPhrase: String {
         switch subjectType {
         case .host:    return "staying with \(subjectName)"
@@ -128,9 +117,7 @@ private struct GuestNoteRow: View {
 
     @Environment(StayRequestStore.self) private var requestStore
 
-    /// The trip this note was written about, when it was written about one and
-    /// that trip is still in the store. A note outlives the record it was filed
-    /// under, so a missing stay drops the subtitle rather than the note.
+    /// The trip this note was about, if still in the store; a missing stay drops the subtitle, not the note.
     private var stayContext: String? {
         guard let stayRequestID = note.stayRequestID else { return nil }
         let known = requestStore.incomingRequests + requestStore.outgoingRequests
@@ -166,9 +153,7 @@ private struct GuestNoteRow: View {
 
 // MARK: - Composer
 
-/// What the composer was opened for. Modelled as one value rather than a set of
-/// optionals so "editing a note" and "writing a new one about a trip" cannot be
-/// half-set at the same time.
+/// What the composer opened for: one value, so "editing" and "new note about a trip" can't be half-set.
 enum GuestNoteComposition: Identifiable, Hashable {
     case new(subjectType: GuestNoteSubjectType, subjectID: String, stayRequestID: String?)
     case editing(GuestNote)
@@ -222,9 +207,7 @@ struct GuestNoteComposerSheet: View {
                     Text("Private note")
                 } footer: {
                     VStack(alignment: .leading, spacing: 4) {
-                        // The one thing worth saying at the moment of writing,
-                        // said once. A guest who has to guess at the audience
-                        // writes for one.
+                        // The audience, said once; a guest who has to guess writes for one.
                         Text("Only you will ever read this. \(subjectName) isn't told, and it isn't sent to anyone.")
                         Text("\(trimmed.count) / \(GuestNote.maxLength)")
                             .foregroundColor(trimmed.count > GuestNote.maxLength ? .danger : .secondaryText)
@@ -283,12 +266,9 @@ struct GuestNoteComposerSheet: View {
 
 // MARK: - Entry point
 
-/// The button that takes a guest from a host's profile or a listing into their
-/// private notes about it, carrying a one-line preview of the most recent one.
-/// Styled as the quietest control on whatever page it sits on — grey rather than
-/// accent — because what is private should not look like an invitation to
-/// broadcast, and because the loud controls on those pages reach the other
-/// person while this one never does.
+/// The button from a host's profile or a listing into the guest's private notes,
+/// with a one-line preview of the latest. Quietest control on the page (grey, not
+/// accent): private shouldn't look like an invitation to broadcast.
 struct GuestNotesLink: View {
     let subjectType: GuestNoteSubjectType
     let subjectID: String
@@ -298,8 +278,7 @@ struct GuestNotesLink: View {
 
     private var mostRecent: GuestNote? { noteStore.mostRecentNote(about: subjectType, subjectID) }
 
-    /// A short "never sees these" line, correct for whichever kind of subject
-    /// this is. A listing has no one to be told; its host does.
+    /// A short "never sees these" line right for the subject; a listing has no one to tell, its host does.
     private var reassurance: String {
         switch subjectType {
         case .host:    return "Just for you. \(subjectName) never sees these."
@@ -326,21 +305,11 @@ struct GuestNotesLink: View {
 
 // MARK: - Post-trip prompt
 
-/// The optional add-a-note moment on the guest's side, as a section the Stays
-/// tab drops into its own list: an ordinary row, offered once per trip,
-/// dismissible, and never a modal standing between the guest and the rest of the
-/// screen. If they ignore it forever, nothing happens; if they wave it off, it
-/// does not come back, and they can still write a note from the host's or
-/// listing's screen whenever they like.
-///
-/// The mirror of the host's `NotePromptSection`. Which trips reach it is the
-/// caller's question (`GuestNotePrompt`); what it says and how hard it asks are
-/// this file's — which is to say, softly, because the ask is an offer.
-///
-/// The note it writes is filed against the listing the trip was at, so it has a
-/// home the guest can find it in again — the same listing page the standing
-/// entry point sits on. That the stay was with a particular host is context the
-/// note keeps (`stayRequestID`), not a second place to store it.
+/// The optional add-a-note moment as a Stays tab section: an ordinary row, offered
+/// once per trip, dismissible, never a modal. Ignoring it does nothing and waving
+/// it off is permanent; notes remain writable from the host or listing screen.
+/// Mirrors the host's `NotePromptSection`; `GuestNotePrompt` picks the trips. The
+/// note is filed against the trip's listing, with the stay kept as context (`stayRequestID`).
 struct GuestNotePromptSection: View {
     let stays: [StayRequest]
     @Binding var composing: GuestNoteComposition?
@@ -375,9 +344,7 @@ struct GuestNotePromptSection: View {
     }
 }
 
-/// One trip's prompt. Two plain choices, neither of them urgent: the ask is an
-/// offer, so "Not this time" is a real answer and is styled as one rather than
-/// as a dismissal the guest has to hunt for.
+/// One trip's prompt: two plain choices, and "Not this time" is a real answer, not a hidden dismissal.
 private struct GuestNotePromptRow: View {
     let hostName: String
     let dateRange: String

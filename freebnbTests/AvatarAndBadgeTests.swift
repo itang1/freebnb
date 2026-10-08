@@ -2,9 +2,7 @@
 //  AvatarAndBadgeTests.swift
 //  freebnbTests
 //
-//  Two derivations that the UI leans on but can't easily be checked by looking
-//  at a screenshot: what a person's generated avatar resolves to, and what the
-//  Stays tab badge is allowed to count.
+//  Two derivations the UI leans on: what a generated avatar resolves to, and what the Stays tab badge counts.
 //
 
 import Foundation
@@ -15,48 +13,37 @@ import Testing
 // MARK: - Generated avatars
 
 struct GeneratedAvatarTests {
-    /// The whole premise: the same person draws the same everywhere, forever.
-    /// Swift's own `hashValue` is per-process seeded, so a careless
-    /// implementation would pass a single run and hand the user a new face after
-    /// every relaunch.
+    /// The premise: the same person draws the same everywhere, forever. `hashValue` is per-process seeded, so a careless version would pass one run and change faces on relaunch.
     @Test func theSameSeedAlwaysResolvesToTheSameAvatar() {
         let first = AvatarIdentity(seed: "user-abc123")
         let second = AvatarIdentity(seed: "user-abc123")
         #expect(first == second)
-        // Pinned literals, so a change to the hash or the symbol table shows up
-        // here as a failing test rather than as every user silently getting a
-        // new avatar on update.
+        // Pinned literals, so a hash or symbol table change fails here, not as everyone's avatar silently changing.
         #expect(first.symbolName == AvatarIdentity(seed: "user-abc123").symbolName)
     }
 
     @Test func differentSeedsSpreadAcrossTheWholeSpace() {
         let identities = (0..<4000).map { AvatarIdentity(seed: "user-\($0)") }
 
-        // Every symbol, hue, and shade should actually get used; a derivation
-        // that collapses onto a handful of values would leave the friends list
-        // looking like everyone shares an avatar.
+        // Every symbol, hue and shade should get used, or the friends list looks like one shared avatar.
         #expect(Set(identities.map(\.symbolName)).count == AvatarIdentity.symbols.count)
         #expect(Set(identities.map(\.hueIndex)).count == AvatarIdentity.hueCount)
         #expect(Set(identities.map(\.shadeIndex)).count == AvatarIdentity.shades.count)
 
-        // And the axes must vary independently rather than in lockstep, which is
-        // the thing that actually determines how often two people on one screen
-        // look alike. Most of the 1,920-combination space should be reachable.
+        // The axes must vary independently; most of the 1,920 combinations should be reachable.
         let combinations = Set(identities.map { "\($0.symbolName)-\($0.hueIndex)-\($0.shadeIndex)" })
         #expect(combinations.count > 1500)
     }
 
-    /// The realistic worry, stated as a test: a friends list should almost never
-    /// show the same avatar twice. Uses fixed seeds so this can't flake.
+    /// A friends list should almost never show the same avatar twice. Fixed seeds, so no flakes.
     @Test func aFriendsSizedGroupRarelyCollides() {
-        // 200 groups of 20, which is a large friends list.
+        // 200 groups of 20, a large friends list.
         let groupsWithDuplicates = (0..<200).filter { group in
             let avatars = (0..<20).map { AvatarIdentity(seed: "group\(group)-user\($0)") }
             let distinct = Set(avatars.map { "\($0.symbolName)-\($0.hueIndex)-\($0.shadeIndex)" })
             return distinct.count < avatars.count
         }
-        // Birthday-paradox expectation at this space is roughly 9%; allow slack
-        // so this pins the order of magnitude, not one particular hash.
+        // The birthday-paradox expectation is about 9%; allow slack to pin the order of magnitude.
         #expect(groupsWithDuplicates.count < 40)
     }
 
@@ -71,33 +58,23 @@ struct GeneratedAvatarTests {
         }
     }
 
-    /// Avatars are derived on every render of every row, so the derivation has to
-    /// stay far cheaper than a frame budget even when a list is flying. This
-    /// asserts a very loose ceiling — it is a smoke alarm for someone later
-    /// adding I/O, a cache lookup, or a `String` allocation per avatar, not a
-    /// benchmark.
+    /// Avatars derive on every row render, so this asserts a very loose ceiling, a smoke alarm for added I/O or allocation, not a benchmark.
     @Test func derivingAvatarsIsFastEnoughToDoOnEveryRender() {
         let seeds = (0..<10_000).map { "user-\(UUID().uuidString)-\($0)" }
         let start = Date()
         for seed in seeds { _ = AvatarIdentity(seed: seed) }
         let elapsed = Date().timeIntervalSince(start)
-        // 10,000 derivations is far more than any screen will ever ask for; a
-        // full second would mean something is very wrong.
+        // 10,000 derivations is far more than any screen needs; a full second means something is wrong.
         #expect(elapsed < 1.0)
     }
 
-    /// An empty seed is a real case (a profile that hasn't loaded yet). It has to
-    /// resolve to something stable rather than crashing on a modulo by zero or
-    /// drawing a blank circle.
+    /// An empty seed (profile not yet loaded) must resolve stably, not crash or draw a blank circle.
     @Test func anEmptySeedStillGetsAStableAvatar() {
         #expect(AvatarIdentity(seed: "") == AvatarIdentity(seed: ""))
         #expect(AvatarIdentity.symbols.contains(AvatarIdentity(seed: "").symbolName))
     }
 
-    /// Real Firebase UIDs, not the short synthetic seeds the other tests use.
-    /// They share a length and an alphabet, so a derivation that keyed off
-    /// something coarse (a prefix, a length, a first byte) would pass everywhere
-    /// else and then hand a whole production user base three avatars.
+    /// Real Firebase UIDs share length and alphabet, so a coarse derivation (prefix, length, first byte) would pass elsewhere and give a user base three avatars.
     @Test func realWorldUIDsStillSpreadOut() {
         let uids = [
             "0kQ9vBnZ3xQKfL2mTpR7dYsWgHc2", "1aXcVbNmQwErTyUiOpAsDfGh3JkL",
@@ -115,12 +92,8 @@ struct GeneratedAvatarTests {
 
 // MARK: - Avatar contrast
 
-/// The avatars have to stay legible in both appearances, which is the thing a
-/// hue wheel with a fixed brightness quietly gets wrong (a blue at the same
-/// "brightness" as a yellow is nowhere near as visible). These resolve the real
-/// colours the palette hands out and measure them, so a later tweak to the hue
-/// count, the shades, or the luminance targets can't dim an avatar into the
-/// background without failing here.
+/// Avatars must stay legible in both appearances, which a fixed-brightness hue wheel
+/// gets wrong. These measure the real palette colours so tweaks can't dim one into the background.
 @MainActor
 struct AvatarContrastTests {
     /// WCAG's floor for a graphic that carries meaning.
@@ -141,8 +114,7 @@ struct AvatarContrastTests {
         return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 
-    /// The symbol sits on a disc of its own colour at low opacity over the page,
-    /// so this reconstructs that disc to measure what the eye actually compares.
+    /// The symbol sits on a low-opacity disc of its own colour, so this reconstructs the disc to measure what the eye compares.
     private func discLuminance(_ color: Color, pageIsDark: Bool) -> Double {
         let (r, g, b) = components(color)
         let page: Double = pageIsDark ? 0.09 : 1.0
@@ -176,8 +148,7 @@ struct AvatarContrastTests {
         }
     }
 
-    /// Light and dark aren't allowed to resolve to the same colour: if they did,
-    /// one of the two appearances is being served a palette tuned for the other.
+    /// Light and dark mustn't resolve to the same colour, or one is served a palette tuned for the other.
     @Test func theTwoAppearancesUseDifferentColours() {
         let identity = AvatarIdentity(seed: "user-abc123")
         let light = AvatarPalette.color(for: identity, in: .light)
@@ -185,8 +156,7 @@ struct AvatarContrastTests {
         #expect(luminance(dark) > luminance(light))
     }
 
-    /// Reconstructs an identity that lands on a given palette slot. The seed is
-    /// irrelevant to the colour; only the hue and shade indices matter.
+    /// Reconstructs an identity landing on a palette slot; only the hue and shade indices matter.
     private func identity(atPaletteIndex index: Int) -> AvatarIdentity {
         var found: AvatarIdentity?
         var seed = 0
@@ -217,9 +187,7 @@ private func stay(_ status: StayRequestStatus) -> StayRequest {
     )
 }
 
-/// The badge means "someone is blocked on you". These pin the two halves of
-/// that: it counts what you owe an answer on, in either role, and stays silent
-/// about everything you are merely waiting on.
+/// The badge means "someone is blocked on you": it counts what you owe an answer on in either role and ignores what you wait on.
 struct StaysBadgeCountTests {
     @Test func aPendingRequestCountsForTheHostOnly() {
         let stays = [stay(.pending)]

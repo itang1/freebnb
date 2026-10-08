@@ -2,23 +2,16 @@
 //  ListingDraft.swift
 //  freebnb
 //
-//  An unfinished listing, kept on the device so closing the sheet doesn't throw
-//  away ten minutes of typing (feature 13).
+//  An unfinished listing kept on the device so closing the sheet doesn't lose the typing.
 //
-//  Drafts never leave the phone. A draft holds the street address, which the
-//  published listing deliberately does not — the public document carries only
-//  city/state/zip, and the street lives in `homes/{id}/private/location`. Writing
-//  drafts to Firestore would mean a second home for that street, a second set of
-//  rules to get right, and a second thing to delete on account deletion. The
-//  device already stores the address the host is typing; keeping it there costs
-//  nothing and widens no surface.
+//  Drafts never leave the phone. A draft holds the street address, which the public
+//  listing deliberately lacks (it lives in `homes/{id}/private/location`); syncing
+//  drafts would add a second home for it, more rules, and another account-deletion cleanup.
 //
 
 import Foundation
 
-/// A snapshot of the new-listing form. Every field has the same default the form
-/// opens with, so `ListingDraft()` is exactly "nothing typed yet" — which is what
-/// makes an untouched form cheap to recognise and refuse to save.
+/// A snapshot of the new-listing form. Defaults match the form's opening state, so `ListingDraft()` is "nothing typed" and untouched forms are easy to refuse.
 struct ListingDraft: Codable, Equatable, Sendable {
     var street = ""
     var city = ""
@@ -29,9 +22,7 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var numBathrooms = 0
     var maxGuests = 2
     var maxStayDays = 7
-    /// Keyed by `SleepingSurface.rawValue`, the same shape `Sleeping.arrangements`
-    /// uses. A `[SleepingSurface: Int]` would need `CodingKeyRepresentable` to
-    /// survive a round trip through JSON as anything but an array of pairs.
+    /// Keyed by `SleepingSurface.rawValue`, like `Sleeping.arrangements`; an enum-keyed dictionary wouldn't round-trip through JSON as a map.
     var sleepingArrangements: [String: Int] = [:]
     /// Keyed by `BedSize.rawValue`, for the same reason.
     var bedSizes: [String: Int] = [:]
@@ -63,11 +54,8 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var foodProvision: FoodProvision = .none
 
     var title = ""
-    /// Whether `title` is the host's own wording or just the name the form
-    /// suggested. Restoring a draft has to tell them apart: a suggested name
-    /// should keep tracking the city, and a typed one must never be overwritten.
-    /// Defaults to false, so drafts stored before this field decode as suggested,
-    /// which is the recoverable direction to be wrong in.
+    /// Whether `title` is the host's wording or the form's suggestion, which a restore must distinguish
+    /// (suggestions keep tracking the city). Defaults to false so older drafts decode as suggested, the recoverable direction.
     var titleWasEdited = false
     var description = ""
     var contactPreference: HostContactPreference = .inApp
@@ -75,22 +63,15 @@ struct ListingDraft: Codable, Equatable, Sendable {
     var hostMotivation: HostMotivation = .open
     var cancellationPolicy: CancellationPolicy = .flexible
 
-    /// True when the host has typed nothing. Such a draft is not worth storing,
-    /// and restoring one would announce a "draft" that says nothing.
-    ///
-    /// A suggested listing name doesn't count as typing: the form fills one in
-    /// the moment it opens, and without this exception simply opening the sheet
-    /// and closing it would leave a draft claiming work was in progress.
+    /// True when the host has typed nothing, so the draft isn't worth storing. A
+    /// suggested name doesn't count, or opening and closing the sheet would leave a draft.
     var isPristine: Bool {
         var baseline = ListingDraft()
         if !titleWasEdited { baseline.title = title }
         return self == baseline
     }
 
-    /// Typed view of the sleeping arrangements. Both directions drop raw values
-    /// that no longer name a surface and counts that aren't positive, so that
-    /// `draft.sleepingCounts = x; draft.sleepingCounts` returns `x` and a pristine
-    /// draft stays recognisably pristine.
+    /// Typed view of the sleeping arrangements. Both directions drop unknown surfaces and non-positive counts, so setting then reading round-trips and a pristine draft stays pristine.
     var sleepingCounts: [SleepingSurface: Int] {
         get {
             sleepingArrangements.reduce(into: [:]) { result, pair in
@@ -123,11 +104,8 @@ struct ListingDraft: Codable, Equatable, Sendable {
     }
 }
 
-/// Reads and writes the single in-progress draft for one user.
-///
-/// Keyed by user id, so signing into a second account on a shared device does not
-/// surface the first host's half-typed address. An empty user id (a signed-out or
-/// anonymous session) stores nothing.
+/// Reads and writes the one in-progress draft per user. Keyed by user id so a shared device
+/// doesn't surface another host's address; an empty id (signed out or anonymous) stores nothing.
 struct ListingDraftStore {
     private let defaults: UserDefaults
 
@@ -137,10 +115,8 @@ struct ListingDraftStore {
 
     private func key(_ userID: String) -> String { "listingDraft.\(userID)" }
 
-    /// Nil when there is no draft, when it decodes to nothing usable, or when it
-    /// was never really started. A draft that fails to decode is discarded rather
-    /// than surfaced as an error: it is a convenience, and the form behind it is
-    /// perfectly usable empty.
+    /// Nil when there's no draft, it decodes to nothing usable, or it was never started.
+    /// An undecodable draft is discarded, not surfaced, since the form works empty.
     func load(userID: String) -> ListingDraft? {
         guard !userID.isEmpty,
               let data = defaults.data(forKey: key(userID)),
@@ -150,8 +126,7 @@ struct ListingDraftStore {
         return draft
     }
 
-    /// Storing a pristine draft clears any previous one: the host emptied the
-    /// form, and offering to restore what they just cleared would be perverse.
+    /// Storing a pristine draft clears the previous one; restoring what the host just cleared would be perverse.
     func save(_ draft: ListingDraft, userID: String) {
         guard !userID.isEmpty else { return }
         guard !draft.isPristine else {
@@ -168,14 +143,11 @@ struct ListingDraftStore {
     }
 }
 
-/// What the listing form is for. The two axes that matter are which listing seeds
-/// the fields, and which listing (if any) the save overwrites — and duplication
-/// is precisely the case where those differ.
+/// What the listing form is for. The axes are which listing seeds the fields and which (if any) the save overwrites; duplication is where they differ.
 enum ListingFormMode: Hashable {
     case create
     case edit(Home)
-    /// Prefilled from an existing listing, saved as a new one. For the host with a
-    /// guest room and a couch, who should not retype their address (feature 13).
+    /// Prefilled from an existing listing, saved as new, so a host with several rooms needn't retype their address.
     case duplicate(Home)
 
     /// The listing whose values the form opens with.
@@ -186,17 +158,13 @@ enum ListingFormMode: Hashable {
         }
     }
 
-    /// The listing this save overwrites, or nil when it writes a new document.
-    /// `duplicate` deliberately returns nil: it keeps the source's fields and
-    /// none of its identity.
+    /// The listing this save overwrites, or nil for a new document; `duplicate` keeps fields but none of the identity.
     var target: Home? {
         guard case .edit(let home) = self else { return nil }
         return home
     }
 
-    /// Only a from-scratch listing is draft-backed. An edit has a saved document
-    /// behind it, and a duplicate is one tap away from being recreated — restoring
-    /// an unrelated draft over either would overwrite what the host just asked for.
+    /// Only a from-scratch listing is draft-backed; restoring an unrelated draft over an edit or duplicate would overwrite what the host asked for.
     var isDraftBacked: Bool {
         if case .create = self { return true }
         return false
