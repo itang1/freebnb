@@ -7,9 +7,7 @@ import SwiftUI
 
 struct OnboardingPage: View {
     @Binding var isPresented: Bool
-    /// Called when the user answers the hosting step with "List My Place".
-    /// The parent presents the create-listing flow after this sheet dismisses;
-    /// doing it here would race the dismissal animation.
+    /// Called on "List My Place"; the parent presents create-listing after this sheet dismisses (doing it here races the animation).
     var onChooseHost: () -> Void = {}
     @State private var currentPage = 0
 
@@ -19,10 +17,7 @@ struct OnboardingPage: View {
         let body: String
     }
 
-    // One slide per differentiator, each distinct: the promise (free + trusted),
-    // trust made visible (you always know your host), privacy (no contacts grab,
-    // which is literally true since the network is built from friends, never the
-    // address book), then how a stay works.
+    // One slide per differentiator: the promise (free + trusted), trust made visible, privacy (no contacts grab; the network is friends, not the address book), then how a stay works.
     private let slides: [Slide] = [
         Slide(
             icon: "house.lodge.fill",
@@ -46,10 +41,7 @@ struct OnboardingPage: View {
         )
     ]
 
-    /// The hosting-intent ask sits after the walkthrough slides as its own page.
-    /// Hosts are the scarce side of the network, so the one question worth
-    /// asking before the user ever sees a (possibly thin) feed is whether they
-    /// have a couch to offer.
+    /// The hosting-intent ask follows the walkthrough: hosts are the scarce side, so the question to ask before a possibly thin feed is whether they have a couch to offer.
     private var isHostStep: Bool { currentPage == slides.count }
 
     var body: some View {
@@ -80,8 +72,7 @@ struct OnboardingPage: View {
                             .foregroundColor(.onAccent)
                             .cornerRadius(12)
                     }
-                    // Fixed-height slot keeps layout stable across pages: Skip on
-                    // the walkthrough, the guest-only answer on the hosting step.
+                    // Fixed-height slot keeps layout stable: Skip on the walkthrough, the guest-only answer on the hosting step.
                     Group {
                         if isHostStep {
                             Button("I'm just looking for now") { isPresented = false }

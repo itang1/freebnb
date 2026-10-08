@@ -2,12 +2,8 @@
 //  QRCode.swift
 //  freebnb
 //
-//  Renders a string as a scannable QR code on-device (feature 32). The invite
-//  sheet encodes the same plain `freebnb://invite` link the share flow uses, so a
-//  friend standing next to you can point the stock Camera app at it and open the
-//  app. No network, no new permission: the OS camera does the scanning. The link
-//  carries no identity and takes no action — friends are added in-app, never by a
-//  scan.
+//  Renders a string as a scannable QR code on-device. The invite sheet encodes the same invite link as sharing, so a
+//  nearby friend can scan it with the stock Camera: no network or permission. The link carries no identity and takes no action.
 //
 
 import CoreImage
@@ -15,16 +11,12 @@ import CoreImage.CIFilterBuiltins
 import UIKit
 
 enum QRCode {
-    /// A crisp QR image for `string`, or nil if CoreImage could not encode it.
-    ///
-    /// The generator emits a tiny bitmap (one pixel per module); `scale` blows it
-    /// up so it stays sharp at display size. Render it with `.interpolation(.none)`
-    /// so SwiftUI does not blur the edges back into unscannability.
+    /// A crisp QR image for `string`, or nil if CoreImage can't encode it. `scale` enlarges the one-pixel-per-module
+    /// bitmap; render with `.interpolation(.none)` so SwiftUI doesn't blur it unscannable.
     static func image(for string: String, scale: CGFloat = 12) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
-        // Medium error correction: recovers ~15% of the code, enough to survive a
-        // phone camera at an angle without bloating the module count.
+        // Medium error correction recovers ~15%, enough for an angled phone camera without bloating modules.
         filter.correctionLevel = "M"
         guard let output = filter.outputImage else { return nil }
 

@@ -2,8 +2,7 @@
 //  MessageInputBar.swift
 //  freebnb
 //
-//  The compose field pinned to the bottom of a chat thread. Split out of
-//  MessagingPage.swift (A2).
+//  The compose field pinned to the bottom of a chat thread.
 //
 
 import SwiftUI
@@ -13,9 +12,7 @@ struct MessageInputBar: View {
     @Binding var draft: String
     @FocusState.Binding var isFocused: Bool
     let onSend: () -> Void
-    /// When offline, sending still works: Firestore queues the write and replays
-    /// it on reconnect. The bar stays enabled and shows a reassuring caption so
-    /// the user knows the message isn't lost (feature 41).
+    /// Offline, sending still works (Firestore queues and replays); the bar stays enabled with a caption so the user knows it isn't lost.
     var isOffline: Bool = false
 
     private var isEmpty: Bool {
@@ -60,12 +57,9 @@ struct MessageInputBar: View {
     }
 }
 
-/// Takes the composer's place once the friendship that opened this thread is
-/// gone. Messaging is friend-gated in the rules, so a live composer here would
-/// accept the message, echo it into the thread, and then fail the write with no
-/// way to retry it; the history stays readable either way. Blocking is not
-/// mentioned: it is in the menu for anyone who wants it, and raising it in
-/// answer to an ended friendship would read as a suggestion to escalate.
+/// Takes the composer's place once the friendship that opened the thread is gone. Messaging is friend-gated in the
+/// rules, so a live composer would accept and echo a message then fail the write unretryably; history stays readable.
+/// Blocking isn't mentioned (it's in the menu), since raising it here would read as a suggestion to escalate.
 struct MessageThreadClosedFooter: View {
     let otherName: String
 

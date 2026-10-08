@@ -2,8 +2,7 @@
 //  MessageBubble.swift
 //  freebnb
 //
-//  A single chat bubble rendered in MessagingPage. Split out of the former
-//  732-line MessagingPage.swift (A2).
+//  A single chat bubble rendered in MessagingPage.
 //
 
 import SwiftUI
@@ -11,17 +10,14 @@ import SwiftUI
 struct MessageBubble: View {
     let message: Message
     let currentUserID: String
-    /// The other participant's display name, so a centered stay event card can
-    /// name who acted; a card has no left/right side to say it.
+    /// The other participant's display name, so a centered stay event card can name who acted.
     let otherName: String
     let state: MessageState
     let onRetry: () -> Void
     let onDiscard: () -> Void
     var onReport: () -> Void = {}
 
-    /// Routes a tapped "See other dates" on a host-cancellation card back to the
-    /// listing. Navigation-only, exactly like the Spotlight-listing deep link it
-    /// borrows, so no confirmation is owed.
+    /// Routes a tapped "See other dates" on a host-cancellation card to the listing; navigation-only, so no confirmation.
     @Environment(DeepLinkRouter.self) private var router
 
     private var isFromMe: Bool { message.senderUserID == currentUserID }
@@ -29,8 +25,7 @@ struct MessageBubble: View {
 
     var body: some View {
         if let event = message.event {
-            // Structured stay events render as a centered system card, not a
-            // left/right chat bubble (item 29).
+            // Structured stay events render as a centered system card, not a left/right bubble.
             StayEventCard(event: event, timestamp: message.timestamp,
                           isFromMe: isFromMe, otherName: otherName, state: state,
                           onSeeOtherDates: seeOtherDatesAction(for: event))
@@ -39,9 +34,7 @@ struct MessageBubble: View {
         }
     }
 
-    /// Offered only on the guest's copy of a host cancellation, and only when the
-    /// event carried the listing it was on. The host's own copy and every other
-    /// event get nil, which hides the button.
+    /// Offered only on the guest's copy of a host cancellation whose event carried the listing; nil elsewhere hides the button.
     private func seeOtherDatesAction(for event: StayEvent) -> (() -> Void)? {
         guard event.kind == .hostCancelled, !isFromMe, let listingID = event.listingID else {
             return nil

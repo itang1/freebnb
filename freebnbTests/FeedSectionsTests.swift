@@ -2,9 +2,7 @@
 //  FeedSectionsTests.swift
 //  freebnbTests
 //
-//  Covers the pure derivation behind the feed's explanatory chips (feature 18).
-//  The chip makes a claim about who knows whom, so the cases that matter most
-//  here are the ones where it must stay silent.
+//  Covers the derivation behind the feed's explanatory chips; the chip claims who knows whom, so the key cases are where it stays silent.
 //
 
 import Foundation
@@ -26,9 +24,7 @@ struct FeedReasonTests {
         #expect(FeedSections.reason(for: home, myID: me, friendIDs: friends) == .friend)
     }
 
-    /// A host who isn't a verified friend gets no chip, even when the ACL still
-    /// names the viewer (a friendship that ended since the listing was written):
-    /// a wrong chip is a false statement about who knows whom.
+    /// A host who isn't a verified friend gets no chip even if the ACL names the viewer (an ended friendship); a wrong chip is a false statement.
     @Test func unverifiableConnectionStaysSilent() {
         let staleACL = HomeFixture.make(id: "a", hostUserID: "stranger", allowedViewerIDs: [me])
         #expect(FeedSections.reason(for: staleACL, myID: me, friendIDs: friends) == nil)
@@ -37,8 +33,7 @@ struct FeedReasonTests {
         #expect(FeedSections.reason(for: noACL, myID: me, friendIDs: friends) == nil)
     }
 
-    /// A signed-out browser has no network, so nothing about the graph is true of
-    /// them — including, importantly, that an ACL entry for "" means anything.
+    /// A signed-out browser has no network, so an ACL entry for "" means nothing.
     @Test func signedOutViewerNeverEarnsAChip() {
         let ownedByEmptyString = HomeFixture.make(id: "a", hostUserID: "", allowedViewerIDs: [""])
         #expect(FeedSections.reason(for: ownedByEmptyString, myID: "", friendIDs: []) == nil)

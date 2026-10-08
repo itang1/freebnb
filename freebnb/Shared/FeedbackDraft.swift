@@ -2,40 +2,33 @@
 //  FeedbackDraft.swift
 //  freebnb
 //
-//  The in-app feedback composer's model (feature 43). A feedback note is a short
-//  free-text message the user sends to the team; it is delivered to the Google
-//  Form in `FeedbackService`, whose responses feed the team's spreadsheet.
+//  The feedback composer's model: a short free-text note delivered to the Google Form in `FeedbackService`.
 //
 
 import Foundation
 
-/// A feedback note being composed. Pure and `Equatable` so the composer's
-/// enablement and counter derive from it and it is unit-testable without a view.
+/// A feedback note being composed; pure and `Equatable` so enablement and counter derive from it without a view.
 struct FeedbackDraft: Equatable, Sendable {
     var message: String
 
-    /// A sane client-side length so the composer can show a counter and reject a
-    /// runaway paste; the Form itself imposes no cap.
+    /// A client-side length so the composer can show a counter and reject a runaway paste; the Form has no cap.
     static let maxLength = 2000
 
     init(message: String = "") {
         self.message = message
     }
 
-    /// The message with surrounding whitespace removed, which is what gets sent
-    /// and what the length checks below count.
+    /// The message trimmed of surrounding whitespace, which is what's sent and counted.
     var trimmedMessage: String {
         message.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Characters left before the cap. Goes negative once the user is over, so
-    /// the composer can flag it in red without a second computation.
+    /// Characters left before the cap; negative once over, so the composer can flag it red.
     var remainingCharacters: Int {
         Self.maxLength - trimmedMessage.count
     }
 
-    /// A note is sendable when it has content and is within the cap. An
-    /// all-whitespace note is empty after trimming and so is rejected here.
+    /// Sendable when it has content within the cap; all-whitespace is empty after trimming.
     var isValid: Bool {
         let count = trimmedMessage.count
         return count > 0 && count <= Self.maxLength

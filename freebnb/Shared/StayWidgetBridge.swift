@@ -2,10 +2,8 @@
 //  StayWidgetBridge.swift
 //  freebnb
 //
-//  Publishes the home-screen widget snapshot (feature 40, widget half). Turns the
-//  store's live `StayRequest` arrays into the small `StayWidgetSnapshot` value,
-//  writes it to the App Group, and pokes WidgetKit to reload. Pure translation
-//  plus one side effect, so `makeSnapshot` is unit-testable on its own.
+//  Publishes the widget snapshot: turns the stores' live `StayRequest` arrays into `StayWidgetSnapshot`, writes it to the App Group
+//  and reloads WidgetKit. Pure translation plus one side effect, so `makeSnapshot` is unit-testable.
 //
 
 import Foundation
@@ -16,12 +14,10 @@ import os
 enum StayWidgetBridge {
     private static let log = AppLog.logger("widgets")
 
-    /// Recomputes the snapshot from the current requests and hands it to the
-    /// widgets. Cheap and idempotent, so calling it on every Firestore snapshot
-    /// (like the reminder sync) is fine.
+    /// Recomputes the snapshot and hands it to the widgets; cheap and idempotent, so safe on every Firestore snapshot.
     static func publish(incoming: [StayRequest], outgoing: [StayRequest], viewerID: String) {
         guard !viewerID.isEmpty else {
-            // Signed out: clear the widgets rather than leave a stale trip up.
+            // Signed out: clear the widgets rather than leave a stale trip.
             StayWidgetSnapshot.empty.write()
             WidgetCenter.shared.reloadAllTimelines()
             return
@@ -32,9 +28,7 @@ enum StayWidgetBridge {
         log.debug("published widget snapshot: nextTrip=\(snapshot.nextTrip != nil, privacy: .public) pendingIn=\(snapshot.pendingIncomingCount, privacy: .public)")
     }
 
-    /// The next stay worth surfacing plus the two pending counts. "Next" means the
-    /// under-way stay if there is one, otherwise the soonest still-upcoming
-    /// accepted stay, across both hosting and travelling.
+    /// The next stay worth surfacing plus the two pending counts: the under-way stay, else the soonest upcoming accepted one, across hosting and travelling.
     static func makeSnapshot(
         incoming: [StayRequest],
         outgoing: [StayRequest],
@@ -46,8 +40,7 @@ enum StayWidgetBridge {
         let nextTrip = all
             .filter { $0.status == .accepted }
             .filter { $0.isUnderway(now: now) || $0.checkIn >= now }
-            // Under-way stays sort ahead of upcoming ones; within each group the
-            // soonest check-in wins. Tuple `<` gives exactly that ordering.
+            // Under-way sorts ahead of upcoming, soonest check-in within each; tuple `<` gives that.
             .min { ($0.isUnderway(now: now) ? 0 : 1, $0.checkIn) < ($1.isUnderway(now: now) ? 0 : 1, $1.checkIn) }
             .map { trip in
                 TripSummary(
