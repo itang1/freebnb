@@ -2,20 +2,15 @@
 //  SafetyCheckInSheet.swift
 //  freebnb
 //
-//  "Share my stay" (feature 5): tell one person where you'll be and when.
-//
-//  The message is composed on-device and handed to the system share sheet, so
-//  the address travels through the guest's own Messages or Mail. FreeBNB never
-//  sends it anywhere, which means the emergency contact needs no account, and
-//  the disclosure surface doesn't grow by a single service.
+//  "Share my stay": tell one person where you'll be and when. The message is composed on-device and handed to
+//  the share sheet, so the address travels via the guest's own Messages or Mail and FreeBNB sends it nowhere.
 //
 
 import SwiftUI
 
 struct SafetyCheckInSheet: View {
     let stay: StayRequest
-    /// The exact address, when this guest has earned it. Nil before the host
-    /// accepts, in which case the shared message says the city and says why.
+    /// The exact address, when earned; nil before acceptance, when the message gives the city and says why.
     let location: ListingLocation?
     let manual: HouseManual?
 
@@ -115,8 +110,7 @@ struct SafetyCheckInSheet: View {
         }
     }
 
-    /// Remembers the contact for next time. A failure here must not block the
-    /// share: getting the message out matters more than remembering who it went to.
+    /// Remembers the contact for next time; a failure mustn't block the share.
     private func saveContact() async {
         guard contact.isComplete, contact != userProfileStore.currentProfile?.emergencyContact else { return }
         isSaving = true

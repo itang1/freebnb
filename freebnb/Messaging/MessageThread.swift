@@ -2,8 +2,7 @@
 //  MessageThread.swift
 //  freebnb
 //
-//  The scrolling bubble list inside a chat, including its empty, loading, and
-//  no-search-results states. Split out of MessagingPage.swift (A2).
+//  The scrolling bubble list in a chat, with its empty, loading and no-search-results states.
 //
 
 import SwiftUI
@@ -19,18 +18,14 @@ struct MessageThread: View {
 
     @Environment(MessageStore.self) private var messageStore
 
-    /// Applies the search filter. Takes the thread rather than reading it, so a
-    /// body pass sorts the messages once instead of once per read.
+    /// Applies the search filter, taking the thread rather than reading it so a body pass sorts once.
     private func filtered(_ all: [Message]) -> [Message] {
         guard !searchQuery.isEmpty else { return all }
         return all.filter { $0.text.localizedCaseInsensitiveContains(searchQuery) }
     }
 
     var body: some View {
-        // Read once per body pass and pass it down. These were computed
-        // properties, and `messages(for:)` re-sorts the whole thread on every
-        // call — the empty check, the ForEach, and the onChange key made that
-        // three sorts per pass, on the longest collection on screen.
+        // Read once per body pass; `messages(for:)` re-sorts the thread on every call, which cost three sorts on the longest collection.
         let allMessages = messageStore.messages(for: conversationID)
         let messages = filtered(allMessages)
         ScrollViewReader { proxy in
@@ -80,14 +75,12 @@ struct MessageThread: View {
         if !searchQuery.isEmpty {
             emptyText("No messages match \"\(searchQuery)\"")
         } else if messageStore.isLoadingThread(conversationID) {
-            // Only stands in for the unknown-yet state: a thread already backed
-            // by the global snapshot skips this.
+            // Stands in only for the unknown-yet state; a thread backed by the global snapshot skips it.
             SkeletonMessageThread()
                 .accessibilityElement()
                 .accessibilityLabel("Loading messages")
         } else {
-            // The medallion only decorates a brand-new thread; a search miss
-            // stays plain text so it reads as a result, not a welcome.
+            // The medallion decorates only a new thread; a search miss stays plain text so it reads as a result.
             VStack(spacing: 16) {
                 EmptyStateMedallion(systemImage: "bubble.left.and.bubble.right")
                 Text("Send \(otherName) a message to get started.")
@@ -111,8 +104,7 @@ struct MessageThread: View {
 }
 
 #Preview {
-    // The thread is fed by a live listener, so an unopened conversation renders
-    // the empty state — the branch most worth eyeballing.
+    // Fed by a live listener, so an unopened conversation renders the empty state, the branch worth eyeballing.
     MessageThread(
         conversationID: "preview-conversation",
         participants: ["preview-me", "preview-them"],

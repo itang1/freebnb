@@ -2,11 +2,8 @@
 //  CachedAsyncImage.swift
 //  freebnb
 //
-//  Drop-in replacement for AsyncImage for feed imagery. AsyncImage decodes a
-//  photo at its full native resolution every time it appears, which is what
-//  makes an image-heavy scroll stutter. This view downsamples to the pixels
-//  actually drawn and keeps the decoded result in a shared in-memory cache,
-//  so a card scrolling back on screen renders immediately.
+//  Drop-in AsyncImage replacement for feed imagery: AsyncImage decodes at full resolution each appearance, stuttering
+//  scrolls. This downsamples to the drawn pixels and keeps the decoded result in a shared in-memory cache.
 //
 
 import ImageIO
@@ -21,8 +18,7 @@ enum CachedImagePhase {
 
 struct CachedAsyncImage<Content: View>: View {
     let url: URL?
-    /// The largest dimension, in points, the image will be drawn at. The
-    /// loader decodes to this times the display scale and no bigger.
+    /// The largest dimension in points the image is drawn at; decoded to this times the display scale, no bigger.
     let maxPointSize: CGFloat
     @ViewBuilder let content: (CachedImagePhase) -> Content
 
@@ -42,8 +38,7 @@ struct CachedAsyncImage<Content: View>: View {
                     let image = try await DownsampledImageLoader.load(url: url, maxPixelSize: maxPixel)
                     phase = .success(Image(uiImage: image))
                 } catch is CancellationError {
-                    // Scrolled away mid-download; leave the phase alone so the
-                    // next appearance restarts the load.
+                    // Scrolled away mid-download; leave the phase so the next appearance restarts the load.
                 } catch {
                     phase = .failure
                 }
@@ -51,8 +46,7 @@ struct CachedAsyncImage<Content: View>: View {
     }
 }
 
-/// Downloads and downsamples in one step, so the full-resolution bitmap is
-/// never decoded. Decoded images are cached by URL and target size.
+/// Downloads and downsamples in one step so the full-resolution bitmap is never decoded; cached by URL and target size.
 enum DownsampledImageLoader {
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
@@ -66,8 +60,7 @@ enum DownsampledImageLoader {
 
     static func load(url: URL, maxPixelSize: CGFloat) async throws -> UIImage {
         let (data, _) = try await URLSession.shared.data(from: url)
-        // Decode off the caller's actor; ImageIO thumbnailing never
-        // materialises the full-size bitmap.
+        // Decode off the caller's actor; ImageIO thumbnailing never materialises the full bitmap.
         let image = try await Task.detached(priority: .userInitiated) {
             try downsample(data: data, maxPixelSize: maxPixelSize)
         }.value

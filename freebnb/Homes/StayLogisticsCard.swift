@@ -2,10 +2,8 @@
 //  StayLogisticsCard.swift
 //  freebnb
 //
-//  The post-acceptance surfaces on a listing detail page (feature 19):
-//   - guests with a confirmed stay see a logistics card (dates, add-to-Calendar,
-//     and the host's house manual once it exists),
-//   - hosts see an entry point to edit that manual.
+//  The post-acceptance surfaces on a listing detail page: guests with a confirmed stay see a logistics card
+//  (dates, add-to-Calendar, the host's house manual); hosts see an entry point to edit the manual.
 //
 
 import SwiftUI
@@ -25,7 +23,7 @@ struct StayLogisticsCard: View {
         return manual
     }
 
-    /// The saved-to-disk copy of this stay's arrival essentials (feature 44).
+    /// The saved-to-disk copy of this stay's arrival essentials.
     private var kit: CheckInKit? { checkInKitStore.kit(for: stay.id) }
 
     var body: some View {
@@ -69,9 +67,7 @@ struct StayLogisticsCard: View {
                 Divider()
                 manualRows(manual)
             } else if let kit, kit.hasContent {
-                // The live manual didn't load — most likely there is no network.
-                // The saved copy is exactly what this feature exists for, so show
-                // it rather than an empty card.
+                // The live manual didn't load (likely no network); show the saved copy rather than an empty card.
                 Divider()
                 savedKitRows(kit)
             }
@@ -126,8 +122,7 @@ struct StayLogisticsCard: View {
         }
     }
 
-    /// The same rows as `manualRows`, read from the on-disk kit instead of the
-    /// live document, for when the live one couldn't be fetched.
+    /// The same rows read from the on-disk kit, for when the live document couldn't be fetched.
     @ViewBuilder
     private func savedKitRows(_ kit: CheckInKit) -> some View {
         Text("House manual")

@@ -2,9 +2,7 @@
 //  SpotlightIndexerTests.swift
 //  freebnbTests
 //
-//  The pure attribute builders behind saved-listing Spotlight indexing
-//  (feature 40). The live CSSearchableIndex isn't driven here — only what we hand
-//  it, which is the part that must be correct and privacy-safe.
+//  The pure attribute builders behind saved-listing Spotlight indexing; the live CSSearchableIndex isn't driven, only what we hand it.
 //
 
 import Testing
@@ -79,8 +77,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func descriptionNeverLeaksAnAddressField() {
-        // Sanity: the builder only reads public card fields, never the private
-        // street. There is no street on Home to read, but this pins the contract.
+        // The builder reads only public card fields, never the private street; pins the contract.
         let home = makeHome(description: "Near downtown")
         #expect(SpotlightIndexer.contentDescription(for: home) == "Near downtown")
     }

@@ -8,9 +8,7 @@ import UIKit
 
 // MARK: - Shared formatters
 
-/// `DateFormatter` allocations are surprisingly expensive; the same few
-/// configurations show up across every stay/message screen, so we keep a
-/// single instance per style and reuse it.
+/// `DateFormatter` allocation is expensive and a few configurations recur across stay/message screens, so one instance per style is reused.
 enum AppDateFormatters {
     /// "Mar 5" — used in chat banners and activity strings.
     static let shortDay: DateFormatter = {
@@ -30,8 +28,7 @@ enum AppDateFormatters {
 
 // MARK: - UserDefaults keys
 
-/// Single source of truth for UserDefaults keys; previously these were
-/// stringly-typed at five different call sites.
+/// Single source of truth for UserDefaults keys.
 enum UserDefaultsKey {
     static let userName              = "userName"
     static let hasSeenOnboarding     = "hasSeenOnboarding"
@@ -39,16 +36,14 @@ enum UserDefaultsKey {
     static let appearance              = "appearance"
     static let ageGateAccepted         = "ageGateAccepted"
     static let selectedTab             = "selectedTab"
-    /// The `WhatsNew` release version the user has already seen, so a fresh
-    /// install or an update auto-presents the changelog exactly once (feature 43).
+    /// The `WhatsNew` release version already seen, so the changelog auto-presents once per install or update.
     static let lastSeenWhatsNewVersion = "lastSeenWhatsNewVersion"
 }
 
 // MARK: - Bundle
 
 extension Bundle {
-    /// The marketing version ("1.0"), used for the About row and stamped onto
-    /// feedback notes so a report carries the build it came from.
+    /// The marketing version ("1.0") for the About row and feedback notes.
     var appVersionString: String {
         (infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
     }

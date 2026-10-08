@@ -2,11 +2,8 @@
 //  NetworkReach.swift
 //  freebnb
 //
-//  Tallies how many listings each friend hosts, so the Friends list can show a
-//  "2 homes" count beside each friend. A pure derivation of (visible listings,
-//  viewer, friends), like `FeedSections`, so it is unit-tested directly rather
-//  than only seen by scrolling a signed-in build. It reuses `FeedSections.reason`,
-//  so the one rule about who-knows-whom lives in exactly one place.
+//  Tallies how many listings each friend hosts, for the Friends list's "2 homes". Pure like `FeedSections`
+//  (unit-tested directly) and reuses `FeedSections.reason`, so the who-knows-whom rule lives in one place.
 //
 
 import Foundation
@@ -30,12 +27,8 @@ struct NetworkReach: Equatable {
 
     static let empty = NetworkReach(hosts: [])
 
-    /// Tallies `homes` by the connection that put each one in front of `myID`.
-    ///
-    /// `displayName` resolves a host UID to a name; a nil result falls back rather
-    /// than dropping the friend, so a not-yet-loaded profile still contributes its
-    /// homes to the count. An empty `myID` (signed-out or anonymous) has no network
-    /// and reaches nothing.
+    /// Tallies `homes` by the connection that put each in front of `myID`. `displayName` resolves a host UID;
+    /// nil falls back rather than dropping the friend. An empty `myID` has no network and reaches nothing.
     static func compute(
         homes: [Home],
         myID: String,
@@ -62,8 +55,7 @@ struct NetworkReach: Equatable {
                     homeCount: count
                 )
             }
-            // Most homes first; then by name and finally id so rows sharing a count
-            // still have a stable total order, as `HomeStore.feed` does.
+            // Most homes first, then name, then id, giving a stable total order as `HomeStore.feed` does.
             .sorted { a, b in
                 if a.homeCount != b.homeCount { return a.homeCount > b.homeCount }
                 if a.displayName != b.displayName { return a.displayName < b.displayName }
