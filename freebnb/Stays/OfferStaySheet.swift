@@ -2,19 +2,11 @@
 //  OfferStaySheet.swift
 //  freebnb
 //
-//  Host-side sheet for offering a listing to a friend (feature 43): "my place is
-//  free Mar 3–10, want it?"
-//
-//  The mirror of `RequestStaySheet`, and deliberately shaped like it — same date
-//  pickers, same conflict warnings, same note field — because it becomes the same
-//  stay document. The differences are the ones that matter: the host picks a
-//  person instead of a place, and the fields that belong to the guest (their party
-//  size, their arrival time, their note) are left for the guest to fill in if they
-//  say yes. The rules reject an offer that tries to write them.
-//
-//  This exists because every other host action in the app is a reply. Until a
-//  guest asked, a recruited host who opened FreeBNB found an empty room and no
-//  reason to come back.
+//  Host-side sheet for offering a listing to a friend ("my place is free Mar 3–10, want it?").
+//  The mirror of `RequestStaySheet` (same pickers, conflict warnings and note field)
+//  since it becomes the same stay document. The host picks a person, and the guest's
+//  fields (party size, arrival, note) are left for them to fill in on yes; the rules reject
+//  an offer writing them. It exists because every other host action is a reply.
 //
 
 import SwiftUI
@@ -44,28 +36,20 @@ struct OfferStaySheet: View {
         max(Calendar.current.dateComponents([.day], from: checkIn, to: checkOut).day ?? 0, 0)
     }
 
-    /// Friends who can actually see this listing. The rules require the recipient
-    /// to be in the listing's read ACL, so offering to anyone else would be
-    /// rejected on write — better to never present them.
+    /// Friends who can see this listing; the rules require the recipient in its read ACL, so offering to others would be rejected.
     private var offerableFriends: [String] {
         let viewers = Set(listing.allowedViewerIDs ?? [])
         return friendStore.friendIDs.filter { viewers.contains($0) }
     }
 
-    /// Reads the merged `unavailableRanges` now that the two public arrays have
-    /// been folded into one. Naming the offending range is fine here where it
-    /// would not be guest-side: this sheet is the host's own listing, so the
-    /// oracle `StayRows` guards against (a guest learning which nights are booked
-    /// rather than blocked) does not arise — the host already knows both.
+    /// Reads the merged `unavailableRanges`. Naming the range is fine here: it's the host's own
+    /// listing, so the booked-vs-blocked oracle `StayRows` guards against doesn't arise.
     private var blockedConflict: DateRange? {
         listing.unavailableRanges.first { $0.overlaps(checkIn: checkIn, checkOut: checkOut) }
     }
 
-    /// A stay already accepted for this listing over the same dates. The host can
-    /// read every request to their own listing, so unlike the guest side this is a
-    /// complete check — but it is still only a courtesy: the callable's
-    /// transaction is what actually stops the double booking when the guest says
-    /// yes, which may be days from now and after another guest has been accepted.
+    /// A stay already accepted for this listing over the same dates. A complete check since the host
+    /// reads every request, but a courtesy: the transaction stops the double booking when the guest says yes.
     private var acceptedConflict: StayRequest? {
         requestStore.incomingRequests.first { req in
             req.listingID == listing.id
@@ -74,8 +58,7 @@ struct OfferStaySheet: View {
         }
     }
 
-    /// An offer for these dates that this friend hasn't answered yet. Sending a
-    /// second one would read as nagging, which an offer must never do.
+    /// An unanswered offer for these dates; a second would read as nagging.
     private var duplicateOffer: StayRequest? {
         guard let guestUserID else { return nil }
         return requestStore.incomingRequests.first { req in
@@ -224,8 +207,7 @@ struct OfferStaySheet: View {
                 checkOut: checkOut,
                 hostNote: note
             )
-            // The same courtesy note a request posts, so the offer shows up in the
-            // thread the two of them already share rather than only in a tab.
+            // The same courtesy note a request posts, so the offer shows in the shared thread.
             messageStore.sendStayEvent(
                 StayEvent(kind: .offered, dateRange: dateRangeText()),
                 senderUserID: authManager.userID,

@@ -14,8 +14,7 @@ import GoogleSignIn
 import SwiftUI
 import UserNotifications
 
-// Attests that requests come from a genuine, unmodified build of this app so
-// Firestore/Storage/Functions can reject traffic that bypasses the app.
+// Attests that requests come from a genuine build of this app, so backends can reject traffic that bypasses it.
 final class FreeBNBAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
     func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
         AppAttestProvider(app: app)
@@ -34,10 +33,8 @@ struct FreeBNBApp: App {
     @State private var stayRequestStore: StayRequestStore
     @State private var friendStore: FriendStore
     @State private var circleStore: CircleStore
-    // Declared without an initializer, like the other repository-backed stores:
-    // an inline `= BookingPolicyStore()` runs while the property wrappers are
-    // built, which is before `FirebaseApp.configure()` below, and constructing
-    // a Firestore handle there throws on the way up.
+    // Declared without an initializer: an inline `= BookingPolicyStore()` would run before
+    // `FirebaseApp.configure()` and constructing a Firestore handle there throws.
     @State private var bookingPolicyStore: BookingPolicyStore
     @State private var reviewStore: ReviewStore
     @State private var friendNoteStore: FriendNoteStore
@@ -46,13 +43,10 @@ struct FreeBNBApp: App {
     @State private var checkInKitStore = CheckInKitStore()
 
     init() {
-        // App Check must be registered before FirebaseApp.configure() so the
-        // first backend calls are attested. The simulator can't do App Attest, so
-        // DEBUG builds use the debug provider: it reads the token from the
-        // FIRAAppCheckDebugToken environment variable (set in the freebnb scheme)
-        // and falls back to minting a fresh one, logged to the Xcode console, that
-        // must then be registered in Firebase Console → App Check → Manage debug
-        // tokens.
+        // App Check registers before FirebaseApp.configure() so the first calls are attested. The
+        // simulator can't do App Attest, so DEBUG uses the debug provider: the FIRAAppCheckDebugToken
+        // env var (set in the scheme), else a fresh token logged to the console that must be
+        // registered in Firebase Console → App Check → Manage debug tokens.
 #if DEBUG
         AppCheck.setAppCheckProviderFactory(AppCheckDebugProviderFactory())
 #else
@@ -63,9 +57,7 @@ struct FreeBNBApp: App {
         Self.configureEmulatorIfRequested()
         Self.resetStateIfUITesting()
 #endif
-        // Enable crash reporting and analytics collection (A6). Must follow
-        // FirebaseApp.configure(), and the emulator check above, so an emulator
-        // or UI-test run is correctly excluded from collection.
+        // Enable crash and analytics collection; must follow configure() and the emulator check above.
         Telemetry.configure()
         Messaging.messaging().isAutoInitEnabled = true
         _authManager = State(initialValue: AuthManager())
@@ -105,15 +97,12 @@ struct FreeBNBApp: App {
                     requestPushPermission()
                 }
                 .onOpenURL { url in handleIncomingURL(url) }
-                // An invite link tapped in Messages or Mail. A Universal Link is
-                // handed over as a browsing activity, not as a URL, so `onOpenURL`
-                // alone would never see it — the tap would open Safari instead.
+                // An invite link tapped in Messages or Mail arrives as a browsing activity, not a URL, so `onOpenURL` alone would open Safari.
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     guard let url = activity.webpageURL else { return }
                     handleIncomingURL(url)
                 }
-                // A saved listing tapped in Spotlight hands back its identifier;
-                // route it into the app, which pushes the listing (feature 40).
+                // A saved listing tapped in Spotlight hands back its identifier; route it into the app.
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
                     if let listingID = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
                         router.pendingListingID = listingID
@@ -122,10 +111,7 @@ struct FreeBNBApp: App {
         }
     }
 
-    // Points Auth and Firestore at `firebase emulators:start` instead of the
-    // production project, so automated runs never write real data. See
-    // EmulatorEnvironment for how the emulator is requested. DEBUG-only;
-    // production builds never check for this.
+    // Points Auth and Firestore at the emulator (see EmulatorEnvironment) so automated runs never write real data. DEBUG-only.
 #if DEBUG
     private static func configureEmulatorIfRequested() {
         guard EmulatorEnvironment.isActive else { return }
@@ -140,9 +126,7 @@ struct FreeBNBApp: App {
     }
 #endif
 
-    // UI tests pass `-UITesting` so every run starts from the age gate with no
-    // signed-in user, regardless of what a previous run (or a developer) left
-    // in this simulator.
+    // UI tests pass `-UITesting` so every run starts at the age gate with no signed-in user.
 #if DEBUG
     private static func resetStateIfUITesting() {
         guard ProcessInfo.processInfo.arguments.contains("-UITesting") else { return }
@@ -163,14 +147,10 @@ struct FreeBNBApp: App {
         }
     }
 
-    // Routes an incoming URL, from either entry point above. The
-    // reversed-client-ID scheme is the Google sign-in callback; our own
-    // `freebnb://stays` scheme is what the home-screen widgets and the
-    // current-stay Live Activity open when tapped, and it simply switches to the
-    // Stays tab. An invite arrives as an https Universal Link (or the older
-    // `freebnb://invite` scheme) and lands on Friends with the sender's card on
-    // screen when it names one. Friend connections are still made only in-app,
-    // so a link never creates one; the most an invite does is save a search.
+    // Routes an incoming URL from either entry point. The reversed-client-ID scheme is the
+    // Google sign-in callback; `freebnb://stays` (widgets, Live Activity) switches to Stays; an
+    // invite (https Universal Link or `freebnb://invite`) lands on Friends with the sender's
+    // card. Links never create a friend connection.
     private func handleIncomingURL(_ url: URL) {
         if GIDSignIn.sharedInstance.handle(url) { return }
         guard let route = DeepLinkRouter.route(for: url) else { return }

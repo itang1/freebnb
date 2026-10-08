@@ -2,10 +2,8 @@
 //  FriendshipControl.swift
 //  freebnb
 //
-//  The relationship control on someone's profile: the one place to start, answer,
-//  or end a friendship. A friendship is the whole trust grant on FreeBNB (you see
-//  each other's homes), so ending one is deliberate here, tucked behind a menu and
-//  a confirmation, never a stray swipe.
+//  The relationship control on someone's profile: start, answer or end a friendship. A
+//  friendship is the whole trust grant, so ending one is deliberate: behind a menu and a confirmation.
 //
 
 import SwiftUI
@@ -56,9 +54,7 @@ struct FriendshipControl: View {
         case .incoming(let edge):
             incomingControls(edge)
         case .friends:
-            // Once you're friends there's nothing to do up here: the status and the
-            // (deliberately buried) way to end it live at the bottom of the profile,
-            // beside Report and Block. See `FriendStatusButton`.
+            // Once friends, the status and the (buried) way to end it live at the bottom, beside Report and Block (see `FriendStatusButton`).
             EmptyView()
         }
     }
@@ -135,9 +131,7 @@ struct FriendshipControl: View {
 
     // MARK: - Actions
 
-    /// Runs a friend-graph mutation with a shared busy flag and inline error, so
-    /// every button in every state disables together and surfaces failures the
-    /// same way.
+    /// Runs a friend-graph mutation with a shared busy flag and inline error, so every button disables and fails alike.
     private func perform(_ action: @escaping () async throws -> Void) {
         errorMessage = nil
         isWorking = true
@@ -149,11 +143,8 @@ struct FriendshipControl: View {
     }
 }
 
-/// The friendship status, shown at the bottom of a profile beside Report and
-/// Block. It reads as a quiet "Friends ✓" confirmation; unfriending is tucked
-/// behind a tap and a confirmation, so ending a friendship is never a stray,
-/// one-tap thing. Renders nothing unless the two people are actually friends, so
-/// the profile can drop it in unconditionally.
+/// The friendship status at the bottom of a profile beside Report and Block: a quiet
+/// "Friends ✓" with unfriending behind a tap and confirmation. Renders nothing unless friends.
 struct FriendStatusButton: View {
     let userID: String
     let displayName: String
@@ -166,18 +157,12 @@ struct FriendStatusButton: View {
     @State private var isWorking = false
     @State private var errorMessage: String?
 
-    /// Whether unfriending can be offered, which the stay lists answer three ways
-    /// rather than two.
+    /// Whether unfriending can be offered; the stay lists give three answers, not two.
     private enum UnfriendAvailability {
         case available
-        /// A stay is on the books. Messaging is friend-gated, so ending the
-        /// friendship here would take away the way these two coordinate a key
-        /// handoff or a lock-out, at the one time they need it.
+        /// A stay is on the books; ending the friendship would remove the thread they need for key handoffs.
         case blockedByStay
-        /// The lists have not arrived yet, or a listener failed. Either way they
-        /// are empty, and an empty list is not the same answer as "no stay" —
-        /// reading it as one puts the button back exactly when the store cannot
-        /// contradict it.
+        /// The lists haven't arrived or a listener failed; an empty list isn't "no stay".
         case unknown
     }
 
@@ -211,10 +196,7 @@ struct FriendStatusButton: View {
                 isPresented: $confirming,
                 titleVisibility: .visible
             ) {
-                // No unfriend option while a stay is on the books. The dialog
-                // still opens and still says why, rather than the row going
-                // quietly inert — an option that vanishes without explanation
-                // reads as a bug.
+                // No unfriend while a stay is on the books; the dialog still opens and says why, since a vanished option reads as a bug.
                 if case .available = unfriendAvailability {
                     Button("Unfriend \(displayName)", role: .destructive) {
                         errorMessage = nil
@@ -228,10 +210,7 @@ struct FriendStatusButton: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                // Blocking stays available from the row below this one, and is
-                // not mentioned in any of these: someone who needs it will look
-                // for it, and offering it in answer to "unfriend" would read as
-                // a suggestion to escalate.
+                // Blocking stays available from the row below and isn't mentioned here; offering it for "unfriend" would suggest escalating.
                 switch unfriendAvailability {
                 case .available:
                     Text("Unfriending means you'll no longer see each other's homes. To reconnect, one of you will need to send a new friend request.")

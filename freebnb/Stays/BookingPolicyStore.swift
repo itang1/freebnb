@@ -2,18 +2,12 @@
 //  BookingPolicyStore.swift
 //  freebnb
 //
-//  The guest's half of Circles, and deliberately a different type from
-//  `CircleStore` rather than a second section of it. A host reads their circles,
-//  their memberships, and everyone's overrides; a guest reads one document, the
-//  policy a single host has resolved for them, and cannot reach anything else.
-//  Two stores keeps that asymmetry something the compiler knows about instead of
-//  something a comment asks you to remember.
-//
-//  Fetched on demand rather than listened to. A live listener would turn a host
-//  tightening a policy into an event on the guest's screen — the calendar
-//  quietly losing days while they look at it — and the one thing this feature
-//  promises is that a restricted friend is never told. One read when the request
-//  sheet opens, and the answer holds for as long as the sheet is up.
+//  The guest's half of Circles, a different type from `CircleStore` so the compiler knows
+//  the asymmetry: a host reads circles, memberships and overrides; a guest reads one
+//  document, the policy a host resolved for them. Fetched on demand, not listened to: a
+//  live listener would let a host tightening a policy change the guest's calendar
+//  while they look, and a restricted friend must never be told. One read when the sheet
+//  opens holds while it's up.
 //
 
 import Foundation
@@ -23,18 +17,14 @@ import os
 @MainActor
 @Observable
 final class BookingPolicyStore {
-    /// What the request sheet needs to draw itself: the rules that apply, and
-    /// how much of the frequency window the guest has already spent.
+    /// What the request sheet needs: the applicable rules and how much of the frequency window is spent.
     struct Resolved: Equatable, Sendable {
         var policy: BookingPolicy
-        /// Requests already made inside the open window. Zero when the window
-        /// has elapsed or there is no cap.
+        /// Requests already made inside the open window; zero when it elapsed or there's no cap.
         var staysUsedInWindow: Int
-        /// When the open window ends, if a cap is in force and the window is
-        /// still running.
+        /// When the open window ends, if a cap is in force.
         var windowEndsAt: Date?
-        /// The counter as it stands, so the sheet can hand the advanced value to
-        /// the write without re-reading it.
+        /// The counter as it stands, so the sheet can hand the advanced value to the write.
         var counter: StayCounter?
 
         /// Nothing configured: every option offered, no days withheld.
@@ -48,14 +38,9 @@ final class BookingPolicyStore {
         self.repository = repository
     }
 
-    /// The policy `hostID` has published for `guestID`, with the guest's own
-    /// frequency counter folded in.
-    ///
-    /// A host who has published nothing, and a read that fails, both come back
-    /// unrestricted. That is the safe direction for a *display* decision: the
-    /// sheet offers what it cannot rule out, and `firestore.rules` is what
-    /// actually refuses. Erring the other way would grey out a calendar because
-    /// the network hiccuped.
+    /// The policy `hostID` published for `guestID`, with the guest's frequency counter
+    /// folded in. No policy or a failed read comes back unrestricted, the safe direction
+    /// for a display decision since `firestore.rules` is what refuses.
     func resolve(hostID: String, guestID: String) async -> Resolved {
         guard !hostID.isEmpty, !guestID.isEmpty, hostID != guestID else { return .unrestricted }
         do {
@@ -75,10 +60,8 @@ final class BookingPolicyStore {
         }
     }
 
-    /// The counter value a request being sent right now should carry, or nil
-    /// when the policy is uncapped and no counter is needed. The rules accept
-    /// exactly these two shapes — open a window, or increment the open one — so
-    /// the write is never one they would have to turn down.
+    /// The counter value a request being sent now should carry, or nil when uncapped.
+    /// The rules accept only open-a-window or increment-the-open-one.
     func advancedCounter(
         for resolved: Resolved,
         hostID: String,
