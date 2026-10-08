@@ -11,8 +11,7 @@ private struct SkeletonModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // A repeatForever pulse is exactly the kind of looping animation
-            // Reduce Motion exists to stop; hold a steady mid opacity instead.
+            // A repeatForever pulse is what Reduce Motion exists to stop; hold a steady mid opacity.
             .opacity(reduceMotion ? 0.6 : (animating ? 0.4 : 0.9))
             .onAppear {
                 guard !reduceMotion else { return }
@@ -86,9 +85,7 @@ struct SkeletonConversationRow: View {
     }
 }
 
-/// A single placeholder chat bubble. `isMine` mirrors the real thread's
-/// leading/trailing alignment so the skeleton settles into the loaded layout
-/// without the rows jumping sides.
+/// A placeholder chat bubble; `isMine` mirrors the thread's alignment so the skeleton settles without rows jumping sides.
 struct SkeletonMessageBubble: View {
     var isMine: Bool
     var width: CGFloat
@@ -102,9 +99,7 @@ struct SkeletonMessageBubble: View {
     }
 }
 
-/// Alternating placeholder bubbles for a thread whose first snapshot is still
-/// in flight. Widths are fixed rather than random so the shape is stable across
-/// the re-renders SwiftUI performs while the view is on screen.
+/// Alternating placeholder bubbles for a thread awaiting its first snapshot, in fixed widths so the shape is stable across re-renders.
 struct SkeletonMessageThread: View {
     private static let bubbles: [(isMine: Bool, width: CGFloat)] = [
         (false, 180), (true, 140), (false, 220), (true, 96), (false, 160)
@@ -121,9 +116,7 @@ struct SkeletonMessageThread: View {
     }
 }
 
-/// Placeholder for the listing detail map while the address is geocoded.
-/// Matches the loaded map's 250pt height and corner radius so the swap is
-/// a crossfade rather than a reflow.
+/// Placeholder for the detail map while the address geocodes, matching its 250pt height and corner radius so the swap is a crossfade.
 struct SkeletonMapBlock: View {
     var body: some View {
         SkeletonBlock(height: 250, cornerRadius: 12)

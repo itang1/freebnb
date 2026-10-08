@@ -2,24 +2,17 @@
 //  HostCancelStaySheet.swift
 //  freebnb
 //
-//  The sheet a host sees when calling off a stay the guest was already given.
-//  A confirmed stay is the one cancellation the guest was counting on, so this
-//  does two things a bare "are you sure?" can't: it says plainly what the guest
-//  will be told, and it offers (never demands) a note the host can use to
-//  suggest other dates on the way out. The note is optional and there is no
-//  reason field, so a host with nothing to add just cancels.
+//  The sheet for a host calling off a stay the guest was given: it says plainly what the guest will be told and
+//  offers (never demands) a note to suggest other dates. There's no reason field, so a host with nothing to add just cancels.
 //
 
 import SwiftUI
 
 struct HostCancelStaySheet: View {
     let request: StayRequest
-    /// The guest's display name, so the sheet can name who hears about this
-    /// rather than saying "the guest".
+    /// The guest's display name, so the sheet names who hears about this.
     let guestName: String
-    /// Performs the cancel with the host's optional note. Returns nil on success,
-    /// or the message to show if it failed: the presenting page sits behind this
-    /// sheet, so an error raised there would be invisible and the button inert.
+    /// Performs the cancel with the host's optional note; nil on success, else the message to show (the presenting page is behind the sheet).
     let onConfirm: (_ note: String?) async -> String?
 
     @State private var note = ""
@@ -59,8 +52,7 @@ struct HostCancelStaySheet: View {
                             let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
                             errorMessage = await onConfirm(trimmed.isEmpty ? nil : trimmed)
                             isConfirming = false
-                            // Owns its own dismissal: stay open on failure with the
-                            // reason showing, close on success.
+                            // Owns its dismissal: stays open on failure with the reason, closes on success.
                             if errorMessage == nil { dismiss() }
                         }
                     }

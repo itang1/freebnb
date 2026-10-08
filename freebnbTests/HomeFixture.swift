@@ -2,24 +2,16 @@
 //  HomeFixture.swift
 //  freebnbTests
 //
-//  A shared `Home` builder for the tests whose fixtures only differ by a handful
-//  of fields (id, host, reach, coordinate, timestamps). It replaces the copies
-//  of the same `makeHome`/`makeAmenities` that had drifted across the suite.
-//
-//  Namespaced as `HomeFixture.make` on purpose: three tests keep a private
-//  `makeHome` because their fixture is tuned to what they assert, and a free
-//  function of the same name would make those call sites ambiguous.
-//    - ListingDraftTests: a rich Pasadena listing whose fields it reads back.
-//    - SpotlightIndexerTests: Portland/OR defaults its title and keyword tests rely on.
-//    - TrustAndSafetyTests: a fixed `createdAt`.
+//  A shared `Home` builder for tests whose fixtures differ by a few fields, replacing the drifted `makeHome`
+//  copies. Namespaced as `HomeFixture.make` because three tests keep a private `makeHome` tuned to their assertions
+//  (ListingDraftTests, SpotlightIndexerTests, TrustAndSafetyTests), and a free function would be ambiguous.
 //
 
 import Foundation
 @testable import freebnb
 
 enum HomeFixture {
-    /// Every amenity off. Tests that care about a specific amenity set it on the
-    /// returned `Home`; none of the callers here read amenities at all.
+    /// Every amenity off; tests that care set it on the returned `Home`.
     static func amenities() -> Amenities {
         Amenities(
             hasAC: false, hasHeating: false, hasKitchen: false, hasFridgeSpace: false,
@@ -31,8 +23,7 @@ enum HomeFixture {
         )
     }
 
-    /// A minimal "Town, CA" listing. `id` defaults to a fresh UUID so a test that
-    /// builds several homes without naming them never collides on the same id.
+    /// A minimal "Town, CA" listing; `id` defaults to a fresh UUID so unnamed homes never collide.
     static func make(
         id: String = UUID().uuidString,
         hostUserID: String = "host",

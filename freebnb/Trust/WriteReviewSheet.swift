@@ -2,12 +2,8 @@
 //  WriteReviewSheet.swift
 //  freebnb
 //
-//  The post-stay review form (feature 1): a rating, a public comment, and a
-//  private note that only the person being reviewed will ever read.
-//
-//  The private channel is what makes an honest public review possible. Without
-//  it, the only place to put "the shower was cold" is the profile, so people
-//  either say nothing or say it in front of everyone.
+//  The post-stay review form: a rating, a public comment, and a private note only the reviewed person reads.
+//  The private channel makes honest public reviews possible; otherwise "the shower was cold" has nowhere to go.
 //
 
 import SwiftUI
@@ -32,9 +28,7 @@ struct WriteReviewSheet: View {
     private var canSubmit: Bool {
         Review.ratingRange.contains(rating)
             && !isSubmitting
-            // Both caps are enforced by the rules; check them here so an over-long
-            // field disables Submit with a visible counter instead of failing the
-            // write with a permission denial.
+            // Both caps are rule-enforced; checking here disables Submit with a counter instead of a permission denial.
             && trimmedComment.count <= Review.commentMaxLength
             && trimmedNote.count <= PrivateFeedback.maxLength
     }

@@ -2,17 +2,14 @@
 //  WhatsNewPage.swift
 //  freebnb
 //
-//  Renders the `WhatsNew` changelog (feature 43). Doubles as a navigable Info page
-//  and, when handed an `onDismiss`, as the auto-presented "what's new" sheet. A
-//  highlight with a `longRead` pushes `HighlightReaderPage`; this is also where the
-//  old "Feature Spotlight" reader page moved to.
+//  Renders the `WhatsNew` changelog: a navigable Info page, or with an `onDismiss` the auto-presented sheet.
+//  A highlight with a `longRead` pushes `HighlightReaderPage`.
 //
 
 import SwiftUI
 
 struct WhatsNewPage: View {
-    /// When non-nil, a "Done" button is shown and this is called on tap, so the
-    /// same view serves both the pushed Info page and the presented sheet.
+    /// When non-nil, a "Done" button calls this, so one view serves the pushed page and the sheet.
     var onDismiss: (() -> Void)?
 
     var body: some View {
@@ -116,8 +113,7 @@ struct WhatsNewSheet: View {
     }
 }
 
-/// The full read behind a highlight's `longRead`, formerly the "Feature Spotlight"
-/// article page.
+/// The full read behind a highlight's `longRead`.
 struct HighlightReaderPage: View {
     let highlight: ReleaseHighlight
     let longRead: String
