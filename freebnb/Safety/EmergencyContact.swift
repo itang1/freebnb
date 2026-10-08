@@ -2,17 +2,10 @@
 //  EmergencyContact.swift
 //  freebnb
 //
-//  The person a guest tells about a stay (feature 5). Stored in the guest's
-//  owner-only `users/{uid}/private/profile` subdocument, which nobody else — not
-//  the host, not another guest — can read.
-//
-//  The contact is not a FreeBNB account and gets no server-side notification.
-//  Sharing a stay composes the message on-device and hands it to the system share
-//  sheet, so the address travels through the guest's own Messages or Mail and
-//  never through a third party. That is both the cheapest design and the one with
-//  the smallest disclosure surface: FreeBNB never learns who the contact is
-//  beyond what the guest chose to store, and never transmits the address anywhere
-//  new. Server-side delivery is written up in TODO_MANUAL.md.
+//  The person a guest tells about a stay, stored in the guest's owner-only `users/{uid}/private/profile`.
+//  The contact isn't a FreeBNB account and gets no server notification: sharing composes the message on-device
+//  and hands it to the share sheet, so the address travels via the guest's own Messages or Mail, smallest
+//  disclosure surface. Server-side delivery is in TODO_MANUAL.md.
 //
 
 import Foundation
@@ -20,8 +13,7 @@ import Foundation
 struct EmergencyContact: Codable, Hashable, Sendable {
     /// What the guest calls them: "Mum", "Priya", "my roommate".
     var name: String
-    /// A phone number or email, kept as free text because it is only ever shown
-    /// back to the guest as a reminder of who they picked.
+    /// Free text, since it's only shown back to the guest as a reminder of who they picked.
     var contact: String
 
     var isComplete: Bool {
@@ -52,10 +44,7 @@ struct EmergencyContact: Codable, Hashable, Sendable {
 // MARK: - The message a guest sends
 
 enum SafetyCheckIn {
-    /// The "here is where I'll be" note, assembled from only what this viewer is
-    /// actually entitled to see. A guest whose stay hasn't been accepted has no
-    /// street address, so neither does the message — it degrades to the city
-    /// rather than pretending to a precision it doesn't have.
+    /// The "here is where I'll be" note, from only what this viewer may see; without an accepted stay it degrades to the city.
     static func message(
         stay: StayRequest,
         guestName: String,

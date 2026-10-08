@@ -2,18 +2,13 @@
 //  CalendarInvite.swift
 //  freebnb
 //
-//  Builds a shareable .ics file for a confirmed stay so a guest can add it to
-//  their calendar from the share sheet — no EventKit permission or entitlement
-//  required, which keeps the "add to Calendar" button on the logistics card
-//  friction-free (feature 19).
+//  Builds a shareable .ics for a confirmed stay, so "add to Calendar" needs no EventKit permission.
 //
 
 import Foundation
 
 enum CalendarInvite {
-    /// One all-day VEVENT. `endDay` is the exclusive bound — the departure day for
-    /// a stay, the day after the last blocked night for an availability block —
-    /// which is exactly what iCalendar's DTEND means for an all-day event.
+    /// One all-day VEVENT; `endDay` is exclusive (departure day, or the day after the last blocked night), as iCalendar's DTEND means.
     struct Event {
         var uid: String
         var title: String
@@ -39,13 +34,8 @@ enum CalendarInvite {
         )
     }
 
-    /// Writes any number of all-day VEVENTs into one calendar file — a host's
-    /// blocked periods (feature 16), or a single stay. Returns nil for an empty
-    /// event list, since a calendar with nothing in it is not worth sharing.
-    ///
-    /// `filename` distinguishes the exports in the temporary directory; two
-    /// features writing to one path would let a stale stay ride out under an
-    /// availability export's name.
+    /// Writes any number of all-day VEVENTs into one calendar file (blocked periods or a single stay);
+    /// nil for an empty list. `filename` distinguishes exports so features sharing a path can't leak a stale file.
     static func icsFile(events: [Event], filename: String) -> URL? {
         guard !events.isEmpty else { return nil }
 

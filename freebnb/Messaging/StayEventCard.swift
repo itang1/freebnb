@@ -2,10 +2,7 @@
 //  StayEventCard.swift
 //  freebnb
 //
-//  The centered system card a thread renders for a stay-lifecycle event
-//  (requested / accepted / declined / cancelled) in place of the old
-//  emoji-prefixed text bubble (item 29). The underlying message keeps its
-//  `text`, so this is purely a richer presentation of the same event.
+//  The centered system card a thread renders for a stay-lifecycle event, replacing the emoji-prefixed bubble; the message keeps its `text`.
 //
 
 import SwiftUI
@@ -13,18 +10,12 @@ import SwiftUI
 struct StayEventCard: View {
     let event: StayEvent
     let timestamp: Date?
-    /// Whether the signed-in user is the one who did this, and who the other
-    /// person is. The card is centered with no left/right side, so its title is
-    /// the only thing that can say which of the two people acted.
+    /// Whether the signed-in user did this, and who the other is; the card has no side, so its title says who acted.
     let isFromMe: Bool
     let otherName: String
-    /// Pending while the send is in flight, failed if it never committed. Ordinary
-    /// events resolve to `.sent` almost immediately.
+    /// Pending while the send is in flight, failed if it never committed.
     var state: MessageState = .sent
-    /// Set only for a `hostCancelled` event shown to the guest: opens the
-    /// listing so they can look at its other dates. An offer, not a nudge, so
-    /// the card carries it as a quiet button the guest can ignore. Nil for every
-    /// other card, including the host's own copy of the cancellation.
+    /// Set only for a `hostCancelled` event shown to the guest: opens the listing for its other dates, a quiet button they can ignore.
     var onSeeOtherDates: (() -> Void)?
 
     var body: some View {
@@ -103,8 +94,7 @@ struct StayEventCard: View {
         case .accepted:  return "\(actor) accepted the stay"
         case .declined:  return "\(actor) declined the stay"
         case .cancelled: return "\(actor) cancelled the stay"
-        // The guest reads that the host had to call it off, not that they simply
-        // did. The host's own copy stays plain: they know why.
+        // The guest reads that the host had to call it off; the host's own copy stays plain.
         case .hostCancelled: return isFromMe ? "You cancelled the stay" : "\(otherName) had to cancel the stay"
         case .modified:  return "\(actor) changed the dates"
         }
@@ -124,9 +114,7 @@ struct StayEventCard: View {
     private var tint: Color {
         switch event.kind {
         case .requested, .modified: return .accent
-        // Green like an acceptance rather than accent like a request: an offer is
-        // somebody saying yes before being asked, which is good news landing in
-        // the thread, not a question being posed.
+        // Green like an acceptance: an offer is good news landing in the thread, not a question.
         case .offered:   return .green
         case .accepted:  return .green
         case .declined, .cancelled, .hostCancelled: return .secondary

@@ -4,8 +4,7 @@
 // checks, which is what lets an account read and triage the `reports` collection
 // through the moderation console (feature 6).
 //
-// The claim can only be minted with Admin SDK credentials, never by the app, so
-// a moderator is someone an operator deliberately made one.
+// The claim needs Admin SDK credentials, never the app, so a moderator is someone an operator deliberately made one.
 //
 // Usage:
 //   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json \
@@ -18,9 +17,7 @@
 //   FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
 //   GCLOUD_PROJECT=freebnb-6814a node scripts/set_admin_claim.js dev@freebnb.test
 //
-// The user must sign out and back in (or force-refresh their ID token) before a
-// changed claim reaches their requests: custom claims ride in the token, and an
-// already-issued token keeps its old claims until it expires.
+// The user must sign out and back in (or refresh their ID token) for a changed claim to apply; claims ride in the token until it expires.
 
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -51,8 +48,7 @@ async function listAdmins() {
 
 async function setClaim(email, grant) {
   const user = await auth.getUserByEmail(email);
-  // Merge rather than replace: blowing away another claim while adding this one
-  // would be a silent, hard-to-trace privilege change.
+  // Merge, not replace: clobbering another claim while adding this one would be a silent privilege change.
   const claims = { ...(user.customClaims || {}) };
   if (grant) {
     claims.admin = true;
