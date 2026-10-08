@@ -1,22 +1,10 @@
-// The split calendar: `homes/{id}/private/availability`.
-//
-// A listing's calendar is stored twice on purpose. The public document carries
-// one merged field, `unavailableDateRanges`; the two halves it was merged from
-// live in this private document. The split exists because Firestore grants reads
-// per document and never per field — a listing that published both halves let
-// anyone who could see it subtract one from the other and learn exactly which
-// nights the home was occupied, no matter what the UI chose to draw.
-//
-// So the interesting cases here are all about keeping the halves apart and
-// keeping the server's half the server's:
-//
-//   - an accepted guest, who may read the street address, must NOT read this.
-//     One accepted stay anywhere would otherwise make the host's bookings
-//     legible again and the split would have bought nothing.
-//   - `bookedDateRanges` is derived from accepted stays by `onStayRequestWritten`
-//     and must survive every client write, including the one that deletes the
-//     document out from under the pin.
-//   - the host's own half stays writable, or the availability editor stops working.
+// The split calendar: `homes/{id}/private/availability`. The public document carries one merged
+// `unavailableDateRanges`; the halves live here, because Firestore grants reads per document, so
+// publishing both would let anyone subtract one from the other and learn the occupied nights. The
+// cases keep the halves apart and the server's half the server's:
+//   - an accepted guest, who may read the street, must NOT read this (one accepted stay would make bookings legible);
+//   - `bookedDateRanges` derives from accepted stays and must survive every client write, including a delete;
+//   - the host's own half stays writable, or the editor stops working.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -99,7 +87,7 @@ describe("homes/{id}/private/availability read — who sees the halves", () => {
     await assertSucceeds(getDoc(availability(as(HOST))));
   });
 
-  // A co-host keeps the calendar current, which they cannot do blind.
+  // A co-host keeps the calendar current, which they can't do blind.
   it("allows a co-host", async () => {
     await assertSucceeds(getDoc(availability(as(COHOST))));
   });
@@ -109,9 +97,7 @@ describe("homes/{id}/private/availability read — who sees the halves", () => {
     await assertFails(getDoc(availability(as(GUEST))));
   });
 
-  // The control for the case above: the same guest, the same marker, the
-  // sibling document. If this failed too, the test above would prove nothing
-  // beyond "the guest cannot read subcollections".
+  // The control for the case above: same guest and marker, sibling document; otherwise it would prove only "guests can't read subcollections".
   it("still allows that guest the street address", async () => {
     await assertSucceeds(getDoc(location(as(GUEST))));
   });
@@ -134,12 +120,9 @@ describe("homes/{id}/private/availability write — the server's half", () => {
     );
   });
 
-  // The booked half was pinned when a trigger owned it. The trigger is not
-  // deployed, so the host's reconciler owns it now — it recomputes bookings from
-  // the listing's accepted stays and writes them here. Managers may write it;
-  // it stays managers-only, so a booking never becomes legible to a guest. A
-  // manager over-booking their own calendar harms only themselves, and a
-  // non-manager is refused by the same gate the blocked half sits behind.
+  // The booked half was pinned when a trigger owned it. That isn't deployed, so the host's reconciler
+  // now recomputes it from accepted stays and writes here. Managers may write it but it stays managers-only;
+  // over-booking their own calendar harms only themselves, and non-managers hit the same gate as the blocked half.
   it("allows the host to write the booked half", async () => {
     await assertSucceeds(
       setDoc(availability(as(HOST)), { bookedDateRanges: [range(9)] }, { merge: true })
@@ -156,8 +139,7 @@ describe("homes/{id}/private/availability write — the server's half", () => {
     await assertSucceeds(setDoc(availability(as(HOST)), { blockedDateRanges: [range(1)] }));
   });
 
-  // Deleting is the one way to change a field without updating it, so the pin
-  // has to cover it too.
+  // Deleting is the other way to change a field, so the pin covers it too.
   it("denies the host deleting the document to shed its bookings", async () => {
     await assertFails(deleteDoc(availability(as(HOST))));
   });
@@ -174,12 +156,8 @@ describe("homes/{id}/private/availability write — the server's half", () => {
     );
   });
 
-  // The turnover buffer (feature: turnover buffer): the host's gap around every
-  // confirmed stay, stored here rather than on the public listing so a guest
-  // cannot subtract a known buffer from an unavailable stretch to recover the
-  // booking under it. The rule validates the field but does not range-check it
-  // against the calendar — a rule cannot loop over ranges, which is why the
-  // double-booking and buffer guards both live in the accept path.
+  // The turnover buffer: stored here, not on the public listing, so a guest can't subtract a known buffer from an
+  // unavailable stretch. The rule validates the field but can't range-check it (no loops); the double-booking and buffer guards live in the accept path.
   it("allows the host to set a valid turnover buffer", async () => {
     await assertSucceeds(
       setDoc(availability(as(HOST)), { bufferHours: 48 }, { merge: true })

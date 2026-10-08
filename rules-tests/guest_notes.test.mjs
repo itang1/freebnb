@@ -1,27 +1,13 @@
-// A guest's private notes on the hosts they stay with and the listings they
-// consider — the symmetric twin of friend_notes.test.mjs, from the other side of
-// the same stay.
-//
-// The UI never shows a note to anyone but its author, but the caller this
-// feature has to hold against is precisely the host who has stopped using the
-// UI: a technical user reading raw documents, listing the collection, or
-// guessing a note id. So the whole promise has to be true here, at the rules,
-// with the app switched off.
-//
-// What is pinned:
-//   - the host a note is about cannot read it, by get or by list, ever;
-//   - neither can a stranger, an anonymous caller, or the guest is not exposed
-//     to a moderator (there is no isAdmin() branch on this collection);
-//   - a guest cannot write a note into somebody else's collection, and cannot
-//     write a `host` note about themselves;
-//   - an edit cannot re-point a note at a different host or listing, cannot
-//     switch a note's kind between host and listing, or rewrite when it was
-//     written;
-//   - the shape holds: known subject types only, no extra fields, no empty or
-//     over-long text, no non-string stay link;
+// A guest's private notes on hosts and listings, the twin of friend_notes.test.mjs. The UI
+// shows a note only to its author, but the caller to hold against is the host who stopped
+// using the UI and reads raw documents, lists the collection or guesses a note id. Pinned:
+//   - the host a note is about can't read it, by get or list;
+//   - neither can a stranger, an anonymous caller or a moderator (no isAdmin() branch);
+//   - a guest can't write into someone else's collection or a `host` note about themselves;
+//   - an edit can't re-point a note, switch its kind (host/listing) or rewrite its date;
+//   - the shape holds: known subject types, no extra fields, no empty/over-long text or non-string stay link;
 //   - a note about a former host stays readable and deletable by its author;
-//   - the prompt marker carries a timestamp and nothing else, and is just as
-//     unreadable to the host.
+//   - the prompt marker is a timestamp only, and as unreadable to the host.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -107,9 +93,7 @@ describe("who can read a note", () => {
     await assertSucceeds(getDocs(notesOf(as(GUEST), GUEST)));
   });
 
-  // The whole feature in one assertion. The host knows the guest's uid (it is on
-  // every stay request between them) and can guess a document path; the rule,
-  // not the absence of a screen, is what stops them.
+  // The whole feature in one assertion: the host knows the guest's uid and can guess a path; the rule, not a missing screen, stops them.
   it("refuses the host the note is about", async () => {
     await assertFails(getDoc(noteDoc(as(HOST))));
   });
@@ -126,15 +110,13 @@ describe("who can read a note", () => {
     await assertFails(getDoc(noteDoc(anon())));
   });
 
-  // Being on the other side of the stay a note names buys nothing: the note is
-  // the guest's, not the stay's.
+  // The other side of the stay buys nothing: the note is the guest's, not the stay's.
   it("refuses the host of the stay the note is filed under", async () => {
     await seedNote("note-2", { stayRequestID: STAY });
     await assertFails(getDoc(noteDoc(as(HOST), GUEST, "note-2")));
   });
 
-  // Notes outlive the stay. A guest who never returns still keeps the note that
-  // explains why.
+  // Notes outlive the stay; a guest who never returns keeps the note explaining why.
   it("still lets the author read a note about a host they never see again", async () => {
     await assertSucceeds(getDoc(noteDoc(as(GUEST))));
     await assertSucceeds(deleteDoc(noteDoc(as(GUEST))));
@@ -172,8 +154,7 @@ describe("writing a note", () => {
     );
   });
 
-  // Nullable means nullable: a note tied to no stay is the ordinary case, not a
-  // degraded one.
+  // Nullable means nullable: a note tied to no stay is ordinary.
   it("lets a guest write a note tied to no stay at all", async () => {
     await assertSucceeds(
       setDoc(noteDoc(as(GUEST)), {
@@ -194,8 +175,7 @@ describe("writing a note", () => {
     );
   });
 
-  // A `host` note about yourself would put guest-authored text on the one
-  // profile you might later hand somebody else to look at.
+  // A `host` note about yourself would put guest-authored text on a profile you might hand to someone else.
   it("refuses a host note about yourself", async () => {
     await assertFails(
       setDoc(noteDoc(as(GUEST)), {
@@ -267,8 +247,7 @@ describe("writing a note", () => {
     );
   });
 
-  // A field nobody validates is a field somebody will eventually put a rating
-  // in, or a report flag — the two things this feature exists instead of.
+  // A field nobody validates will eventually hold a rating or report flag, which this feature exists instead of.
   it("refuses an unknown field", async () => {
     await assertFails(
       setDoc(noteDoc(as(GUEST)), {
@@ -301,16 +280,14 @@ describe("editing and deleting", () => {
     );
   });
 
-  // A note re-filed under somebody else keeps its date and reads as
-  // contemporaneous evidence about a host it was never written about.
+  // A re-filed note keeps its date and reads as contemporaneous evidence about someone it was never written about.
   it("refuses re-pointing a note at a different host", async () => {
     await assertFails(
       updateDoc(noteDoc(as(GUEST)), { subjectID: OTHER, updatedAt: serverTimestamp() })
     );
   });
 
-  // A host note quietly reborn as a listing note (or the reverse) is the same
-  // re-filing dressed differently; the kind is pinned too.
+  // Switching kind (host note to listing note) is the same re-filing, so the kind is pinned too.
   it("refuses switching a note's kind between host and listing", async () => {
     await assertFails(
       updateDoc(noteDoc(as(GUEST)), {
@@ -338,8 +315,7 @@ describe("editing and deleting", () => {
     await assertSucceeds(deleteDoc(noteDoc(as(GUEST))));
   });
 
-  // The subject cannot suppress what is said about them any more than they can
-  // read it. Both are the same rule.
+  // The subject can't suppress what's said about them any more than read it.
   it("refuses a delete by the host the note is about", async () => {
     await assertFails(deleteDoc(noteDoc(as(HOST), GUEST)));
   });
@@ -357,8 +333,7 @@ describe("post-trip prompt markers", () => {
     await assertSucceeds(setDoc(promptDoc(as(GUEST)), { dismissedAt: serverTimestamp() }));
   });
 
-  // The marker says a prompt was seen. It must never grow a field saying what
-  // the guest thought.
+  // The marker says a prompt was seen; it must never grow a field saying what the guest thought.
   it("refuses any field other than the timestamp", async () => {
     await assertFails(
       setDoc(promptDoc(as(GUEST)), { dismissedAt: serverTimestamp(), verdict: "bad host" })

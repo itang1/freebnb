@@ -1,22 +1,13 @@
-// Circles: friend-grouped booking rules.
-//
-// The client hides what a policy forbids, but hiding is not refusing, and the
-// caller a host restricting someone has in mind is exactly the one running a
-// modified client. So the whole feature has to hold here, at the rules, with the
-// UI switched off.
-//
-// What is pinned:
-//   - the resolution chain (override > circle > Default) picks the same policy
-//     the Swift resolver does, and always terminates;
-//   - a host with no circles restricts nothing, which is what they had before;
-//   - each of the three policy fields actually refuses a write;
-//   - an absent arrivalWindow is read as 'flexible' rather than as unchecked;
-//   - the frequency cap cannot be dodged by declining to advance the counter,
-//     by sliding the counter's window, or by spending someone else's;
-//   - moving the dates on a pending request re-checks the notice rule;
-//   - a guest cannot read the circles or the memberships, only the policy
-//     resolved for them;
-//   - Default cannot be deleted, and no other circle can claim to be it.
+// Circles: friend-grouped booking rules. The client hides what a policy forbids, but the
+// caller to hold against runs a modified client, so the feature must hold at the rules. Pinned:
+//   - resolution (override > circle > Default) matches the Swift resolver and always terminates;
+//   - a host with no circles restricts nothing;
+//   - each of the three policy fields refuses a write;
+//   - an absent arrivalWindow reads as 'flexible', not unchecked;
+//   - the frequency cap can't be dodged by not advancing the counter, sliding its window or spending someone else's;
+//   - moving a pending request's dates re-checks the notice rule;
+//   - a guest can't read circles or memberships, only the policy resolved for them;
+//   - Default can't be deleted and no other circle can claim to be it.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -44,9 +35,7 @@ const FRIEND = "user-friend";
 const OTHER = "user-other";
 const LISTING = "listing-1";
 const DAY_MS = 86_400_000;
-// Reused verbatim wherever a test both seeds a counter and writes it again: the
-// rules pin windowStart across an increment, so two Timestamps a millisecond
-// apart are two different windows.
+// Reused where a test seeds a counter and writes it again: the rules pin windowStart across an increment, so Timestamps a millisecond apart are different windows.
 const OPEN_WINDOW_START = Timestamp.fromMillis(Date.now() - DAY_MS);
 const ELAPSED_WINDOW_START = Timestamp.fromMillis(Date.now() - 31 * DAY_MS);
 
@@ -338,10 +327,8 @@ describe("minimum notice", () => {
     );
   });
 
-  // "No minimum" has to mean exactly the behaviour a host had before Circles,
-  // and checkIn is a local start-of-day — so a literal `checkIn >= request.time`
-  // would quietly withdraw the same-day request the app has always allowed.
-  // Zero is skipped rather than compared against, on both sides.
+  // "No minimum" must mean the pre-Circles behaviour, and checkIn is a local start-of-day, so a literal
+  // `checkIn >= request.time` would withdraw same-day requests. Zero is skipped on both sides.
   it("still admits a same-day request when the notice is zero", async () => {
     await seedCircle("default", policy({ minNoticeHours: 0 }));
     await assertSucceeds(
@@ -355,7 +342,7 @@ describe("minimum notice", () => {
   it("re-checks the notice window when a pending request moves its dates", async () => {
     await seedCircle("default", policy({ minNoticeHours: 72 }));
     await assertSucceeds(createRequest(FRIEND));
-    // The dodge this closes: ask for a date far out, then walk it back in.
+    // The dodge this closes: ask far out, then walk it back in.
     await assertFails(
       updateDoc(doc(as(FRIEND), "stayRequests", "req-1"), {
         checkIn: Timestamp.fromMillis(Date.now() + 1 * DAY_MS),
@@ -403,7 +390,7 @@ describe("frequency cap", () => {
   it("refuses sliding the window forward to buy headroom", async () => {
     await seedCircle("default", capped());
     await seedCounter(FRIEND, { windowStart: OPEN_WINDOW_START, count: 2 });
-    // Reopening a window that has not elapsed is the whole dodge.
+    // Reopening a window that hasn't elapsed is the whole dodge.
     await assertFails(createRequestWithCounter(FRIEND, { count: 1 }, {}, "req-4"));
   });
 
@@ -435,13 +422,9 @@ describe("frequency cap", () => {
 
 // ---------------------------------------------------------------------------
 
-// The rules engine allows 1000 expressions per evaluation, and the first draft
-// of the resolution above spent them all on an ordinary booking by re-reading
-// the same documents from four helpers. These two drive the longest chain there
-// is — membership, override, all three fields set, counter advanced — and they
-// assert *success*, which is the only assertion that can tell "the policy
-// permitted this" from "the engine gave up". An assertFails would pass either
-// way, which is exactly how the bug hid.
+// The engine allows 1000 expressions per evaluation, and the first draft spent them all on an ordinary
+// booking by re-reading documents from four helpers. These drive the longest chain (membership, override,
+// all three fields, counter advanced) and assert *success*, the only assertion telling "permitted" from "engine gave up" (an assertFails passes either way).
 describe("the longest resolution chain still evaluates", () => {
   const everything = () =>
     policy({
