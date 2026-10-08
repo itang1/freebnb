@@ -2,14 +2,8 @@
 //  BookingPolicyEditor.swift
 //  freebnb
 //
-//  The three fields of a booking policy, as form sections. Shared by the circle
-//  editor and the per-friend override sheet, because a policy set on one person
-//  and a policy set on a circle are the same thing pointed at a different number
-//  of people — and an editor that differed between them would sooner or later
-//  differ in what it permitted.
-//
-//  Host-facing only. Nothing in this file is reachable from a screen a guest can
-//  see.
+//  The three fields of a booking policy as form sections, shared by the circle editor and the per-friend override
+//  sheet (the same thing aimed at different numbers of people). Host-facing only.
 //
 
 import SwiftUI
@@ -17,8 +11,7 @@ import SwiftUI
 struct BookingPolicyEditor: View {
     @Binding var policy: BookingPolicy
 
-    /// Notice values worth offering. A stepper over 8760 hours would be a joke,
-    /// and a free-text field invites "48h" and "two days".
+    /// Notice values worth offering; a stepper over 8760 hours would be a joke and free text invites "two days".
     private static let noticeChoices = [0, 12, 24, 48, 72, 168, 336, 720]
 
     private static let periodChoices = [7, 14, 30, 90, 180, 365]
@@ -40,9 +33,7 @@ struct BookingPolicyEditor: View {
         } header: {
             Text("Arrival times they can pick")
         } footer: {
-            // Says what the guest sees, because that is the part a host cannot
-            // check for themselves and the part they are most likely to get
-            // wrong about this feature.
+            // Says what the guest sees, the part a host can't check and is likeliest to get wrong.
             Text(arrivalFooter)
         }
 
@@ -98,8 +89,7 @@ struct BookingPolicyEditor: View {
             set: { on in
                 var options = Set(policy.allowedArrivalOptions)
                 if on { options.insert(window.rawValue) } else { options.remove(window.rawValue) }
-                // Stored in the enum's order rather than tap order, so two hosts
-                // who picked the same set store the same array.
+                // Stored in the enum's order, not tap order, so the same set stores the same array.
                 policy.allowedArrivalOptions = ArrivalWindow.allCases
                     .map(\.rawValue)
                     .filter(options.contains)
@@ -146,9 +136,7 @@ struct BookingPolicyEditor: View {
     }
 }
 
-/// One line describing what a policy does, for a circle row or a friend row.
-/// "No restrictions" when it does nothing, which is what a host's Default circle
-/// says until they change it.
+/// One line describing what a policy does, for a circle or friend row; "No restrictions" when it does nothing.
 func bookingPolicySummary(_ policy: BookingPolicy) -> String {
     if policy.isPermissive { return "No restrictions" }
     var parts: [String] = []

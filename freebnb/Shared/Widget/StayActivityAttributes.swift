@@ -2,11 +2,8 @@
 //  StayActivityAttributes.swift
 //  freebnb (shared with the freebnbWidgets extension)
 //
-//  The Live Activity contract for an in-progress stay (feature 21). Shared
-//  verbatim between the app (which starts, updates, and ends the activity) and
-//  the widget extension (which renders the Lock Screen and Dynamic Island). The
-//  static half — where and when — lives in the attributes; the one thing that
-//  changes over the stay, its phase, lives in `ContentState`.
+//  The Live Activity contract for an in-progress stay, shared verbatim by the app and the widget extension.
+//  The static half (where, when) lives in the attributes; the phase, which changes over the stay, in `ContentState`.
 //
 
 import ActivityKit
@@ -34,9 +31,7 @@ enum StayPhase: String, Codable, Hashable, Sendable {
     /// Checkout happens today.
     case checkoutToday
 
-    /// The phase for a stay at `now`, or nil when there is no live activity to
-    /// show (the stay is wholly in the future or already over). `checkIn` and
-    /// `checkOut` are local start-of-day dates.
+    /// The phase for a stay at `now`, or nil when there's no live activity (wholly future or over). Dates are local start-of-day.
     static func current(
         checkIn: Date,
         checkOut: Date,
@@ -50,9 +45,7 @@ enum StayPhase: String, Codable, Hashable, Sendable {
         if now < checkIn && !calendar.isDate(now, inSameDayAs: checkIn) {
             return nil
         }
-        // The whole check-in day counts as arriving. checkIn is stored as a
-        // start-of-day date, so a `now < checkIn` comparison alone would flip
-        // the stay to "underway" at midnight, before anyone has arrived.
+        // The whole check-in day counts as arriving; comparing `now < checkIn` alone would flip to "underway" at midnight.
         if calendar.isDate(now, inSameDayAs: checkIn) {
             return .arrivingToday
         }

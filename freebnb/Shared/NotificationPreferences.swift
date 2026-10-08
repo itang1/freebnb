@@ -2,11 +2,8 @@
 //  NotificationPreferences.swift
 //  freebnb
 //
-//  Per-category push notification preferences. Stored server-side in the owner's
-//  private profile subdocument so a mute actually silences the push (the Cloud
-//  Functions read these before sending), and syncs across the user's devices
-//  (feature 37). A missing map or key means "enabled" — users only ever persist
-//  the categories they turn off.
+//  Per-category push preferences, stored in the owner's private profile so a mute silences the push (the Cloud
+//  Functions read them) and syncs across devices. A missing map or key means enabled; only turned-off categories persist.
 //
 
 import Foundation
@@ -51,9 +48,7 @@ enum NotificationCategory: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// Enabled/disabled state per category. Codable so it rides along on `UserProfile`
-/// (populated from the private subdocument by the profile merger), and round-trips
-/// to a Firestore map via `firestoreValue`.
+/// Enabled/disabled state per category. Codable so it rides on `UserProfile`, round-tripping to a Firestore map via `firestoreValue`.
 struct NotificationPreferences: Codable, Hashable, Sendable {
     var messages: Bool
     var stayRequests: Bool
@@ -72,8 +67,7 @@ struct NotificationPreferences: Codable, Hashable, Sendable {
         self.friendRequests = friendRequests
     }
 
-    /// Builds from the raw Firestore map. An absent map or key defaults to `true`
-    /// (enabled), matching the Cloud Functions' `!== false` check.
+    /// Builds from the raw Firestore map; an absent map or key is `true`, matching the functions' `!== false` check.
     init(firestore map: [String: Any]?) {
         func flag(_ key: String) -> Bool { (map?[key] as? Bool) ?? true }
         self.init(
@@ -84,9 +78,7 @@ struct NotificationPreferences: Codable, Hashable, Sendable {
         )
     }
 
-    /// Tolerant of payloads written before a category existed: a missing key is
-    /// enabled, matching both `init(firestore:)` and the functions' `!== false`.
-    /// The synthesized decoder would throw on one instead.
+    /// Tolerant of payloads predating a category (a missing key is enabled); the synthesized decoder would throw.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         func flag(_ key: CodingKeys) throws -> Bool {

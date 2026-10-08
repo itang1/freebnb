@@ -2,26 +2,16 @@
 //  PreviewEnvironment.swift
 //  freebnb
 //
-//  One environment injection for every #Preview. A preview renders a subtree
-//  whose children may read any of the stores FreeBNBApp provides at launch,
-//  and a single missing one fatal-errors the whole preview process the moment
-//  it is read. Injecting the complete set here, backed by in-memory
-//  repositories, also keeps the canvas from ever constructing a
-//  Firestore-backed store and talking to the real backend.
-//
-//  Not #if DEBUG-gated for the same reason as PreviewData: #Preview bodies are
-//  compiled (then stripped) in release configurations, so gating this would
-//  break archive builds.
+//  One environment injection for every #Preview. A missing store fatal-errors the preview when read, so this
+//  injects the complete set on in-memory repositories (and never constructs a Firestore-backed store).
+//  Not #if DEBUG-gated, like PreviewData: #Preview bodies compile in release, so gating would break archives.
 //
 
 import SwiftUI
 
 extension View {
-    /// Injects the full set of stores the app provides at launch, each backed
-    /// by an empty in-memory repository. Apply this to every #Preview instead
-    /// of injecting stores one by one. To seed a store with fixture data,
-    /// attach its `.environment(...)` closer to the view than this modifier;
-    /// the nearer value wins.
+    /// Injects the full set of stores the app provides at launch on empty in-memory repositories. To seed
+    /// fixture data, attach a nearer `.environment(...)`; the nearer value wins.
     @MainActor
     func previewEnvironment() -> some View {
         environment(AuthManager())
@@ -37,8 +27,7 @@ extension View {
             .environment(GuestNoteStore(repository: InMemoryGuestNoteRepository()))
             .environment(NetworkMonitor(start: false))
             .environment(DeepLinkRouter())
-            // A temporary directory, so a preview never reads or writes the real
-            // kits (and so several previews can't fight over the same files).
+            // A temporary directory, so previews never touch the real kits or fight over files.
             .environment(CheckInKitStore(
                 files: CheckInKitFileStore(
                     directory: URL.temporaryDirectory
