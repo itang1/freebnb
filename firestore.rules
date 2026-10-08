@@ -11,17 +11,14 @@ service cloud.firestore {
       return request.auth.uid == userID;
     }
 
-    // A moderator. The `admin` custom claim is minted out of band by
-    // `scripts/set_admin_claim.js` (Admin SDK) and never by the app, so it cannot
-    // be self-assigned. Reads the claim through map.get() so an account without
-    // the claim evaluates to false instead of erroring on a missing key.
+    // A moderator. The `admin` claim is minted out of band by
+    // `scripts/set_admin_claim.js`, so it can't be self-assigned; map.get() makes a missing claim false.
     function isAdmin() {
       return isSignedIn() && request.auth.token.get('admin', false) == true;
     }
 
-    // True when `a` and `b` have an accepted friend edge. The edge id is its two
-    // participants sorted alphabetically, and rules cannot sort, so both orders
-    // are probed; `||` short-circuits on the hit.
+    // True when `a` and `b` have an accepted friend edge. The edge id is the two
+    // sorted participants and rules can't sort, so both orders are probed.
     function areFriends(a, b) {
       return (exists(/databases/$(database)/documents/friendEdges/$(a + '_' + b))
               && get(/databases/$(database)/documents/friendEdges/$(a + '_' + b)).data.status == 'accepted')
@@ -29,51 +26,38 @@ service cloud.firestore {
               && get(/databases/$(database)/documents/friendEdges/$(b + '_' + a)).data.status == 'accepted');
     }
 
-    // Anonymous "guest" accounts may browse (read) but must not write. The UI
-    // already restricts guests; this makes it a real security boundary rather
-    // than a client-side convention.
+    // Anonymous guests may browse but not write; this makes the UI restriction a security boundary.
     function isFullMember() {
       return isSignedIn()
           && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
-    // True when `ownerID`'s private profile lists `otherID` as blocked.
-    // get()/exists() run with elevated privilege, so this reads the owner-only
-    // private doc that clients cannot. Missing doc or field is treated as "not
-    // blocked" via the default on get().
+    // True when `ownerID`'s private profile blocks `otherID`. get() runs elevated,
+    // so it reads the owner-only doc; a missing doc or field means not blocked.
     function hasBlocked(ownerID, otherID) {
       return exists(/databases/$(database)/documents/users/$(ownerID)/private/profile)
           && get(/databases/$(database)/documents/users/$(ownerID)/private/profile)
                .data.get('blockedUserIDs', []).hasAny([otherID]);
     }
 
-    // A block severs the thread both ways (S11). Checking only the recipient's
-    // list stopped a blocked sender but still let the blocker write to the
-    // person they blocked: the UI hides that thread, but a direct Firestore
-    // write bypassed the UI. `||` short-circuits, so the common case costs the
-    // same single document read it did before.
+    // A block severs the thread both ways; checking only the recipient's list let
+    // a blocker write to the person they blocked via a direct write. `||` short-circuits.
     function blockedEitherWay(userA, userB) {
       return hasBlocked(userA, userB) || hasBlocked(userB, userA);
     }
 
-    // True when the caller hosts the listing. get() runs with elevated privilege,
-    // so this works from a subcollection rule that cannot read the parent doc
-    // through `resource`. Denies (rather than errors) when the listing is gone.
-    //
-    // This is the *identity* question — who owns the listing — and is deliberately
-    // distinct from `isListingManager` below. A co-host manages a listing; they do
-    // not become its host. Every place that decides who receives a stay request,
-    // who may grant a guest the street address, or who may delete the listing
-    // outright keeps asking this one.
+    // True when the caller hosts the listing. get() runs elevated, so it works from
+    // subcollection rules; denies when the listing is gone. This is identity, distinct
+    // from `isListingManager`: a co-host isn't the host, and stay-request recipients,
+    // address grants and deletion all ask this one.
     function isListingHost(homeID) {
       return exists(/databases/$(database)/documents/homes/$(homeID))
           && get(/databases/$(database)/documents/homes/$(homeID)).data.hostUserID == request.auth.uid;
     }
 
-    // True when the caller may *manage* the listing: its host, or one of the
-    // co-hosts the host has named (feature 14). This is the question the listing's
-    // own description and its progressively-disclosed subdocuments ask, because a
-    // roommate who cannot read the street address cannot let a guest in.
+    // True when the caller may manage the listing: its host or a named co-host.
+    // The listing's description and private subdocuments ask this, since a
+    // roommate who can't read the address can't let a guest in.
     function isListingManager(homeID) {
       return exists(/databases/$(database)/documents/homes/$(homeID))
           && (get(/databases/$(database)/documents/homes/$(homeID)).data.hostUserID == request.auth.uid
@@ -81,78 +65,46 @@ service cloud.firestore {
                    .data.get('coHostUserIDs', []).hasAny([request.auth.uid]));
     }
 
-    // True when the caller may answer a stay request with the host's authority:
-    // the host named on the request, or a co-host of the listing it targets
-    // (feature 14).
-    //
-    // Co-hosts were deliberately excluded from stay requests when co-hosting
-    // landed, on the reasoning that managing a listing is not becoming its host.
-    // That left a co-host able to read the street address and block dates on the
-    // calendar while blind to the bookings filling it, which is the half of the
-    // job that made the other half incoherent. A co-host now answers requests for
-    // the listings they manage; naming one is the act of delegating that.
-    //
-    // `isOwner` is checked first so the common path (the host themselves) costs
-    // no extra document read — rules short-circuit, and only the co-host branch
-    // pays for the get() inside isListingManager.
-    //
-    // Takes the document rather than the listing id because both callers already
-    // hold `resource.data`, and the owner check needs `hostUserID` off the same
-    // map. Safe on a create, where `resource` is null: the update rule is not
-    // reached, and rules-tests/requests.test.mjs covers that path.
+    // True when the caller may answer a stay request with the host's authority: the
+    // host on the request or a co-host of its listing. A co-host who could read the
+    // address and block dates but not see bookings had half a job. `isOwner` comes
+    // first so the host's own path costs no extra read. Takes the document since
+    // callers hold `resource.data`; safe on create, where `resource` is null
+    // (covered by rules-tests/requests.test.mjs).
     function isHostSide(data) {
       return isOwner(data.hostUserID) || isListingManager(data.listingID);
     }
 
-    // True when `homeID` is a live listing (exists, not soft-deleted) whose host
-    // is exactly `claimedHostID`. Used to stop a guest from fabricating a stay
-    // request that names an arbitrary victim as host or targets a dead listing
-    // (S8). get() reads with elevated privilege, so it works even for a
-    // friends-only listing the guest can legitimately see.
+    // True when `homeID` is a live listing whose host is exactly `claimedHostID`,
+    // stopping a guest fabricating a request naming a victim host or a dead
+    // listing. get() is elevated, so it works for friends-only listings.
     function listingHasActiveHost(homeID, claimedHostID) {
       return exists(/databases/$(database)/documents/homes/$(homeID))
           && get(/databases/$(database)/documents/homes/$(homeID)).data.hostUserID == claimedHostID
           && get(/databases/$(database)/documents/homes/$(homeID)).data.get('deletedAt', null) == null;
     }
 
-    // The listing's advertised guest capacity, used to bound a stay request's
-    // party size (feature 20). Duplicate get()s in one evaluation are cached by
-    // the rules engine, so this shares the read listingHasActiveHost already did.
+    // The listing's advertised capacity, bounding a request's party size. The engine caches duplicate get()s.
     function listingMaxGuests(homeID) {
       return get(/databases/$(database)/documents/homes/$(homeID)).data.guestPolicy.maxGuests;
     }
 
     // -------------------------------------------------------------------------
-    // Circles — friend-grouped booking rules.
+    // Circles: friend-grouped booking rules (docs/internal/CIRCLES.md).
     //
-    // A host sorts their friends into named circles and hangs a booking policy
-    // off each one. The whole point of the feature is that a restricted friend
-    // is never told: there is no decline, no error, and nothing on a guest's
-    // screen that distinguishes a rule from a busy week. That means these rules
-    // are the *only* enforcement that counts — the client hides what it must not
-    // offer, but hiding is not refusing, and a modified client is exactly the
-    // caller a host restricting someone has in mind.
+    // A restricted friend is never told: no decline, no error, nothing on screen
+    // distinguishes a rule from a busy week. So these rules are the only
+    // enforcement that counts; the client only hides what it mustn't offer.
     //
-    // Resolution order, matched exactly by CirclePolicyResolver in the Swift
-    // client: per-friend override, then the circle the friend is filed under,
-    // then the Default circle. It always terminates, because Default lives at a
-    // fixed document id. Rules cannot query, so "which circle is the default
-    // one" could never have been a field to search for; it has to be a path.
-    //
-    // A host who has no circles at all — nobody has run the migration, and they
-    // have not opened the app since Circles shipped — restricts nothing, which
-    // is precisely the behaviour they had before. That is the absence of
-    // configuration, not a special case for Default: once the documents exist,
-    // Default is read like any other circle.
-    //
-    // See docs/internal/CIRCLES.md.
+    // Resolution order, matched by CirclePolicyResolver in the client:
+    // per-friend override, then the friend's circle, then Default. It always
+    // terminates because Default lives at a fixed document id. A host with no
+    // circles (migration not run) restricts nothing, as before.
     // -------------------------------------------------------------------------
 
     function defaultCircleID() { return 'default'; }
 
-    // Mirrors ArrivalWindow in the Swift client and the whitelist the stay
-    // request create rule applies to `arrivalWindow`; rules-tests/mirrors.test.mjs
-    // asserts all three still agree.
+    // Mirrors ArrivalWindow in the client and the stay request whitelist; rules-tests/mirrors.test.mjs checks all three.
     function arrivalOptions() {
       return ['flexible', 'morning', 'afternoon', 'evening', 'lateNight'];
     }
@@ -165,9 +117,7 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(hostID)/circleMembers/$(friendID);
     }
 
-    // The shape of a policy, wherever it is stored: on a circle, as a per-friend
-    // override, or as the resolved projection a guest reads. Bounds mirror
-    // BookingPolicy / StayFrequencyCap in Circle.swift.
+    // The shape of a policy wherever stored (circle, override, resolved projection); bounds mirror BookingPolicy / StayFrequencyCap.
     function isValidBookingPolicy(policy) {
       return policy is map
           && policy.keys().hasOnly(['allowedArrivalOptions', 'minNoticeHours', 'maxStaysPerPeriod'])
@@ -179,8 +129,7 @@ service cloud.firestore {
           && policy.minNoticeHours is int
           && policy.minNoticeHours >= 0
           && policy.minNoticeHours <= 8760
-          // Absent means uncapped. There is no sentinel count standing in for
-          // "unlimited", so a cleared cap leaves no number behind to misread.
+          // Absent means uncapped; no sentinel count stands in for "unlimited".
           && (policy.get('maxStaysPerPeriod', null) == null
               || (policy.maxStaysPerPeriod is map
                   && policy.maxStaysPerPeriod.keys().hasOnly(['count', 'periodDays'])
@@ -192,20 +141,16 @@ service cloud.firestore {
                   && policy.maxStaysPerPeriod.periodDays <= 3650));
     }
 
-    // The resolution below is written as a chain of functions that pass the
-    // document they just read down as an argument, rather than as helpers that
-    // each re-read it. Rules have no local bindings, so a `policy(host, friend)`
-    // helper called from four places is four full re-resolutions — and the first
-    // draft of this blew the engine's 1000-expression budget on an ordinary
-    // booking. Passing the map is the binding.
+    // Resolution passes the document it just read down as an argument rather than
+    // re-reading it: rules have no local bindings, and re-resolving from four places
+    // once blew the 1000-expression budget.
 
-    // 0 for anything that isn't a plain int, so a malformed policy written out
-    // of band degrades to "no minimum" rather than wedging a host's bookings.
+    // 0 for non-ints, so a malformed policy degrades to "no minimum".
     function noticeHours(p) {
       return p.get('minNoticeHours', 0) is int ? p.get('minNoticeHours', 0) : 0;
     }
 
-    // 0 means uncapped — an absent cap, and also a malformed one.
+    // 0 means uncapped, including an absent or malformed cap.
     function capCountOf(p) {
       return p.get('maxStaysPerPeriod', null) == null
            ? 0
@@ -218,27 +163,15 @@ service cloud.firestore {
            : (p.maxStaysPerPeriod.get('periodDays', 0) is int ? p.maxStaysPerPeriod.get('periodDays', 0) : 0);
     }
 
-    // Whether policy `p` admits this booking.
-    //
-    // An absent arrivalWindow is read as 'flexible' rather than waved through:
-    // the field is optional on the document, so treating "unset" as "unchecked"
-    // would leave the whole arrival restriction one omitted key away from being
-    // nothing at all.
-    //
-    // checkIn is a local start-of-day, and the client rounds the same horizon up
-    // to a whole day before greying cells out (BookingPolicy.earliestCheckIn),
-    // so the two agree on which day is the first bookable one.
-    //
-    // `needsSlot` is false when the write is an edit to a request that already
-    // spent one: moving the dates on a pending request is the same ask, not
-    // another.
+    // Whether policy `p` admits this booking. An absent arrivalWindow reads as
+    // 'flexible', not unchecked. checkIn is a local start-of-day and the client rounds
+    // the horizon up to a whole day (BookingPolicy.earliestCheckIn), so both agree on
+    // the first bookable day. `needsSlot` is false when editing a request that already spent one.
     function policyPermits(p, hostID, friendID, data, needsSlot) {
       return data.get('arrivalWindow', 'flexible')
                in p.get('allowedArrivalOptions', arrivalOptions())
-          // Zero is skipped rather than compared against: checkIn is a
-          // start-of-day, so `checkIn >= request.time` would reject the
-          // same-day request the app has always allowed, and "no minimum
-          // notice" must mean exactly the behaviour a host had before Circles.
+          // Zero is skipped: `checkIn >= request.time` would reject same-day requests,
+          // and "no minimum notice" must mean the pre-Circles behaviour.
           && (noticeHours(p) == 0
               || data.checkIn >= request.time + duration.value(noticeHours(p), 'h'))
           && (!needsSlot
@@ -251,9 +184,7 @@ service cloud.firestore {
           && 'policy' in get(circlePath(hostID, circleID)).data;
     }
 
-    // The circle named, falling back to Default when it has been deleted, and
-    // to no restriction at all when the host has no circles — the state of a
-    // host who has not opened the app since Circles shipped.
+    // The named circle, falling back to Default if deleted, and to no restriction if the host has no circles.
     function circlePermits(hostID, circleID, friendID, data, needsSlot) {
       return circleHasPolicy(hostID, circleID)
            ? policyPermits(get(circlePath(hostID, circleID)).data.policy, hostID, friendID, data, needsSlot)
@@ -263,26 +194,22 @@ service cloud.firestore {
               : true);
     }
 
-    // A per-friend override supersedes the circle, which is the entire meaning
-    // of an override.
+    // A per-friend override supersedes the circle.
     function membershipPermits(hostID, member, friendID, data, needsSlot) {
       return member.get('overridePolicy', null) != null
            ? policyPermits(member.overridePolicy, hostID, friendID, data, needsSlot)
            : circlePermits(hostID, member.get('circleID', defaultCircleID()), friendID, data, needsSlot);
     }
 
-    // The entry point: does `hostID`'s Circles configuration admit this booking
-    // from `friendID`? A friend with no membership document is governed by
-    // Default, which is the window between a friend request being accepted and
-    // the host's client filing them.
+    // The entry point: does `hostID`'s configuration admit this booking from
+    // `friendID`? A friend without a membership doc is governed by Default.
     function bookingPermitted(hostID, friendID, data, needsSlot) {
       return exists(membershipPath(hostID, friendID))
            ? membershipPermits(hostID, get(membershipPath(hostID, friendID)).data, friendID, data, needsSlot)
            : circlePermits(hostID, defaultCircleID(), friendID, data, needsSlot);
     }
 
-    // The cap and window governing a pair, for the counter's own rules. Same
-    // chain, resolving to numbers instead of a verdict; 0 means uncapped.
+    // The cap and window governing a pair, as numbers; 0 means uncapped.
     function pairCapCount(hostID, friendID) {
       return exists(membershipPath(hostID, friendID))
            ? membershipCapCount(hostID, get(membershipPath(hostID, friendID)).data)
@@ -327,12 +254,9 @@ service cloud.firestore {
       return /databases/$(database)/documents/stayCounters/$(hostID + '_' + guestID);
     }
 
-    // The frequency cap, enforced the only way a query-less rule can enforce a
-    // rate: the guest advances a counter in the same commit as the request, this
-    // requires the advance to have happened, and the counter's own rules cap it.
-    // Deliberately identical in shape to rateCounterAdvanced() below, including
-    // its caveat — a batch of creates paired with one increment shares a slot,
-    // and App Check is the primary control against a hand-rolled client.
+    // The frequency cap, enforced as a query-less rule can: the guest advances a
+    // counter in the same commit and this requires it. Same shape and caveat as
+    // rateCounterAdvanced() below (batched creates share a slot; App Check is the main control).
     function stayCounterAdvanced(hostID, guestID) {
       return (getAfter(stayCounterPath(hostID, guestID)).data.windowStart == request.time
               && getAfter(stayCounterPath(hostID, guestID)).data.count == 1)
@@ -341,22 +265,16 @@ service cloud.firestore {
                  == get(stayCounterPath(hostID, guestID)).data.count + 1);
     }
 
-    // The keys an update actually touches. Anything absent from the caller's
-    // allowlist is thereby pinned to its existing value.
+    // The keys an update touches; anything outside the caller's allowlist is pinned.
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    // True when this write also validly advances the caller's rateLimits counter
-    // in the same commit — either opening a fresh window (count resets to 1 at
-    // request.time) or incrementing an already-open one. getAfter() reads the
-    // post-commit state, so tying a message create to it forces every send to
-    // consume a slot the rateLimits rules cap at MESSAGE_RATE_LIMIT per window.
-    // Caveat: a batch of N message creates paired with a single counter
-    // increment all see the same getAfter() and so share one slot; rules cannot
-    // count sibling writes. App Check is the primary control against such a
-    // hand-rolled client (see the deployment checklist); this is defense in depth
-    // against the naive send-in-a-loop that the audit's S4 describes.
+    // True when this write also advances the caller's rateLimits counter in the same
+    // commit (a fresh window resetting to 1 at request.time, or an increment).
+    // getAfter() reads the post-commit state, so every send consumes a slot. Caveat:
+    // N batched creates with one increment share a slot since rules can't count
+    // siblings; App Check is the primary control against hand-rolled clients.
     function rateCounterAdvanced(uid) {
       return (getAfter(/databases/$(database)/documents/rateLimits/$(uid)).data.windowStart == request.time
               && getAfter(/databases/$(database)/documents/rateLimits/$(uid)).data.count == 1)
@@ -365,11 +283,8 @@ service cloud.firestore {
                  == get(/databases/$(database)/documents/rateLimits/$(uid)).data.count + 1);
     }
 
-    // Optional-field helpers. The Swift Firestore encoder omits nil optionals
-    // rather than writing null, but seed and admin writes do use null, so both
-    // absent and null count as "unset". These take the field name as a string
-    // and read it with map.get(), because indexing a map by a variable key is
-    // not part of the rules language.
+    // Optional-field helpers. The Swift encoder omits nil but seed/admin writes use
+    // null, so absent and null both mean unset. Fields are read by string with map.get().
     function isUnset(data, field) {
       return data.get(field, null) == null;
     }
@@ -386,12 +301,9 @@ service cloud.firestore {
               && data.get(field, []).size() <= maxCount);
     }
 
-    // A message may carry an optional structured stay event (item 29). Absent is
-    // fine (an ordinary chat message); when present it must be a well-formed map
-    // with a known kind, so a modified client cannot smuggle arbitrary data onto
-    // a message the recipient's UI will render as a trusted system card.
-    // The kind list mirrors StayEvent.Kind in MessageStore.swift; a kind the
-    // client sends but this list omits makes the courtesy note silently fail.
+    // A message may carry a structured stay event. When present it must be a
+    // well-formed map with a known kind, so a modified client can't smuggle data
+    // into a system card. The kinds mirror StayEvent.Kind in MessageStore.swift.
     function validMessageEvent(data) {
       return isUnset(data, 'event')
           || (data.event is map
@@ -402,42 +314,25 @@ service cloud.firestore {
               && data.event.dateRange.size() > 0
               && data.event.dateRange.size() < 200
               && isOptionalString(data.event, 'note', 2000)
-              // The listing the event refers to, so the card can offer a way
-              // back to it. Optional because the kinds that predate it don't
-              // carry one; capped because it is a document id, not free text.
+              // The listing the event refers to, for the card's way back; optional and capped as a document id.
               && isOptionalString(data.event, 'listingID', 200));
     }
 
     // -------------------------------------------------------------------------
     // Users
-    // The user document is a PUBLIC projection (displayName + timestamps +
-    // trustStats) that any full member may read for name display in
-    // chat/listings and for the reputation chips on a listing card. PII and
-    // safety-sensitive data (email, fcmToken, blockedUserIDs, savedListingIDs,
-    // emergencyContact) live in the owner-only `private/profile` subdocument below
-    // and are never world-readable. Only the owner can create/update. Deletes are
-    // forbidden on the client; account deletion is handled by a Cloud Function
-    // cascade.
+    // The user document is a public projection (displayName, timestamps,
+    // trustStats) readable by any full member. PII and safety data live in the
+    // owner-only `private/profile` subdocument. Only the owner creates/updates;
+    // deletes go through a Cloud Function cascade.
     // -------------------------------------------------------------------------
     match /users/{userID} {
-      // The public user doc holds exactly these keys. hasOnly() keeps the
-      // world-readable document from being used as a spam surface or a stealth
-      // data channel; hasAll() keeps a merge write from dropping a field.
-      // `trustStats` is optional because only the recomputeTrustStats function
-      // ever writes it, and it does so with admin credentials that bypass this.
-      // The name-search index (UserSearchTerms in the client). Optional: it is
-      // absent on documents written before the backfill, and search simply does
-      // not find those until scripts/backfill_search_terms.js runs.
-      //
-      // Rules cannot loop, so the individual prefixes can't be checked against
-      // the name — a modified client could add terms it never earned and make
-      // itself findable under words that aren't its own. Bounded rather than
-      // prevented: the size cap limits how much of that is possible, and the
-      // whole lowercased displayName must be present, so the terms can never
-      // disown the name they belong to. Being findable is not access — a
-      // stranger still has to be accepted as a friend to see anything — but
-      // when functions deploy, onUserWritten should own this field outright
-      // (section B).
+      // The public user doc holds exactly these keys; hasOnly() stops it becoming a
+      // spam surface and hasAll() stops a merge dropping a field. `trustStats` is
+      // optional since only recomputeTrustStats writes it (admin bypasses this).
+      // The name-search index (UserSearchTerms) is optional until
+      // scripts/backfill_search_terms.js runs. Rules can't loop, so prefixes aren't
+      // checked against the name; the size cap bounds abuse and the whole lowercased
+      // displayName must be present. Being findable isn't access. onUserWritten should own this field.
       function isValidSearchTerms(data) {
         return isUnset(data, 'searchTerms')
             || (data.searchTerms is list
@@ -456,17 +351,14 @@ service cloud.firestore {
             && data.updatedAt == request.time;
       }
 
-      // Full members only: the public projection is readable by any real
-      // account for name display, but not by an anonymous guest minted from the
-      // public web config, which would otherwise let anyone enumerate the whole
-      // user base. Elevated get()/exists() in other rules still read it freely.
+      // Full members only, so an anonymous guest can't enumerate users. Elevated get()/exists() still read it.
       allow read: if isFullMember();
 
       allow create: if isSignedIn()
           && isOwner(userID)
           && isValidPublicProfile(request.resource.data)
           && request.resource.data.createdAt == request.time
-          // Reputation is earned, never claimed on the way in (feature 2).
+          // Reputation is earned, never claimed on the way in.
           && isUnset(request.resource.data, 'trustStats');
 
       allow update: if isSignedIn()
@@ -474,25 +366,19 @@ service cloud.firestore {
           && isValidPublicProfile(request.resource.data)
           // createdAt must not change
           && request.resource.data.createdAt == resource.data.createdAt
-          // Neither may trustStats: a host must not be able to award themselves a
-          // verified badge, a five-star average, or a hundred completed stays.
-          // Cloud Functions write it with admin credentials, which skip this rule.
+          // Nor trustStats, so a host can't award themselves badges; Cloud Functions bypass this.
           && request.resource.data.get('trustStats', null) == resource.data.get('trustStats', null);
 
       allow delete: if false;
 
-      // Owner-only private data. Readable and writable exclusively by the owner;
-      // Cloud Functions still reach it through elevated get()/exists().
+      // Owner-only private data; Cloud Functions reach it through elevated get()/exists().
       match /private/{docID} {
         allow read, write: if isSignedIn() && isOwner(userID);
       }
 
-      // The host's circles. Owner-only in both directions, and the read side
-      // matters as much as the write side: a circle carries a *name*, and
-      // "Acquaintance" is precisely the decline this feature exists to spare
-      // people. Firestore has no field-level read rules, so the rules a guest's
-      // client legitimately needs are projected into `bookingPolicies` below
-      // instead of being read from here.
+      // The host's circles, owner-only both ways: a circle *name* ("Acquaintance")
+      // is the decline this feature spares people. With no field-level read rules,
+      // what guests need is projected into `bookingPolicies` below.
       match /circles/{circleID} {
         function isValidCircle(data) {
           return data.keys().hasOnly(['name', 'isDefault', 'sortOrder', 'policy', 'createdAt', 'updatedAt'])
@@ -501,10 +387,7 @@ service cloud.firestore {
               && data.name.size() > 0
               && data.name.size() <= 40
               && data.sortOrder is int
-              // Being the Default circle is a fact about the document id, never
-              // a claim the document makes. Every policy resolution ends at this
-              // id, so exactly one document can hold that role and it is the one
-              // the path names.
+              // Being Default is a fact about the document id, never a claim in the document.
               && data.isDefault == (circleID == defaultCircleID())
               && isValidBookingPolicy(data.policy);
         }
@@ -513,15 +396,11 @@ service cloud.firestore {
         allow create, update: if isSignedIn()
             && isOwner(userID)
             && isValidCircle(request.resource.data);
-        // Default cannot be deleted — a new friend always needs somewhere to
-        // land, and the resolution chain has to end somewhere that exists.
-        // Renaming it and rewriting its policy are ordinary updates above; there
-        // is nothing else special about it.
+        // Default can't be deleted: a new friend needs somewhere to land.
         allow delete: if isSignedIn() && isOwner(userID) && circleID != defaultCircleID();
       }
 
-      // Which circle each friend is in, plus any policy the host set on that one
-      // person. Keyed by the friend's uid so a booking resolves in one get().
+      // Which circle each friend is in plus any per-person policy, keyed by uid so a booking resolves in one get().
       match /circleMembers/{friendID} {
         function isValidMembership(data) {
           return data.keys().hasOnly(['circleID', 'overridePolicy', 'updatedAt'])
@@ -540,15 +419,10 @@ service cloud.firestore {
         allow delete: if isSignedIn() && isOwner(userID);
       }
 
-      // The resolved policy, projected for one guest — the only part of Circles
-      // a guest may read, and only their own. It carries the three rules and
-      // nothing else: no circle id, no circle name, no count of circles, nothing
-      // that reveals the host sorts anyone at all.
-      //
-      // A display cache in the same sense a listing's `unavailableDateRanges`
-      // is one. The rules above are the boundary; this exists so the request
-      // sheet can decline to *offer* what the rules would refuse, which is what
-      // keeps a restricted friend from ever meeting an error.
+      // The resolved policy projected for one guest, who reads only their own. It
+      // carries the three rules and nothing that reveals the host sorts anyone. A
+      // display cache: the rules above are the boundary, and this lets the request
+      // sheet not offer what would be refused.
       match /bookingPolicies/{guestID} {
         allow read: if isSignedIn() && (isOwner(userID) || isOwner(guestID));
         allow create, update: if isSignedIn()
@@ -557,22 +431,11 @@ service cloud.firestore {
         allow delete: if isSignedIn() && isOwner(userID);
       }
 
-      // The host's private notes on their friends — what they'd write on the
-      // back of an index card so they can remember, months later, why somebody
-      // sits in the circle they sit in.
-      //
-      // Read is the owner and nobody else. Not the friend the note is about,
-      // not a moderator, not a Cloud Function, not the other side of a stay it
-      // names. That is the entire feature: a host writes candidly only if
-      // "private" means the document, not the screen, and the caller this has
-      // to hold against is the technically-minded friend reading raw documents
-      // rather than the app. There is deliberately no second branch on this
-      // read rule to audit later, and nothing anywhere projects a note, a count
-      // of notes, or a derived score out to any other reader.
-      //
-      // Note the shape of the surrounding file too: `isAdmin()` appears only on
-      // `reports`, so there is no ambient moderator read over `users/**` that
-      // would quietly widen this one.
+      // The host's private notes on friends. Read is the owner and nobody else (not
+      // the friend, a moderator, or a Cloud Function), so "private" means the
+      // document, not the screen. No second read branch, and nothing projects a note,
+      // count or score to anyone. `isAdmin()` appears only on `reports`, so no ambient
+      // moderator read widens this.
       match /friendNotes/{noteID} {
         function isValidNote(data) {
           return data.keys().hasOnly(['subjectUserID', 'text', 'stayRequestID', 'createdAt', 'updatedAt'])
@@ -580,13 +443,11 @@ service cloud.firestore {
               && data.subjectUserID is string
               && data.subjectUserID.size() > 0
               && data.subjectUserID.size() <= 128
-              // A note about yourself is not a thing this feature is for, and
-              // allowing it would put host-authored text on the one profile the
-              // host might later hand somebody else to look at.
+              // A note about yourself isn't what this is for, and would put host-authored text on a profile they might share.
               && data.subjectUserID != userID
               && data.text is string
               && data.text.size() > 0
-              // Mirrors FriendNote.maxLength in the Swift client.
+              // Mirrors FriendNote.maxLength.
               && data.text.size() <= 2000
               && (data.get('stayRequestID', null) == null
                   || (data.stayRequestID is string
@@ -600,11 +461,9 @@ service cloud.firestore {
             && isOwner(userID)
             && isValidNote(request.resource.data);
 
-        // Editing changes the text (and may attach or clear a stay). It must not
-        // re-point the note at a different person: a note re-filed under someone
-        // else keeps its date and reads as contemporaneous evidence about them,
-        // which is the one way this could become unfair to a friend who never
-        // sees it. `createdAt` is pinned for the same reason it is on a review.
+        // Edits change the text (and may attach or clear a stay) but can't re-point the
+        // note: a re-filed note keeps its date and reads as evidence about someone who
+        // never sees it. `createdAt` is pinned.
         allow update: if isSignedIn()
             && isOwner(userID)
             && isValidNote(request.resource.data)
@@ -614,11 +473,8 @@ service cloud.firestore {
         allow delete: if isSignedIn() && isOwner(userID);
       }
 
-      // Which post-stay note prompts this host has already answered or waved
-      // off, so the app asks once and then leaves them alone. Deliberately
-      // separate documents from the notes themselves: this says a prompt was
-      // *seen*, carries no text, and is the only part of the feature that would
-      // ever be worth syncing across a host's devices.
+      // Which note prompts the host answered or waved off, so the app asks once.
+      // Separate from the notes: it says a prompt was seen and carries no text.
       match /friendNotePrompts/{stayRequestID} {
         allow read: if isSignedIn() && isOwner(userID);
         allow create, update: if isSignedIn()
@@ -628,28 +484,11 @@ service cloud.firestore {
         allow delete: if isSignedIn() && isOwner(userID);
       }
 
-      // The guest's private notes on the hosts they stay with and the listings
-      // they consider — the symmetric twin of `friendNotes` above, read from the
-      // other side of the same stay. The host-side note protects a host from a
-      // repeat bad guest; this protects nobody and is not meant to. It is the
-      // guest's own reference material, so a guest who had a rough stay has a
-      // record of their own.
-      //
-      // Read is the owner and nobody else. Not the host the note is about, not a
-      // moderator, not a Cloud Function, not the other side of a stay it names.
-      // That is the entire feature, and the caller it has to hold against is the
-      // technically-minded host reading raw documents rather than the app. There
-      // is deliberately no second branch on this read rule — no `isAdmin()` reach
-      // here, exactly as there is none on `friendNotes`; the app's moderation
-      // queue lives at `reports`, and a note is deliberately not a report.
-      // Nothing anywhere projects a note, a count of notes, or a derived score
-      // out to any other reader.
-      //
-      // Unlike a friend note, whose subject is always a person, a guest note
-      // points at a host (a user) or a listing (a home). `subjectType` says
-      // which, and `subjectID` is that thing's id; the update rule pins both, so
-      // a note can never be re-filed from one host onto another, or off a host
-      // onto a listing, while keeping its date.
+      // The guest's private notes on hosts and listings, the twin of `friendNotes`.
+      // Same rules: read is the owner alone, no `isAdmin()` branch (moderation lives
+      // at `reports`), and nothing projects a note, count or score. `subjectType`
+      // says host or listing, `subjectID` is its id, and the update rule pins both so
+      // a note can't be re-filed while keeping its date.
       match /guestNotes/{noteID} {
         function isValidNote(data) {
           return data.keys().hasOnly(['subjectType', 'subjectID', 'text', 'stayRequestID', 'createdAt', 'updatedAt'])
@@ -658,16 +497,12 @@ service cloud.firestore {
               && data.subjectID is string
               && data.subjectID.size() > 0
               && data.subjectID.size() <= 200
-              // A `host` note about yourself is not a thing this feature is for,
-              // the same way a friend note about yourself isn't: it would put
-              // guest-authored text on the one profile you might later hand
-              // somebody else to look at. A listing you happen to host is a
-              // different id space and carries no such profile, so only the host
-              // case is barred here.
+              // A `host` note about yourself is barred as with friend notes; a listing
+              // you host is a different id space with no such profile.
               && !(data.subjectType == 'host' && data.subjectID == userID)
               && data.text is string
               && data.text.size() > 0
-              // Mirrors GuestNote.maxLength in the Swift client.
+              // Mirrors GuestNote.maxLength.
               && data.text.size() <= 2000
               && (data.get('stayRequestID', null) == null
                   || (data.stayRequestID is string
@@ -681,12 +516,7 @@ service cloud.firestore {
             && isOwner(userID)
             && isValidNote(request.resource.data);
 
-        // Editing changes the text (and may attach or clear a stay). It must not
-        // re-point the note at a different host or listing: a note re-filed under
-        // someone else keeps its date and reads as contemporaneous evidence about
-        // them, which is the one way this could become unfair to a host who never
-        // sees it. `createdAt` is pinned for the same reason it is on a friend
-        // note.
+        // Edits can't re-point the note at a different host or listing, as with friend notes; `createdAt` is pinned.
         allow update: if isSignedIn()
             && isOwner(userID)
             && isValidNote(request.resource.data)
@@ -697,11 +527,7 @@ service cloud.firestore {
         allow delete: if isSignedIn() && isOwner(userID);
       }
 
-      // Which post-trip note prompts this guest has already answered or waved
-      // off, so the app asks once and then leaves them alone. The mirror of
-      // `friendNotePrompts`: this says a prompt was *seen*, carries no text, and
-      // is the only part of the feature that would ever be worth syncing across
-      // a guest's devices.
+      // Which post-trip note prompts the guest answered or waved off; mirrors `friendNotePrompts`.
       match /guestNotePrompts/{stayRequestID} {
         allow read: if isSignedIn() && isOwner(userID);
         allow create, update: if isSignedIn()
@@ -714,31 +540,20 @@ service cloud.firestore {
 
     // -------------------------------------------------------------------------
     // Homes / Listings
-    // A listing is readable only by its host, its co-hosts, and the users named
-    // in `allowedViewerIDs` — the host's accepted friends, denormalized onto the
-    // document because rules cannot join to `friendEdges`. There are no wider
-    // tiers: no public listings and no friends-of-friends reach. Someone two
-    // hops out is surfaced as a friend *suggestion* instead, and sees the
-    // listing only after the host accepts them as a friend.
+    // Readable only by the host, co-hosts and `allowedViewerIDs` (the host's
+    // accepted friends, denormalized since rules can't join to `friendEdges`).
+    // Friends-of-friends appear only as suggestions.
     //
-    // Clients therefore cannot query `homes` unfiltered: a query is rejected
-    // outright if any matched document fails the read rule. The feed issues the
-    // one provably-safe query — `allowedViewerIDs contains me` — which also
-    // covers the host's own listings, since the ACL always names the host.
+    // Clients can't query `homes` unfiltered, since a query is rejected if any
+    // matched document fails the read rule. The feed uses `allowedViewerIDs
+    // contains me`, which also covers the host's own listings.
     //
-    // The legacy `visibility` field ('everyone' / 'friendsOnly' /
-    // 'friendsOfFriends') is gone: writes carrying it are rejected outright by
-    // the key allowlist below, and scripts/migrate_friends_only.js strips it
-    // from pre-migration documents while rebuilding every ACL to host +
-    // accepted friends. A pre-migration document remains readable under the
-    // ACL gate but cannot be updated until migrated.
-    //
-    // Only the host may write their own listings.
+    // The legacy `visibility` field is rejected by the key allowlist below;
+    // scripts/migrate_friends_only.js strips it and rebuilds ACLs. An unmigrated
+    // document stays readable but can't be updated. Only the host writes listings.
     // -------------------------------------------------------------------------
     match /homes/{homeID} {
-      // Every key the Home model encodes. Optional fields are omitted by the
-      // encoder when nil, so hasOnly() (not hasAll()) is the right check for
-      // the tail of this list.
+      // Every key the Home model encodes. Optionals are omitted when nil, so the tail uses hasOnly().
       function isValidListing(data) {
         return data.keys().hasOnly([
                  'id', 'hostUserID', 'hostName', 'title', 'address', 'description',
@@ -759,15 +574,11 @@ service cloud.firestore {
             && data.hostName.size() < 200
             // Nested struct validation
             && data.address is map
-            // The public address is city-level. `street` belongs in the private
-            // location subdocument; rejecting it here is what keeps a modified
-            // client from putting it back on the world-readable document.
+            // The public address is city-level; `street` belongs in the private subdocument, and rejecting it here keeps it off the readable doc.
             && data.address.keys().hasOnly(['city', 'state', 'zip'])
             && data.address.keys().hasAll(['city', 'state'])
-            // The city is snapshotted onto every stay request against this
-            // listing, where it is capped at 100. Uncapped here, a longer city
-            // would validate on the listing and then reject every request made
-            // against it, with nothing on either screen to say why.
+            // The city is copied onto every stay request, where it is capped at 100; uncapped here, a longer one
+            // would validate on the listing and then reject every request against it.
             && data.address.city is string
             && data.address.city.size() > 0
             && data.address.city.size() <= 100
@@ -777,40 +588,30 @@ service cloud.firestore {
             && data.sleeping.numGuestRooms is int
             && data.guestPolicy.maxGuests is int
             && data.guestPolicy.maxStayDays is int
-            // Size caps so a document can't be stuffed toward the 1 MiB limit.
-            // The 60-char title cap mirrors CreateListingViewModel.titleMaxLength.
+            // Size caps so a document can't be stuffed toward 1 MiB. The 60-char title cap mirrors CreateListingViewModel.titleMaxLength.
             && isOptionalString(data, 'title', 60)
             && isOptionalString(data, 'description', 2000)
             && isOptionalString(data, 'hostContactInfo', 500)
             && isOptionalList(data, 'photoURLs', 10)
-            // The merged calendar, and the only availability field this
-            // world-readable document is allowed to carry. `blockedDateRanges` and
-            // `bookedDateRanges` are absent from the key allowlist above on
-            // purpose: Firestore grants reads per document, never per field, so a
-            // listing that published both halves let any viewer subtract one from
-            // the other and learn which nights the home was occupied. They live in
-            // `private/availability` now, and this rule is what stops a modified
-            // client putting them back. The cap is the sum of the two former caps,
-            // since this is their union.
+            // The merged calendar, the only availability field this readable document
+            // may carry. `blockedDateRanges` and `bookedDateRanges` are off the
+            // allowlist on purpose: publishing both would let a viewer subtract one
+            // from the other and learn which nights were occupied. They live in
+            // `private/availability`. The cap is the sum of their former caps.
             && isOptionalList(data, 'unavailableDateRanges', 200)
-            // Enums and coordinates: a value the client can't decode makes the
-            // listing silently disappear from the feed (see A5).
+            // Enums and coordinates: an undecodable value silently drops the listing from the feed.
             && (isUnset(data, 'contactPreference')
                 || data.contactPreference in ['inApp', 'contactInfo'])
             && (isUnset(data, 'hostMotivation')
                 || data.hostMotivation in ['eager', 'open', 'selective'])
             && (isUnset(data, 'cancellationPolicy')
                 || data.cancellationPolicy in ['flexible', 'moderate', 'strict'])
-            // The read ACL. A host may grant whoever they like access to their own
-            // listing, so the only constraints are a size cap (this array is
-            // downloaded with every feed document) and that the host cannot lock
-            // themselves out of their own listing.
+            // The read ACL. The host may share with whoever they like; constraints are
+            // a size cap (it downloads with every feed document) and no self-lockout.
             && isOptionalList(data, 'allowedViewerIDs', 1000)
             && (isUnset(data, 'allowedViewerIDs')
                 || data.allowedViewerIDs.hasAll([data.hostUserID]))
-            // Co-hosts (feature 14). A partner or roommate, not a second owner:
-            // capped small, and never the host themselves, whose powers are not
-            // a subset of a co-host's and must not be confused with them.
+            // Co-hosts: a partner or roommate, not a second owner. Capped small and never the host.
             && isOptionalList(data, 'coHostUserIDs', 5)
             && !data.get('coHostUserIDs', []).hasAny([data.hostUserID])
             && (isUnset(data, 'latitude') || data.latitude is number)
@@ -820,15 +621,12 @@ service cloud.firestore {
             && (isUnset(data, 'createdAt') || data.createdAt is timestamp);
       }
 
-      // Each read clause corresponds to one client query: the feed's
-      // `allowedViewerIDs contains me`, the host's own-listings query, and the
-      // co-host's `coHostUserIDs contains me`. Keep them in sync: a query that
-      // isn't provably covered by one clause is rejected wholesale, not filtered.
-      // The keys a co-host may rewrite: the description of the home itself.
-      // Everything absent from this list — who hosts the listing, how to reach
-      // them, who can see it, who else may manage it, and whether it still
-      // exists — is thereby pinned, because `changedKeys().hasOnly()` rejects any
-      // write that touches a key outside it.
+      // Each read clause matches one client query (the feed's `allowedViewerIDs
+      // contains me`, own listings, co-host's `coHostUserIDs contains me`). Keep them in
+      // sync: a query not provably covered by one clause is rejected wholesale.
+      // The keys a co-host may rewrite: the description of the home. Everything
+      // else (host, contact, visibility, roster, existence) is pinned because
+      // `changedKeys().hasOnly()` rejects any other key.
       function coHostEditableKeys() {
         return ['description', 'hostMotivation', 'sleeping', 'guestPolicy',
                 'amenities', 'cancellationPolicy', 'photoURLs',
@@ -836,18 +634,15 @@ service cloud.firestore {
                 'latitude', 'longitude', 'geohash'];
       }
 
-      // The co-hosts this write adds. Rules cannot loop, so a roster change is
-      // admitted one addition at a time and that one is checked against the
-      // friend graph; see the update rule.
+      // The co-hosts this write adds. Rules can't loop, so a roster change is
+      // admitted one addition at a time and checked against the friend graph.
       function addedCoHosts() {
         return request.resource.data.get('coHostUserIDs', [])
                  .removeAll(resource.data.get('coHostUserIDs', []));
       }
 
-      // A co-host can read the listing they manage even if the host later
-      // unfriends them and drops them out of `allowedViewerIDs`. The roster is
-      // the grant; removing someone from it is how you take it back. This clause
-      // is what makes the client's `coHostUserIDs contains me` query legal.
+      // A co-host keeps read access even if unfriended out of `allowedViewerIDs`;
+      // the roster is the grant. This clause makes `coHostUserIDs contains me` legal.
       allow read: if isSignedIn()
           && (resource.data.hostUserID == request.auth.uid
               || request.auth.uid in resource.data.get('allowedViewerIDs', [])
@@ -855,75 +650,55 @@ service cloud.firestore {
 
       allow create: if isFullMember()
           && request.resource.data.hostUserID == request.auth.uid
-          // New listings stamp the server time the feed orders by (L3).
+          // New listings stamp the server time the feed orders by.
           && request.resource.data.createdAt == request.time
-          // A listing is born with no co-hosts. Admitting a roster here would
-          // mean validating every name in it against the friend graph, and rules
-          // cannot loop — so co-hosts are added afterwards, one update at a time.
+          // A listing is born with no co-hosts, since a roster can't be validated in a loop; add them one update at a time.
           && request.resource.data.get('coHostUserIDs', []).size() == 0
           && isValidListing(request.resource.data);
 
-      // Update re-validates the whole document. Without this a host could
-      // corrupt their own listing into a shape the client cannot decode, and
-      // decode failures are silently dropped, so the listing would just vanish.
+      // Update re-validates the whole document, so a host can't corrupt a listing into a shape the client silently drops.
       allow update: if isSignedIn()
-          // hostUserID is immutable after creation. This is what stops a co-host
-          // from writing themselves into the host's chair, and it is checked
-          // before either branch below so neither can forget it.
+          // hostUserID is immutable, which stops a co-host taking the host's chair; checked before both branches.
           && request.resource.data.hostUserID == resource.data.hostUserID
-          // createdAt is immutable once set. A legacy listing that predates the
-          // field may stamp it (to request.time) on its next edit, never rewrite.
+          // createdAt is immutable once set; a legacy listing may stamp it once (to request.time).
           && (request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
               || (resource.data.get('createdAt', null) == null
                   && request.resource.data.createdAt == request.time))
           && isValidListing(request.resource.data)
           && (
-            // The host. May rewrite anything the validator allows, including the
-            // co-host roster — but only one addition per write, because that is
-            // the most a loop-free rule can check against the friend graph. A
-            // co-host must be an accepted friend: they are about to be handed the
-            // street address, and "co-host" must not become a way to grant a
-            // stranger read access to the host's front door. Removals are
-            // unconstrained; taking a capability back is always safe.
+            // The host. May rewrite anything the validator allows, with at most one
+            // co-host addition per write (all a loop-free rule can check). A co-host
+            // must be an accepted friend, since they get the street address. Removals
+            // are unconstrained; taking a capability back is safe.
             (isOwner(resource.data.hostUserID)
                 && (addedCoHosts().size() == 0
                     || (addedCoHosts().size() == 1
                         && areFriends(addedCoHosts()[0], resource.data.hostUserID))))
             ||
-            // A co-host. May describe the home — its capacity, amenities,
-            // availability, photos — and nothing else. In particular they cannot
-            // touch `allowedViewerIDs` (which the client rebuilds from the saving
-            // user's friends, and which would silently republish a friends-only
-            // listing to a second social graph the host never saw), `visibility`,
-            // `hostName`, the host's contact details, the co-host roster, or
-            // `deletedAt`. That last one is why a co-host cannot soft-delete a
-            // listing through the update rule after being refused the delete rule.
+            // A co-host. May describe the home (capacity, amenities, availability,
+            // photos) and nothing else. Not `allowedViewerIDs` (the client rebuilds it from
+            // the saver's friends and would republish the listing to another social
+            // graph), nor host details, the roster or `deletedAt`, which would be a
+            // soft-delete route around the delete rule.
             (resource.data.get('coHostUserIDs', []).hasAny([request.auth.uid])
                 && changedKeys().hasOnly(coHostEditableKeys()))
           );
 
-      // Host only. Deleting someone else's listing is not "managing" it, and a
-      // soft delete is unrecoverable from the client.
+      // Host only: deleting isn't "managing", and a soft delete is unrecoverable from the client.
       allow delete: if isSignedIn()
           && resource.data.hostUserID == request.auth.uid;
 
       // -----------------------------------------------------------------------
-      // Private listing data. Three documents live here, and they do not all
-      // share a visibility rule:
-      //   - `location`:     the exact street address and unrounded coordinates.
-      //   - `manual`:       the host's check-in guide (feature 15).
+      // Private listing data, with differing visibility:
+      //   - `location`:     exact street address and unrounded coordinates.
+      //   - `manual`:       the host's check-in guide.
       //   - `availability`: the calendar with blocked and booked still apart.
       //
-      // `location` and `manual` are progressively disclosed: the managers plus a
-      // guest whose stay the host has accepted, never world-readable, because the
+      // `location` and `manual` go to the managers plus an accepted guest; the
       // public listing carries only city/state/zip and a coordinate rounded to
-      // roughly a kilometre.
-      //
-      // `availability` is disclosed to nobody outside the managers, accepted
-      // guests included. Being accepted earns you the street you were invited to;
-      // it never earns you which of the host's other closed days were bookings.
-      // The public listing publishes only the union of the two halves, and the
-      // whole point of keeping them here is that no reader can undo that merge.
+      // about a kilometre. `availability` goes to managers only, accepted guests
+      // included: acceptance earns the street, not which closed days were
+      // bookings, and keeping the halves here is what prevents undoing the public merge.
       // -----------------------------------------------------------------------
       function isValidLocation(data) {
         return data.keys().hasOnly(['street', 'latitude', 'longitude'])
@@ -933,8 +708,7 @@ service cloud.firestore {
             && (isUnset(data, 'latitude') || data.latitude is number)
             && (isUnset(data, 'longitude') || data.longitude is number);
       }
-      // Every field the HouseManual model encodes; all optional free text with
-      // size caps so the document can't be stuffed toward the 1 MiB limit.
+      // Every field the HouseManual model encodes; optional free text with size caps.
       function isValidManual(data) {
         return data.keys().hasOnly([
                  'checkInInstructions', 'wifiNetwork', 'wifiPassword',
@@ -947,14 +721,10 @@ service cloud.firestore {
             && isOptionalString(data, 'houseNotes', 2000)
             && isOptionalString(data, 'hostPhone', 40);
       }
-      // The two halves of the calendar, plus the host's turnover buffer. Caps
-      // match the former per-field caps on the public document, whose merged field
-      // is now capped at their sum. `bufferHours` is the gap held around every
-      // confirmed stay (feature: turnover buffer); it is validated but not
-      // range-checked against the calendar here, for the same reason the
-      // double-booking guard lives in the accept transaction and not these rules:
-      // a rule cannot loop over ranges. Bounds mirror
-      // ListingAvailability.maxBufferHours.
+      // The two calendar halves plus the turnover buffer (`bufferHours`). Caps match
+      // the former per-field caps. Not range-checked against the calendar, since
+      // rules can't loop (the double-booking guard is in the accept transaction).
+      // Bounds mirror ListingAvailability.maxBufferHours.
       function isValidAvailability(data) {
         return data.keys().hasOnly(['blockedDateRanges', 'bookedDateRanges', 'bufferHours'])
             && isOptionalList(data, 'blockedDateRanges', 100)
@@ -965,28 +735,15 @@ service cloud.firestore {
                     && data.bufferHours <= 168));
       }
 
-      // `bookedDateRanges` is derived from accepted stays, and used to be pinned
-      // against every client because a Cloud Function owned it. That trigger is
-      // not deployed, so a pinned field is not a server-owned field — it is a
-      // field nothing writes, and a booked half that never learns about a booking.
-      // The host owns it now: their app recomputes it from the listing's accepted
-      // stays (the client stand-in for `onStayRequestWritten`) and writes it here.
-      //
-      // Loosening it costs no privacy — this whole document is managers-only, so
-      // the reason it was split from the public listing (guests must not tell a
-      // booking from a blocked day) is untouched. And it was already
-      // manager-gated, so "a client could park a booking on a rival's calendar"
-      // was never reachable: a client may only write listings it manages, and a
-      // manager over-booking their own calendar harms only themselves.
+      // `bookedDateRanges` was pinned against clients because a Cloud Function owned
+      // it. That trigger isn't deployed, so a pinned field was just one nothing
+      // writes. The host's app now recomputes it from accepted stays (the client
+      // stand-in for `onStayRequestWritten`). No privacy cost: the document is
+      // managers-only and a manager can only harm their own calendar.
 
-      // A co-host reads and writes these documents: a roommate who cannot see the
-      // street address or the door code cannot let a guest in, and the check-in
-      // instructions are exactly the thing they are there to keep current.
+      // A co-host reads and writes these: a roommate who can't see the address or door code can't let a guest in.
       match /private/{docID} {
-        // The accepted-guest branch deliberately excludes `availability`. Without
-        // that exclusion an accepted guest would read the unmerged calendar and
-        // the split above would buy nothing: one accepted stay, anywhere, and the
-        // host's bookings are legible again.
+        // The accepted-guest branch excludes `availability`, or one accepted stay would make the host's bookings legible.
         allow read: if isSignedIn()
             && (isListingManager(homeID)
                 || (docID != 'availability'
@@ -999,74 +756,39 @@ service cloud.firestore {
                 || (docID == 'availability'
                     && isValidAvailability(request.resource.data)));
 
-        // `availability` is excluded: the host reconciles it in place, never by
-        // deleting it, and a stray delete would drop the booked half a guest's
-        // accepted stay depends on. `onHomeDeleted` cascades the subcollection as
-        // admin, which these rules do not apply to.
+        // `availability` is excluded: the host reconciles it in place, and a stray delete would drop the booked
+        // half. `onHomeDeleted` cascades the subcollection as admin, which bypasses these rules.
         allow delete: if isFullMember()
             && isListingManager(homeID)
             && docID != 'availability';
       }
 
       // -----------------------------------------------------------------------
-      // Accepted-guest markers. Existence is the capability: the private location
-      // rule above checks for `accepted/{callerUID}`. A manager writes one when
-      // accepting a stay and removes it if the stay is later declined or
-      // cancelled; the guest may remove their own to give the address back.
+      // Accepted-guest markers. Existence is the capability (the private location
+      // rule checks `accepted/{callerUID}`). A manager writes one on accepting a stay
+      // and removes it on decline or cancel; the guest may remove their own.
+      // Read, delete and create all ask `isListingManager`, since `isHostSide` lets a
+      // co-host answer requests; otherwise a co-host could issue a grant they can't
+      // read back or cancel a stay without revoking its address (the cancel batch
+      // is atomic and would fail).
       //
-      // This block used to ask `isListingHost` throughout, on the reasoning that
-      // admitting a stranger into someone's home is the host's decision and not a
-      // co-host's. It said so, and it said that if stay requests ever reached a
-      // co-host, "these two must change together". They have: `isHostSide` now
-      // lets a co-host answer requests for the listings they manage, and `create`
-      // below already moved to `isListingManager` so the grant could be written in
-      // the same commit as the acceptance.
-      //
-      // Read and delete had not moved with it, which left a co-host able to issue
-      // a grant they could not read back, and — worse — able to cancel an accepted
-      // stay while unable to revoke its address. That second one is not a
-      // theoretical asymmetry: `updateStatus` sends the status change and the
-      // marker delete as one batch, and a batch is atomic, so the cancel failed
-      // outright rather than leaving the address behind. All three now ask the
-      // same question.
-      //
-      // There is deliberately no `match /{path=**}/accepted/{guestID}` anywhere in
-      // this file, so a client cannot run a collection-group query here. Note that
-      // `firestore.indexes.json` does enable COLLECTION_GROUP scope on
-      // `accepted.guestUserID`: that index exists for `onUserDeleted`, which
-      // cascades the grants of a deleted account through the Admin SDK and so
-      // bypasses these rules entirely. The index is not evidence that a client
-      // query was intended, and if one is ever wanted, the rule it needs is
-      // `resource.data.guestUserID == request.auth.uid` and nothing looser.
-      // `isListingManager(homeID)` cannot be carried across — `homeID` is unbound
-      // under a wildcard match — and the `isSignedIn()` that would make the query
-      // "work" would hand every host's accepted-guest roster, which is the address
-      // grant itself, to everyone.
+      // There is deliberately no `match /{path=**}/accepted/{guestID}`, so clients
+      // can't run a collection-group query. The COLLECTION_GROUP index on
+      // `accepted.guestUserID` exists for `onUserDeleted`, which uses the Admin SDK.
+      // If a client query is ever wanted it needs `resource.data.guestUserID ==
+      // request.auth.uid` and nothing looser; `homeID` is unbound under a wildcard,
+      // and a bare `isSignedIn()` would expose every host's accepted-guest roster.
       // -----------------------------------------------------------------------
       match /accepted/{guestID} {
         allow read: if isSignedIn()
             && (request.auth.uid == guestID || isListingManager(homeID));
 
-        // The grant is issued alongside a real acceptance, by whichever side does
-        // the accepting: a manager accepting a request, or the guest accepting the
-        // host's offer. Both are legitimate disclosures — the offer was the host
-        // choosing to host this guest, and acceptance is the moment the address is
-        // theirs to know.
-        //
-        // This was `false`, on the reasoning that only the callable should ever
-        // disclose an address. The callable is not deployed, so that rule made the
-        // address undisclosable rather than carefully disclosed. What keeps it from
-        // being a forgery hole is `getAfter`: it reads post-commit state, so the
-        // named request must *itself* be accepted, for this listing, for this
-        // guest, when the batch settles. Neither side can mint a grant for a
-        // request that never got accepted, point one at a different listing, or
-        // leave one behind by accepting and rolling back — the write lands with a
-        // matching accepted request or not at all.
-        //
-        // The guest cannot forge the offer that entitles them: an `offered`
-        // request can only be created by its host (the create rule pins
-        // `hostUserID == auth.uid` on that path), so a guest writing their own
-        // grant is always downstream of a host who chose to host them.
+        // The grant is issued alongside a real acceptance, by the manager accepting a
+        // request or the guest accepting the host's offer; both are legitimate
+        // disclosures. What stops forgery is `getAfter`: it reads post-commit state,
+        // so the named request must itself be accepted, for this listing and guest,
+        // when the batch settles. A guest can't forge the offer that entitles them,
+        // since only the host can create an `offered` request.
         allow create: if isFullMember()
             && (isListingManager(homeID) || request.auth.uid == guestID)
             && request.resource.data.keys().hasOnly(['requestID', 'guestUserID', 'createdAt'])
@@ -1078,12 +800,10 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/stayRequests/$(request.resource.data.requestID))
                  .data.listingID == homeID;
 
-        // A grant is not editable in place; revoke and re-issue.
+        // A grant isn't editable in place; revoke and re-issue.
         allow update: if false;
 
-        // Revoking is the safe half of the pair: taking an address back can be
-        // done by anyone entitled to have granted it, and by the guest handing it
-        // in. A co-host who may cancel the stay must be able to revoke with it.
+        // Revoking is the safe half: anyone entitled to grant may revoke, and the guest may hand it in.
         allow delete: if isSignedIn()
             && (request.auth.uid == guestID || isListingManager(homeID));
       }
@@ -1092,13 +812,11 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     // Stay requests
     // Guests create pending requests; hosts accept/decline; guests can cancel.
-    // No edits once a request reaches a terminal state (declined / cancelled).
+    // No edits once a request reaches a terminal state.
     // -------------------------------------------------------------------------
     match /stayRequests/{requestID} {
-      // The two parties, plus any co-host of the listing being asked about — the
-      // co-host branch is what makes the client's `listingID in [...]` inbox
-      // query legal (feature 14). Listed last so the parties' reads short-circuit
-      // before the listing lookup.
+      // The two parties plus any co-host of the listing, which makes the client's
+      // `listingID in [...]` inbox query legal. Last so the parties short-circuit first.
       allow read: if isSignedIn()
           && (request.auth.uid == resource.data.guestUserID
               || request.auth.uid == resource.data.hostUserID
@@ -1111,68 +829,42 @@ service cloud.firestore {
                'guestNote', 'hostNote', 'guestCount', 'arrivalWindow',
                'status', 'initiatedBy', 'completedAt', 'createdAt', 'updatedAt'
              ])
-          // Denormalized listing title, snapshotted at request time (optional).
-          // Same 60-char cap as the listing's own title.
+          // Denormalized listing title snapshot (optional), with the listing's 60-char cap.
           && isOptionalString(request.resource.data, 'listingTitle', 60)
-          // The other two snapshots were in the key allowlist and validated
-          // nowhere, which left them unbounded free text chosen by whoever
-          // created the request. Neither one stays in the document: both are
-          // interpolated straight into push bodies (onStayRequestWritten) and
-          // into the local reminder copy, so an unvalidated value here is
-          // arbitrary text on the other person's Lock Screen. Capped to match
-          // the fields they are snapshots of — city as the listing's own city,
-          // host name as `displayName`.
+          // The other two snapshots (city, host name) were validated nowhere, yet they
+          // are interpolated into push bodies and reminder copy, i.e. arbitrary text on
+          // the other person's Lock Screen. Capped to match their source fields.
           && isOptionalString(request.resource.data, 'listingCity', 100)
-          // 199, not 200: the host-rename update branch below requires
-          // `size() < 200`, so a name created at exactly 200 could never be
-          // renamed again. Same bound `displayName` itself is held to.
+          // 199, not 200: the host-rename branch requires `size() < 200`, so a 200-char name could never be renamed.
           && isOptionalString(request.resource.data, 'listingHostName', 199)
-          // A stay cannot be born finished.
+          // A stay can't be born finished.
           && isUnset(request.resource.data, 'completedAt')
-          // Two ways a stay can start, and the creator must be the party the
-          // status says started it (feature 43). Pinned together so neither can
-          // be forged: a guest cannot create a document that claims the host
-          // offered, and a host cannot manufacture a "request" from a friend who
-          // never asked — which would otherwise let a host fabricate a stay and
-          // then accept it themselves, minting trust stats out of nothing.
+          // A stay starts as a guest's request or a host's offer, and the creator must
+          // be the party the status says. Pinned together so a host can't fabricate a
+          // "request" from a friend and accept it to mint trust stats.
           && (
-            // The guest asks. `initiatedBy` is optional here purely so the field
-            // stays absent on the path that predates offers.
+            // The guest asks. `initiatedBy` is optional so it stays absent on the pre-offers path.
             (request.resource.data.guestUserID == request.auth.uid
                 && request.resource.data.status == "pending"
                 && (isUnset(request.resource.data, 'initiatedBy')
                     || request.resource.data.initiatedBy == request.auth.uid)
                 // A host's note is the host's to write, and only on a reply.
                 && isUnset(request.resource.data, 'hostNote')
-                // The host's circle policy for this friend, enforced on the ask
-                // and only on the ask: a policy governs what a friend may
-                // request, and a host offering their own place is not asking.
-                //
-                // Nothing here produces a distinguishable failure. A guest whose
-                // client is current never reaches these clauses, because the
-                // request sheet does not offer what they would refuse; a guest
-                // whose client is stale sees the same generic "no longer
-                // available" a lost race already gives them. Neither is told a
-                // circle exists.
+                // The host's circle policy, enforced on the ask only: a policy governs
+                // what a friend may request, not what a host offers. Nothing here fails
+                // distinguishably; a stale client sees the same "no longer available"
+                // as a lost race, and nobody is told a circle exists.
                 && bookingPermitted(request.resource.data.hostUserID, request.auth.uid,
                                     request.resource.data, true))
             ||
-            // The host offers. The mirror: the host writes the note, and the
-            // guest's own fields (their note, their party size, their arrival
-            // time) are theirs to fill in if they accept — the host must not put
-            // words in their mouth.
+            // The host offers. The guest's own fields (note, party size, arrival) are
+            // theirs to fill in on accepting; the host mustn't put words in their mouth.
             //
-            // The friendship is checked here directly, and deliberately *not*
-            // left to the `allowedViewerIDs` gate below. On the guest path that
-            // ACL is a real boundary, because a guest cannot edit someone else's
-            // listing. On this path the caller is the host, who writes that array
-            // themselves — so adding an arbitrary uid to their own listing and
-            // then "offering" to them would land an unsolicited stay, with a
-            // 2000-character note, in the trip list of any user in the app. The
-            // ACL cannot gate a write by the person who authors the ACL.
-            // `onHomeWrittenACL` scrubs a hand-written roster, but it runs after
-            // the fact and is not deployed everywhere, so the invariant belongs
-            // in the rule rather than in a trigger.
+            // Friendship is checked directly, not left to the `allowedViewerIDs` gate:
+            // on this path the caller authors that array, so adding any uid and
+            // "offering" would land an unsolicited stay in anyone's trip list. The
+            // trigger that scrubs rosters runs after the fact and isn't deployed
+            // everywhere, so the invariant lives in the rule.
             (request.resource.data.hostUserID == request.auth.uid
                 && request.resource.data.status == "offered"
                 && request.resource.data.initiatedBy == request.auth.uid
@@ -1190,44 +882,28 @@ service cloud.firestore {
           && request.resource.data.checkIn is timestamp
           && request.resource.data.checkOut is timestamp
           && request.resource.data.checkOut > request.resource.data.checkIn
-          // Check-in must not be in the past. checkIn is a local start-of-day, so
-          // a one-day grace keeps a same-day request valid regardless of the
-          // guest's timezone offset from UTC while still rejecting stale dates.
+          // Check-in can't be in the past; a one-day grace covers timezone offset for same-day requests.
           && request.resource.data.checkIn > request.time - duration.value(1, 'd')
-          // The named host must actually own the (live) listing being requested,
-          // so a request can't be aimed at an arbitrary user's inbox (S8).
+          // The named host must own the live listing, so a request can't target an arbitrary inbox.
           && listingHasActiveHost(request.resource.data.listingID, request.resource.data.hostUserID)
-          // Only someone the listing is shared with may knock: the guest must be
-          // in its read ACL. Without this, any member holding a leaked listing id
-          // could file requests into a host's inbox, straight past the
-          // friends-only boundary. The get() is cached with the ones
-          // listingHasActiveHost already did, so it costs no extra read.
+          // Only someone the listing is shared with may knock: the guest must be in
+          // its read ACL, so a leaked listing id can't file requests past the
+          // friends-only boundary. The get() is cached with listingHasActiveHost's.
           //
-          // Keyed to guestUserID rather than the caller, which is what makes it
-          // hold for both directions (feature 43). On the guest path the two are
-          // the same uid, pinned above. On the host path the caller is the host,
-          // who is always in their own listing's ACL — so checking the caller
-          // there would check nothing at all, and would let a host offer their
-          // place to someone who cannot even see it.
-          //
-          // This clause carries the guest path on its own, because a guest cannot
-          // edit the ACL it reads. It does *not* carry the host path, where the
-          // caller authors the array being checked; that direction is gated by
-          // the explicit areFriends() on the offer branch above. Keep both.
+          // Keyed to guestUserID, not the caller, so it holds in both directions: on
+          // the host path the caller is always in their own ACL. This clause carries
+          // the guest path alone; the host path is gated by areFriends() on the offer
+          // branch above. Keep both.
           && request.resource.data.guestUserID in
                get(/databases/$(database)/documents/homes/$(request.resource.data.listingID))
                  .data.get('allowedViewerIDs', [])
-          // A block severs this the same way it severs a thread (S11). Between the
-          // two parties, for the same reason as above: on the host path the caller
-          // *is* the host, and blockedEitherWay(host, host) is vacuously false.
+          // A block severs this like a thread, between the two parties; on the host path
+          // the caller is the host, so checking the caller would be vacuous.
           && !blockedEitherWay(request.resource.data.guestUserID, request.resource.data.hostUserID)
-          // The inbox and trip lists order by createdAt; pin it so a request
-          // cannot backdate itself. The client's @ServerTimestamp field encodes
-          // to the server-timestamp sentinel, which equals request.time here.
+          // Lists order by createdAt; pin it so a request can't backdate itself (the sentinel equals request.time).
           && request.resource.data.createdAt == request.time
           && isOptionalString(request.resource.data, 'guestNote', 2000)
-          // Party size, when given, is a positive int no larger than the
-          // listing's advertised capacity (feature 20).
+          // Party size, when given, is a positive int up to the listing's capacity.
           && (isUnset(request.resource.data, 'guestCount')
               || (request.resource.data.guestCount is int
                   && request.resource.data.guestCount >= 1
@@ -1236,29 +912,22 @@ service cloud.firestore {
               || request.resource.data.arrivalWindow in
                    ['flexible', 'morning', 'afternoon', 'evening', 'lateNight']);
 
-      // Status transitions may touch nothing but the status, the note belonging
-      // to the acting role, and updatedAt. Everything else — checkIn, checkOut,
-      // guestNote, listingID, the participant IDs, createdAt — is pinned by
-      // affectedKeys(), so a host cannot rewrite the dates while "accepting"
-      // and a guest cannot rewrite them while cancelling.
+      // Status transitions may touch only the status, the acting role's note and
+      // updatedAt; everything else is pinned by affectedKeys(), so dates can't be
+      // rewritten while accepting or cancelling.
       allow update: if isSignedIn()
           && (
-            // Name propagation: a host rewrites only the denormalized
-            // listingHostName on requests they host, so a rename doesn't leave
-            // trip rows showing the old name (L7). Allowed on any status, since
-            // past trips should show the current name too; touches nothing else.
+            // Name propagation: a host rewrites only `listingHostName` on their requests,
+            // on any status, so past trips show the current name.
             (isOwner(resource.data.hostUserID)
                 && changedKeys().hasOnly(['listingHostName'])
                 && request.resource.data.listingHostName is string
                 && request.resource.data.listingHostName.size() > 0
                 && request.resource.data.listingHostName.size() < 200)
             ||
-            // Date change on a still-pending request (feature 23): the guest may
-            // move checkIn/checkOut in place rather than cancel and re-send. Only
-            // the guest, only while pending, and changedKeys() pins everything
-            // else — status included — so this can never double as an accept or a
-            // rewrite of the participant IDs. The date validity rules mirror
-            // create: end after start, and start not already in the past.
+            // Date change on a pending request: the guest only, while pending, and
+            // changedKeys() pins everything else (status included), so it can't double
+            // as an accept. Date validity mirrors create.
             (isOwner(resource.data.guestUserID)
                 && resource.data.status == "pending"
                 && changedKeys().hasOnly(['checkIn', 'checkOut', 'updatedAt'])
@@ -1267,11 +936,8 @@ service cloud.firestore {
                 && request.resource.data.checkOut is timestamp
                 && request.resource.data.checkOut > request.resource.data.checkIn
                 && request.resource.data.checkIn > request.time - duration.value(1, 'd')
-                // A date change is a second chance to break the notice rule:
-                // ask for a date three months out, then walk it back to
-                // tomorrow. The same bound applies here as on create. It spends
-                // no new frequency slot — this is the same request, not another
-                // one — and the arrival window is pinned by changedKeys().
+                // A date change could dodge the notice rule (ask far out, walk it back),
+                // so the same bound applies. It spends no new slot; the arrival window is pinned.
                 && bookingPermitted(resource.data.hostUserID, request.auth.uid,
                                     request.resource.data, false))
             ||
@@ -1279,85 +945,50 @@ service cloud.firestore {
             (resource.data.status in ["pending", "offered", "accepted"]
                 && request.resource.data.updatedAt == request.time
                 && (
-                  // Host declines a pending request. Acceptance is NOT a client
-                  // write: it goes through the acceptStayRequest callable, whose
-                  // admin transaction is the race-free double-booking guard (L1).
+                  // Host declines a pending request. Acceptance isn't a client write via
+                  // this branch; the callable's admin transaction is the race-free guard.
                   (isHostSide(resource.data)
                       && resource.data.status == "pending"
                       && request.resource.data.status == "declined"
                       && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
-                  // Host side accepts a pending request. This was the callable's
-                  // alone, because only an admin could read every accepted stay on
-                  // the listing and rule out a double-booking. The callable is not
-                  // deployed — this project has no Cloud Functions in production —
-                  // so the choice was not "client or server" but "client or not at
-                  // all", and a booking app that cannot accept a booking is not a
-                  // booking app.
-                  //
-                  // What replaces the admin query is a client transaction over
-                  // `private/availability`, which is one document rather than a
-                  // query, so a client transaction can serialize on it: two devices
-                  // accepting at once contend on the same document and the loser
-                  // retries against the winner's write. That is the same guarantee
-                  // for the case the guard was written for (one host, two devices)
-                  // and a weaker one against a modified client, which these rules
-                  // cannot check without looping over ranges.
-                  //
-                  // Deliberately narrower than the callable: only `pending`, and
-                  // only the host side. A guest accepting an *offer* still needs
-                  // the callable, because the document that would let them check
-                  // overlap is one they are forbidden to read, and the marker below
-                  // is not theirs to write.
+                  // Host accepts a pending request. The callable was the only way (an
+                  // admin could read every accepted stay) but isn't deployed, so a
+                  // client transaction over `private/availability` serializes
+                  // instead: two devices contend on one document and the loser
+                  // retries. Same guarantee for one host with two devices; weaker
+                  // against a modified client, which rules can't check without
+                  // looping. Narrower than the callable: pending only, host side only
+                  // (a guest accepting an offer can't read the calendar).
                   (isHostSide(resource.data)
                       && resource.data.status == "pending"
                       && request.resource.data.status == "accepted"
                       && changedKeys().hasOnly(['status', 'hostNote', 'updatedAt'])
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
-                  // Guest declines a host's offer (feature 43): the mirror of the
-                  // branch above. Their note goes in guestNote, because hostNote
-                  // belongs to the host who wrote the offer and overwriting it
-                  // would edit someone else's words. Accepting an offer is a
-                  // callable for the same reason accepting a request is — an
-                  // offer books the same room, so it needs the same guard.
+                  // Guest declines a host's offer. Their note goes in guestNote, since
+                  // hostNote belongs to the host and overwriting it would edit their words.
                   (isOwner(resource.data.guestUserID)
                       && resource.data.status == "offered"
                       && request.resource.data.status == "declined"
                       && changedKeys().hasOnly(['status', 'guestNote', 'updatedAt'])
                       && isOptionalString(request.resource.data, 'guestNote', 2000))
                   ||
-                  // Guest accepts a host's offer. The mirror of the host accepting
-                  // a request, and client-side for the same reason: the callable
-                  // that used to own it is not deployed, so this was the choice
-                  // between a client write and no acceptance at all.
-                  //
-                  // The guest cannot reach the private calendar, so unlike the host
-                  // path this write does not itself carry a serialized overlap
-                  // check — the double-booking guard for an offer lives in the
-                  // host's booked-range reconciler (the client stand-in for
-                  // `onStayRequestWritten`), which recomputes the listing's booked
-                  // dates from its accepted stays whenever the host's app sees this
-                  // status change. Weaker than the host path's in-transaction
-                  // check, and the honest limit of what a guest — who may not read
-                  // the calendar they would need to check — can do without a
-                  // server. Their own note is the only field they add; hostNote is
-                  // the host's, written when they made the offer.
+                  // Guest accepts a host's offer. Client-side since the callable isn't
+                  // deployed. The guest can't read the private calendar, so there's no
+                  // serialized overlap check; the host's booked-range reconciler is the
+                  // double-booking guard (weaker, but all a guest can do without a
+                  // server). The guest adds only their own note; hostNote is the host's.
                   (isOwner(resource.data.guestUserID)
                       && resource.data.status == "offered"
                       && request.resource.data.status == "accepted"
                       && changedKeys().hasOnly(['status', 'guestNote', 'updatedAt'])
                       && isOptionalString(request.resource.data, 'guestNote', 2000))
                   ||
-                  // Host withdraws an offer the guest hasn't answered. Cancelled
-                  // rather than declined: the offer was the host's to retract, and
-                  // "declined" would read on the guest's trip list as though they
-                  // had turned it down.
-                  // `cancelledBy` stays pinned to the listing's host even when a
-                  // co-host retracts: it records which *side* backed out, which is
-                  // what the push trigger branches on and what the guest's trip
-                  // row reads back.
+                  // Host withdraws an unanswered offer: cancelled, not declined, so it
+                  // doesn't read as the guest's refusal. `cancelledBy` stays the listing's
+                  // host even when a co-host retracts; it records which side backed out.
                   (isHostSide(resource.data)
                       && resource.data.status == "offered"
                       && request.resource.data.status == "cancelled"
@@ -1365,21 +996,16 @@ service cloud.firestore {
                       && request.resource.data.get('cancelledBy', '') == resource.data.hostUserID
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
-                  // Guest cancels a pending or accepted request. `cancelledBy`
-                  // records which side backed out — the two cancellations are
-                  // otherwise indistinguishable on the document, which left the
-                  // push trigger unable to tell whom to notify. Pinned to the
-                  // caller so neither party can pin the blame on the other.
+                  // Guest cancels a pending or accepted request. `cancelledBy` records
+                  // which side backed out (the push trigger needs it) and is pinned to
+                  // the caller so neither party can pin blame on the other.
                   (isOwner(resource.data.guestUserID)
                       && request.resource.data.status == "cancelled"
                       && changedKeys().hasOnly(['status', 'cancelledBy', 'updatedAt'])
                       && request.resource.data.get('cancelledBy', '') == resource.data.guestUserID)
                   ||
-                  // Host calls off an accepted stay they can no longer honor
-                  // (illness, a burst pipe). Distinct from declining: a pending
-                  // request is declined, an accepted stay is cancelled, so the
-                  // trip rows read the same whichever side backed out. The note
-                  // gives the guest a why, same as a decline's.
+                  // Host calls off an accepted stay they can't honor. Cancelled, not
+                  // declined, so trip rows read the same either way; the note gives the guest a why.
                   (isHostSide(resource.data)
                       && resource.data.status == "accepted"
                       && request.resource.data.status == "cancelled"
@@ -1387,13 +1013,10 @@ service cloud.firestore {
                       && request.resource.data.get('cancelledBy', '') == resource.data.hostUserID
                       && isOptionalString(request.resource.data, 'hostNote', 2000))
                   ||
-                  // Either party closes out an accepted stay that has begun
-                  // (feature 4). Completion is what unlocks reviews and what
-                  // trustStats counts, so the checkIn bound is what stops a host
-                  // from farming completed stays by accepting and instantly
-                  // "finishing" a booking a year out. completedAt is write-once:
-                  // it is unset before this transition, by the create rule above
-                  // and by the fact that no other branch may touch it.
+                  // Either party closes out an accepted stay that has begun. Completion
+                  // unlocks reviews and trustStats, so the checkIn bound stops a host
+                  // farming completed stays by "finishing" a booking a year out.
+                  // completedAt is write-once.
                   (resource.data.status == "accepted"
                       && request.resource.data.status == "completed"
                       && (isHostSide(resource.data) || isOwner(resource.data.guestUserID))
@@ -1408,8 +1031,7 @@ service cloud.firestore {
 
     // -------------------------------------------------------------------------
     // Messages
-    // participants is always [smaller_uid, larger_uid] to keep pairs canonical
-    // and make the composite index on (participants, timestamp) usable.
+    // participants is always [smaller_uid, larger_uid], keeping pairs canonical for the (participants, timestamp) index.
     // -------------------------------------------------------------------------
     match /messages/{messageID} {
       allow read: if isSignedIn()
@@ -1432,48 +1054,38 @@ service cloud.firestore {
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() < 5000
           && request.resource.data.timestamp == request.time
-          // Reject the message if either party has blocked the other, so a
-          // block can't be bypassed by writing to Firestore directly (S11).
+          // Reject if either party blocked the other, so a block can't be bypassed by a direct write.
           && !blockedEitherWay(
                request.auth.uid,
                request.resource.data.participants[0] == request.auth.uid
                  ? request.resource.data.participants[1]
                  : request.resource.data.participants[0]
              )
-          // The friend graph is the trust model, and messaging is one of the
-          // three things it gates. Reads were already participants-only, but
-          // sends were open to any member the recipient hadn't blocked, so a
-          // stranger who knew a uid could put text on someone's lock screen.
-          // This is the same reasoning the host-offer branch records above: an
-          // unsolicited write that lands in another person's app is a decision
-          // for the friendship to make, not for the sender.
+          // The friend graph gates messaging. Sends were open to any member the
+          // recipient hadn't blocked, so a stranger knowing a uid could put text on
+          // their lock screen; an unsolicited write is the friendship's decision.
           && areFriends(
                request.auth.uid,
                request.resource.data.participants[0] == request.auth.uid
                  ? request.resource.data.participants[1]
                  : request.resource.data.participants[0]
              )
-          // Enforce the per-user send rate in the write path: the same commit
-          // must advance the sender's rateLimits counter, which the rules below
-          // cap at MESSAGE_RATE_LIMIT per window (S4).
+          // Enforce the send rate in the write path: the same commit must advance the
+          // sender's rateLimits counter, capped below at MESSAGE_RATE_LIMIT per window.
           && rateCounterAdvanced(request.auth.uid);
 
       allow update, delete: if false;
     }
 
     // -------------------------------------------------------------------------
-    // Conversations — the denormalized per-thread summary the client's
-    // conversation list and unread badge read from. The `onMessageCreated`
-    // Cloud Function owns lastMessage, updatedAt, and the unread increments, and
-    // creates the doc (admin writes bypass these rules). Clients may only, on a
-    // conversation they belong to, clear their own unread count (mark read) or
-    // toggle their own membership in mutedBy (mute/unmute); everything else —
-    // participants, lastMessage, the other party's unread and mute state — is
-    // pinned. conversationID = sorted participants joined by "_".
+    // Conversations: the denormalized per-thread summary behind the list and unread
+    // badge. `onMessageCreated` owns lastMessage, updatedAt and unread increments
+    // (admin bypasses these rules). Clients may only clear their own unread count
+    // or toggle their own `mutedBy` membership; all else is pinned.
+    // conversationID = sorted participants joined by "_".
     // -------------------------------------------------------------------------
     match /conversations/{conversationID} {
-      // The participant who is not the caller. Reads resource.data.participants,
-      // so it is only valid on read/update where the doc already exists.
+      // The participant who isn't the caller; reads resource.data, so valid only where the doc exists.
       function conversationOther() {
         return resource.data.participants[0] == request.auth.uid
             ? resource.data.participants[1]
@@ -1489,15 +1101,13 @@ service cloud.firestore {
       allow update: if isSignedIn()
           && request.auth.uid in resource.data.participants
           && (
-            // Mark read: zero only my own unread count, leaving the other
-            // participant's count (and everything else) untouched.
+            // Mark read: zero only my own unread count.
             (changedKeys().hasOnly(['unreadCounts'])
                 && request.resource.data.unreadCounts.get(request.auth.uid, 0) == 0
                 && request.resource.data.unreadCounts.get(conversationOther(), 0)
                      == resource.data.unreadCounts.get(conversationOther(), 0))
             ||
-            // Mute / unmute: add or remove only myself from mutedBy, leaving the
-            // other participant's membership unchanged.
+            // Mute / unmute: add or remove only myself from mutedBy.
             (changedKeys().hasOnly(['mutedBy'])
                 && request.resource.data.mutedBy is list
                 && request.resource.data.mutedBy.hasOnly(resource.data.participants)
@@ -1509,23 +1119,19 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Rate-limit counters — one per user, written only in the same commit as the
-    // message it gates (see rateCounterAdvanced). A sliding fixed window: `count`
-    // messages sent since `windowStart`, reset once the window elapses. The rules
-    // are what make the limit real — they refuse an increment past the cap and
-    // refuse to reopen the window before it has expired, so a modified client
-    // cannot grant itself extra headroom by rewriting the doc.
+    // Rate-limit counters: one per user, written only in the commit of the message
+    // it gates (see rateCounterAdvanced). A fixed window: `count` messages since
+    // `windowStart`. The rules refuse an increment past the cap and reopening before
+    // the window expires, so a modified client can't grant itself headroom.
     // -------------------------------------------------------------------------
     match /rateLimits/{userID} {
-      // Window length and per-window cap. Keep in sync with the client's advisory
-      // pre-check (MessageStore.sendRateLimit / sendRateWindow).
+      // Window length and cap; keep in sync with the client's MessageStore.sendRateLimit / sendRateWindow.
       function windowSeconds() { return 60; }
       function messageCap() { return 30; }
 
       allow read: if isSignedIn() && isOwner(userID);
 
-      // First message ever (or first after a full reset that deleted the doc):
-      // a fresh window stamped at request.time with a single message in it.
+      // First message ever (or after a reset): a fresh window at request.time with one message.
       allow create: if isFullMember()
           && isOwner(userID)
           && request.resource.data.keys().hasOnly(['windowStart', 'count'])
@@ -1537,14 +1143,12 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['windowStart', 'count'])
           && request.resource.data.count is int
           && (
-            // The previous window has elapsed: open a new one at request.time.
+            // The previous window elapsed: open a new one at request.time.
             (request.time >= resource.data.windowStart + duration.value(windowSeconds(), 's')
                 && request.resource.data.windowStart == request.time
                 && request.resource.data.count == 1)
             ||
-            // Still inside the open window: increment by one, up to the cap. The
-            // window start is pinned, so the window cannot be slid forward to
-            // dodge the cap.
+            // Inside the open window: increment by one up to the cap; windowStart is pinned so it can't be slid forward.
             (request.resource.data.windowStart == resource.data.windowStart
                 && request.time < resource.data.windowStart + duration.value(windowSeconds(), 's')
                 && request.resource.data.count == resource.data.count + 1
@@ -1555,35 +1159,26 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Stay counters — the frequency half of a circle's booking policy.
-    // Document id is "{hostUID}_{guestUID}", pinned to the two id fields below.
+    // Stay counters: the frequency half of a circle's booking policy. Document id
+    // is "{hostUID}_{guestUID}", pinned to the id fields below.
     //
-    // Rules cannot run a query, so "how many times has this person booked me
-    // lately" is not a question that can be asked at write time. It is the same
-    // problem message rate limiting already has, and the same answer: the guest
-    // advances this counter in the same commit as the request, the stay request
-    // rule requires the advance through getAfter(), and the cap lives here.
+    // Rules can't query "how often has this person booked me", so, as with message
+    // rate limits, the guest advances this counter in the request's commit, the
+    // stay request rule requires it via getAfter(), and the cap lives here. Cap and
+    // window come from the host's circle documents, which the guest can't write.
     //
-    // The cap and the window length are read from the *host's* circle documents,
-    // which the guest cannot write. A guest who tampers with their own counter
-    // can only deny themselves slots they were owed.
-    //
-    // A slot is spent when a request is created and is not returned if the host
-    // declines it or the guest cancels. Refunding needs a server that recounts,
-    // and there is none deployed; the throttle is therefore on how often someone
-    // asks, which is the behaviour a host reaching for it actually wants.
+    // A slot is spent on create and not refunded on decline or cancel (that would
+    // need a server recount); the throttle is on how often someone asks.
     // -------------------------------------------------------------------------
     match /stayCounters/{counterID} {
       function capCount(data) { return pairCapCount(data.hostUserID, data.guestUserID); }
       function windowDays(data) { return pairCapPeriodDays(data.hostUserID, data.guestUserID); }
 
-      // Both parties may read it: the guest's own client needs it to know when
-      // its window rolls over, and the host's to show what a circle is doing.
+      // Both parties read it: the guest to know when the window rolls, the host to see what a circle is doing.
       allow read: if isSignedIn()
           && (isOwner(resource.data.guestUserID) || isOwner(resource.data.hostUserID));
 
-      // First request this guest has ever sent this host: a fresh window with a
-      // single request in it.
+      // First request this guest sent this host: a fresh window with one request.
       allow create: if isFullMember()
           && request.resource.data.keys().hasOnly(['hostUserID', 'guestUserID', 'windowStart', 'count'])
           && request.resource.data.hostUserID is string
@@ -1600,16 +1195,13 @@ service cloud.firestore {
           && isOwner(resource.data.guestUserID)
           && request.resource.data.count is int
           && (
-            // The window has elapsed — or the host has no cap at all, so there
-            // is no window to respect. Either way a fresh one opens here.
+            // The window elapsed, or the host has no cap: open a fresh one.
             ((windowDays(resource.data) == 0
               || request.time >= resource.data.windowStart + duration.value(windowDays(resource.data), 'd'))
                 && request.resource.data.windowStart == request.time
                 && request.resource.data.count == 1)
             ||
-            // Still inside the open window: increment by one, up to the cap.
-            // windowStart is pinned, so the window cannot be slid forward to buy
-            // headroom — the same trick rateLimits closes.
+            // Inside the open window: increment by one up to the cap; windowStart is pinned, as in rateLimits.
             (request.resource.data.windowStart == resource.data.windowStart
                 && request.resource.data.count == resource.data.count + 1
                 && (capCount(resource.data) == 0
@@ -1620,16 +1212,14 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Friend edges — bidirectional connections between two users.
-    // edgeID = "{smallerUID}_{largerUID}" (canonical alphabetical order).
+    // Friend edges: bidirectional connections, edgeID = "{smallerUID}_{largerUID}".
     // -------------------------------------------------------------------------
     match /friendEdges/{edgeID} {
       allow read: if isSignedIn()
           && (request.auth.uid == resource.data.userA
               || request.auth.uid == resource.data.userB);
 
-      // Send a friend request (create pending edge). The key allowlist keeps a
-      // modified client from stashing arbitrary extra fields on the edge.
+      // Send a friend request (create a pending edge). The key allowlist blocks extra fields.
       allow create: if isFullMember()
           && request.resource.data.keys().hasOnly(
                ['userA', 'userB', 'status', 'initiator', 'createdAt', 'updatedAt']
@@ -1644,46 +1234,33 @@ service cloud.firestore {
           && request.resource.data.userA != request.resource.data.userB
           // edgeID must match the canonical "{userA}_{userB}" form
           && edgeID == request.resource.data.userA + "_" + request.resource.data.userB
-          // A block must stop friend requests too (S11): deleting a declined
-          // edge lets it be re-sent forever, so without this a blocked user
-          // could keep landing in the blocker's Requests list.
+          // A block stops friend requests too; otherwise a blocked user could re-send forever after a decline-delete.
           && !blockedEitherWay(request.resource.data.userA, request.resource.data.userB);
 
-      // Accept a pending request (only the non-initiator may accept).
+      // Accept a pending request (non-initiator only).
       allow update: if isSignedIn()
           && (request.auth.uid == resource.data.userA
               || request.auth.uid == resource.data.userB)
           && resource.data.status == "pending"
           && request.resource.data.status == "accepted"
           && request.auth.uid != resource.data.initiator
-          // The accept may move the status and its timestamp, and nothing else.
-          // Pinning the three identity fields by equality (as this rule used to
-          // do alone) says what may not change but never bounds what may be
-          // *added*: with no allowlist, the accepting party could hang arbitrary
-          // extra fields — or a near-megabyte of padding — off an edge document
-          // that create carefully allowlists. hasOnly() makes the two symmetric,
-          // and subsumes the equality pins on userA/userB/initiator, which are
-          // absent from the list and therefore already immutable. createdAt is
-          // likewise pinned by omission, which the old rule left free.
+          // The accept may move only the status and its timestamp. hasOnly() bounds
+          // what may be added (equality pins alone left extra fields and padding open),
+          // and pins userA/userB/initiator/createdAt by omission.
           && changedKeys().hasOnly(['status', 'updatedAt']);
 
-      // Either party may delete (decline, cancel, or remove friend).
+      // Either party may delete (decline, cancel or unfriend).
       allow delete: if isSignedIn()
           && (request.auth.uid == resource.data.userA
               || request.auth.uid == resource.data.userB);
     }
 
     // -------------------------------------------------------------------------
-    // Reviews — post-stay, two-way, public (feature 1).
-    //
-    // The document id is "{stayRequestID}_{authorUID}". That is what makes "one
-    // review per person per stay" a property of the path rather than a query the
-    // client could skip: a second review lands on the same document, and the
-    // update rule below only lets its own author rewrite it.
-    //
-    // A review may only be written about a stay that actually finished, by one of
-    // its two participants, about the other one. All three facts are read off the
-    // stay request itself with an elevated get(), so a client cannot assert them.
+    // Reviews: post-stay, two-way, public. The document id is
+    // "{stayRequestID}_{authorUID}", making one review per person per stay a
+    // property of the path; only the author may rewrite it. A review needs a
+    // finished stay, by one of its participants, about the other, all read off the
+    // stay request with an elevated get().
     // -------------------------------------------------------------------------
     match /reviews/{reviewID} {
       function stayPath(requestID) {
@@ -1700,9 +1277,7 @@ service cloud.firestore {
             && isOptionalString(data, 'publicComment', 2000);
       }
 
-      // Reviews are the public reputation record; any full member may read
-      // them. Gated to full members (not merely signed in) so an anonymous
-      // guest minted from the public web config cannot enumerate them.
+      // Public reputation record, readable by full members (not anonymous guests, who could enumerate).
       allow read: if isFullMember();
 
       allow create: if isFullMember()
@@ -1722,7 +1297,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
           && exists(stayPath(request.resource.data.stayRequestID))
-          // Only a finished stay may be reviewed (feature 4 gates feature 1).
+          // Only a finished stay may be reviewed.
           && stay(request.resource.data.stayRequestID).status == 'completed'
           && stay(request.resource.data.stayRequestID).listingID == request.resource.data.listingID
           // ...by one of its participants, about the other, with the matching role.
@@ -1736,8 +1311,7 @@ service cloud.firestore {
                 && request.resource.data.role == 'hostReviewingGuest')
           );
 
-      // The author may revise what they said. Everything that establishes who
-      // reviewed whom about which stay is pinned by affectedKeys().
+      // The author may revise; who reviewed whom about which stay is pinned by affectedKeys().
       allow update: if isSignedIn()
           && isOwner(resource.data.authorUserID)
           && changedKeys().hasOnly(['rating', 'publicComment', 'updatedAt'])
@@ -1747,8 +1321,7 @@ service cloud.firestore {
       // A review is a record, not a draft. Removal is a moderation action.
       allow delete: if false;
 
-      // The private feedback channel: what the reviewer would say to the
-      // reviewed's face but not on their profile. Readable by exactly those two.
+      // The private feedback channel: what the reviewer would say to the reviewed's face. Readable by exactly those two.
       match /private/{docID} {
         function reviewPath() {
           return /databases/$(database)/documents/reviews/$(reviewID);
@@ -1776,14 +1349,10 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // References — a friend vouching for a friend, independent of any stay
-    // (feature 1). The document id is "{subjectUID}_{authorUID}", so one friend
-    // writes at most one reference for another, and `areFriends` means a stranger
-    // cannot vouch for anyone at all.
-    //
-    // Either party may delete: the author because they changed their mind, and
-    // the subject because a reference sits on *their* profile and they should not
-    // have to keep one they didn't ask for.
+    // References: a friend vouching for a friend, independent of any stay. The id
+    // is "{subjectUID}_{authorUID}", so one friend writes at most one reference
+    // for another, and `areFriends` stops strangers vouching. Either party may
+    // delete: the author changed their mind, or the subject doesn't want it on their profile.
     // -------------------------------------------------------------------------
     match /references/{referenceID} {
       // Public reputation record, full members only (see the reviews read).
@@ -1806,7 +1375,7 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time
           // Vouching is a friendship-gated act.
           && areFriends(request.auth.uid, request.resource.data.subjectUserID)
-          // A block severs this the same way it severs a thread (S11).
+          // A block severs this like a thread.
           && !blockedEitherWay(request.auth.uid, request.resource.data.subjectUserID);
 
       allow update: if isSignedIn()
@@ -1822,14 +1391,10 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Reports — the moderation inbox (feature 6). Written by any full member and
-    // by the keyword-moderation triggers (admin, which bypass these rules), read
-    // and triaged only by a moderator holding the `admin` custom claim. A reporter
-    // cannot read their own report back: the inbox is not a channel.
-    //
-    // Triage states: new → reviewing → actioned | dismissed. Nothing about the
-    // report itself (who filed it, against what, why) is editable, so triage can
-    // never rewrite the evidence.
+    // Reports: the moderation inbox. Written by any full member and by the
+    // moderation triggers (admin bypasses these rules); read and triaged only by a
+    // moderator with the `admin` claim. Reporters can't read their report back.
+    // Triage: new → reviewing → actioned | dismissed; the report itself is immutable.
     // -------------------------------------------------------------------------
     match /reports/{reportID} {
       allow read: if isAdmin();
@@ -1844,19 +1409,14 @@ service cloud.firestore {
           && request.resource.data.reason.size() > 0
           && request.resource.data.reason.size() < 2000
           && request.resource.data.targetType in ["user", "listing", "message"]
-          // What is being reported. Bounded like every other client-authored
-          // string: `reason` was capped but this was not, leaving an unbounded
-          // write into a collection the reporter cannot read back — the one
-          // shape of abuse a write-only inbox is prone to.
+          // What is reported is bounded like other client strings; unbounded here would be abuse in a write-only inbox.
           && request.resource.data.targetID is string
           && request.resource.data.targetID.size() > 0
           && request.resource.data.targetID.size() < 200
-          // A fresh report enters triage at the top of the queue, and is filed by
-          // a person — `source: "auto"` belongs to the moderation triggers.
+          // A fresh report enters triage at the top, filed by a person (`source: "auto"` is for the triggers).
           && (isUnset(request.resource.data, 'status') || request.resource.data.status == 'new')
           && (isUnset(request.resource.data, 'source') || request.resource.data.source == 'user')
-          // The console orders the queue by createdAt, so a report must not be
-          // able to backdate itself out of sight.
+          // The console orders by createdAt, so a report can't backdate itself out of sight.
           && (isUnset(request.resource.data, 'createdAt')
               || request.resource.data.createdAt == request.time);
 
