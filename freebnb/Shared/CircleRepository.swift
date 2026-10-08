@@ -2,19 +2,14 @@
 //  CircleRepository.swift
 //  freebnb
 //
-//  Reads and writes for Circles. Two audiences, deliberately kept apart in one
-//  file so the asymmetry is visible:
-//
-//    - the *host* side reads and writes `users/{me}/circles` and
-//      `users/{me}/circleMembers`, and fans the resolved policy out to
-//      `users/{me}/bookingPolicies/{friend}`;
-//    - the *guest* side reads exactly one document, their own projection under
-//      the host they are about to ask, and never the circles themselves.
-//
-//  The fan-out is the same shape as `allowedViewerIDs` on a listing: the client
-//  that owns the source of truth denormalizes it for the people who need to read
-//  it, the rules never trust the copy, and a Cloud Function repairs drift when
-//  one is deployed. See docs/internal/CIRCLES.md.
+//  Reads and writes for Circles, with two audiences kept apart in one file so the
+//  asymmetry shows:
+//    - the host reads/writes `users/{me}/circles` and `circleMembers` and fans the
+//      resolved policy out to `users/{me}/bookingPolicies/{friend}`;
+//    - the guest reads one document, their own projection under the host they're about to
+//      ask, never the circles.
+//  The fan-out is denormalized like a listing's `allowedViewerIDs`; the rules never trust
+//  the copy. See docs/internal/CIRCLES.md.
 //
 
 import FirebaseAuth
@@ -34,23 +29,19 @@ protocol CircleRepository: Sendable {
     ) -> RepositoryListener
 
     func saveCircle(hostID: String, _ circle: FriendCircle) async throws
-    /// Deletes a circle and moves everyone in it back to Default, then refreshes
-    /// their projections. Never called for the Default circle itself.
+    /// Deletes a circle and moves its members back to Default, then refreshes their projections. Never for Default.
     func deleteCircle(hostID: String, circleID: String, movingMembers members: [String]) async throws
-    /// Writes one friend's membership (circle assignment and/or override) and
-    /// their projection together.
+    /// Writes one friend's membership (assignment and/or override) and projection together.
     func saveMembership(hostID: String, _ membership: CircleMembership, resolvedPolicy: BookingPolicy) async throws
-    /// Rewrites the projection for a set of friends at once — what a circle's
-    /// policy edit fans out to.
+    /// Rewrites the projection for a set of friends at once (a circle policy edit's fan-out).
     func publishPolicies(hostID: String, policiesByFriendID: [String: BookingPolicy]) async throws
     /// Creates the three starter circles for a host who has none.
     func seedCircles(hostID: String) async throws
 
     // MARK: Guest side
-    /// The one document a guest may read: the policy this host has resolved for
-    /// them. Nil when the host has published none, which means no restrictions.
+    /// The one document a guest may read: the policy this host resolved for them; nil means no restrictions.
     func fetchPolicy(hostID: String, guestID: String) async throws -> BookingPolicy?
-    /// The guest's own frequency counter with this host, if one exists.
+    /// The guest's own frequency counter with this host, if any.
     func fetchStayCounter(hostID: String, guestID: String) async throws -> StayCounter?
 }
 
@@ -124,10 +115,8 @@ struct FirestoreCircleRepository: CircleRepository {
     func deleteCircle(hostID: String, circleID: String, movingMembers members: [String]) async throws {
         guard circleID != FriendCircle.defaultID else { return }
         try await withRetry {
-            // One batch, so a friend is never briefly in a circle that no longer
-            // exists. Chunked for a host with more friends than the batch cap
-            // allows; the delete goes in the last chunk so an interrupted run
-            // leaves the circle standing rather than its members orphaned.
+            // One batch, so a friend is never in a deleted circle. Chunked past the batch cap, with
+            // the delete in the last chunk so an interrupted run leaves the circle standing.
             let chunks = stride(from: 0, to: max(members.count, 1), by: firestoreBatchLimit / 2).map { start in
                 Array(members[start..<min(start + firestoreBatchLimit / 2, members.count)])
             }
@@ -151,13 +140,8 @@ struct FirestoreCircleRepository: CircleRepository {
         guard let friendID = membership.id else { return }
         try await withRetry {
             let batch = db.batch()
-            // Written whole, not merged. A cleared override has to *leave* the
-            // document — a merge would leave the old map sitting there and the
-            // resolver would go on preferring it, which is a host turning off a
-            // restriction and watching it keep applying. The membership is only
-            // three fields and the client always holds all of them, so writing
-            // it whole says that in one operation instead of pairing a merge
-            // with a field delete on the same document in the same batch.
+            // Written whole, not merged: a cleared override must leave the document, or the
+            // resolver keeps preferring it. The membership is three fields the client always holds.
             try batch.setData(from: membership, forDocument: self.members(hostID).document(friendID))
             try batch.setData(
                 from: resolvedPolicy,
@@ -187,8 +171,7 @@ struct FirestoreCircleRepository: CircleRepository {
             let batch = db.batch()
             for circle in FriendCircle.seeded() {
                 guard let id = circle.id else { continue }
-                // merge:true so a re-run never stomps a host who has since
-                // renamed or reconfigured one of these.
+                // merge:true so a re-run never stomps a renamed or reconfigured circle.
                 try batch.setData(from: circle, forDocument: self.circles(hostID).document(id), merge: true)
             }
             try await batch.commit()

@@ -2,17 +2,10 @@
 //  FriendNotesPage.swift
 //  freebnb
 //
-//  Where a host reads and writes their private notes about one friend.
-//
-//  Every screen in this file is the host's own, in the same sense CirclesPage
-//  is: nothing here is reachable from a listing, a conversation, or any surface
-//  a guest can open, and no note is ever rendered for anybody but its author.
-//  The copy says so plainly and exactly once per screen, because a host who is
-//  unsure who can see this writes a note they'd have written for an audience,
-//  which is the wrong note.
-//
-//  There is no rating, no count, and no summary here on purpose. A note is
-//  something the host reads and then decides for themselves.
+//  Where a host reads and writes private notes about one friend. Every screen is the
+//  host's own (like CirclesPage): nothing is reachable by a guest and no note renders
+//  for anyone but its author. The copy says so once per screen, since a host unsure
+//  of the audience writes the wrong note. No rating, count or summary, on purpose.
 //
 
 import SwiftUI
@@ -116,9 +109,7 @@ private struct FriendNoteRow: View {
 
     @Environment(StayRequestStore.self) private var requestStore
 
-    /// The stay this note was written about, when it was written about one and
-    /// that stay is still in the store. A note outlives the record it was filed
-    /// under, so a missing stay drops the subtitle rather than the note.
+    /// The stay this note was about, if still in the store; a missing stay drops the subtitle, not the note.
     private var stayContext: String? {
         guard let stayRequestID = note.stayRequestID else { return nil }
         let known = requestStore.incomingRequests + requestStore.outgoingRequests
@@ -154,9 +145,7 @@ private struct FriendNoteRow: View {
 
 // MARK: - Composer
 
-/// What the composer was opened for. Modelled as one value rather than a pair of
-/// optionals so "editing a note" and "writing a new one about a stay" cannot be
-/// half-set at the same time.
+/// What the composer opened for: one value, so "editing" and "new note about a stay" can't be half-set.
 enum FriendNoteComposition: Identifiable, Hashable {
     case new(friendID: String, stayRequestID: String?)
     case editing(FriendNote)
@@ -208,9 +197,7 @@ struct FriendNoteComposerSheet: View {
                     Text("Private note")
                 } footer: {
                     VStack(alignment: .leading, spacing: 4) {
-                        // The one thing worth saying at the moment of writing,
-                        // said once. A host who has to guess at the audience
-                        // writes for one.
+                        // The audience, said once; a host who has to guess writes for one.
                         Text("Only you will ever read this. \(friendName) isn't told, and it doesn't affect anything they can book.")
                         Text("\(trimmed.count) / \(FriendNote.maxLength)")
                             .foregroundColor(trimmed.count > FriendNote.maxLength ? .danger : .secondaryText)
@@ -269,9 +256,7 @@ struct FriendNoteComposerSheet: View {
 
 // MARK: - Entry point
 
-/// The row that takes a host from a friend's screen into their notes, carrying
-/// a one-line preview of the most recent one. Used on both host-side friend
-/// screens so the entry point reads the same in each.
+/// The row from a friend's screen into their notes, with a one-line preview of the latest; used on both host-side friend screens.
 struct FriendNotesLink: View {
     let friendID: String
     let friendName: String
@@ -287,9 +272,7 @@ struct FriendNotesLink: View {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Private notes")
-                    // The preview is the note itself, not a count dressed up as
-                    // a verdict: "3 notes" invites a host to read a number where
-                    // the point is to read the sentence they wrote.
+                    // The preview is the note itself, not a count, which would invite reading a number over the sentence.
                     Text(mostRecent?.text ?? "Just for you. \(friendName) never sees these.")
                         .font(.caption)
                         .foregroundColor(.secondaryText)
@@ -303,14 +286,10 @@ struct FriendNotesLink: View {
     }
 }
 
-/// The optional add-a-note moment, as a section the Stays tab drops into its
-/// own list: an ordinary row, offered once per stay, dismissible, and never a
-/// modal standing between the host and the rest of the screen. If they ignore it
-/// forever, nothing happens; if they wave it off, it does not come back, and
-/// they can still write a note from that friend's screen whenever they like.
-///
-/// Which stays reach it is the caller's question (`FriendNotePrompt`); what it
-/// says and how hard it asks are this file's.
+/// The optional add-a-note moment as a Stays tab section: an ordinary row, offered
+/// once per stay, dismissible, never a modal. Ignoring it does nothing and waving it
+/// off is permanent; notes remain writable from the friend's screen. `FriendNotePrompt`
+/// picks the stays.
 struct NotePromptSection: View {
     let stays: [StayRequest]
     @Binding var composing: FriendNoteComposition?
@@ -345,9 +324,7 @@ struct NotePromptSection: View {
     }
 }
 
-/// One stay's prompt. Two plain choices, neither of them urgent: the ask is an
-/// offer, so "Not this time" is a real answer and is styled as one rather than
-/// as a dismissal the host has to hunt for.
+/// One stay's prompt: two plain choices, and "Not this time" is a real answer, not a hidden dismissal.
 private struct NotePromptRow: View {
     let guestName: String
     let dateRange: String

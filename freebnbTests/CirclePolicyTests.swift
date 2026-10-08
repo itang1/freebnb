@@ -2,14 +2,9 @@
 //  CirclePolicyTests.swift
 //  freebnbTests
 //
-//  The pure half of Circles: how a policy resolves, and what it withholds from
-//  the guest's calendar.
-//
-//  These decisions are duplicated in `firestore.rules`, which is the half that
-//  actually enforces them (rules-tests/circles.test.mjs). The two have to agree,
-//  because a client that hides more than the rules refuse annoys a guest, and a
-//  client that hides less shows them an option that fails — and a failure is the
-//  one thing a restricted friend must never see.
+//  The pure half of Circles: how a policy resolves and what it withholds from the guest's
+//  calendar. Duplicated in `firestore.rules` (rules-tests/circles.test.mjs); they must
+//  agree, since hiding less than the rules refuse shows a restricted friend a failure.
 //
 
 import Foundation
@@ -67,8 +62,7 @@ struct CirclePolicyResolutionTests {
         #expect(source == .circle(id: "c1", name: "c1"))
     }
 
-    // The window between a friend request being accepted and the host's client
-    // filing them. Default is a real policy-bearing circle, so it answers.
+    // Between a friend request being accepted and the host's client filing them; Default answers.
     @Test("a friend with no membership document is governed by Default")
     func noMembershipFallsBackToDefault() {
         let (policy, source) = CirclePolicyResolver.resolve(
@@ -89,9 +83,7 @@ struct CirclePolicyResolutionTests {
         #expect(source == .fallbackDefault)
     }
 
-    // A host who has not opened the app since Circles shipped. Not a special
-    // case for Default — Default does not exist yet — and the behaviour is
-    // exactly what they had before the feature.
+    // A host who hasn't opened the app since Circles shipped; behaves as before the feature.
     @Test("a host with no circles at all restricts nothing")
     func noCirclesIsUnrestricted() {
         let (policy, source) = CirclePolicyResolver.resolve(membership: nil, circles: [])
@@ -100,9 +92,7 @@ struct CirclePolicyResolutionTests {
         #expect(ArrivalWindow.allCases.allSatisfy(policy.allows))
     }
 
-    // Default's permissiveness is a stored value the host may edit, not a branch
-    // in the code. Restricting it has to bite exactly as hard as restricting any
-    // other circle.
+    // Default's permissiveness is a stored, editable value; restricting it bites like any circle.
     @Test("a restricted Default circle restricts")
     func defaultIsNotSpeciallyPermissive() {
         let (policy, _) = CirclePolicyResolver.resolve(
@@ -146,9 +136,7 @@ struct ArrivalOptionTests {
 
 @Suite("Minimum notice")
 struct MinimumNoticeTests {
-    // checkIn is a local start-of-day, so the horizon has to round *up* to a
-    // whole day: a 12-hour notice at 9pm rules out tomorrow, because tomorrow
-    // starts in three hours. Rounding down would offer a day the rules refuse.
+    // checkIn is a local start-of-day, so the horizon rounds up: a 12-hour notice at 9pm rules out tomorrow.
     @Test("the horizon rounds up to the next whole day")
     func roundsUpToWholeDay() {
         let policy = BookingPolicy(minNoticeHours: 12)
@@ -190,9 +178,7 @@ struct DaysWithheldTests {
         #expect(withheld(.permissive).isEmpty)
     }
 
-    // 72 hours from 9am on the 10th lands at 9am on the 13th, and the 13th
-    // *starts* before that — so the first day a guest can actually check in on
-    // is the 14th. Rounding the other way would offer a day the rules refuse.
+    // 72 hours from 9am on the 10th lands on the 13th, which starts before that, so the first check-in day is the 14th.
     @Test("notice withholds every day before the horizon, and none after")
     func noticeWithholdsThePrefix() {
         let days = withheld(BookingPolicy(minNoticeHours: 72))
@@ -201,8 +187,7 @@ struct DaysWithheldTests {
         #expect(!days.contains(at(2026, 3, 14)))
     }
 
-    // The whole calendar, not a marked subset: a spent window has to read as
-    // "the host has nothing free", which is a sentence about the host.
+    // The whole calendar, not a marked subset: a spent window reads as "the host has nothing free".
     @Test("a spent frequency window closes the calendar until it reopens")
     func spentWindowClosesEverything() {
         let policy = BookingPolicy(maxStaysPerPeriod: StayFrequencyCap(count: 2, periodDays: 30))
@@ -218,8 +203,7 @@ struct DaysWithheldTests {
         #expect(withheld(policy, used: 1, windowEndsAt: at(2026, 4, 1)).isEmpty)
     }
 
-    // A ten-year cap must not build ten years of dates for a grid that shows
-    // twelve months.
+    // A ten-year cap mustn't build ten years of dates for a twelve-month grid.
     @Test("the withheld set is clamped to the grid's own horizon")
     func clampedToGridHorizon() {
         let policy = BookingPolicy(maxStaysPerPeriod: StayFrequencyCap(count: 1, periodDays: 3650))
@@ -256,9 +240,7 @@ struct StayCounterTests {
         #expect(open.spent(cap: cap, now: at(2026, 3, 10), calendar: utc) == 1)
     }
 
-    // The two shapes the rules accept, and nothing else: increment inside the
-    // window, or open a new one once it has elapsed. windowStart is pinned in
-    // between, which is what stops the window being slid forward to dodge the cap.
+    // The two shapes the rules accept: increment inside the window or open a new one after it; windowStart is pinned.
     @Test("advancing inside the window increments and keeps windowStart")
     func advanceIncrements() {
         let open = counter(start: at(2026, 3, 1), count: 1)
@@ -292,9 +274,7 @@ struct BookingPolicyStoreTests {
         return BookingPolicyStore(repository: repository)
     }
 
-    // The safe direction for a *display* decision: the sheet offers what it
-    // cannot rule out, and the rules are what refuse. Erring the other way would
-    // grey out a calendar because a read failed.
+    // The safe direction for a display decision: offer what can't be ruled out and let the rules refuse.
     @Test("a host who has published nothing comes back unrestricted")
     func noProjectionIsUnrestricted() async {
         let resolved = await store(policy: nil).resolve(hostID: "h", guestID: "g")

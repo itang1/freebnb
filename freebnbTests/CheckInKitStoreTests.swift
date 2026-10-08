@@ -2,15 +2,10 @@
 //  CheckInKitStoreTests.swift
 //  freebnbTests
 //
-//  The reconciliation half of feature 44: which kits survive a sync and which
-//  come off the disk. `StayReminderTests` covers the pure scheduling decisions
-//  next door; this covers the one that writes secrets to a file.
-//
-//  The sign-out case is the reason this file exists. `CheckInKitStore.sync` has
-//  always had a "signed out, take the kits off the device" branch, but its only
-//  caller lived inside ContentView's `isSignedIn` branch — torn down on sign-out
-//  before it could fire — so the branch was unreachable and the door codes
-//  stayed. Nothing failed, because nothing asked.
+//  The reconciliation half of the check-in kit: which kits survive a sync and which
+//  come off disk (`StayReminderTests` covers scheduling). The sign-out case is why it
+//  exists: that branch was unreachable because its only caller was torn down on
+//  sign-out, so door codes stayed and nothing failed.
 //
 
 import Foundation
@@ -37,16 +32,14 @@ private func kit(stayID: String, savedAt: Date = Date()) -> CheckInKit {
     )
 }
 
-/// A file store rooted in a fresh temporary directory, so cases cannot see each
-/// other's files and none of this touches the real Application Support folder.
+/// A file store in a fresh temporary directory, isolated from each other and from Application Support.
 private func temporaryFileStore() -> CheckInKitFileStore {
     let dir = URL.temporaryDirectory
         .appendingPathComponent("CheckInKitStoreTests-\(UUID().uuidString)", isDirectory: true)
     return CheckInKitFileStore(directory: dir)
 }
 
-/// Never called: every case here either signs out or has no live stays, and
-/// neither path fetches. A kit that needs building would be a different test.
+/// Never called: these cases sign out or have no live stays, and neither fetches.
 private func unusedFetch(_ listingID: String) async -> (Home, ListingLocation?, HouseManual?)? {
     Issue.record("fetch should not be called for \(listingID)")
     return nil
@@ -70,9 +63,8 @@ struct CheckInKitStoreTests {
     }
 
     @Test func signOutClearsKitsEvenWhenStaysStillArrive() async {
-        // The sign-out ordering is not guaranteed: the auth listener may clear the
-        // viewer before the stay listener drops its last snapshot. The empty
-        // viewer id has to be what decides, not the stays.
+        // Sign-out ordering isn't guaranteed (auth may clear the viewer before the stay listener
+        // drops its last snapshot), so the empty viewer id must decide, not the stays.
         let files = temporaryFileStore()
         files.save(kit(stayID: "stay-1"))
         let store = CheckInKitStore(files: files)
@@ -84,47 +76,38 @@ struct CheckInKitStoreTests {
     }
 
     @Test func signedInGuestKeepsKitsForTheirOwnLiveStays() async {
-        // The control. Without it a store that pruned unconditionally would pass
-        // both cases above.
+        // The control: an unconditionally pruning store would pass both cases above.
         let files = temporaryFileStore()
         files.save(kit(stayID: "stay-1"))
         files.save(kit(stayID: "stay-gone"))
         let store = CheckInKitStore(files: files)
 
-        // stay-1 is live; stay-gone is not in the list, so it is stale. No fetch
-        // runs because stay-1's kit is already on disk and equivalent.
+        // stay-1 is live; stay-gone is stale. No fetch runs since stay-1's kit is on disk and equivalent.
         await store.sync(stays: [staleStay(id: "stay-1")], viewerID: guestID) { _ in nil }
 
         #expect(store.kits.keys.sorted() == ["stay-1"])
         #expect(files.loadAll().map(\.stayID) == ["stay-1"])
     }
 
-    // The store's sign-out branch was correct all along; what was broken was the
-    // view never reaching it. These pin the change key that makes it reachable.
+    // The store's sign-out branch was fine; the view never reached it. These pin the change key that makes it reachable.
 
     @Test func signingOutChangesTheKeyEvenWithNoStays() {
-        // The regression in one line. A signed-out user has no stays, so without
-        // the viewer id both sides are `[]`, SwiftUI sees no change, `sync` never
-        // runs, and the door codes stay on the device.
+        // The regression: a signed-out user has no stays, so without the viewer id both sides are `[]`, no change, and door codes stay.
         let signedIn = CheckInKitStore.changeKey(authResolved: true, viewerID: guestID, stays: [])
         let signedOut = CheckInKitStore.changeKey(authResolved: true, viewerID: "", stays: [])
         #expect(signedIn != signedOut)
     }
 
     @Test func launchingBeforeAuthResolvesDoesNotLookLikeSigningOut() {
-        // The other direction, and the more expensive one to get wrong. At launch
-        // the uid has not arrived yet, so the key carries an empty viewer id that
-        // means "not known", not "nobody" — and the caller skips the sync on the
-        // strength of it. Once Firebase answers, the key must change, or a guest
-        // who really is signed out keeps kits that are no longer theirs.
+        // At launch the empty viewer id means "not known", not "nobody", and the caller skips
+        // the sync; once Firebase answers the key must change, or a signed-out guest keeps old kits.
         let unresolved = CheckInKitStore.changeKey(authResolved: false, viewerID: "", stays: [])
         let signedOut = CheckInKitStore.changeKey(authResolved: true, viewerID: "", stays: [])
         #expect(unresolved != signedOut)
     }
 
     @Test func switchingUsersChangesTheKeyWithIdenticalStays() {
-        // The shared-device case: the same stay list cannot make two different
-        // viewers look alike, or the second user's sync would be skipped.
+        // On a shared device the same stay list mustn't make two viewers look alike.
         let stays = [staleStay(id: "stay-1")]
         #expect(
             CheckInKitStore.changeKey(authResolved: true, viewerID: guestID, stays: stays)
@@ -133,8 +116,7 @@ struct CheckInKitStoreTests {
     }
 
     @Test func anUnrelatedSnapshotLeavesTheKeyAlone() {
-        // The other half of the bargain: the key exists to avoid re-syncing on
-        // every snapshot, so a pending stay arriving must not disturb it.
+        // The key avoids re-syncing on every snapshot, so a pending stay arriving mustn't disturb it.
         let live = staleStay(id: "stay-1")
         let pending = StayRequest(
             listingID: "listing-2",
@@ -156,8 +138,7 @@ struct CheckInKitStoreTests {
         let files = temporaryFileStore()
         let store = CheckInKitStore(files: files)
 
-        // The viewer hosts this stay rather than taking it. Building a kit would
-        // write the host's own address to their own disk for no reason.
+        // The viewer hosts this stay, so a kit would write their own address to disk for no reason.
         let stay = StayRequest(
             listingID: "listing-1",
             listingCity: "Lisbon",
