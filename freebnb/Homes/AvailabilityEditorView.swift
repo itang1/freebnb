@@ -2,14 +2,11 @@
 //  AvailabilityEditorView.swift
 //  freebnb
 //
-//  Host view for availability (feature 16): the days the host can't host. The
-//  host taps days; the flat set is collapsed back into `DateRange`s only on save,
-//  because ranges are the storage format and a set is what a tappable calendar
-//  wants. See `AvailabilityCalendar`.
+//  Host view for availability: the days the host can't host. The flat tapped set
+//  collapses into `DateRange`s only on save (see `AvailabilityCalendar`).
 //
-//  Blocking is reason-free on purpose. "Unavailable" never says why — a trip, a
-//  renovation, another guest, or simply not this week — and that ambiguity is
-//  what keeps a host's plans their own on a listing their friends can all see.
+//  Blocking is reason-free on purpose: "unavailable" never says why, which keeps
+//  a host's plans their own on a listing all their friends can see.
 //
 
 import SwiftUI
@@ -22,37 +19,29 @@ struct AvailabilityEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var blockedDays: Set<Date> = []
-    /// The turnover gap the host wants held around every confirmed stay. Loaded
-    /// with the calendar and written back on save; `loadedBufferHours` is what it
-    /// arrived as, so an untouched buffer costs no write.
+    /// The turnover gap held around every confirmed stay; `loadedBufferHours` is what it arrived as, so an untouched buffer costs no write.
     @State private var bufferHours = ListingAvailability.defaultBufferHours
     @State private var loadedBufferHours = ListingAvailability.defaultBufferHours
-    /// The server's half, loaded alongside the host's. Held rather than derived
-    /// from `listing` because the listing only carries the merged copy now, and
-    /// merged is exactly the thing this screen must not show.
+    /// The server's half, loaded with the host's. Held apart because the listing
+    /// only carries the merged copy, which this screen must not show.
     @State private var bookedRanges: [DateRange] = []
-    /// The calendar lives in a separate document, so unlike every other field on
-    /// this screen it isn't in hand when the sheet opens. Nothing is editable
-    /// until it arrives: a grid that drew empty and accepted taps would let a host
-    /// "unblock" days by saving before their own blocks had loaded.
+    /// The calendar is a separate document, so nothing is editable until it
+    /// arrives, or a host could "unblock" days by saving before their blocks loaded.
     @State private var isLoading = true
     @State private var applyToAllHomes = false
     @State private var isSaving = false
     @State private var errorMessage: String?
-    /// Rebuilt only when the blocked days change. Writing the .ics inside `body`
-    /// would put a file write on every SwiftUI render pass.
+    /// Rebuilt only when blocked days change; writing the .ics in `body` would hit disk every render.
     @State private var exportURL: URL?
 
-    /// A year is as far ahead as anyone plans a spare couch, and it bounds the
-    /// number of grids the scroll view has to build.
+    /// A year ahead is as far as anyone plans a spare couch, and it bounds the grids built.
     private static let monthsAhead = 12
 
     init(listing: Home) {
         self.listing = listing
     }
 
-    /// Pulls the unmerged calendar. The host's half seeds the grid; the server's
-    /// half is kept aside so those days can be drawn locked.
+    /// Pulls the unmerged calendar; the host's half seeds the grid, the server's is drawn locked.
     private func load() async {
         let availability = await homeStore.availability(for: listing.id)
         blockedDays = AvailabilityCalendar.blockedDays(
@@ -64,10 +53,8 @@ struct AvailabilityEditorView: View {
         isLoading = false
     }
 
-    /// The buffer choices, in whole turnover days because the calendar is
-    /// day-granular: a sub-day buffer would still close a whole date, so offering
-    /// "2 hours" would draw a day and read as a lie. Stored as hours all the same,
-    /// which is the unit the setting is defined in.
+    /// Buffer choices in whole days, since the calendar is day-granular and "2
+    /// hours" would draw a full day. Stored as hours, the setting's unit.
     private static let bufferOptions: [Int] = [0, 24, 48, 72]
 
     private static func bufferLabel(_ hours: Int) -> String {
@@ -79,24 +66,19 @@ struct AvailabilityEditorView: View {
         }
     }
 
-    /// Derived on demand rather than mirrored into state, so the summary list can
-    /// never disagree with the grid above it.
+    /// Derived on demand so the summary can't disagree with the grid.
     private var blockedRanges: [DateRange] {
         AvailabilityCalendar.ranges(from: blockedDays)
     }
 
-    /// The days an accepted stay has taken. Read from the listing (the server
-    /// keeps it current) rather than toggled, so the grid can show them filled in
-    /// and locked. Not folded into `blockedDays`: those are the host's to edit and
-    /// get written back on save, and a booking is neither.
+    /// Days an accepted stay has taken, read from the listing and shown locked;
+    /// not part of `blockedDays`, which the host edits and saves.
     private var bookedDays: Set<Date> {
         AvailabilityCalendar.blockedDays(in: AvailabilityCalendar.upcoming(bookedRanges))
     }
 
-    /// The host's other homes, the ones "apply to all" would reach. Only listings
-    /// this user hosts — a co-host editing someone else's availability has no "my
-    /// other homes" to speak of. Empty (so the option stays hidden) unless the user
-    /// hosts this listing and at least one more.
+    /// The host's other homes that "apply to all" would reach. Empty (option hidden)
+    /// unless the user hosts this listing and at least one more.
     private var otherHostedListings: [Home] {
         guard listing.isHostedBy(authManager.userID) else { return [] }
         return homeStore.managedListings.filter {
@@ -153,8 +135,7 @@ struct AvailabilityEditorView: View {
 
             let booked = bookedDays
 
-            // The host's own calendar is the one place the two are told apart, so
-            // the booked key only appears once there is a booking to explain.
+            // The host's own calendar is where the two are told apart, so the booked key appears only with a booking.
             AvailabilityLegend(showsBooked: !booked.isEmpty)
 
             ForEach(AvailabilityCalendar.months(count: Self.monthsAhead), id: \.self) { month in
@@ -175,11 +156,8 @@ struct AvailabilityEditorView: View {
 
     // MARK: - Turnover buffer
 
-    /// The gap held automatically around every confirmed stay, so a checkout and
-    /// the next check-in never land on the same day without the host blocking it by
-    /// hand each time. Reason-free to the guest like everything else here: the held
-    /// days simply read as unavailable, indistinguishable from a booking or a
-    /// closed week.
+    /// The gap held automatically around every confirmed stay. Like everything
+    /// here it is reason-free to the guest: held days read as unavailable.
     @ViewBuilder
     private var bufferSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -207,11 +185,8 @@ struct AvailabilityEditorView: View {
 
     // MARK: - Apply to all homes
 
-    /// Offered only to a host with more than one home, and phrased as a plain
-    /// choice: it copies the dates onto the other homes once, adding to whatever
-    /// each already has rather than replacing it, and does not keep them in step
-    /// afterwards. Hidden entirely for a single-home host and for a co-host, for
-    /// whom "all my homes" is either one home or none.
+    /// Offered only to a host with more than one home. Copies the dates onto the
+    /// other homes once, adding to what each has, and doesn't keep them in step.
     @ViewBuilder
     private var applyToAllSection: some View {
         let others = otherHostedListings
@@ -238,9 +213,7 @@ struct AvailabilityEditorView: View {
                 .font(.subheadline.weight(.semibold))
 
             if ranges.isEmpty {
-                // Deliberately not "all dates available": an empty block list only
-                // means the host has ruled nothing out, which is not the same as a
-                // promise that every date is free. A friend still asks.
+                // Not "all dates available": an empty list only means nothing is ruled out; a friend still asks.
                 Label("No blocked dates.", systemImage: "checkmark.circle")
                     .font(.subheadline)
                     .foregroundColor(.secondaryText)
@@ -248,9 +221,7 @@ struct AvailabilityEditorView: View {
                 ForEach(ranges) { range in
                     rangeRow(range)
                 }
-                // Handed to the share sheet rather than written through EventKit,
-                // which would ask for calendar permission just to give the host
-                // back what they typed.
+                // Handed to the share sheet rather than EventKit, which would ask for calendar permission.
                 if let exportURL {
                     ShareLink(item: exportURL) {
                         Label("Export to Calendar", systemImage: "square.and.arrow.up")
@@ -262,7 +233,7 @@ struct AvailabilityEditorView: View {
         }
     }
 
-    /// One row of the "here's what you just drew" list of blocked stretches.
+    /// One row of the list of blocked stretches.
     private func rangeRow(_ range: DateRange) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "calendar.badge.minus")
@@ -279,8 +250,7 @@ struct AvailabilityEditorView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Rebuilds the .ics for the current blocked periods. Nil when nothing is
-    /// blocked, which is also what hides the button.
+    /// Rebuilds the .ics for the blocked periods; nil when nothing is blocked (which hides the button).
     private func refreshExport() {
         exportURL = CalendarInvite.icsFile(
             events: blockedRanges.enumerated().map { index, range in
@@ -304,9 +274,7 @@ struct AvailabilityEditorView: View {
         errorMessage = nil
         defer { isSaving = false }
         let ranges = blockedRanges
-        // The buffer first, when it changed, so the blocked-range save that follows
-        // republishes the union with the new padding already in the cache. An
-        // untouched buffer is skipped: it would only rewrite the same value.
+        // Buffer first when changed, so the blocked-range save republishes with the new padding. Skipped if untouched.
         if bufferHours != loadedBufferHours {
             do {
                 try await homeStore.saveBufferHours(bufferHours, for: listing)
@@ -319,14 +287,12 @@ struct AvailabilityEditorView: View {
         do {
             try await homeStore.saveBlockedRanges(ranges, for: listing)
         } catch {
-            // This listing didn't save, so don't fan out onto the others — the
-            // host would be left with the change applied everywhere but here.
+            // This listing didn't save, so don't fan out onto the others.
             errorMessage = error.localizedDescription
             return
         }
-        // The fan-out unions these dates onto the host's other homes. A failure
-        // here is reported by name and leaves this listing (already saved) alone,
-        // so the host can retry without losing what took.
+        // The fan-out unions these dates onto other homes. A failure is reported by
+        // name and leaves this (saved) listing alone, so the host can retry.
         if applyToAllHomes {
             let failed = await homeStore.applyBlockedRangesToOtherHostedListings(
                 ranges, excludingID: listing.id, hostUserID: authManager.userID
@@ -341,8 +307,7 @@ struct AvailabilityEditorView: View {
 
     // MARK: - Labels
 
-    /// `end` is exclusive, so the last blocked night is the day before it. Showing
-    /// the exclusive bound would tell the host they had blocked a day they hadn't.
+    /// `end` is exclusive, so the last blocked night is the day before it.
     private func rangeLabel(_ range: DateRange) -> String {
         let formatter = AppDateFormatters.shortDay
         let lastBlocked = Calendar.current.date(byAdding: .day, value: -1, to: range.end) ?? range.start

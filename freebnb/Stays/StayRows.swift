@@ -2,8 +2,7 @@
 //  StayRows.swift
 //  freebnb
 //
-//  The row, badge, and sheet views the Stays tab composes. Split out of
-//  StaysTab.swift, which is the screen; these are the pieces it arranges.
+//  The row, badge and sheet views the Stays tab composes (split from StaysTab.swift).
 //
 
 import SwiftUI
@@ -13,16 +12,13 @@ import SwiftUI
 struct OutgoingRequestRow: View {
     let request: StayRequest
     var onCancel: (() -> Void)? = nil
-    /// Change dates without cancel-and-resend (feature 23). Offered only while
-    /// the request is still pending.
+    /// Change dates without cancel-and-resend; only while pending.
     var onModify: (() -> Void)? = nil
-    /// Tell someone where you'll be (feature 5). Offered on any confirmed trip.
+    /// Tell someone where you'll be; on any confirmed trip.
     var onShare: (() -> Void)? = nil
-    /// Close the stay out (feature 4). Nil until the stay has begun.
+    /// Close the stay out; nil until it has begun.
     var onComplete: (() -> Void)? = nil
-    /// Answer a host's offer (feature 43). Non-nil only while `.offered`, which is
-    /// the one status where the guest is the party who owes a reply — every other
-    /// row in this list is the guest waiting on somebody else.
+    /// Answer a host's offer; non-nil only while `.offered`, the one status where the guest owes a reply.
     var onAccept:  (() -> Void)? = nil
     var onDecline: (() -> Void)? = nil
 
@@ -79,8 +75,7 @@ struct OutgoingRequestRow: View {
 
             if let onCancel, request.status.isActive {
                 Button(role: .destructive, action: onCancel) {
-                    // A pending request is withdrawn; a confirmed stay is called
-                    // off. Same verb underneath, but the label should say which.
+                    // A pending request is withdrawn, a confirmed stay called off; the label says which.
                     Text(request.status == .accepted ? "Cancel stay" : "Cancel request")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
@@ -92,9 +87,7 @@ struct OutgoingRequestRow: View {
                 .padding(.top, 4)
             }
 
-            // Answering a host's offer. "No thanks" rather than "Decline": the
-            // friend is turning down an invitation, not rejecting an application,
-            // and the button should sound like the former.
+            // Answering an offer: "No thanks", since the friend is declining an invitation.
             if showsOfferActions {
                 HStack(spacing: 12) {
                     Button(action: { onDecline?() }) {
@@ -108,8 +101,7 @@ struct OutgoingRequestRow: View {
                     .buttonStyle(.pressable)
 
                     Button(action: { onAccept?() }) {
-                        // Coral: accepting is the commit action the row is
-                        // asking for, so it takes the call-to-action color.
+                        // Coral: accepting is the commit action.
                         Text("Yes please")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -148,10 +140,8 @@ struct StayActionButton: View {
 
 // MARK: - Review prompt row
 
-/// A finished stay waiting on the signed-in user's review (features 1 and 4).
-/// When `onThank` is set (the viewer was the guest) the primary action is the
-/// thank-you flow (feature 24), which sends a gratitude note and then leads into
-/// the same review; otherwise it's a plain "Leave a review".
+/// A finished stay awaiting the user's review. With `onThank` (the viewer was
+/// the guest) the primary action is the thank-you flow, then the review; else "Leave a review".
 struct ReviewPromptRow: View {
     let request: StayRequest
     let subjectName: String
@@ -183,16 +173,13 @@ struct ReviewPromptRow: View {
     }
 }
 
-// MARK: - Thank-you sheet (guest gratitude after checkout, feature 24)
+// MARK: - Thank-you sheet
 
-/// A lightweight gratitude note the guest sends the host after checkout, which
-/// then leads straight into leaving a review. The note is optional — a guest who
-/// only wants to review can skip it — so both paths hand back to the same review
-/// prompt via `onContinue`.
+/// An optional gratitude note the guest sends the host after checkout, leading
+/// into the review; both paths hand back via `onContinue`.
 struct ThankYouSheet: View {
     let hostName: String
-    /// `note` is nil when the guest skipped sending. Either way the caller then
-    /// opens the review, so the thank-you doubles as the review prompt.
+    /// `note` is nil when skipped; either way the caller opens the review next.
     let onContinue: (_ note: String?) async -> Void
 
     @State private var note: String
@@ -255,16 +242,14 @@ struct ThankYouSheet: View {
 struct IncomingRequestRow: View {
     let request: StayRequest
     let guestName: String
-    /// Street address of the listing. Pass when the host has multiple listings so
-    /// the guest can see which property the request is for.
+    /// Street address, passed when the host has several listings to tell requests apart.
     var listingAddress: String? = nil
     var showActions: Bool = false
     var onAccept:  (() -> Void)? = nil
     var onDecline: (() -> Void)? = nil
-    /// Close the stay out (feature 4). Nil until the stay has begun.
+    /// Close the stay out; nil until it has begun.
     var onComplete: (() -> Void)? = nil
-    /// Call off an accepted stay the host can no longer honor. Offered on
-    /// upcoming hosting rows; the tab confirms before acting.
+    /// Call off an accepted stay the host can't honor; the tab confirms first.
     var onCancel: (() -> Void)? = nil
 
     var body: some View {
@@ -374,8 +359,7 @@ struct StatusBadge: View {
     private var badgeColor: Color {
         switch status {
         case .pending:   return .warning
-        // Same amber as pending: both mean "somebody owes an answer", and the
-        // badge's job is to say the stay is unresolved, not which way it points.
+        // Same amber as pending: the badge says the stay is unresolved, not which way it points.
         case .offered:   return .warning
         case .accepted:  return .success
         case .completed: return Color.accent
@@ -385,14 +369,12 @@ struct StatusBadge: View {
     }
 }
 
-// MARK: - Accept sheet (lets host add an optional note)
+// MARK: - Accept sheet
 
 struct AcceptSheet: View {
     let request: StayRequest
-    /// Performs the accept. Returns nil on success, or the message to show the
-    /// host on failure. The message has to come back here rather than onto the
-    /// presenting page: that page sits behind this sheet, so an error raised
-    /// there is invisible and the Accept button looks inert.
+    /// Performs the accept; nil on success, else the message to show. It comes back
+    /// here because the presenting page sits behind the sheet and an error there is invisible.
     let onConfirm: (String?) async -> String?
 
     @State private var note = ""
@@ -426,9 +408,7 @@ struct AcceptSheet: View {
                             let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
                             errorMessage = await onConfirm(trimmed.isEmpty ? nil : trimmed)
                             isConfirming = false
-                            // The sheet owns its own dismissal now, so every
-                            // caller gets the same behaviour: stay open on
-                            // failure with the reason showing, close on success.
+                            // The sheet owns dismissal: stay open on failure, close on success.
                             if errorMessage == nil { dismiss() }
                         }
                     }
@@ -440,13 +420,11 @@ struct AcceptSheet: View {
     }
 }
 
-// MARK: - Modify sheet (guest changes dates on a pending request, feature 23)
+// MARK: - Modify sheet
 
 struct ModifyStaySheet: View {
     let request: StayRequest
-    /// The listing, when it's cached, so the same max-stay and blocked-date
-    /// guards the request sheet enforces apply here too. Nil-safe: an uncached
-    /// listing still allows a date change, just without the policy checks.
+    /// The listing when cached, so the same max-stay and blocked-date guards apply; nil still allows a date change.
     let listing: Home?
     let onSave: (_ checkIn: Date, _ checkOut: Date) async -> Void
 
@@ -456,9 +434,8 @@ struct ModifyStaySheet: View {
     @Environment(BookingPolicyStore.self) private var policyStore
     @Environment(\.dismiss) private var dismiss
 
-    /// The host's rules for this guest. Only the notice window can bite here: a
-    /// date change spends no frequency slot (it is the same ask, not another
-    /// one) and cannot touch the arrival time, which `changedKeys()` pins.
+    /// The host's rules for this guest. Only the notice window applies: a date
+    /// change spends no frequency slot and can't touch the arrival time.
     @State private var resolvedPolicy: BookingPolicyStore.Resolved = .unrestricted
 
     init(request: StayRequest, listing: Home?, onSave: @escaping (Date, Date) async -> Void) {
@@ -475,13 +452,9 @@ struct ModifyStaySheet: View {
 
     private var maxStay: Int? { listing?.guestPolicy.maxStayDays }
 
-    /// Whether the proposed dates cross a day this listing can't take. Reads the
-    /// merged `unavailableRanges`, never `blockedDateRanges` alone: this sheet is
-    /// guest-facing, and validating against the host's blocks by themselves made it
-    /// an oracle — dates over a block were refused by name while dates over a
-    /// booking sailed through, which told the guest exactly which nights the home
-    /// was occupied. A Bool rather than the range, because naming the span is the
-    /// other half of the same leak.
+    /// Whether the dates cross a day this listing can't take. Reads the merged
+    /// `unavailableRanges`, never blocks alone, or the sheet would reveal which
+    /// nights are booked. A Bool, since naming the span leaks the same thing.
     private var hasUnavailableConflict: Bool {
         listing?.unavailableRanges.contains { $0.overlaps(checkIn: checkIn, checkOut: checkOut) } ?? false
     }
@@ -490,15 +463,9 @@ struct ModifyStaySheet: View {
         checkIn != request.checkIn || checkOut != request.checkOut
     }
 
-    /// The earliest day the picker will go to. Today, or the host's notice
-    /// window if it reaches further out.
-    ///
-    /// A lower bound rather than a warning, deliberately: the picker already
-    /// refuses to go into the past and says nothing about it, so a guest whose
-    /// host set a notice window meets the same wall, with the same silence. The
-    /// rules enforce the identical bound on this write — without this the guest
-    /// could pick a date and be told "Missing or insufficient permissions",
-    /// which is the decline this whole feature exists to avoid.
+    /// The earliest day the picker allows: today or the host's notice window. A
+    /// lower bound rather than a warning, matching the rules' bound so the guest
+    /// never hits a permissions error.
     private var earliestSelectable: Date {
         max(Date(), resolvedPolicy.policy.earliestCheckIn())
     }
@@ -507,10 +474,7 @@ struct ModifyStaySheet: View {
         !isSaving && hasChanges && checkOut > checkIn
             && (maxStay == nil || nights <= maxStay!)
             && !hasUnavailableConflict
-            // The dates this sheet opened on predate the policy: a request filed
-            // before the host set a notice window starts out below the bound.
-            // Save stays disabled until the guest picks a date the picker is
-            // willing to offer, which is where it opens them anyway.
+            // Dates predating the policy start below the bound; Save stays disabled until a valid date is picked.
             && checkIn >= Calendar.current.startOfDay(for: earliestSelectable)
     }
 
