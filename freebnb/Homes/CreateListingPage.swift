@@ -95,12 +95,10 @@ struct CreateListingPage: View {
                 await vm.loadStreet(homeStore: homeStore)
                 suggestTitle()
             }
-            // The suggested name carries the city, so it follows the address until
-            // the host types a name of their own.
+            // The suggested name carries the city, so it follows the address until the host types their own.
             .onChange(of: vm.city) { _, _ in suggestTitle() }
             .onChange(of: userProfileStore.displayName) { _, _ in suggestTitle() }
-            // Autosave rather than prompting on Cancel: the sheet can also leave by
-            // a swipe down, which no confirmation dialog gets to intercept.
+            // Autosave rather than prompting on Cancel, since a swipe down can't be intercepted by a dialog.
             .onChange(of: vm.draft) { _, _ in
                 vm.persistDraft(to: draftStore, userID: authManager.userID)
             }
@@ -117,11 +115,8 @@ struct CreateListingPage: View {
         )
     }
 
-    /// Bridges the toolbar and the "save without map location" button to the
-    /// view model. Returns `true` when the sheet should dismiss.
-    ///
-    /// The draft is cleared only on a save that actually landed. A geocode failure
-    /// or a rejected write leaves the sheet open with the draft intact behind it.
+    /// Bridges the toolbar and "save without map location" button to the view model; true when the sheet should
+    /// dismiss. The draft clears only on a save that landed, so a geocode failure or rejected write keeps it.
     private func saveListing(allowMissingCoordinates: Bool = false) async -> Bool {
         let saved = await vm.save(
             homeStore: homeStore,
@@ -187,8 +182,7 @@ struct CreateListingPage: View {
         }
     }
 
-    /// Only shown once the listing has a bed, since a couch has no size worth
-    /// naming. The save drops these if the last bed goes away.
+    /// Only once the listing has a bed (a couch's size isn't worth naming); the save drops these if the last bed goes.
     @ViewBuilder
     private var bedSizesSection: some View {
         if (vm.sleepingCounts[.bed] ?? 0) > 0 {
@@ -301,8 +295,7 @@ struct CreateListingPage: View {
         )
     }
 
-    // Not a setting: every listing is friends-only by design. Stated here so a
-    // host never has to wonder who is about to see their home.
+    // Not a setting: every listing is friends-only. Stated so a host never wonders who sees their home.
     private var visibilitySection: some View {
         Section("Who can see this listing") {
             Label {
@@ -316,10 +309,8 @@ struct CreateListingPage: View {
         }
     }
 
-    /// The names the host's other listings already use, which this one may not
-    /// reuse. `managedListings` also holds homes they only co-host, hence
-    /// `isHostedBy`; the listing being edited is excluded so saving an edit
-    /// doesn't collide with itself.
+    /// Names the host's other listings already use, which this one may not reuse. `managedListings`
+    /// includes co-hosted homes (hence `isHostedBy`); the listing being edited is excluded.
     private var takenTitles: Set<String> {
         let hostID = authManager.userID
         guard !hostID.isEmpty else { return [] }
@@ -332,8 +323,7 @@ struct CreateListingPage: View {
         Section("Listing name") {
             TextField("e.g. Guest room by the Rose Bowl", text: $vm.title)
                 .textInputAutocapitalization(.words)
-                // Latches on the first keystroke so the suggestion stops
-                // following the city once the host has made the name their own.
+                // Latches on the first keystroke so the suggestion stops following the city.
                 .onChange(of: vm.title) { _, _ in vm.noteTitleChanged() }
             if let problem = vm.titleProblem(taken: takenTitles) {
                 Text(problem)

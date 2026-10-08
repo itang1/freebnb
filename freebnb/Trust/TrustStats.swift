@@ -2,11 +2,9 @@
 //  TrustStats.swift
 //  freebnb
 //
-//  The reputation numbers shown on a profile and on every listing (feature 2).
-//  They live on the world-readable `users/{uid}` document because a listing card
-//  must render them without a second fetch per host, and they are written only
-//  by the `recomputeTrustStats` Cloud Function — `firestore.rules` pins the map
-//  against client writes, so a host cannot inflate their own numbers.
+//  The reputation numbers on a profile and every listing. They live on the world-readable
+//  user document so cards render without a fetch per host, and only `recomputeTrustStats`
+//  writes them (the rules pin the map against clients).
 //
 
 import Foundation
@@ -19,8 +17,7 @@ struct TrustStats: Codable, Hashable, Sendable {
     /// Reviews written *about* this user, and their mean rating (1...5).
     var reviewCount: Int?
     var averageRating: Double?
-    /// Set only by an out-of-band identity check (feature 3, not yet wired to a
-    /// provider). Nil and false both render as "not verified".
+    /// Set only by an out-of-band identity check (not yet wired); nil and false both render "not verified".
     var idVerified: Bool?
 
     var isVerified: Bool { idVerified == true }
@@ -33,9 +30,7 @@ struct TrustStats: Codable, Hashable, Sendable {
 }
 
 extension TrustStats {
-    /// Whole years since `createdAt`, as "New here" / "1 year on FreeBNB" / "3
-    /// years on FreeBNB". Lives here rather than on `UserProfile` so every trust
-    /// number is phrased in one place.
+    /// Whole years since `createdAt`: "New here" / "1 year on FreeBNB" / "3 years on FreeBNB". Here so every trust number is phrased in one place.
     static func tenureText(joinedAt: Date?, now: Date = Date()) -> String? {
         guard let joinedAt else { return nil }
         let years = Calendar.current.dateComponents([.year], from: joinedAt, to: now).year ?? 0
@@ -44,9 +39,7 @@ extension TrustStats {
     }
 }
 
-/// The answer to "how many friends do we have in common" for one other user,
-/// computed by the `mutualFriends` callable because `friendEdges` is readable
-/// only by the two people it connects.
+/// How many friends we have in common with one other user, from the `mutualFriends` callable (`friendEdges` is readable only by the two people).
 struct MutualFriends: Codable, Hashable, Sendable {
     var count: Int
     /// A few names to make the number concrete ("Priya, Sam and 3 others").
@@ -64,8 +57,7 @@ struct MutualFriends: Codable, Hashable, Sendable {
 
     /// "Priya and Sam", "Priya, Sam and 3 others", or nil when there are none.
     var summary: String? {
-        // `count` is the callable's total, not a collection length: it can
-        // exceed `names.count`, so `names.isEmpty` is not an equivalent check.
+        // `count` is the callable's total and can exceed `names.count`, so `names.isEmpty` isn't equivalent.
         // swiftlint:disable:next empty_count
         guard count > 0 else { return nil }
         let shown = names.prefix(2)

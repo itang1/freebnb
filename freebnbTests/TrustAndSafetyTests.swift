@@ -2,9 +2,8 @@
 //  TrustAndSafetyTests.swift
 //  freebnbTests
 //
-//  The pure logic behind the trust-and-safety surfaces: who may complete or
-//  review a stay, how a reputation is phrased, and whether a friends-of-friends
-//  listing is visible to a viewer the client can only judge by its ACL.
+//  The pure logic behind trust-and-safety surfaces: who may complete or review a stay, how
+//  a reputation is phrased, and whether a listing is visible given only its ACL.
 //
 
 import Foundation
@@ -81,8 +80,7 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
 }
 
 @Test func futureStayCannotBeCompleted() {
-    // The guard that stops a host from farming completed stays by accepting a
-    // booking a year out and instantly "finishing" it.
+    // Stops a host farming completed stays by accepting a booking a year out and "finishing" it.
     let stay = makeStay(checkIn: tomorrow, checkOut: nextWeek)
     #expect(!stay.canBeMarkedComplete(now: now))
 }
@@ -109,8 +107,7 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
 }
 
 @Test func reviewIDIsDeterministicPerStayAndAuthor() {
-    // The rules require the document id to equal this, which is what makes a
-    // second review of the same stay an overwrite rather than a new document.
+    // The rules require the id to equal this, so a second review overwrites the first.
     let review = Review(
         stayRequestID: "stay-7",
         listingID: "listing-1",
@@ -180,9 +177,7 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
     #expect(MutualFriends(count: 3, names: ["Priya", "Sam"]).countSummary == "3 mutual friends")
 }
 
-/// A suggestion row is shown *before* any relationship exists, so it says how
-/// close someone is without saying through whom. The names stay on the model for
-/// the profile page, which is somewhere the viewer chose to go.
+/// A suggestion row appears before any relationship exists, so it says how close someone is, not through whom; names stay on the model for the profile page.
 @Test func aFriendSuggestionCountsMutualsWithoutNamingThem() {
     let suggestion = FriendSuggestion(
         userID: "u1",
@@ -205,9 +200,7 @@ private let nextWeek = now.addingTimeInterval(7 * 86_400)
 // MARK: - Friends-only visibility (feature 7)
 
 @Test func feedChecksTheFriendshipNotJustTheACL() {
-    // A stale ACL — a friend removed since the listing was last written — must
-    // not keep showing the listing. The repository query is ACL-gated, so this
-    // client-side friendship check is the second line of defence.
+    // A stale ACL (a friend removed since the listing was written) mustn't keep showing it; this client check backs up the ACL-gated query.
     let home = makeHome(id: "h", hostUserID: "host", allowedViewerIDs: ["host", "me"])
     #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: [], blockedIDs: []).isEmpty)
     #expect(HomeStore.feed(from: [home], myID: "me", friendIDs: ["host"], blockedIDs: []).count == 1)

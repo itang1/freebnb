@@ -2,17 +2,15 @@
 //  ReviewsRepository.swift
 //  freebnb
 //
-//  Reviews, private feedback, character references, and the mutual-friend count
-//  (features 1 and 2). Reads are one-shot rather than live: a profile's reviews
-//  change on the order of once per stay, so a snapshot listener per viewed
-//  profile would cost far more than it earns.
+//  Reviews, private feedback, character references and the mutual-friend count. Reads are one-shot
+//  since a profile's reviews change about once per stay; a listener per viewed profile would cost more than it earns.
 //
 
 @preconcurrency import FirebaseFirestore
 @preconcurrency import FirebaseFunctions
 import Foundation
 
-// Enough to fill a profile page; the tail is not worth the read cost.
+// Enough to fill a profile page; the tail isn't worth the reads.
 private let reviewsFetchLimit = 50
 private let referencesFetchLimit = 25
 
@@ -22,21 +20,17 @@ protocol ReviewsRepository: Sendable {
     /// Reviews `authorUserID` has written. Used to know which completed stays
     /// still owe a review.
     func fetchReviewsWritten(byUserID authorUserID: String) async throws -> [Review]
-    /// Creates or revises the caller's review of a stay, and writes the private
-    /// note alongside it when one is given. Passing nil leaves any existing note
-    /// untouched — a reviewer editing their public comment shouldn't silently
-    /// erase what they said privately.
+    /// Creates or revises the caller's review, writing the private note alongside if given.
+    /// Nil leaves any existing note untouched, so editing the public comment doesn't erase it.
     func submit(_ review: Review, privateFeedback: String?) async throws
-    /// The private note attached to a review. Readable only by its author and its
-    /// subject; nil when there is none or the caller isn't one of them.
+    /// The private note on a review, readable only by its author and subject; nil if none or not entitled.
     func fetchPrivateFeedback(reviewID: String) async throws -> PrivateFeedback?
 
     func fetchReferences(subjectUserID: String) async throws -> [CharacterReference]
     func submitReference(_ reference: CharacterReference) async throws
     func deleteReference(id: String) async throws
 
-    /// Friends the caller and `userID` have in common, computed by the
-    /// `mutualFriends` callable — `friendEdges` are unreadable to third parties.
+    /// Friends the caller and `userID` share, from the `mutualFriends` callable (`friendEdges` is unreadable to third parties).
     func fetchMutualFriends(userID: String) async throws -> MutualFriends
 }
 
@@ -94,14 +88,10 @@ struct FirestoreReviewsRepository: ReviewsRepository {
         let review = review
         try await withRetry {
             let ref = reviewDoc(review.id)
-            // A create must stamp createdAt with the server time; an edit must
-            // leave it exactly as it was, and the rules only let it touch rating,
-            // publicComment, and updatedAt. Writing the whole document on an edit
-            // would rewrite createdAt to a fresh server timestamp and be rejected.
+            // A create stamps createdAt with the server time; an edit must leave it, since the rules only
+            // let it touch rating, publicComment and updatedAt (a whole-document write would be rejected).
             if try await ref.getDocument().exists {
-                // A cleared comment is removed rather than written as null: the
-                // rules' isOptionalString() accepts both, but an absent key is
-                // what the Swift encoder produces for nil everywhere else.
+                // A cleared comment is removed, not written as null, matching how the encoder treats nil.
                 let comment: Any = review.publicComment.map { $0 as Any } ?? FieldValue.delete()
                 try await ref.updateData([
                     "rating": review.rating,

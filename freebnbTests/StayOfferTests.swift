@@ -2,12 +2,9 @@
 //  StayOfferTests.swift
 //  freebnbTests
 //
-//  Host-initiated offers (feature 43). The rules tests in rules-tests/offers.test.mjs
-//  cover who may write what; these cover the model's own reading of a document —
-//  which side owes a reply, and who started it.
-//
-//  Both questions used to have a single answer because there was only one way a
-//  stay could begin. Everything here is a place that assumption was baked in.
+//  Host-initiated offers. rules-tests/offers.test.mjs covers who may write what; these cover
+//  the model's reading of a document: which side owes a reply and who started it, questions that
+//  once had a single answer.
 //
 
 import Foundation
@@ -43,17 +40,13 @@ struct StayInitiatorTests {
         #expect(stay(status: .pending, initiatedBy: guest).initiator == .guest)
     }
 
-    /// Requests written before offers existed carry no `initiatedBy`, and could
-    /// only ever have been the guest asking — that was the only thing the app
-    /// could do. Reading them as host-initiated would misfile every past trip.
+    /// Requests predating offers have no `initiatedBy` and were the guest asking; reading them as host-initiated would misfile past trips.
     @Test func aRequestWithNoInitiatorIsTheGuestAsking() {
         #expect(stay(status: .pending, initiatedBy: nil).initiator == .guest)
         #expect(stay(status: .completed, initiatedBy: nil).initiator == .guest)
     }
 
-    /// The initiator has to survive the stay moving on, which is the whole reason
-    /// it is a stored field rather than a read of `status`. An accepted offer and
-    /// an accepted request are both just "accepted".
+    /// The initiator must survive the stay moving on, which is why it's stored and not read off `status`.
     @Test func theInitiatorOutlivesTheStatus() {
         #expect(stay(status: .accepted, initiatedBy: host).initiator == .host)
         #expect(stay(status: .completed, initiatedBy: host).initiator == .host)
@@ -70,8 +63,7 @@ struct AwaitingReplyTests {
         #expect(request.awaitsReply(from: guest) == false)
     }
 
-    /// The mirror, and the point of the feature: an offer is the one thing in the
-    /// app that lands in a guest's lap needing their answer.
+    /// The mirror: an offer is the one thing that lands in a guest's lap needing their answer.
     @Test func anOfferWaitsOnTheGuest() {
         let offer = stay(status: .offered, initiatedBy: host)
         #expect(offer.awaitingParty == guest)
@@ -87,16 +79,14 @@ struct AwaitingReplyTests {
         }
     }
 
-    /// An empty user id is what a signed-out viewer looks like, and it must not
-    /// match a document that happens to be missing the same field.
+    /// An empty user id (signed out) must not match a document missing the same field.
     @Test func nobodyIsAwaitedWhenThereIsNoViewer() {
         #expect(stay(status: .pending, initiatedBy: guest).awaitsReply(from: "") == false)
     }
 }
 
 struct OfferAcceptanceTests {
-    /// Whoever owes the answer is the only one who can give it. A host accepting
-    /// their own offer would book a friend into a stay they never agreed to.
+    /// Only whoever owes the answer can give it; a host accepting their own offer would book a friend into a stay they never agreed to.
     @Test func onlyTheGuestCanAcceptAnOffer() {
         let offer = stay(status: .offered, initiatedBy: host)
         #expect(offer.canBeAccepted(by: guest))
@@ -123,16 +113,13 @@ struct OfferAcceptanceTests {
 }
 
 struct OfferStatusTests {
-    /// An offer is unresolved, so it must count as active. `updateStatus` revokes
-    /// the guest's address grant on every inactive status, and an offer that read
-    /// as inactive would have that grant torn out from under it.
+    /// An offer is unresolved, so it must count as active, or `updateStatus` would revoke the guest's address grant.
     @Test func anOfferIsActiveAndAwaitingAReply() {
         #expect(StayRequestStatus.offered.isActive)
         #expect(StayRequestStatus.offered.isAwaitingReply)
     }
 
-    /// An offer is a proposal, not a stay. It must not count toward anybody's
-    /// hosted or taken totals until it actually happens.
+    /// An offer is a proposal, not a stay; it mustn't count toward hosted or taken totals until it happens.
     @Test func anOfferIsNotAStayThatHappened() {
         #expect(StayRequestStatus.offered.didHappen == false)
     }
