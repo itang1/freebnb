@@ -12,18 +12,15 @@ import os
 struct UserProfile: Identifiable, Codable, Hashable, Sendable {
     @DocumentID var id: String?
     var displayName: String
-    // Reputation, on the world-readable user document because a listing card has
-    // to render it without a second fetch per host (feature 2). Written only by
-    // the server; `firestore.rules` refuses every client write to it.
+    // Reputation lives on the world-readable user document so listing cards render it without a fetch per host; server-written only.
     var trustStats: TrustStats?
     var email: String?
     var savedListingIDs: [String]?
     var blockedUserIDs: [String]?
     var fcmToken: String?
-    // Per-category push preferences; lives in the private subdocument and is
-    // merged in alongside the other owner-only fields. Absent means "all on".
+    // Per-category push preferences, in the private subdocument; absent means all on.
     var notificationPrefs: NotificationPreferences?
-    // Who to tell about a stay (feature 5). Owner-only, like the block list.
+    // Who to tell about a stay; owner-only, like the block list.
     var emergencyContact: EmergencyContact?
     @ServerTimestamp var createdAt: Date?
     @ServerTimestamp var updatedAt: Date?
@@ -46,10 +43,7 @@ final class UserProfileStore {
 
     @ObservationIgnored private let repository: UserProfileRepository
     @ObservationIgnored private let feedbackService: FeedbackService
-    // `nonisolated(unsafe)` because `deinit` is nonisolated and must tear
-    // these down. Both are only assigned from @MainActor contexts, and
-    // Firebase's `ListenerRegistration.remove()` and
-    // `Auth.removeStateDidChangeListener(_:)` are thread-safe.
+    // `nonisolated(unsafe)`: deinit is nonisolated but must tear these down; both are thread-safe.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private var inFlight: Set<String> = []
@@ -119,12 +113,9 @@ final class UserProfileStore {
         }
     }
 
-    /// Creates the first profile document. A failure here used to be logged and
-    /// never retried, which left the account wedged: signed in, no profile, and
-    /// no snapshot coming that would trigger another attempt. Retries with
-    /// backoff while this user is still signed in and the listener still hasn't
-    /// delivered a profile; if every attempt fails, the guard flag resets so the
-    /// next listener restart tries again.
+    /// Creates the first profile document, retrying with backoff while the user is
+    /// signed in and no profile has arrived (a single failure once wedged the account);
+    /// if every attempt fails, the guard flag resets for the next listener restart.
     private func createInitialProfile(userID: String, displayName: String, email: String?) async {
         for attempt in 0..<5 {
             if attempt > 0 {
@@ -167,8 +158,7 @@ final class UserProfileStore {
         if ids.contains(listingID) { ids.remove(listingID) } else { ids.insert(listingID) }
         let newIDs = Array(ids)
 
-        // Optimistic local update so the filter and icon reflect the change
-        // immediately without waiting for the Firestore listener round-trip.
+        // Optimistic local update so the filter and icon reflect the change immediately.
         let snapshot = currentProfile
         currentProfile?.savedListingIDs = newIDs
 
@@ -206,9 +196,7 @@ final class UserProfileStore {
         try await setBlocked(userID, blocked: false)
     }
 
-    /// Optimistic like the saved-listings toggle: the feed and the block menus
-    /// flip immediately, and a failed write puts them back so the UI never
-    /// claims a block that didn't land.
+    /// Optimistic like the saved-listings toggle; a failed write reverts so the UI never claims a block that didn't land.
     private func setBlocked(_ userID: String, blocked: Bool) async throws {
         guard let myID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         var ids = currentProfile?.blockedIDs ?? []
@@ -232,11 +220,9 @@ final class UserProfileStore {
         try await repository.submitReport(reporterUserID: myID, targetType: targetType, targetID: targetID, reason: reason)
     }
 
-    /// Sends an in-app feedback note (feature 43) to the Google Form behind
-    /// `FeedbackService`. The message is trimmed to match what the composer
-    /// validated. `appVersion` defaults to the running build so a bug report
-    /// identifies itself; tests override it. The account ID rides along for
-    /// follow-up when the sender is signed in; the Form accepts it regardless.
+    /// Sends an in-app feedback note to the Google Form behind `FeedbackService`,
+    /// trimmed as the composer validated. `appVersion` defaults to the running build
+    /// (tests override it) and the account ID rides along when signed in.
     func submitFeedback(
         message: String,
         appVersion: String? = Bundle.main.appVersionString
@@ -249,9 +235,7 @@ final class UserProfileStore {
         )
     }
 
-    /// Persists per-category push preferences to the private profile. Updates the
-    /// local copy optimistically so the toggle reflects the change without waiting
-    /// for the listener round-trip; reverts on failure.
+    /// Persists per-category push preferences to the private profile, optimistically, reverting on failure.
     func updateNotificationPrefs(_ prefs: NotificationPreferences) async throws {
         guard let userID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         let snapshot = currentProfile
@@ -265,9 +249,7 @@ final class UserProfileStore {
         }
     }
 
-    /// Stores, or with nil clears, the person this user shares their stays with
-    /// (feature 5). Optimistic like the notification toggles, and reverted on
-    /// failure so the form never claims a save that didn't land.
+    /// Stores, or with nil clears, the person this user shares stays with; optimistic and reverted on failure.
     func updateEmergencyContact(_ contact: EmergencyContact?) async throws {
         guard let userID = Auth.auth().currentUser?.uid else { throw ProfileUpdateError.notSignedIn }
         let snapshot = currentProfile
@@ -281,8 +263,7 @@ final class UserProfileStore {
         }
     }
 
-    /// Fetches the user's full data export and writes it to a temporary JSON file,
-    /// returning its URL for the share sheet (L12). The caller owns presenting it.
+    /// Fetches the full data export into a temporary JSON file and returns its URL for the share sheet.
     func exportDataFile() async throws -> URL {
         let data = try await repository.exportUserData()
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("FreeBNB-my-data.json")
@@ -312,11 +293,9 @@ final class UserProfileStore {
         profile(for: userID)?.displayName
     }
 
-    /// Awaits a definitive lookup of a single profile (unlike `profile(for:)`,
-    /// which returns nil immediately and fetches in the background). Used to
-    /// validate that an invite deep link's inviter is a real user before the
-    /// app prompts to send them a friend request. Returns nil if no such user
-    /// exists or the fetch fails.
+    /// Awaits a definitive lookup of one profile (unlike `profile(for:)`, which returns
+    /// nil and fetches in the background), to validate an invite's inviter before
+    /// prompting a friend request. Nil if no such user exists or the fetch fails.
     func fetchProfileOnce(userID: String) async -> UserProfile? {
         if let cached = profileCache[userID] { return cached }
         do {

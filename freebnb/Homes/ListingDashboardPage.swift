@@ -9,8 +9,7 @@
 import SwiftUI
 
 struct ListingDashboardPage: View {
-    // The snapshot the caller navigated with. `listing` below prefers the live
-    // copy from the store so a co-host add/remove is reflected immediately.
+    // The snapshot the caller navigated with; `listing` prefers the store's live copy so co-host changes show immediately.
     private let passedListing: Home
 
     init(listing: Home) {
@@ -33,8 +32,7 @@ struct ListingDashboardPage: View {
 
     // MARK: - Derived data
 
-    /// The live listing from the store, so a roster change reflects here without
-    /// reopening the dashboard. Falls back to the snapshot the caller passed.
+    /// The live listing from the store, falling back to the caller's snapshot.
     private var listing: Home {
         homeStore.managedListings.first { $0.id == passedListing.id } ?? passedListing
     }
@@ -50,7 +48,7 @@ struct ListingDashboardPage: View {
     private var pendingRequests:  [StayRequest] { listingRequests.filter { $0.status == .pending  } }
     private var acceptedRequests: [StayRequest] { listingRequests.filter { $0.status == .accepted } }
     private var pastRequests:     [StayRequest] { listingRequests.filter { !$0.status.isActive   } }
-    /// Offers this host has sent that the friend hasn't answered (feature 43).
+    /// Offers this host sent that the friend hasn't answered.
     private var sentOffers:       [StayRequest] { listingRequests.filter { $0.status == .offered  } }
 
     private var guestIDs: Set<String> { Set(listingRequests.map { $0.guestUserID }) }
@@ -70,18 +68,14 @@ struct ListingDashboardPage: View {
         List {
             listingSummarySection
 
-            // Above co-hosts and offers: blocking dates is the routine upkeep a
-            // host comes back to do, where the others are occasional.
+            // Above co-hosts and offers: blocking dates is the routine upkeep.
             availabilitySection
 
             if isHost {
                 coHostSection
             }
 
-            // The one thing a host can start (feature 43). Above the request
-            // sections on purpose: this page is otherwise entirely a list of
-            // things other people did, which is exactly why a host with an empty
-            // week had no reason to open the app.
+            // The one thing a host can start; above the request sections, since the rest is things other people did.
             if isHost {
                 Section {
                     Button {
@@ -93,10 +87,7 @@ struct ListingDashboardPage: View {
                 }
             }
 
-            // "None came in" and "still arriving" are different answers, and this
-            // screen gave the first one to both. On a cold start or an account
-            // switch the inbox is empty for a round trip, which read to a host as
-            // being told nobody had asked.
+            // "None came in" and "still arriving" differ; on a cold start or account switch the inbox is briefly empty.
             if requestStore.isLoadingIncoming && !hasContent {
                 Section {
                     HStack(spacing: 10) {
@@ -211,8 +202,7 @@ struct ListingDashboardPage: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(Color.accent)
             }
-            // The roster is the host's alone (feature 14); a co-host manages the
-            // listing but does not decide who else does.
+            // The roster is the host's alone; a co-host manages the listing but doesn't decide who else does.
             if isHost {
                 ToolbarItem(placement: .secondaryAction) {
                     Button("Co-hosts") { showCoHosts = true }
@@ -263,8 +253,7 @@ struct ListingDashboardPage: View {
                 .background(listing.hostMotivation.tintColor.opacity(0.12))
                 .clipShape(Capsule())
 
-                // Prefetched for the host's own listings by HomeStore; the zip is
-                // the honest fallback while it loads.
+                // Prefetched by HomeStore for the host's listings; the zip is the fallback while it loads.
                 Text(homeStore.listingLocations[listing.id]?.street ?? listing.address.zip)
                     .font(.subheadline)
                     .foregroundColor(.secondaryText)
@@ -293,14 +282,9 @@ struct ListingDashboardPage: View {
 
     // MARK: - Availability
 
-    /// The blocked calendar, as a row on the page rather than only as a toolbar
-    /// button.
-    ///
-    /// The editor was reachable the whole time, but only from `.secondaryAction`,
-    /// which iOS folds into the "..." overflow menu — so the one control a host
-    /// needs most was the one control with no presence on the page. It keeps its
-    /// toolbar entry; this adds the visible route, and states the current position
-    /// so a host can see whether anything is blocked without opening anything.
+    /// The blocked calendar as a page row. The editor was only in `.secondaryAction`,
+    /// which iOS folds into the overflow menu; this adds the visible route and shows
+    /// whether anything is blocked.
     private var availabilitySection: some View {
         Section("Availability") {
             Button {
@@ -326,9 +310,7 @@ struct ListingDashboardPage: View {
         }
     }
 
-    /// Counts upcoming blocked days, not ranges: "2 periods" means nothing to
-    /// someone deciding whether they have room for a guest next week, and a range
-    /// that started last month would inflate it either way.
+    /// Counts upcoming blocked days, not ranges, which mean little for deciding whether there's room next week.
     private var availabilitySummary: String {
         let blockedDays = AvailabilityCalendar.blockedDays(
             in: AvailabilityCalendar.upcoming(listing.unavailableRanges)
@@ -339,7 +321,7 @@ struct ListingDashboardPage: View {
         return "\(blockedDays.count) upcoming day\(blockedDays.count == 1 ? "" : "s") blocked or booked"
     }
 
-    // MARK: - Co-hosts (feature 14)
+    // MARK: - Co-hosts
 
     @ViewBuilder
     private var coHostSection: some View {
@@ -419,8 +401,7 @@ struct ListingDashboardPage: View {
 
     // MARK: - Actions
 
-    /// Returns nil on success, or the failure message for `AcceptSheet` to show.
-    /// The sheet dismisses itself once this returns nil.
+    /// Returns nil on success, or the failure message for `AcceptSheet`; the sheet dismisses itself on nil.
     private func accept(_ request: StayRequest, hostNote: String?) async -> String? {
         actionError = nil
         do {
@@ -451,9 +432,7 @@ struct ListingDashboardPage: View {
         }
     }
 
-    /// Takes back an offer the friend hasn't answered (feature 43). Posts the
-    /// `cancelled` event, not `declined`: the friend never said no, and a thread
-    /// that claimed they did would be a small lie told about them.
+    /// Takes back an unanswered offer. Posts `cancelled`, not `declined`: the friend never said no.
     private func withdraw(_ request: StayRequest) async {
         actionError = nil
         do {

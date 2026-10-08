@@ -2,10 +2,8 @@
 //  FeedFilters.swift
 //  freebnb
 //
-//  The feed's filter and sort vocabulary, plus the pure filterAndSort pipeline
-//  and the search-paging state machine. Split out of HomesPage.swift so the
-//  view file stays small enough to type-check quickly and the pure logic is
-//  obviously test-facing (FeedOrderingTests, CapacityFacetTests).
+//  The feed's filter and sort vocabulary, the pure filterAndSort pipeline and the
+//  search-paging state machine, split from HomesPage.swift (FeedOrderingTests, CapacityFacetTests).
 //
 
 import SwiftUI
@@ -21,8 +19,7 @@ enum FilterCategory: String, CaseIterable {
     case cancellation = "Cancellation"
 }
 
-// A filter is a (label, category, predicate) triple. Adding a new filter
-// means one line in `FilterOption.all` instead of edits in three places.
+// A filter is a (label, category, predicate) triple; adding one is a line in `FilterOption.all`.
 struct FilterOption: Identifiable, Hashable, Sendable {
     let id: String
     let label: String
@@ -62,7 +59,7 @@ extension FilterOption {
         }
     }
 
-    // Source of truth. Declaration order drives menu order and chip order.
+    // Source of truth; declaration order drives menu and chip order.
     static let all: [FilterOption] = [
         // Host motivation
         FilterOption(id: "notSelective", label: "Available to Host", category: .host) { $0.hostMotivation != .selective },
@@ -73,17 +70,14 @@ extension FilterOption {
         // Guests & Space
         FilterOption(id: "guestRoom", label: "Guest has Private Room", category: .guestsAndSpace) { $0.sleeping.numGuestRooms > 0 },
         FilterOption(id: "sleepingBed", label: "Guest has Bed", category: .guestsAndSpace) { ($0.sleeping.sleepingCounts[.bed] ?? 0) > 0 },
-        // A listing that never recorded a bed size matches neither of these. It
-        // cannot support the claim, and a guest who filters for a queen has said
-        // plainly that a maybe is not good enough (feature 17).
+        // A listing with no recorded bed size matches neither: a guest filtering for a queen wants more than a maybe.
         FilterOption(id: "bedForTwo", label: "Queen or King Bed", category: .guestsAndSpace) { $0.sleeping.hasBedForTwo },
         FilterOption(id: "twoBathrooms", label: "2+ Bathrooms", category: .guestsAndSpace) { $0.sleeping.numBathrooms >= 2 },
         .bool("kidsAllowed", "Kids Allowed", .guestsAndSpace, \.guestPolicy.kidsAllowed),
         .bool("guestPetsAllowed", "Guest Can Bring Pets", .guestsAndSpace, \.guestPolicy.guestPetsAllowed),
         .bool("hostHasPets", "Host Has Pets", .guestsAndSpace, \.amenities.hostHasPets),
 
-        // Accessibility. Each is a claim the host made, so an absent one filters
-        // the listing out rather than admitting it on a guess.
+        // Accessibility: each is a host claim, so an absent one filters the listing out.
         .bool("stepFreeEntry", "Step-free Entry", .accessibility, \.amenities.hasStepFreeEntry),
         .bool("elevator", "Elevator", .accessibility, \.amenities.hasElevator),
         .bool("accessibleBathroom", "Accessible Bathroom", .accessibility, \.amenities.hasAccessibleBathroom),
@@ -127,8 +121,7 @@ extension FilterOption {
 
 enum SortOption: String, CaseIterable, Identifiable {
     case `default`     = "Default"
-    /// Only offered once the city query has geocoded, since without a search
-    /// center there is nothing to be near. See `GeoScope`.
+    /// Only offered once the city query has geocoded, since otherwise there's no center; see `GeoScope`.
     case nearest       = "Nearest"
     case mostEager     = "Most Eager to Host"
     case mostFlexible  = "Most Flexible Cancellation"
@@ -142,10 +135,8 @@ enum SortOption: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// Whether the feed should keep pulling pages on behalf of an active search or
-/// filter. Pure and `Equatable` so the loop's stopping conditions are unit-tested
-/// rather than only observable by scrolling, and so the view can restart its
-/// driving task whenever any input changes.
+/// Whether the feed should keep pulling pages for an active search or filter. Pure
+/// and `Equatable` so stopping conditions are unit-tested and the view can restart its task.
 struct FeedSearchPaging: Equatable {
     var isNarrowing: Bool
     var canLoadMore: Bool
@@ -154,28 +145,21 @@ struct FeedSearchPaging: Equatable {
     var pagesLoaded: Int
     var maxPages: Int
 
-    /// Unfetched pages could still hold matches for the active query. Suppresses
-    /// the empty state, which would otherwise claim there are no results before
-    /// we have looked at all of them.
+    /// Unfetched pages could still hold matches; suppresses the empty state until all are checked.
     var isSearchingRemainingPages: Bool {
         isNarrowing && canLoadMore && (isLoadingMore || pagesLoaded < maxPages)
     }
 
-    /// Stops on `hasError` as well: a failed page leaves `canLoadMore` set, and
-    /// without this the loop would retry the same broken fetch up to the cap.
+    /// Stops on `hasError` too: a failed page leaves `canLoadMore` set and the loop would retry to the cap.
     var shouldFetchNextPage: Bool {
         isSearchingRemainingPages && !isLoadingMore && !hasError
     }
 }
 
-/// The visible list: the incoming feed narrowed by the filter chips, the city or
-/// state query, the saved-only toggle, and the search radius, then reordered by
-/// `sort`. `query` is expected pre-trimmed and lowercased.
-///
-/// `scope` is the geocoded city query and its radius (feature 11). It is nil
-/// whenever there is no query, or the query names nowhere a geocoder recognises —
-/// in which case the radius filter and the `nearest` sort both no-op rather than
-/// emptying the feed over a typo.
+/// The visible list: the feed narrowed by filter chips, city/state query, saved-only
+/// and radius, then sorted. `query` is pre-trimmed and lowercased. `scope` is the
+/// geocoded query and radius; nil with no query or an unrecognised place, where the
+/// radius filter and `nearest` sort no-op rather than emptying the feed over a typo.
 func filterAndSort(
     _ homes: [Home],
     query: String,
@@ -205,14 +189,9 @@ func filterAndSort(
     }
 }
 
-/// Closest to the search center first. Listings with no coordinate sort last
-/// rather than being dropped: with no radius set, "we don't know where this is"
-/// is a reason to rank it low, not to hide it.
-///
-/// Distances are computed once per listing instead of inside the comparator,
-/// which would recompute them O(n log n) times. The comparator falls through to
-/// the listing id so equidistant rows hold a stable order across recomputes, for
-/// the same reason `HomeStore.feed` does.
+/// Closest to the search center first. Listings with no coordinate sort last, not
+/// dropped. Distances are computed once per listing rather than in the comparator,
+/// which falls through to the id for a stable order, as `HomeStore.feed` does.
 private func nearestFirst(_ homes: [Home], scope: GeoScope) -> [Home] {
     homes
         .map { (home: $0, distance: scope.distance(to: $0) ?? .greatestFiniteMagnitude) }

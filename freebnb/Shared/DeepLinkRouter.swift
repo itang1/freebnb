@@ -11,30 +11,20 @@ import Observation
 final class DeepLinkRouter {
     var pendingConversationUserID: String?
 
-    /// A stay-event push (new request / accepted / declined) the user tapped.
-    /// Consumed by ContentView to switch to the Stays tab. Unlike an invite, this
-    /// only navigates — it never mutates data — so acting on it directly is safe.
+    /// A stay-event push the user tapped; ContentView switches to the Stays tab. Navigation-only, so acting on it directly is safe.
     var pendingStayEvent: Bool = false
 
-    /// A saved listing the user opened from Spotlight search (feature 40).
-    /// Consumed by ContentView, which switches to the Listings tab and pushes the
-    /// listing if it's loaded. Navigation-only, so acting on it directly is safe.
+    /// A saved listing opened from Spotlight; ContentView switches to Listings and pushes it if loaded. Navigation-only.
     var pendingListingID: String?
 
-    /// Set when a child view (e.g. the empty feed's "Find Friends" prompt) wants
-    /// to send the user to the Friends tab. Consumed by ContentView, which
-    /// switches tabs and resets this. Navigation-only, so acting on it directly
-    /// is safe.
+    /// Set when a child view (e.g. "Find Friends") wants the Friends tab; ContentView switches and resets it. Navigation-only.
     var pendingFriendsTab: Bool = false
 
-    /// The sender of an invite link the user just opened (`freebnb://invite?from=`).
-    /// ContentView switches to Friends and FriendsPage shows that person's card,
-    /// ready to add. Navigation-only, exactly like the fields above: opening an
-    /// invite never creates an edge, so a forged link can do no more than show
-    /// someone a name they could have searched for.
+    /// The sender of an opened invite link. ContentView switches to Friends and
+    /// FriendsPage shows their card to add. Navigation-only: opening never creates an edge.
     var pendingInviterID: String?
 
-    /// True while any intent above is still waiting to be acted on.
+    /// True while any intent above is waiting to be acted on.
     var hasPendingIntent: Bool {
         pendingConversationUserID != nil
             || pendingStayEvent
@@ -43,32 +33,20 @@ final class DeepLinkRouter {
             || pendingInviterID != nil
     }
 
-    /// Set by `ContentView` when it acts on any of the intents above, and cleared
-    /// when the user signs out.
-    ///
-    /// It exists for one case: a link followed while signed out. Signing in also
-    /// resets the tab to Listings (`selectedTab` is persisted, so a returning
-    /// user would otherwise reopen wherever they left off), and that default must
-    /// not overwrite a destination the user explicitly asked for. Checking both
-    /// this and `hasPendingIntent` makes the outcome the same whichever of the
-    /// two runs first: before the link is consumed the pending flag is set, and
-    /// afterwards this one is.
+    /// Set by `ContentView` when it acts on an intent, cleared on sign-out. It covers
+    /// a link followed while signed out: sign-in resets the tab to Listings and mustn't
+    /// overwrite the requested destination, and checking this and `hasPendingIntent`
+    /// gives the same outcome whichever runs first.
     var didRouteSinceSignIn = false
 
-    /// What an incoming `freebnb://` URL asks for. Parsed apart from the app so
-    /// the routing can be tested without one, and so an unknown host is an
-    /// explicit nil rather than a fallthrough that quietly does something.
+    /// What an incoming `freebnb://` URL asks for. Parsed apart from the app so routing is testable, and an unknown host is an explicit nil.
     enum Route: Equatable {
         case stays
-        /// `senderID` is nil for a link that names nobody: an older invite, or
-        /// one shared before the sender's profile had loaded.
+        /// `senderID` is nil for a link naming nobody (an older invite, or shared before the profile loaded).
         case invite(senderID: String?)
     }
 
-    /// Both shapes an invite arrives in: the `https` Universal Link that invites
-    /// carry now, and the `freebnb://` scheme they used to. Links already sent
-    /// keep working, and the web landing page falls back to the scheme when the
-    /// Universal Link didn't open the app.
+    /// Both invite shapes: the `https` Universal Link and the older `freebnb://` scheme, which the web page falls back to.
     static func route(for url: URL) -> Route? {
         switch url.scheme {
         case InviteCopy.customScheme:
@@ -81,9 +59,7 @@ final class DeepLinkRouter {
                 return nil
             }
         case "https":
-            // Only this host and path. A Universal Link is only delivered for the
-            // domains the app claims, but the same URL can also arrive from a
-            // pasted string, so the check is made here rather than assumed.
+            // Only this host and path; a pasted string can reach here, so check rather than assume.
             guard url.host == InviteCopy.webHost,
                   normalizedPath(url) == InviteCopy.webPath
             else { return nil }
@@ -93,17 +69,14 @@ final class DeepLinkRouter {
         }
     }
 
-    /// Treats `/i/` and `/i` as the same path, since a browser or a share sheet
-    /// may add the trailing slash.
+    /// Treats `/i/` and `/i` as the same path, since browsers and share sheets may add the slash.
     private static func normalizedPath(_ url: URL) -> String {
         let path = url.path
         guard path.count > 1, path.hasSuffix("/") else { return path }
         return String(path.dropLast())
     }
 
-    /// The sender named by the link, or nil. An empty value (`?from=`) reads as
-    /// absent, so a link built before the sender's profile loaded still opens
-    /// Friends rather than resolving nobody.
+    /// The sender named by the link, or nil; an empty `?from=` reads as absent so it still opens Friends.
     private static func inviter(in url: URL) -> String? {
         let senderID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?
@@ -112,9 +85,7 @@ final class DeepLinkRouter {
         return senderID?.isEmpty == false ? senderID : nil
     }
 
-    /// Applies a parsed route. Every case here only navigates; none of them
-    /// writes anything, which is what makes acting on a link the user tapped
-    /// safe without a confirmation.
+    /// Applies a parsed route. Every case only navigates and writes nothing, so acting on a tapped link needs no confirmation.
     func handle(_ route: Route) {
         switch route {
         case .stays:
