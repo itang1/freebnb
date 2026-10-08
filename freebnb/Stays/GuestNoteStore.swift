@@ -2,18 +2,11 @@
 //  GuestNoteStore.swift
 //  freebnb
 //
-//  The guest's own notes on the hosts they stay with and the listings they
-//  consider. Guest-side only, in the strong sense: no screen the host can reach
-//  touches this store, and there is no derived value here that any other user's
-//  device could observe.
-//
-//  What this store deliberately does not do is as much of the design as what it
-//  does, exactly as in `FriendNoteStore`. It does not count notes into a score,
-//  does not expose "how many notes about this host" to anything that ranks or
-//  sorts, does not tell the host anything, and never feeds a report. A note is
-//  something the guest reads and then decides for themselves; the moment it feeds
-//  a number or reaches a moderator, it has become something this feature exists
-//  instead of.
+//  The guest's own notes on hosts and listings. Guest-side only: no screen the host can
+//  reach touches this store and nothing derived is observable from another device.
+//  As in `FriendNoteStore`, what it doesn't do is part of the design: no scores, no
+//  "notes about this host" count for ranking, nothing told to the host, nothing fed to
+//  a report.
 //
 
 import FirebaseAuth
@@ -25,16 +18,12 @@ import os
 @MainActor
 @Observable
 final class GuestNoteStore {
-    /// Every note this guest has written, newest first, across all hosts and
-    /// listings.
+    /// Every note this guest wrote, newest first, across all hosts and listings.
     private(set) var notes: [GuestNote] = []
-    /// Stay ids whose post-trip prompt the guest has already answered or waved
-    /// off.
+    /// Stay ids whose post-trip prompt was answered or waved off.
     private(set) var seenPrompts: Set<String> = []
     private(set) var listenerError: String?
-    /// False until the notes listener has delivered a first snapshot. The
-    /// post-trip prompt waits on it, so a guest isn't asked about a trip they
-    /// already wrote a note for while that note is still in flight.
+    /// False until the first notes snapshot; the prompt waits on it so a guest isn't asked about a trip they've already noted.
     private(set) var hasLoaded = false
 
     @ObservationIgnored private let repository: GuestNoteRepository
@@ -61,28 +50,22 @@ final class GuestNoteStore {
 
     // MARK: - Derived views
 
-    /// The notes about one subject — a host or a listing — newest first. The
-    /// only accessor any screen needs, and the only shape a note is ever read in.
+    /// The notes about one host or listing, newest first; the only shape a note is read in.
     func notes(about type: GuestNoteSubjectType, _ subjectID: String) -> [GuestNote] {
         notes.about(type, subjectID)
     }
 
-    /// The most recent note about one subject, for the one-line preview on its
-    /// screen. Nil when there are none.
+    /// The most recent note about one subject, for its one-line preview; nil when none.
     func mostRecentNote(about type: GuestNoteSubjectType, _ subjectID: String) -> GuestNote? {
         notes(about: type, subjectID).first
     }
 
-    /// Whether this guest has already written something about `stayRequestID`.
-    /// Used only to stop asking twice — never to mark a trip as "reviewed", and
-    /// never surfaced to the other party.
+    /// Whether this guest already wrote something about `stayRequestID`; only to avoid asking twice, never surfaced.
     func hasNote(forStayRequestID stayRequestID: String) -> Bool {
         notes.contains { $0.stayRequestID == stayRequestID }
     }
 
-    /// Whether the lightweight post-trip prompt still has anything to ask about
-    /// this stay. Once the guest writes a note or waves the prompt off, it is
-    /// done for good.
+    /// Whether the post-trip prompt still has anything to ask about this stay; done for good once a note is written or waved off.
     func shouldPrompt(forStayRequestID stayRequestID: String) -> Bool {
         hasLoaded
             && !seenPrompts.contains(stayRequestID)
@@ -108,9 +91,7 @@ final class GuestNoteStore {
                     self.notes = notes
                     self.listenerError = nil
                 case .failure(let error):
-                    // Never logs a note's text or its subject: the log is the one
-                    // place a private note could leak to somewhere the rules
-                    // don't reach.
+                    // Never logs a note's text or subject: the log is the one place a private note could leak.
                     self.log.error("notes listener: \(error.localizedDescription, privacy: .public)")
                     self.listenerError = error.localizedDescription
                 }
@@ -128,12 +109,8 @@ final class GuestNoteStore {
 
     // MARK: - Actions
 
-    /// Writes a note about a host or a listing. `stayRequestID` is context, not a
-    /// requirement: a guest noticing something about a place they haven't booked
-    /// should not have to find a visit to file it under.
-    ///
-    /// A guest never keeps a `host` note about themselves — the composer never
-    /// offers it, and the rules refuse it — so that one case is guarded here too.
+    /// Writes a note about a host or listing. `stayRequestID` is context, not required.
+    /// A `host` note about oneself is guarded here too (the composer and rules refuse it).
     func addNote(
         about type: GuestNoteSubjectType,
         _ subjectID: String,
@@ -147,9 +124,7 @@ final class GuestNoteStore {
             guestID: guestID,
             GuestNote(subjectType: type, subjectID: subjectID, text: body, stayRequestID: stayRequestID)
         )
-        // Writing about a trip answers that trip's prompt, so it never comes
-        // back. Best-effort: a failure here costs one redundant prompt, which is
-        // not worth failing the note the guest actually wrote.
+        // Writing answers the trip's prompt for good; best-effort, since failure costs only a redundant prompt.
         if let stayRequestID {
             try? await repository.markPromptSeen(guestID: guestID, stayRequestID: stayRequestID)
         }
@@ -171,14 +146,10 @@ final class GuestNoteStore {
         try await repository.deleteNote(guestID: guestID, noteID: id)
     }
 
-    /// Waves off the post-trip prompt for one stay. Not a decision about the host
-    /// and not recorded as one — it means "don't ask me about this trip again",
-    /// and the guest can still add a note from the host's or the listing's screen
-    /// whenever they like.
+    /// Waves off the post-trip prompt for one stay ("don't ask again"), not a judgement of the host; notes stay writable elsewhere.
     func dismissPrompt(forStayRequestID stayRequestID: String) async {
         guard !guestID.isEmpty else { return }
-        // Optimistic, so the row leaves under the tap rather than after a round
-        // trip. The listener confirms it a moment later.
+        // Optimistic, so the row leaves under the tap; the listener confirms.
         seenPrompts.insert(stayRequestID)
         do { try await repository.markPromptSeen(guestID: guestID, stayRequestID: stayRequestID) }
         catch { log.error("dismiss note prompt: \(error.localizedDescription, privacy: .public)") }

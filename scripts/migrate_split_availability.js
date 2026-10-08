@@ -3,43 +3,33 @@
 // One-off migration that takes a listing's calendar off the world-readable
 // document.
 //
-// Listings used to publish `blockedDateRanges` and `bookedDateRanges` side by
-// side on `homes/{id}`. Firestore grants reads per document and never per
-// field, so every viewer of a listing — the host's accepted friends, which is
-// to say every guest who can see it at all — received both arrays and could
-// subtract one from the other to learn exactly which nights the home was
-// occupied. The UI merged them on screen; the wire never did.
+// Listings used to publish `blockedDateRanges` and `bookedDateRanges` side by side
+// on `homes/{id}`. Firestore grants reads per document, so every guest who could see
+// a listing could subtract one from the other and learn which nights were occupied.
 //
 // After this script:
 //
 //   homes/{id}                       unavailableDateRanges: blocked ++ booked
 //   homes/{id}/private/availability  blockedDateRanges, bookedDateRanges
 //
-// and the two legacy fields are deleted from the public document. The private
-// document is readable only by the listing's managers — not by accepted guests,
-// who get `location` and `manual` but have no business here.
+// and the legacy fields are deleted from the public document. The private document
+// is readable only by the listing's managers, not accepted guests.
 //
-// ORDER: deploy firestore.rules BEFORE running this. The new rules drop the two
-// legacy keys from the listing's write allowlist, so a client that still tried
-// to write them is rejected rather than quietly re-publishing what this removes.
-// The iOS client reads either shape (it falls back to the union of the legacy
-// pair when `unavailableDateRanges` is absent), so between deploy and migration
-// nothing is lost and nothing is over-shared that wasn't already.
+// ORDER: deploy firestore.rules BEFORE running this; the new rules reject clients
+// still writing the legacy keys. The iOS client reads either shape, so nothing is
+// lost or over-shared in between.
 //
-// IDEMPOTENT: a listing that already carries `unavailableDateRanges` and no
-// legacy fields is skipped. Safe to re-run after a partial failure.
+// Idempotent: a listing with `unavailableDateRanges` and no legacy fields is skipped.
 //
-// SAFE BY DEFAULT: targets the Local Emulator Suite only. It refuses to touch
-// the real freebnb-6814a project unless you pass --prod AND set
-// MIGRATE_CONFIRM_PROD=1.
+// Targets the Local Emulator Suite only; it refuses the real freebnb-6814a project
+// unless you pass --prod AND set MIGRATE_CONFIRM_PROD=1.
 //
 // Usage:
 //   node scripts/migrate_split_availability.js              # emulator
 //   node scripts/migrate_split_availability.js --dry-run    # print, write nothing
 //   MIGRATE_CONFIRM_PROD=1 node scripts/migrate_split_availability.js --prod
 //
-// Requires firebase-admin (shared with functions/node_modules, like the other
-// scripts here).
+// Requires firebase-admin (shared with functions/node_modules).
 
 "use strict";
 
@@ -59,12 +49,9 @@ if (!useProd) {
   process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "localhost:8080";
 }
 
-// The functions copy first, deliberately. This script is written against the
-// namespaced v10 API (`admin.firestore()`, `admin.firestore.Timestamp`), and the
-// repo root also carries a firebase-admin v14, whose modular API exposes no
-// `.firestore()` on the root export. Requiring bare picks up v14 and dies at the
-// first call, so the pinned copy wins and the bare require is only a fallback for
-// a checkout without functions/node_modules installed.
+// The functions copy first, deliberately: this script uses the namespaced v10 API,
+// and the root's firebase-admin v14 has no `.firestore()` on its root export. The
+// bare require is only a fallback.
 let admin;
 try {
   admin = require(path.join(__dirname, "..", "functions", "node_modules", "firebase-admin"));
@@ -76,8 +63,7 @@ admin.initializeApp({ projectId: "freebnb-6814a" });
 const db = admin.firestore();
 
 const PAGE_SIZE = 200;
-// Mirrors isOptionalList(data, 'unavailableDateRanges', 200) in firestore.rules,
-// itself the sum of the two former per-field caps.
+// Mirrors isOptionalList(data, 'unavailableDateRanges', 200) in firestore.rules (the sum of the two former caps).
 const UNION_CAP = 200;
 
 /** A stored range is a map of two timestamps; anything else is not one. */
@@ -116,14 +102,12 @@ async function main() {
         data.blockedDateRanges !== undefined || data.bookedDateRanges !== undefined;
       const hasMerged = data.unavailableDateRanges !== undefined;
 
-      // Already migrated, and nothing left behind to clean up.
+      // Already migrated; nothing to clean up.
       if (!hasLegacy && hasMerged) {
         skipped++;
         continue;
       }
-      // A listing that never blocked or booked a day has no availability at all.
-      // Nothing to move, and writing an empty private document would only create
-      // a document where none is needed.
+      // No blocked or booked days means no availability at all; don't create an empty private document.
       if (!hasLegacy && !hasMerged) {
         skipped++;
         continue;
@@ -142,11 +126,8 @@ async function main() {
       migrated++;
       if (dryRun) continue;
 
-      // The private document first: it becomes the source of truth, and the
-      // public field is only a cache of the union. A crash between the two
-      // leaves the truth written and the cache stale, which the next
-      // availability edit or stay change repairs. The other order would leave
-      // the halves nowhere.
+      // Private document first: it's the source of truth and the public field is a
+      // cache, so a crash between leaves the next edit to repair the cache.
       batch.set(
         doc.ref.collection("private").doc("availability"),
         { blockedDateRanges: blocked, bookedDateRanges: booked },
