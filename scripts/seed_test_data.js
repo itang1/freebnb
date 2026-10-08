@@ -1,35 +1,26 @@
 #!/usr/bin/env node
 //
-// Seeds the Firebase Auth + Firestore emulators with a handful of test users,
-// listings, and stay requests so the app has data to click through without
-// hand-creating accounts through the UI every time.
+// Seeds the Auth + Firestore emulators with test users, listings and stay requests.
 //
-// SAFE BY DEFAULT: targets the Local Emulator Suite only. It refuses to touch
-// the real freebnb-6814a project unless you pass --prod AND set
-// SEED_CONFIRM_PROD=1.
-//
-// --prod seeds data only and never touches an existing Auth password, so
-// editing prod's demo content needs no secret. Pass --rotate-passwords (with
-// SEED_PROD_PASSWORD) on the rare run that should reset the cast's sign-in:
-// the cast is real in prod, this file is public, and a password committed here
-// would be an open door to every listing the cast can see.
+// Targets the Local Emulator Suite only. It refuses the real freebnb-6814a project
+// unless you pass --prod AND set SEED_CONFIRM_PROD=1. --prod seeds data only and
+// never touches an existing Auth password; pass --rotate-passwords (with
+// SEED_PROD_PASSWORD) to reset the cast's sign-in. The cast is real in prod and
+// this file is public, so no password is committed for it.
 //
 // Usage:
 //   1. firebase emulators:start --only auth,firestore
 //   2. node scripts/seed_test_data.js
 //
-// Pass --reset (alias --reset-homes) to wipe the demo-content collections before
-// seeding: homes (with their private/location and accepted subcollections),
-// stayRequests, friendEdges, conversations, and messages. This clears legacy data
-// that predates the current schema so the demo starts clean. It deliberately does
-// NOT delete `users` or Auth accounts. Against prod it still requires
-// SEED_CONFIRM_PROD=1.
+// --reset (alias --reset-homes) first wipes the demo-content collections (homes with
+// their private/location and accepted subcollections, stayRequests, friendEdges,
+// conversations, messages) to clear legacy data. It never deletes `users` or Auth
+// accounts, and still needs SEED_CONFIRM_PROD=1 against prod:
 //
 //   SEED_CONFIRM_PROD=1 node scripts/seed_test_data.js --prod --reset
 //
-// Requires `npm install firebase-admin` once, run from the repo root (or from
-// functions/, which already depends on it — this script also works if you
-// point NODE_PATH at functions/node_modules).
+// Requires `npm install firebase-admin` once from the repo root (or point NODE_PATH
+// at functions/node_modules).
 
 "use strict";
 
@@ -47,26 +38,15 @@ if (useProd && process.env.SEED_CONFIRM_PROD !== "1") {
   process.exit(1);
 }
 
-// The cast's sign-in password.
-//
-// An emulator account is a throwaway on a local port, so its password protects
-// nothing and lives here in the open — TestProfiles.swift hardcodes the same
-// value for the DEBUG sign-in buttons, and the two have to agree.
-//
-// Production is the opposite: those accounts are real, hold real friend edges,
-// and see real friends-only listings — and this file is public. A committed
-// password would be an open front door, which is exactly what it was until
-// 2026-07-16. So --prod refuses to run without SEED_PROD_PASSWORD and never
-// falls back to the value below. Keep that secret out of the repo (a password
-// manager, or `read -s`), and note that anyone who learns it gets whatever the
-// cast can see.
+// The cast's sign-in password. On the emulator it protects nothing and lives here
+// in the open; TestProfiles.swift hardcodes the same value for the DEBUG sign-in
+// buttons, so they must agree. In prod the accounts are real and this file is
+// public, so --prod refuses to run without SEED_PROD_PASSWORD and never falls back
+// to the value below (a committed password was an open door until 2026-07-16).
 const EMULATOR_PASSWORD = "emulator-only";
 
-// Editing prod's demo data is routine; rotating the cast's password is not.
-// Those used to be the same operation, so every content fix demanded the
-// secret and reset 16 real accounts as a side effect. They're split now:
-// --prod alone leaves Auth passwords untouched, and --rotate-passwords is the
-// explicit opt-in that changes them.
+// Editing prod's demo data and rotating the cast's password are separate: --prod alone
+// leaves Auth passwords untouched, and --rotate-passwords is the explicit opt-in.
 const rotatePasswords = process.argv.includes("--rotate-passwords");
 const prodPassword = process.env.SEED_PROD_PASSWORD;
 if (useProd && rotatePasswords && !prodPassword) {
@@ -84,8 +64,7 @@ if (useProd && rotatePasswords && prodPassword.length < 6) {
   console.error("SEED_PROD_PASSWORD must be at least 6 characters.");
   process.exit(1);
 }
-// Emulator accounts protect nothing, so they always get the shared throwaway.
-// In prod a password is only ever written on an explicit rotation.
+// Emulator accounts always get the shared throwaway; in prod a password is written only on explicit rotation.
 const castPassword = useProd ? prodPassword : EMULATOR_PASSWORD;
 const writesPasswords = !useProd || rotatePasswords;
 
@@ -94,13 +73,9 @@ if (!useProd) {
   process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || "localhost:9099";
 }
 
-// Use the modular firebase-admin API (getAuth/getFirestore, v10+). The legacy
-// namespaced accessors (admin.auth(), admin.firestore.FieldValue) were removed
-// in firebase-admin v13, so a repo-root `npm install firebase-admin` (which now
-// pulls v14) made this script crash on load and seed nothing. Prefer a
-// firebase-admin at the repo root; fall back to the copy in functions/, which
-// always depends on it. createRequire from functions/package.json resolves the
-// `firebase-admin/*` subpaths through that package's exports map.
+// Uses the modular firebase-admin API (v10+); the namespaced accessors were removed
+// in v13, so a root `npm install firebase-admin` crashed this script. Prefers the
+// root copy and falls back to functions/'s via createRequire.
 let adminRequire = require;
 try {
   require.resolve("firebase-admin/app");
@@ -117,18 +92,14 @@ const db = getFirestore();
 
 const now = FieldValue.serverTimestamp();
 
-// `savedListingIDs` and `blockedUserIDs` are optional per-user overrides written
-// into the private profile; omitted means an empty list. They let the seed mimic
-// a lived-in account (bookmarks, a block) rather than a pristine one.
+// `savedListingIDs` and `blockedUserIDs` are optional overrides for the private
+// profile (default empty), so the seed can mimic a lived-in account.
 //
-// The dev and guest-tester accounts match the DEBUG-only "Sign in as devna" /
-// "Sign in as guest" buttons (WelcomePage, ProfilePage). Both are real,
-// persistent seed users rather than throwaway anonymous Auth accounts, so
-// "browsing without an account" never creates a real account connected to
-// nobody — it signs into a fixed account connected only to the SpongeBob
-// cast. seedFriendEdges makes each an accepted friend of every other seed
-// user (S1), so both can browse friends-only listings while testing; those
-// listings also name them in allowedViewerIDs so the rules let them through.
+// The dev and guest-tester accounts match the DEBUG "Sign in as devna" / "Sign in as
+// guest" buttons. They're persistent seed users, so "browsing without an account"
+// never creates a real account; it signs into a fixed one connected only to the
+// SpongeBob cast. seedFriendEdges makes each an accepted friend of every other seed
+// user, and their listings name them in allowedViewerIDs so the rules let them through.
 const DEV_UID = "seed-dev-tester";
 const GUEST_UID = "seed-guest-tester";
 const TEST_ACCOUNT_UIDS = [DEV_UID, GUEST_UID];
@@ -151,9 +122,8 @@ const users = [
   { uid: "seed-guest-barnacleboy", email: "barnacleboy@seed.freebnb.test", displayName: "Barnacle Boy" }
 ];
 
-// The accessibility trio (feature 17) is false here on purpose: most hosts have
-// not answered, and `false` means "did not say", never "said no". Seeding it true
-// everywhere would make the accessibility filters look like they match anything.
+// The accessibility trio is false on purpose: `false` means "did not say", and seeding
+// true everywhere would make the filters match anything.
 const amenities = {
   hasAC: true, hasHeating: true, hasKitchen: true, hasFridgeSpace: true,
   hasMicrowave: true, hasTV: false, hasWifi: true,
@@ -164,9 +134,8 @@ const amenities = {
   hasStepFreeEntry: false, hasElevator: false, hasAccessibleBathroom: false
 };
 
-// A cozier, fully-stocked variant: TV, all meals, toiletries, coin laundry nearby.
-// Also the ground-floor, step-free listing, so the accessibility filters have
-// something to return in the demo.
+// A cozier, fully-stocked variant (TV, all meals, toiletries, coin laundry nearby),
+// also the ground-floor, step-free listing so the accessibility filters return something.
 const cozyAmenities = {
   ...amenities, hasTV: true, hasInUnitLaundry: false, hasCoinLaundryNearby: true,
   providesToiletries: true, foodProvision: "all", parkingDetails: "Driveway parking",
@@ -182,18 +151,14 @@ const sparseAmenities = {
   hasElevator: true
 };
 
-// `address` is the city-level part only. The read ACL (`allowedViewerIDs`) is
-// not written here: seedHomes() computes it from the seeded friend graph (host
-// + accepted friends), exactly as rebuildListingACLs does in production. Each
-// listing's street and exact coordinates are seeded separately into
-// homes/{id}/private/location.
+// `address` is city-level only. The read ACL (`allowedViewerIDs`) is computed in
+// seedHomes() from the friend graph, as rebuildListingACLs does in production. Each
+// listing's street and exact coordinates are seeded into homes/{id}/private/location.
 //
-// The street + latitude/longitude below are REAL, geocoded addresses (mostly
-// well-known public places), so the map pin and the "Open in Apple Maps" button
-// land on an actual location. HomeDetailPage opens the stored coordinate, not the
-// address string, so the two must stay consistent: if you change a street, re-
-// geocode it and update the coordinate to match (don't hand-edit one without the
-// other). The public homes/{id} doc gets the coordinate rounded by approximate().
+// Streets and coordinates are real geocoded addresses so the map pin and "Open in
+// Apple Maps" land somewhere real. HomeDetailPage opens the stored coordinate, so if
+// you change a street, re-geocode it and update the coordinate to match. The public
+// doc gets the coordinate rounded by approximate().
 const homes = [
   {
     id: "seed-home-spongebob-1",
@@ -226,18 +191,15 @@ const homes = [
     guestPolicy: { maxGuests: 1, maxStayDays: 3, kidsAllowed: false, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "moderate",
-    // SpongeBob co-hosts this one (feature 14): he and Sandy are accepted
-    // friends, which the rules require. Sign in as sandy to manage the roster, or
-    // as spongebob to see it under "Listings you co-host" and edit its details.
+    // SpongeBob co-hosts this one (he and Sandy are friends, as the rules require).
+    // Sign in as sandy to manage the roster, or spongebob to edit its details.
     coHostUserIDs: ["seed-host-spongebob"]
   },
   {
     id: "seed-home-squidward-1",
     hostUserID: "seed-host-squidward",
     hostName: "Squidward Tentacles",
-    // A host with two listings collides on the "<hostName>'s place" fallback, so
-    // both read identically in the request sheet and the chat banner. Every
-    // doubled-up host below carries a title to keep the two apart.
+    // A host with two listings collides on the "<hostName>'s place" fallback, so each doubled-up host carries a title.
     title: "The Clarinet Suite",
     address: { city: "New Orleans", state: "LA", zip: "70116" },
     location: { street: "1132 Royal Street", latitude: 29.9614606, longitude: -90.0615030 },
@@ -361,10 +323,7 @@ const homes = [
     guestPolicy: { maxGuests: 2, maxStayDays: 5, kidsAllowed: true, guestPetsAllowed: false },
     amenities,
     cancellationPolicy: "moderate",
-    // The middle tier (feature 7). The ACL below is only the first degree, which
-    // is all a client could ever compute; `rebuildListingACLs` widens it to the
-    // second degree once the functions run. Until then it behaves as friendsOnly,
-    // which is the safe direction to be wrong in.
+    // The ACL below is only the first degree, all a client can compute; it behaves as friends-only, the safe direction to be wrong in.
   },
   {
     id: "seed-home-squidward-2",
@@ -456,9 +415,7 @@ function approximate(value) {
   return Math.round(value * 100) / 100;
 }
 
-// Mirror of Geohash.encode(...) in Swift: the base-32 geohash of the blurred
-// public coordinate, used as the proximity index key (feature 11). Keep the
-// alphabet and precision in sync with the Swift implementation.
+// Mirror of Geohash.encode(...) in Swift, the proximity index key; keep alphabet and precision in sync.
 const GEOHASH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz";
 function geohashEncode(latitude, longitude, precision = 6) {
   let latRange = [-90, 90];
@@ -496,15 +453,10 @@ function daysFromNow(n) {
 // How many months of blocked second weeks every seeded listing carries.
 const BLOCKED_SECOND_WEEK_MONTHS = 12;
 
-// The 8th through the 14th of each of the next `BLOCKED_SECOND_WEEK_MONTHS`
-// months, starting with the current one. Uniform across the cast on purpose:
-// whichever character you sign in as, the home you try to book has the same
-// stretch greyed out, so the request sheet's conflict path is one tap away
-// instead of something you have to set up by hand first. Sitting in the second
-// week rather than the first leaves bookable days on both sides of the block.
-//
-// Half-open [start, end) to match DateRange in Swift, so an end of the 15th at
-// midnight blocks the 14th and leaves the 15th bookable.
+// The 8th through 14th of each of the next `BLOCKED_SECOND_WEEK_MONTHS` months,
+// starting with the current one. Uniform across the cast so the request sheet's
+// conflict path is one tap away, leaving bookable days on both sides. Half-open
+// [start, end) like DateRange in Swift.
 function secondWeekBlocks() {
   const ranges = [];
   const today = new Date();
@@ -519,10 +471,8 @@ function secondWeekBlocks() {
 async function seedUsers() {
   const strandedUIDs = [];
   for (const u of users) {
-    // A brand-new account needs some password at creation time. On a run that
-    // isn't rotating, use an unguessable throwaway nobody records rather than
-    // inventing a shared one: the doc gets seeded, and the account waits for a
-    // real --rotate-passwords run before anyone can sign into it.
+    // A new account needs some password at creation. When not rotating, use an
+    // unguessable throwaway that nobody records until a real --rotate-passwords run.
     const born = writesPasswords ? castPassword : require("crypto").randomUUID();
     await auth.createUser({ uid: u.uid, email: u.email, password: born, displayName: u.displayName })
       .then(() => {
@@ -530,11 +480,8 @@ async function seedUsers() {
       })
       .catch(async (err) => {
         if (err.code !== "auth/uid-already-exists") throw err;
-        // createUser sets a password; it never resets one. Without this, an
-        // account that already exists keeps whatever password it was born with
-        // forever — which is how the cast went on answering to a committed
-        // password in prod. Passing `password` here makes a re-run a rotation,
-        // so it's included only when that's what was asked for.
+        // createUser never resets a password, so existing accounts kept theirs forever.
+        // Passing `password` makes a re-run a rotation, so include it only when asked.
         await auth.updateUser(u.uid, {
           email: u.email,
           displayName: u.displayName,
@@ -543,8 +490,7 @@ async function seedUsers() {
       });
     await db.collection("users").doc(u.uid).set({
       displayName: u.displayName,
-      // The name-search index the app queries; without it the seeded cast is
-      // invisible to friend search (see scripts/search_terms.js).
+      // The name-search index the app queries; without it the cast is invisible to friend search.
       searchTerms: searchTerms(u.displayName),
       createdAt: now,
       updatedAt: now
@@ -569,9 +515,8 @@ async function seedUsers() {
   }
 }
 
-// Recursively deletes a whole collection (documents plus any subcollections).
-// Uses recursiveDelete where available (admin SDK 10+); otherwise sweeps the
-// subcollections manually. Returns the number of top-level docs removed.
+// Recursively deletes a whole collection (documents plus subcollections), using
+// recursiveDelete where available. Returns the number of top-level docs removed.
 async function deleteCollection(name) {
   const ref = db.collection(name);
   const snapshot = await ref.get();
@@ -590,12 +535,10 @@ async function deleteCollection(name) {
   return snapshot.size;
 }
 
-// Clears the demo-content collections before re-seeding: listings (and their
-// private/location + accepted subcollections), plus the stay requests, friend
-// edges, conversations, and messages that reference them. Deliberately does NOT
-// touch `users` or Auth accounts — those can include real sign-ins, and orphaned
-// profiles are harmless. This is what wipes the pre-migration legacy data so the
-// demo starts from a clean, consistent state.
+// Clears the demo-content collections before re-seeding: listings (with their
+// private/location and accepted subcollections) and the stay requests, friend edges,
+// conversations and messages that reference them. Never touches `users` or Auth
+// accounts, which can include real sign-ins.
 async function resetDemoData() {
   const collections = ["homes", "stayRequests", "friendEdges", "conversations", "messages", "reviews", "references"];
   for (const name of collections) {
@@ -604,8 +547,7 @@ async function resetDemoData() {
   }
 }
 
-// The accepted friends of one user, read from the `friendEdges` array below —
-// the seed-side twin of the Cloud Function's acceptedFriendsOf().
+// The accepted friends of one user, the seed-side twin of the Cloud Function's acceptedFriendsOf().
 function seededFriendsOf(userID) {
   return friendEdges
     .filter((e) => e.status === "accepted" && (e.userA === userID || e.userB === userID))
@@ -615,24 +557,17 @@ function seededFriendsOf(userID) {
 async function seedHomes() {
   for (const home of homes) {
     const { location, ...publicListing } = home;
-    // Friends-only: the ACL is always host + accepted friends, same as
-    // rebuildListingACLs writes in production.
+    // Friends-only: host + accepted friends, as rebuildListingACLs writes.
     publicListing.allowedViewerIDs = [...new Set([home.hostUserID, ...seededFriendsOf(home.hostUserID)])];
     publicListing.latitude = approximate(location.latitude);
     publicListing.longitude = approximate(location.longitude);
     publicListing.geohash = geohashEncode(publicListing.latitude, publicListing.longitude);
-    // Availability is stored twice on purpose: the halves privately, where only
-    // the listing's managers can read them, and their union on the public
-    // document. Seeding only the public field would leave the host's editor
-    // showing an empty calendar; seeding only the private one would leave guests
-    // seeing the listing as wide open.
-    //
-    // Host-blocked, not booked: the booked half is server-owned and recomputed
-    // from accepted stays, so seeding into it would just be overwritten.
+    // Availability is stored twice on purpose: the halves privately for managers and
+    // their union on the public document. Host-blocked only; the booked half is
+    // recomputed from accepted stays, so seeding it would be overwritten.
     const blocked = secondWeekBlocks();
     publicListing.unavailableDateRanges = blocked;
-    // The feed orders by createdAt, and an order-by excludes docs missing the
-    // field, so a seeded listing without one never shows. Stamp it (L3).
+    // The feed orders by createdAt and excludes docs missing it, so stamp it.
     publicListing.createdAt = now;
     await db.collection("homes").doc(home.id).set(publicListing, { merge: true });
     await db.collection("homes").doc(home.id)
@@ -644,8 +579,7 @@ async function seedHomes() {
   console.log(`Seeded ${homes.length} listings.`);
 }
 
-// Builds a stay-request document, pulling the denormalized listing city and host
-// name straight off the listing so they never drift from the home they point at.
+// Builds a stay-request document, taking the listing city and host name from the listing so they can't drift.
 function stayRequest({ id, listingID, guestUserID, checkInDays, checkOutDays, status, guestNote = null, hostNote = null }) {
   const home = homesByID[listingID];
   if (!home) throw new Error(`stayRequest references unknown listing ${listingID}`);
@@ -653,8 +587,7 @@ function stayRequest({ id, listingID, guestUserID, checkInDays, checkOutDays, st
     id,
     listingID,
     listingCity: home.address.city,
-    // Snapshotted like the city so a host thread, which is shared across all of
-    // their listings, can say which home the request is for.
+    // Snapshotted like the city, so a host thread shared across listings can say which home it's for.
     listingTitle: home.title ?? null,
     listingHostName: home.hostName,
     hostUserID: home.hostUserID,
@@ -664,16 +597,14 @@ function stayRequest({ id, listingID, guestUserID, checkInDays, checkOutDays, st
     guestNote,
     hostNote,
     status,
-    // A completed stay is one that finished; it is what unlocks reviews and what
-    // trustStats counts (feature 4). Everything else has no completion time.
+    // A completed stay unlocks reviews and counts in trustStats; others have no completion time.
     ...(status === "completed" ? { completedAt: now } : {}),
     createdAt: now,
     updatedAt: now
   };
 }
 
-// A spread of guests, hosts, and statuses so the Stays tab shows every state:
-// pending (awaiting host), accepted (confirmed), declined, and cancelled.
+// A spread of guests, hosts and statuses so the Stays tab shows every state.
 const stayRequests = [
     stayRequest({ id: "seed-request-pending", listingID: "seed-home-spongebob-1", guestUserID: "seed-guest-patrick",
       checkInDays: 7, checkOutDays: 9, status: "pending", guestNote: "Excited to visit, buddy!" }),
@@ -695,16 +626,14 @@ const stayRequests = [
       checkInDays: 12, checkOutDays: 15, status: "accepted", guestNote: "A little vacation from Texas heat.", hostNote: "Money's money. See you in Miami." }),
     stayRequest({ id: "seed-request-neptune-squidward2", listingID: "seed-home-squidward-2", guestUserID: "seed-host-neptune",
       checkInDays: 40, checkOutDays: 42, status: "pending", guestNote: "A king requires the finest suite." }),
-    // Finished stays, so the Stays tab has something to review and the profiles
-    // have reputations to show. Their dates are in the past, as completion requires.
+    // Finished stays, so the Stays tab has something to review and profiles have reputations; dates are past.
     stayRequest({ id: "seed-request-completed-patrick-krabs", listingID: "seed-home-krabs-1", guestUserID: "seed-guest-patrick",
       checkInDays: -30, checkOutDays: -27, status: "completed", guestNote: "Is mayonnaise an instrument?", hostNote: "It is not." }),
     stayRequest({ id: "seed-request-completed-sandy-spongebob", listingID: "seed-home-spongebob-1", guestUserID: "seed-host-sandy",
       checkInDays: -20, checkOutDays: -17, status: "completed", guestNote: "Y'all got a spare room?", hostNote: "Always!" }),
     stayRequest({ id: "seed-request-completed-gary-pearl", listingID: "seed-home-pearl-1", guestUserID: "seed-guest-gary",
       checkInDays: -12, checkOutDays: -10, status: "completed", guestNote: "Meow." }),
-    // More bookings across more hosts, so every host has at least one taken
-    // (accepted or completed) stay somewhere, not just the original core cast.
+    // More bookings so every host has at least one taken stay.
     stayRequest({ id: "seed-request-patrick-puff", listingID: "seed-home-puff-1", guestUserID: "seed-guest-patrick",
       checkInDays: 25, checkOutDays: 27, status: "accepted", guestNote: "Promise there will be no driving lessons involved.", hostNote: "See that there isn't." }),
     stayRequest({ id: "seed-request-completed-gary-puff", listingID: "seed-home-puff-1", guestUserID: "seed-guest-gary",
@@ -729,10 +658,9 @@ const stayRequests = [
       checkInDays: -25, checkOutDays: -23, status: "completed", guestNote: "A king requires impeccable manners, and you delivered.", hostNote: "Naturally." })
 ];
 
-// Post-stay reviews (feature 1). The document id is "{stayRequestID}_{authorUID}",
-// which is what firestore.rules enforces as "one review per person per stay".
-// `subjectUserID` is whose profile the review lands on, and whose trustStats the
-// `onReviewWritten` trigger recomputes from it.
+// Post-stay reviews. The id is "{stayRequestID}_{authorUID}" (one review per person per
+// stay, per the rules). `subjectUserID` is whose profile it lands on and whose trustStats
+// `onReviewWritten` recomputes.
 function review({ stayRequestID, authorUserID, role, rating, publicComment }) {
   const stay = stayRequests.find((r) => r.id === stayRequestID);
   if (!stay) throw new Error(`review references unknown stay ${stayRequestID}`);
@@ -767,9 +695,7 @@ const reviews = [
     role: "hostReviewingGuest", rating: 5, publicComment: "Finally, a guest who understands the clarinet is not optional listening." })
 ];
 
-// Friend-written character references (feature 1). One per (subject, author),
-// and the rules require an accepted friend edge between the two — which
-// seedFriendEdges creates for every pair of seed users.
+// Friend-written references, one per (subject, author); the rules need an accepted edge, which seedFriendEdges creates for every pair.
 const references = [
   { id: "seed-host-spongebob_seed-guest-patrick", subjectUserID: "seed-host-spongebob", authorUserID: "seed-guest-patrick",
     text: "SpongeBob is my best friend and he has never once let me down. He also makes breakfast." },
@@ -782,8 +708,7 @@ const references = [
 async function seedStayRequests() {
   for (const request of stayRequests) {
     await db.collection("stayRequests").doc(request.id).set(request, { merge: true });
-    // An accepted stay is what discloses the host's street address; the app
-    // writes this marker on accept, so the seed has to as well.
+    // An accepted stay discloses the host's street address; the app writes this marker on accept, so the seed does too.
     if (request.status === "accepted") {
       await db.collection("homes").doc(request.listingID)
         .collection("accepted").doc(request.guestUserID)
@@ -793,22 +718,16 @@ async function seedStayRequests() {
   console.log(`Seeded ${stayRequests.length} stay requests.`);
 }
 
-// Builds a friend-edge document. The doc id and userA/userB ordering mirror
-// FriendEdge.edgeID in Swift: the two UIDs sorted and joined by "_", with userA
-// the alphabetically smaller. `initiator` is whoever sent the request.
+// Builds a friend-edge document. The id and userA/userB ordering mirror FriendEdge.edgeID in
+// Swift: UIDs sorted and joined by "_". `initiator` sent the request.
 function friendEdge(a, b, status, initiator) {
   const [userA, userB] = [a, b].sort();
   return { id: `${userA}_${userB}`, userA, userB, status, initiator };
 }
 
-// A friend graph: mostly accepted, plus a couple of pending requests so the
-// Friends tab shows incoming/outgoing states. Two invariants hold here:
-//   1. Every stay request below is between two accepted friends — you connect
-//      before you ask to stay — so each guest/host pair has an accepted edge.
-//   2. Every listing's allowedViewerIDs is derived from this graph (see
-//      seedHomes), so a listing is visible to exactly its host's accepted
-//      friends here.
-// The dev account is wired to be friends with everyone at the end (S1).
+// A friend graph, mostly accepted plus a couple of pending requests for the Friends
+// tab. Invariants: every stay request is between accepted friends, and every
+// listing's allowedViewerIDs derives from this graph. The dev account ends up friends with everyone.
 const explicitFriendEdges = [
     friendEdge("seed-guest-patrick", "seed-host-spongebob", "accepted", "seed-guest-patrick"),
     friendEdge("seed-guest-patrick", "seed-host-sandy", "accepted", "seed-host-sandy"),
@@ -828,13 +747,10 @@ const explicitFriendEdges = [
     friendEdge("seed-guest-barnacleboy", "seed-host-pearl", "accepted", "seed-guest-barnacleboy"),
     friendEdge("seed-host-sandy", "seed-host-krabs", "accepted", "seed-host-sandy"),
     friendEdge("seed-host-neptune", "seed-host-squidward", "accepted", "seed-host-neptune"),
-    // Backfills edges that completed stays below already required (every stay
-    // request needs an accepted friend edge) but that were missing.
+    // Edges that completed stays required but were missing.
     friendEdge("seed-guest-gary", "seed-host-pearl", "accepted", "seed-guest-gary"),
     friendEdge("seed-guest-patrick", "seed-host-krabs", "accepted", "seed-guest-patrick"),
-    // More density across the graph, backing the additional stay requests below
-    // and giving the previously under-connected hosts (Puff, Karen, Neptune,
-    // Mermaid Man on his own listing) guests who can actually book them.
+    // More density, giving under-connected hosts guests who can book them.
     friendEdge("seed-guest-patrick", "seed-host-puff", "accepted", "seed-guest-patrick"),
     friendEdge("seed-guest-gary", "seed-host-puff", "accepted", "seed-host-puff"),
     friendEdge("seed-guest-barnacleboy", "seed-host-karen", "accepted", "seed-guest-barnacleboy"),
@@ -843,9 +759,8 @@ const explicitFriendEdges = [
     friendEdge("seed-guest-patrick", "seed-host-neptune", "accepted", "seed-host-neptune"),
     friendEdge("seed-guest-patrick", "seed-host-larry", "accepted", "seed-guest-patrick"),
     friendEdge("seed-host-larry", "seed-host-krabs", "accepted", "seed-host-larry"),
-    // Pending: Patrick asked Gary (outgoing for Patrick), Neptune asked Krabs,
-    // Pearl asked Patrick (incoming for Patrick), Karen asked Mermaid Man,
-    // Puff asked Krabs.
+    // Pending: Patrick asked Gary, Neptune asked Krabs, Pearl asked Patrick,
+    // Karen asked Mermaid Man, Puff asked Krabs.
     friendEdge("seed-guest-patrick", "seed-guest-gary", "pending", "seed-guest-patrick"),
     friendEdge("seed-host-neptune", "seed-host-krabs", "pending", "seed-host-neptune"),
     friendEdge("seed-host-pearl", "seed-guest-patrick", "pending", "seed-host-pearl"),
@@ -853,11 +768,8 @@ const explicitFriendEdges = [
     friendEdge("seed-host-puff", "seed-host-krabs", "pending", "seed-host-puff")
 ];
 
-// S1: each test account (dev, guest-tester) is an accepted friend of every
-// other seed user, so both can see every friends-only listing while testing.
-// Neither is ever a friend of a real (non-seed) user — that's the whole point
-// of replacing anonymous "browse without an account" with a fixed guest
-// persona: it's connected only to the SpongeBob cast, never to real people.
+// Each test account (dev, guest-tester) is an accepted friend of every other seed
+// user, so both see every friends-only listing. Neither is a friend of a real user.
 const testAccountFriendEdges = TEST_ACCOUNT_UIDS.flatMap((testUID) =>
   users
     .filter((u) => u.uid !== testUID)
@@ -874,11 +786,9 @@ async function seedFriendEdges() {
   console.log(`Seeded ${friendEdges.length} friend edges.`);
 }
 
-// Writes a message thread between two users: the individual `messages` documents
-// plus the denormalized `conversations/{id}` summary the app reads for the list.
-// `msgs` is oldest-to-newest as authored; each carries `from` and `minsAgo`.
-// unreadCounts advances the recipient on each message and zeroes the sender,
-// exactly as functions/src/index.ts maintains it on a real send.
+// Writes a message thread: the `messages` documents plus the `conversations/{id}`
+// summary. `msgs` is oldest-to-newest, each with `from` and `minsAgo`. unreadCounts
+// advances the recipient and zeroes the sender, as functions/src/index.ts does.
 async function seedThread(a, b, msgs, mutedBy = []) {
   const participants = [a, b].sort();
   const conversationID = participants.join("_");
@@ -905,8 +815,7 @@ async function seedThread(a, b, msgs, mutedBy = []) {
   }, { merge: true });
 }
 
-// Each thread: the two participants, the messages oldest-to-newest, and an
-// optional mutedBy list. Kept as data so it can be validated without Firestore.
+// Each thread: participants, messages oldest-to-newest, and an optional mutedBy list; plain data so it validates without Firestore.
 const conversationThreads = [
   {
     a: "seed-guest-patrick", b: "seed-host-spongebob", msgs: [
@@ -985,10 +894,8 @@ async function seedReferences() {
   console.log(`Seeded ${references.length} character references.`);
 }
 
-// Mirrors `recomputeTrustStats` in functions/src/index.ts. The Cloud Function is
-// the source of truth in a deployed project, but it doesn't run against a bare
-// emulator, so the seed computes the same numbers from the same documents —
-// otherwise every seeded profile shows no reputation at all.
+// Mirrors `recomputeTrustStats` in functions/src/index.ts, computed from the same
+// documents because the function doesn't run against a bare emulator.
 async function seedTrustStats() {
   for (const user of users) {
     const uid = user.uid;
@@ -1002,8 +909,7 @@ async function seedTrustStats() {
         staysTaken: stayRequests.filter((r) => r.guestUserID === uid && r.status === "completed").length,
         reviewCount: ratings.length,
         averageRating: ratings.length ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length : null,
-        // Nothing verifies identity yet (feature 3 is unimplemented), so the badge
-        // is off for everyone. Flipping one here would be a lie in the demo.
+        // Nothing verifies identity yet, so the badge is off for everyone.
         idVerified: false
       }
     }, { merge: true });
@@ -1023,7 +929,7 @@ async function main() {
   await seedConversations();
   await seedReviews();
   await seedReferences();
-  // Last: it reads the stay requests and reviews the steps above wrote.
+  // Last: it reads the stay requests and reviews written above.
   await seedTrustStats();
   console.log(
     useProd
@@ -1035,8 +941,7 @@ async function main() {
   process.exit(0);
 }
 
-// Only seed when run directly. Requiring the module (e.g. from a validator)
-// exposes the datasets below without connecting to Firestore.
+// Only seed when run directly; requiring the module exposes the datasets without connecting.
 if (require.main === module) {
   main().catch((err) => {
     console.error(err);
