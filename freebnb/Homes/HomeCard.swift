@@ -7,11 +7,9 @@ import SwiftUI
 
 struct HomeCard: View {
     let listing: Home
-    /// Why this listing reached the viewer. Nil for a public listing from outside
-    /// the viewer's network, which needs no explanation.
+    /// Why this listing reached the viewer; nil needs no explanation.
     var reason: FeedReason?
-    /// Distance from the city the viewer searched for. Nil when they haven't
-    /// searched, or when this listing has no stored coordinate.
+    /// Distance from the searched city; nil without a search or stored coordinate.
     var distanceMiles: Double?
 
     private let cardImageHeight: CGFloat = 150
@@ -21,13 +19,9 @@ struct HomeCard: View {
             // Header — photo if available, teal strip otherwise
             header
 
-            // Body — the feed card is for scanning; the full amenity breakdown
-            // lives on HomeDetailPage, so the card shows only host, place, and the
-            // at-a-glance summary pills.
+            // Body: the card is for scanning; the full breakdown is on HomeDetailPage.
             VStack(alignment: .leading, spacing: 8) {
-                // The feed is only ever your listings and your friends', so "from
-                // a friend" is a given and goes unlabelled; only your own listings
-                // still earn a chip to set them apart from the rest.
+                // Everything here is yours or a friend's, so "from a friend" goes unlabelled; only your own listings get a chip.
                 let showReasonChip = reason == .yourListing
                 if showReasonChip || distanceMiles != nil {
                     HStack(spacing: 6) {
@@ -53,8 +47,7 @@ struct HomeCard: View {
                 // Summary pills
                 HStack(spacing: 6) {
                     SummaryPill(icon: "door.left.hand.open", text: "\(listing.sleeping.numGuestRooms) room\(listing.sleeping.numGuestRooms == 1 ? "" : "s")")
-                    // Zero bathrooms means the host never said, not that there are
-                    // none. Say nothing rather than something false.
+                    // Zero bathrooms means unsaid, not none; say nothing rather than something false.
                     if listing.sleeping.numBathrooms > 0 {
                         SummaryPill(icon: "shower.fill", text: "\(listing.sleeping.numBathrooms) bath\(listing.sleeping.numBathrooms == 1 ? "" : "s")")
                     }
@@ -73,18 +66,13 @@ struct HomeCard: View {
     }
 
     // MARK: - Header
-    //
-    // The card carries no availability chip at all. Which dates are free is a
-    // calendar's job — the detail page and the request sheet both draw one — and a
-    // chip summarizing it either fires on every listing (most have some future
-    // date spoken for) or promises a vacancy the host never offered.
+    // No availability chip: dates are a calendar's job, and a chip would fire on every listing or promise a vacancy never offered.
 
     @ViewBuilder
     private var header: some View {
         if let firstPhoto = listing.photos.first, let url = URL(string: firstPhoto) {
             ZStack(alignment: .bottomLeading) {
-                // Downsampled to roughly the card's drawn width; a full-size
-                // photo decoded mid-scroll is what makes the feed stutter.
+                // Downsampled to about the drawn width; a full-size photo decoded mid-scroll stutters the feed.
                 CachedAsyncImage(url: url, maxPointSize: 700) { phase in
                     switch phase {
                     case .success(let image):
@@ -155,11 +143,7 @@ struct HomeCard: View {
 
     private var tealHeaderContent: some View {
         HStack(spacing: 10) {
-            // The photo-less card used to be a flat teal strip with the same house
-            // icon on every one, so a feed of them read as one long block. The
-            // host's avatar is the thing that differs card to card, so it goes
-            // here — on a light disc, since the generated tints are tuned for the
-            // page background rather than for solid teal.
+            // Photo-less cards used to be an identical teal strip; the host's avatar differs per card, on a light disc since its tints suit the page background.
             GeneratedAvatar(seed: listing.hostUserID, size: 36)
                 .background(Circle().fill(Color.primaryBackground))
 
@@ -188,8 +172,7 @@ struct HomeCard: View {
 
 }
 
-/// "Why you're seeing this" (feature 18). Reads as a statement about the graph,
-/// so it is announced as one sentence rather than as an icon beside a word.
+/// "Why you're seeing this": announced as one sentence, not an icon beside a word.
 struct FeedReasonChip: View {
     let reason: FeedReason
 
@@ -205,9 +188,7 @@ struct FeedReasonChip: View {
         .foregroundColor(Color.accent)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        // Shell pink under teal text: the one warm fill on the card, so the
-        // social "why you're seeing this" signal reads at a glance instead of
-        // blending into the teal spec pills beside it.
+        // Shell pink under teal text: the one warm fill, so the social signal stands out from the teal pills.
         .background(Color.tertiaryBackground)
         .clipShape(Capsule())
         .accessibilityElement(children: .ignore)
@@ -215,11 +196,7 @@ struct FeedReasonChip: View {
     }
 }
 
-/// A spec pill: room / bath / guest counts and distance. The count reads at full
-/// strength in the primary text colour so the fact carries weight, while the icon
-/// takes brand teal for a spot of colour. Keeping the *text* neutral (rather than
-/// the whole pill teal) means a card full of these still lets the "Friend" reason
-/// chip and the availability warning stand out.
+/// A spec pill (room / bath / guest counts, distance): text in the primary colour for weight, icon in brand teal, so the "Friend" chip still stands out.
 struct SummaryPill: View {
     let icon: String
     let text: String

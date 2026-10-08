@@ -2,17 +2,10 @@
 //  FriendNoteTests.swift
 //  freebnbTests
 //
-//  The pure half of private notes, plus the repository seam.
-//
-//  The half that actually enforces the promise is `firestore.rules`
-//  (rules-tests/friend_notes.test.mjs): nothing in this file can stop a friend
-//  reading a note, and nothing here should be read as though it could. What is
-//  tested here is the part the client owns — ordering, normalization, and the
-//  "ask once" arithmetic behind the post-stay prompt.
-//
-//  `FriendNoteStore` itself binds its host id from an Auth state listener and so
-//  is not directly constructible under test, exactly as `CircleStore` is not;
-//  its pure inputs and its repository are covered instead.
+//  The pure half of private notes plus the repository seam. `firestore.rules`
+//  (rules-tests/friend_notes.test.mjs) enforces privacy; this covers ordering,
+//  normalization and the "ask once" arithmetic. `FriendNoteStore` binds its id from an
+//  Auth listener and isn't constructible here, so its inputs and repository are covered.
 //
 
 import Foundation
@@ -54,9 +47,7 @@ struct FriendNoteTextTests {
         #expect(FriendNote.normalized("  kept the cat alive  ") == "kept the cat alive")
     }
 
-    /// The cap exists in three places — here, `firestore.rules`, and the
-    /// composer's character counter. The client cutting to it is what keeps an
-    /// over-long note a field error instead of a permission denial.
+    /// The cap lives here, in `firestore.rules` and the composer; cutting to it makes an over-long note a field error.
     @Test("text is cut to the cap the rules enforce")
     func clampsToCap() {
         let long = String(repeating: "x", count: FriendNote.maxLength + 500)
@@ -76,8 +67,7 @@ struct FriendNoteOrderingTests {
         #expect(sorted.map(\.id) == ["c", "b", "a"])
     }
 
-    /// A note whose server timestamp hasn't landed yet is the one just written,
-    /// and it belongs at the top rather than at the bottom where a nil sorts.
+    /// A note with no server timestamp yet is the one just written, so it goes at the top, not where nil sorts.
     @Test("a note still awaiting its server timestamp floats to the top")
     func pendingWriteFirst() {
         let sorted = [note("a", created: day(2)), note("new", created: nil)].sortedByDate()
@@ -96,8 +86,7 @@ struct FriendNoteOrderingTests {
         #expect(all.about("nobody").isEmpty)
     }
 
-    /// Both timestamps are server-stamped in one commit on create, so they land
-    /// close together but not identical; "edited" has to mean a real later edit.
+    /// Both timestamps are server-stamped in one commit, close but not identical; "edited" must mean a real later edit.
     @Test("a note is only 'edited' once it has actually been revised")
     func editedFlag() {
         #expect(note("a", created: day(1), updated: day(1)).wasEdited == false)
@@ -140,8 +129,7 @@ struct FriendNotePromptTests {
         #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 1), hostID: host, isSettled: false, now: now))
     }
 
-    /// The reason the window exists: shipping this must not greet a host with a
-    /// prompt for every stay they have ever hosted.
+    /// The window exists so shipping this doesn't prompt for every stay ever hosted.
     @Test("a stay from long ago is not offered")
     func oldStayIsNotOffered() {
         #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 400), hostID: host, isSettled: false, now: now) == false)
@@ -159,9 +147,7 @@ struct FriendNotePromptTests {
         #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 1), hostID: host, isSettled: true, now: now) == false)
     }
 
-    /// Host side only. There is no guest-side twin of this prompt anywhere in
-    /// the feature, and a guest must never be asked to file anything about the
-    /// person who put them up.
+    /// Host side only; no guest-side twin exists.
     @Test("a stay this user was the guest on is not offered")
     func guestSideIsNotOffered() {
         let hostedByOther = stay(hostUserID: "someone-else", endedDaysAgo: 1)
@@ -184,8 +170,7 @@ struct FriendNotePromptTests {
         #expect(FriendNotePrompt.shouldOffer(stay(endedDaysAgo: 1), hostID: "", isSettled: false, now: now) == false)
     }
 
-    /// A stay the nightly sweep completed carries no `completedAt`, so checkout
-    /// has to stand in rather than the prompt silently never appearing.
+    /// A sweep-completed stay has no `completedAt`, so checkout stands in or the prompt would never appear.
     @Test("a stay with no completion timestamp falls back to checkout")
     func fallsBackToCheckout() {
         var swept = stay(endedDaysAgo: 1)
@@ -224,8 +209,7 @@ struct FriendNoteRepositoryTests {
         let stored = repo.notesByHost[host]?[id]
         #expect(stored?.text == "Revised")
         #expect(stored?.stayRequestID == nil)
-        // The subject is never part of an edit; the rules refuse a note
-        // re-pointed at somebody else, and the repository never offers it.
+        // The subject is never part of an edit; the rules refuse a re-pointed note.
         #expect(stored?.subjectUserID == friend)
     }
 
@@ -248,9 +232,7 @@ struct FriendNoteRepositoryTests {
         #expect(repo.promptsByHost["host-2"] == nil)
     }
 
-    /// The prompt asks once. Both ways of answering it — writing something, or
-    /// waving it off — have to leave the same mark, or the host gets asked
-    /// again about a stay they already wrote a note for.
+    /// The prompt asks once: writing and waving off must leave the same mark, or the host is asked again.
     @Test("both answers to the prompt leave the same mark")
     func bothAnswersSettleThePrompt() async throws {
         let repo = InMemoryFriendNoteRepository()
@@ -260,7 +242,7 @@ struct FriendNoteRepositoryTests {
         try await repo.markPromptSeen(hostID: host, stayRequestID: "stay-waved-off")
 
         #expect(repo.promptsByHost[host] == ["stay-written", "stay-waved-off"])
-        // Waving one off writes no note. Silence is not a record of anything.
+        // Waving one off writes no note.
         #expect(repo.notesByHost[host]?.values.contains { $0.stayRequestID == "stay-waved-off" } == false)
     }
 }

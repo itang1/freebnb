@@ -2,17 +2,10 @@
 //  GuestNoteTests.swift
 //  freebnbTests
 //
-//  The pure half of a guest's private notes, plus the repository seam.
-//
-//  The half that actually enforces the promise is `firestore.rules`
-//  (rules-tests/guest_notes.test.mjs): nothing in this file can stop a host
-//  reading a note, and nothing here should be read as though it could. What is
-//  tested here is the part the client owns — ordering, subject matching,
-//  normalization, and the "ask once" arithmetic behind the post-trip prompt.
-//
-//  `GuestNoteStore` itself binds its guest id from an Auth state listener and so
-//  is not directly constructible under test, exactly as `FriendNoteStore` is
-//  not; its pure inputs and its repository are covered instead.
+//  The pure half of a guest's private notes plus the repository seam. `firestore.rules`
+//  (rules-tests/guest_notes.test.mjs) is what enforces privacy; this covers what the
+//  client owns: ordering, subject matching, normalization and the "ask once" arithmetic.
+//  `GuestNoteStore` binds its id from an Auth listener and isn't constructible here, so its inputs and repository are covered.
 //
 
 import Foundation
@@ -56,9 +49,7 @@ struct GuestNoteTextTests {
         #expect(GuestNote.normalized("  quiet street, thin walls  ") == "quiet street, thin walls")
     }
 
-    /// The cap exists in three places — here, `firestore.rules`, and the
-    /// composer's character counter. The client cutting to it is what keeps an
-    /// over-long note a field error instead of a permission denial.
+    /// The cap lives here, in `firestore.rules` and the composer; cutting to it makes an over-long note a field error.
     @Test("text is cut to the cap the rules enforce")
     func clampsToCap() {
         let long = String(repeating: "x", count: GuestNote.maxLength + 500)
@@ -78,8 +69,7 @@ struct GuestNoteOrderingTests {
         #expect(sorted.map(\.id) == ["c", "b", "a"])
     }
 
-    /// A note whose server timestamp hasn't landed yet is the one just written,
-    /// and it belongs at the top rather than at the bottom where a nil sorts.
+    /// A note with no server timestamp yet is the one just written, so it goes at the top, not where nil sorts.
     @Test("a note still awaiting its server timestamp floats to the top")
     func pendingWriteFirst() {
         let sorted = [note("a", created: day(2)), note("new", created: nil)].sortedByDate()
@@ -98,9 +88,7 @@ struct GuestNoteOrderingTests {
         #expect(all.about(.host, "nobody").isEmpty)
     }
 
-    /// A host uid and a listing id could collide as bare strings; the subject
-    /// type is part of the identity, so a listing note never leaks into a host's
-    /// list and vice versa.
+    /// A host uid and a listing id could collide as strings, so the subject type is part of the identity.
     @Test("a host note and a listing note that share an id never mix")
     func typeIsPartOfIdentity() {
         let shared = "shared-id"
@@ -112,8 +100,7 @@ struct GuestNoteOrderingTests {
         #expect(all.about(.listing, shared).map(\.id) == ["l"])
     }
 
-    /// Both timestamps are server-stamped in one commit on create, so they land
-    /// close together but not identical; "edited" has to mean a real later edit.
+    /// Both timestamps are server-stamped in one commit, close but not identical; "edited" must mean a real later edit.
     @Test("a note is only 'edited' once it has actually been revised")
     func editedFlag() {
         #expect(note("a", created: day(1), updated: day(1)).wasEdited == false)
@@ -155,8 +142,7 @@ struct GuestNotePromptTests {
         #expect(GuestNotePrompt.shouldOffer(stay(endedDaysAgo: 1), guestID: guest, isSettled: false, now: now))
     }
 
-    /// The reason the window exists: shipping this must not greet a traveler with
-    /// a prompt for every trip they have ever taken.
+    /// The window exists so shipping this doesn't prompt for every trip ever taken.
     @Test("a trip from long ago is not offered")
     func oldTripIsNotOffered() {
         #expect(GuestNotePrompt.shouldOffer(stay(endedDaysAgo: 400), guestID: guest, isSettled: false, now: now) == false)
@@ -174,8 +160,7 @@ struct GuestNotePromptTests {
         #expect(GuestNotePrompt.shouldOffer(stay(endedDaysAgo: 1), guestID: guest, isSettled: true, now: now) == false)
     }
 
-    /// Guest side only. There is no host-side twin of this prompt here, and a
-    /// host is never asked through this path to file anything about a guest.
+    /// Guest side only; a host is never asked through this path.
     @Test("a stay this user was the host on is not offered")
     func hostSideIsNotOffered() {
         let asGuestSomeoneElse = stay(guestUserID: "someone-else", endedDaysAgo: 1)
@@ -198,8 +183,7 @@ struct GuestNotePromptTests {
         #expect(GuestNotePrompt.shouldOffer(stay(endedDaysAgo: 1), guestID: "", isSettled: false, now: now) == false)
     }
 
-    /// A trip the nightly sweep completed carries no `completedAt`, so checkout
-    /// has to stand in rather than the prompt silently never appearing.
+    /// A sweep-completed trip has no `completedAt`, so checkout stands in or the prompt would never appear.
     @Test("a trip with no completion timestamp falls back to checkout")
     func fallsBackToCheckout() {
         var swept = stay(endedDaysAgo: 1)
@@ -242,8 +226,7 @@ struct GuestNoteRepositoryTests {
         let stored = repo.notesByGuest[guest]?[id]
         #expect(stored?.text == "Revised")
         #expect(stored?.stayRequestID == nil)
-        // The subject is never part of an edit; the rules refuse a note
-        // re-pointed at somebody else, and the repository never offers it.
+        // The subject is never part of an edit; the rules refuse a re-pointed note.
         #expect(stored?.subjectType == .listing)
         #expect(stored?.subjectID == listing)
     }
@@ -267,9 +250,7 @@ struct GuestNoteRepositoryTests {
         #expect(repo.promptsByGuest["guest-2"] == nil)
     }
 
-    /// The prompt asks once. Both ways of answering it — writing something, or
-    /// waving it off — have to leave the same mark, or the guest gets asked again
-    /// about a trip they already wrote a note for.
+    /// The prompt asks once: writing and waving off must leave the same mark, or the guest is asked again.
     @Test("both answers to the prompt leave the same mark")
     func bothAnswersSettleThePrompt() async throws {
         let repo = InMemoryGuestNoteRepository()
@@ -282,7 +263,7 @@ struct GuestNoteRepositoryTests {
         try await repo.markPromptSeen(guestID: guest, stayRequestID: "trip-waved-off")
 
         #expect(repo.promptsByGuest[guest] == ["trip-written", "trip-waved-off"])
-        // Waving one off writes no note. Silence is not a record of anything.
+        // Waving one off writes no note.
         #expect(repo.notesByGuest[guest]?.values.contains { $0.stayRequestID == "trip-waved-off" } == false)
     }
 }

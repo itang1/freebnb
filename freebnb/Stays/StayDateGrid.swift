@@ -2,41 +2,27 @@
 //  StayDateGrid.swift
 //  freebnb
 //
-//  The guest's date picker: one month of tappable day cells where the days the
-//  host can't host are greyed out and refuse the tap. A DatePicker can only bound
-//  a contiguous range, so it cannot say "these seven days, and only these, are
-//  gone" — which is exactly the shape a blocked calendar has. This is the answer
-//  to that.
-//
-//  The host's own editor keeps AvailabilityMonthGrid: it toggles single days and
-//  has no notion of a span. This one selects a span and never writes anything.
+//  The guest's date picker: a month of tappable day cells with unavailable days greyed
+//  out and tap-refusing. A DatePicker can only bound a contiguous range, which can't
+//  express a blocked calendar. The host's editor keeps AvailabilityMonthGrid (single days);
+//  this selects a span and never writes anything.
 //
 
 import SwiftUI
 
 struct StayDateGrid: View {
-    /// Days no stay may pass a night in: the host's blocked ranges and the ranges
-    /// an accepted stay already took, merged, so a booked day and a blocked one
-    /// are indistinguishable here (see `Home.unavailableRanges`).
+    /// Days no stay may pass a night in: blocked plus accepted-stay ranges, merged and indistinguishable (see `Home.unavailableRanges`).
     let unavailableDays: Set<Date>
     @Binding var checkIn: Date?
     @Binding var checkOut: Date?
 
-    /// How far ahead a guest may look. A year is well past any host's blocked
-    /// calendar and keeps the chevrons from running forever.
-    ///
-    /// Not private: the request sheet builds the days a booking policy withholds
-    /// (BookingPolicyGuestView) and has to clamp them to the same horizon, or a
-    /// ten-year frequency cap would build ten years of dates for a grid that
-    /// shows twelve months.
+    /// How far ahead a guest may look; a year keeps the chevrons finite. Not private,
+    /// since the request sheet clamps withheld policy days to the same horizon.
     static let monthsAhead = 12
 
     @State private var visibleMonth: Date = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
 
-    /// Set when a second tap was turned into a new check-in because the span
-    /// between would have crossed an unavailable day. Without it the grid just
-    /// silently moves the selection, which reads as a bug: the guest tapped a
-    /// check-out and got a check-in.
+    /// Set when a second tap became a new check-in because the span would cross an unavailable day; without it the selection moves silently and reads as a bug.
     @State private var restartedOnUnavailableDays = false
 
     private let calendar = Calendar.current
@@ -76,11 +62,9 @@ struct StayDateGrid: View {
                 .accessibilityAddTraits(.updatesFrequently)
             }
         }
-        // Nothing here is worth animating except this line arriving, which a
-        // guest needs to notice landing under their tap.
+        // Only this line arriving is worth animating, so the guest notices it.
         .animation(.default, value: restartedOnUnavailableDays)
-        // Clearing the dates from outside the grid clears the explanation too;
-        // it describes a selection that no longer exists.
+        // Clearing the dates externally clears the explanation, which describes a selection that's gone.
         .onChange(of: checkIn) { _, new in
             if new == nil { restartedOnUnavailableDays = false }
         }
@@ -160,9 +144,7 @@ struct StayDateGrid: View {
 
     // MARK: - Cells
 
-    /// What one day looks like. Ordered so the most restrictive wins: a day in the
-    /// past or one the host ruled out reads the same greyed way whether or not it
-    /// happens to sit inside a half-made selection.
+    /// What one day looks like; the most restrictive wins, so past or ruled-out days grey the same inside a half-made selection.
     private enum CellState {
         case unavailable
         case endpoint
@@ -242,10 +224,8 @@ struct StayDateGrid: View {
 
     // MARK: - Selection
 
-    /// First tap sets check-in. A later tap closes the stay, but only if every
-    /// night between is free — a span that would jump a blocked week starts a new
-    /// selection instead of quietly proposing dates the host would have to decline.
-    /// Tapping the check-in day again, or any earlier day, also restarts.
+    /// First tap sets check-in. A later tap closes the stay only if every night between is
+    /// free; otherwise it starts a new selection. Tapping check-in again, or an earlier day, restarts.
     private func select(_ day: Date) {
         guard let start = checkIn, checkOut == nil, day > start else {
             restartedOnUnavailableDays = false
