@@ -2,20 +2,15 @@
 //  GeoDistance.swift
 //  freebnb
 //
-//  Distance between a listing and a place the user searched for, and the radius
-//  scope the feed narrows by (feature 11). Every coordinate that reaches this
-//  file is the listing's *public* one, already rounded to a neighbourhood by
-//  `Home.approximate(_:)` — so a distance computed here is honest to about a
-//  kilometre and no closer, which is exactly as precise as the map circle a
-//  guest is allowed to see before their stay is accepted.
+//  Distance between a listing and a searched place, and the radius scope the feed narrows by.
+//  Every coordinate here is the listing's public one, rounded to a neighbourhood by
+//  `Home.approximate(_:)`, so distances are honest to about a kilometre, as precise as the pre-acceptance map circle.
 //
 
 import CoreLocation
 import Foundation
 
-/// A latitude/longitude pair that is `Equatable` and `Hashable`, which
-/// `CLLocationCoordinate2D` is not. Equatability is what lets a coordinate sit in
-/// SwiftUI state and drive an `onChange`.
+/// A latitude/longitude pair that is `Equatable` and `Hashable` (`CLLocationCoordinate2D` isn't), so it can sit in SwiftUI state and drive `onChange`.
 struct Coordinate: Hashable, Sendable {
     var latitude: Double
     var longitude: Double
@@ -35,8 +30,7 @@ struct Coordinate: Hashable, Sendable {
 }
 
 extension Home {
-    /// The listing's public, neighbourhood-rounded coordinate. Nil for a listing
-    /// created before the field existed, or one whose address never geocoded.
+    /// The listing's public, rounded coordinate; nil for older listings or addresses that never geocoded.
     var coordinate: Coordinate? {
         guard let latitude, let longitude else { return nil }
         return Coordinate(latitude: latitude, longitude: longitude)
@@ -53,9 +47,7 @@ enum Geo {
         return a.distance(from: b) / metresPerMile
     }
 
-    /// "0.4 mi away", "12 mi away". Sub-mile distances keep a decimal because at
-    /// this scale the rounding would otherwise read as "0 mi", and anything under
-    /// a mile is within the blur radius of the coordinate anyway.
+    /// "0.4 mi away", "12 mi away". Sub-mile distances keep a decimal so they don't read "0 mi"; under a mile is within the blur anyway.
     static func distanceText(_ miles: Double) -> String {
         let value = miles < 10
             ? String(format: "%.1f", miles)
@@ -64,9 +56,7 @@ enum Geo {
     }
 }
 
-/// Where the user is searching from, and how far out they will look. Produced by
-/// geocoding the feed's city query; `radiusMiles` of nil means "any distance",
-/// which still permits distance *sorting* without discarding anything.
+/// Where the user is searching from and how far they'll look; from geocoding the city query. A nil `radiusMiles` means any distance, still permitting distance sorting.
 struct GeoScope: Equatable, Sendable {
     var center: Coordinate
     var radiusMiles: Double?
@@ -76,12 +66,8 @@ struct GeoScope: Equatable, Sendable {
         home.coordinate.map { Geo.distanceMiles(from: center, to: $0) }
     }
 
-    /// Whether the listing survives the radius filter.
-    ///
-    /// A listing with no coordinate is dropped once a radius is set. It cannot
-    /// prove it is nearby, and a radius filter is a promise about distance: quietly
-    /// admitting the unlocatable would break that promise on the one listing the
-    /// user cannot check.
+    /// Whether the listing survives the radius filter. Once a radius is set a listing without
+    /// a coordinate is dropped, since it can't prove it's nearby.
     func contains(_ home: Home) -> Bool {
         guard let radiusMiles else { return true }
         guard let distance = distance(to: home) else { return false }

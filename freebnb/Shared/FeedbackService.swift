@@ -2,25 +2,19 @@
 //  FeedbackService.swift
 //  freebnb
 //
-//  In-app feedback (feature 43) is delivered to a Google Form whose responses
-//  feed a spreadsheet the team reads directly, so there is no server or console
-//  to check. The same Form is public on the web, so anyone can leave feedback
-//  without the app; the native composer just posts to it silently.
+//  In-app feedback goes to a Google Form whose responses feed a spreadsheet the team reads;
+//  the same Form is public on the web, and the native composer just posts to it silently.
 //
 
 import Foundation
 
-/// The Google Form that collects feedback. These are the only values to touch if
-/// the Form changes: rebuilding a question in the Form editor mints a new
-/// `entry.<id>`, which the "Get pre-filled link" option reveals. The responses
-/// land in the linked spreadsheet.
+/// The Google Form that collects feedback. Rebuilding a question mints a new `entry.<id>`
+/// ("Get pre-filled link" reveals it); these are the only values to touch.
 enum FeedbackForm {
     // swiftlint:disable force_unwrapping
-    /// The unlisted endpoint that records a response. Distinct from `webURL`,
-    /// which shows the fillable form.
+    /// The unlisted endpoint that records a response, distinct from `webURL`.
     static let responseURL = URL(string: "https://docs.google.com/forms/d/e/1FAIpQLScebr16uJz2NtsozI_y5fRcx-f0c51RDb2QjFcq0OBLJMELbw/formResponse")!
-    /// The public, fillable form, for sharing outside the app and as the in-app
-    /// fallback when a post fails.
+    /// The public form, for sharing and as the fallback when a post fails.
     static let webURL = URL(string: "https://docs.google.com/forms/d/e/1FAIpQLScebr16uJz2NtsozI_y5fRcx-f0c51RDb2QjFcq0OBLJMELbw/viewform")!
     // swiftlint:enable force_unwrapping
 
@@ -32,17 +26,14 @@ enum FeedbackForm {
     static let versionField = "entry.788164007"
 }
 
-/// Sends a feedback note somewhere the team can read it. An abstraction so the
-/// store's submit path stays testable without a live network call.
+/// Sends a feedback note somewhere the team can read it; an abstraction so submit stays testable offline.
 protocol FeedbackService: Sendable {
     func submit(message: String, userID: String?, appVersion: String?) async throws
 }
 
-/// Posts a feedback note to `FeedbackForm` as an `x-www-form-urlencoded` body,
-/// exactly as the fillable form would. The endpoint is unauthenticated and
-/// unofficial, so a full account is not required; the composer still gates
-/// guests as a product choice, and the browser form is the fallback if a post
-/// fails.
+/// Posts a note to `FeedbackForm` as an `x-www-form-urlencoded` body, like the fillable form.
+/// The endpoint is unauthenticated and unofficial; the composer gates guests as a product
+/// choice, and the web form is the fallback if a post fails.
 struct GoogleFormFeedbackService: FeedbackService {
     private let session: URLSession
 
@@ -63,8 +54,7 @@ struct GoogleFormFeedbackService: FeedbackService {
         if let userID { fields.append((FeedbackForm.userIDField, userID)) }
         if let appVersion { fields.append((FeedbackForm.versionField, appVersion)) }
 
-        // Encode each value against the RFC 3986 unreserved set so a '+' in the
-        // note survives as a literal plus rather than being read as a space.
+        // Encode against the RFC 3986 unreserved set so a '+' survives as a plus, not a space.
         let body = fields
             .map { "\($0.0)=\(Self.formEncode($0.1))" }
             .joined(separator: "&")

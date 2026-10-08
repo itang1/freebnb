@@ -3,30 +3,26 @@
 // One-off migration to the friends-only listing model.
 //
 // Listings used to carry a `visibility` tier ('everyone' / 'friendsOnly' /
-// 'friendsOfFriends') that widened who could read them. The tiers are gone:
-// every listing is now readable only by its host, co-hosts, and the host's
-// accepted friends, enforced through `allowedViewerIDs`. This script brings
-// existing documents in line:
+// 'friendsOfFriends') that widened who could read them. The tiers are gone: every
+// listing is readable only by its host, co-hosts and the host's accepted friends, via
+// `allowedViewerIDs`. This script brings existing documents in line:
 //
 //   - deletes the legacy `visibility` field, and
-//   - rewrites `allowedViewerIDs` to host + accepted friends (capped at 1000,
-//     matching the rules), exactly what rebuildListingACLs now maintains.
+//   - rewrites `allowedViewerIDs` to host + accepted friends (capped at 1000, as the
+//     rules do), what rebuildListingACLs now maintains.
 //
-// Deploy the new firestore.rules and functions BEFORE running this. The rules
-// already ignore `visibility`, so between deploy and migration old documents
-// are at worst too private, never too public.
+// Deploy the new firestore.rules and functions BEFORE running this; the rules ignore
+// `visibility`, so old documents are at worst too private in between.
 //
-// SAFE BY DEFAULT: targets the Local Emulator Suite only. It refuses to touch
-// the real freebnb-6814a project unless you pass --prod AND set
-// MIGRATE_CONFIRM_PROD=1.
+// Targets the Local Emulator Suite only; it refuses the real freebnb-6814a project
+// unless you pass --prod AND set MIGRATE_CONFIRM_PROD=1.
 //
 // Usage:
 //   node scripts/migrate_friends_only.js                 # emulator
 //   node scripts/migrate_friends_only.js --dry-run       # print, write nothing
 //   MIGRATE_CONFIRM_PROD=1 node scripts/migrate_friends_only.js --prod
 //
-// Requires firebase-admin (shared with functions/node_modules, like the other
-// scripts here).
+// Requires firebase-admin (shared with functions/node_modules).
 
 "use strict";
 

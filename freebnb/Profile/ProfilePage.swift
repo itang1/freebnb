@@ -187,17 +187,14 @@ struct ProfilePage: View {
                 .sectionCard()
                 .padding(.bottom, 20)
 
-                // Only offered when the app is pointed at the Auth emulator, so the
-                // seeded credentials are never sent to the production project.
+                // Only offered against the Auth emulator, so seeded credentials never reach production.
                 #if DEBUG
                 if EmulatorEnvironment.isActive {
                     sectionLabel("Switch account")
                     VStack(spacing: 0) {
                         ForEach(Array(TestProfile.all.enumerated()), id: \.element.id) { index, profile in
                             if index > 0 { rowDivider }
-                            // A checkmark marks whoever is signed in now, so the
-                            // list doubles as an account switcher you can read at
-                            // a glance. Tapping any row hops straight to it.
+                            // A checkmark marks who is signed in, so the list doubles as an account switcher.
                             SettingsRow(
                                 icon: profile.systemImage,
                                 label: profile.displayName,
@@ -335,10 +332,7 @@ struct ProfilePage: View {
     private var profileHeader: some View {
         VStack(spacing: 6) {
             Group {
-                // A guest has no account, so there is no stable identity to
-                // generate an avatar from — the crossed-out person says "not
-                // signed in" plainly, where a generated symbol would imply an
-                // account that doesn't exist.
+                // A guest has no stable identity to generate an avatar from; the crossed-out person says "not signed in" plainly.
                 if authManager.authMethod == .guest {
                     PersonAvatar(systemImage: "person.slash", size: 100)
                 } else {
@@ -444,15 +438,11 @@ struct ProfilePage: View {
     }
 }
 
-// Sections kept out of the main struct body so their lines don't count toward
-// SwiftLint's type_body_length; `private` stays file-scoped, so they still see
-// the view's environment.
+// Sections kept out of the main struct body to stay under SwiftLint's type_body_length; `private` is file-scoped.
 extension ProfilePage {
     // MARK: - Hosting section
 
-    /// Hosting lives on the Stays tab behind a segmented picker, which a would-be
-    /// host has no reason to look under. Surface the same page here, where "list
-    /// my home" is a natural thing to go looking for.
+    /// Hosting lives on the Stays tab behind a segmented picker a would-be host wouldn't look under; surface it here too.
     var hostingSection: some View {
         Group {
             sectionLabel("Hosting")
@@ -487,9 +477,7 @@ extension ProfilePage {
 
     // MARK: - Help & info row
 
-    /// The former Info tab, folded in here: reference content (guides, FAQ,
-    /// safety) is visited too rarely to earn a fifth of the tab bar, but it
-    /// still needs a stable, findable home.
+    /// The former Info tab: reference content (guides, FAQ, safety) is too rarely visited to earn a tab but needs a findable home.
     var helpAndInfoRow: some View {
         NavigationLink {
             InfoPage()

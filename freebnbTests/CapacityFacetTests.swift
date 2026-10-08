@@ -2,22 +2,17 @@
 //  CapacityFacetTests.swift
 //  freebnbTests
 //
-//  Covers the richer capacity data (feature 17): bathroom counts, bed sizes, and
-//  accessibility attributes.
-//
-//  Two things are load-bearing here. First, back-compatible decoding: these keys
-//  post-date the schema, and a listing that fails to decode is dropped silently
-//  from the feed (A5), so a listing saved before them must still come back. Second,
-//  the meaning of a missing value — an unanswered question, never an answer of
-//  "no". That distinction decides what the filters match and what the UI renders.
+//  Covers the richer capacity data: bathroom counts, bed sizes and accessibility. Two things
+//  are load-bearing: back-compatible decoding (a decode failure silently drops a listing from
+//  the feed), and a missing value meaning an unanswered question, never "no", which decides
+//  what filters match and the UI renders.
 //
 
 import Foundation
 import Testing
 @testable import freebnb
 
-/// A listing document as it looked before feature 17: no `numBathrooms`, no
-/// `bedSizes`, no accessibility keys.
+/// A listing document as it looked before these fields: no `numBathrooms`, `bedSizes` or accessibility keys.
 private let legacyListingJSON = """
 {
   "hostUserID": "host",
@@ -41,16 +36,14 @@ struct LegacyListingDecodingTests {
         try JSONDecoder().decode(Home.self, from: Data(legacyListingJSON.utf8))
     }
 
-    /// The whole point of the tolerant decoders: a pre-feature-17 listing must
-    /// still decode, or it silently disappears from the feed.
+    /// A pre-feature listing must still decode, or it silently disappears from the feed.
     @Test func listingSavedBeforeFeature17StillDecodes() throws {
         let home = try decodeLegacy()
         #expect(home.sleeping.numGuestRooms == 1)
         #expect(home.amenities.hasWifi)
     }
 
-    /// Zero bathrooms is "the host never said". The card and detail page key off
-    /// this to omit the row rather than print "Bathrooms: 0".
+    /// Zero bathrooms is "never said"; the card and detail page omit the row rather than print "Bathrooms: 0".
     @Test func legacyListingReportsNoBathroomCountRatherThanOne() throws {
         #expect(try decodeLegacy().sleeping.numBathrooms == 0)
     }
@@ -61,7 +54,7 @@ struct LegacyListingDecodingTests {
         #expect(!sleeping.hasBedForTwo)
     }
 
-    /// False here means "did not claim", which is why nothing renders a red X.
+    /// False means "did not claim", so nothing renders a red X.
     @Test func legacyListingClaimsNoAccessibility() throws {
         let amenities = try decodeLegacy().amenities
         #expect(!amenities.hasStepFreeEntry)
@@ -70,9 +63,7 @@ struct LegacyListingDecodingTests {
         #expect(!amenities.hasAnyAccessibility)
     }
 
-    /// Encoding a decoded listing and decoding it back must preserve the new
-    /// fields; the custom decoders sit alongside a synthesized encoder, and it is
-    /// easy for the two to drift apart on a key.
+    /// Encode-then-decode must preserve the new fields; the custom decoders sit beside a synthesized encoder and can drift on a key.
     @Test func newFieldsSurviveAnEncodeDecodeRoundTrip() throws {
         var home = try decodeLegacy()
         home.sleeping.numBathrooms = 2
@@ -116,8 +107,7 @@ struct BedSizeTests {
         #expect(queen.hasBedForTwo)
     }
 
-    /// Smallest first, so "1 king, 2 twins" never reads as if the twins came free
-    /// with the king.
+    /// Smallest first, so "1 king, 2 twins" doesn't read as if the twins came free.
     @Test func bedSizesDescriptionOrdersSmallestFirstAndPluralises() {
         let sleeping = Sleeping(
             numGuestRooms: 1,
@@ -157,8 +147,7 @@ struct CapacityFilterTests {
         try #require(FilterOption.all.first { $0.id == id })
     }
 
-    /// A listing that never recorded a bed size cannot claim a queen. A guest
-    /// filtering for one has said plainly that a maybe is not good enough.
+    /// A listing with no recorded bed size can't claim a queen; a guest filtering for one wants more than a maybe.
     @Test func queenOrKingFilterExcludesListingsThatNeverSaid() throws {
         let option = try filter("bedForTwo")
         #expect(!option.matches(home { _ in }))
@@ -187,8 +176,7 @@ struct CapacityFilterTests {
         #expect(ids == ["stepFreeEntry", "elevator", "accessibleBathroom"])
     }
 
-    /// Ranking homes by accessibility would push accessible listings up the feed
-    /// for guests who never asked. It is a fact about a home, not a perk.
+    /// Ranking by accessibility would push accessible listings up for guests who never asked; it's a fact, not a perk.
     @Test func accessibilityDoesNotInflateTheAmenityCount() {
         let plain = home { _ in }
         let accessible = home {
