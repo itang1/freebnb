@@ -3,52 +3,38 @@
 // One-off migration to Circles — friend-grouped booking rules.
 //
 // Circles let a host sort their friends into named groups and hang a booking
-// policy off each one. Two things have to be true of every existing account
-// before the feature means anything:
+// policy off each one. Before the feature means anything, every existing account needs:
 //
-//   - every host has the starter circles, including the Default one at the
-//     fixed id `default`, because that id is where every policy resolution in
-//     firestore.rules terminates; and
+//   - every host has the starter circles, including Default at the fixed id
+//     `default`, where every policy resolution in firestore.rules terminates; and
 //   - every accepted friend has a `circleMembers` document naming a circle.
 //
-// The second is the point of running this at all. Default is a real,
-// policy-bearing circle now, not an implicit fallback — a friend with no
-// membership document is a gap the rules paper over, not a representation of
-// "in the Default circle". The rules do fall back to Default for such a friend,
-// deliberately, so that a friendship accepted seconds ago is not unenforceable;
-// but leaning on that as the steady state would mean the host's own screen
-// could not tell a friend they had deliberately left in Default from one nobody
-// had ever filed.
+// Default is a real policy-bearing circle, not an implicit fallback. The rules do
+// fall back to Default for an unfiled friend so a just-accepted friendship is
+// enforceable, but relying on that would stop the host's screen telling a friend
+// deliberately left in Default from one never filed.
 //
 // Everyone is filed under Default with the permissive starter policy, so this
-// migration changes what *nobody* may do: it is the identity of the feature,
-// written down. Hosts restrict people afterwards, by hand.
+// changes what nobody may do; hosts restrict people by hand afterwards. It also
+// writes the guest-readable projection at users/{hostID}/bookingPolicies/{friendID}
+// that the request sheet reads (without it the sheet offers everything, which is
+// safe since the rules are the boundary, but a guest may meet a rejection).
 //
-// It also writes the guest-readable projection at
-// users/{hostID}/bookingPolicies/{friendID}, which is what a guest's request
-// sheet reads to know which arrival options to offer. Without it the sheet
-// falls back to offering everything — safe, because the rules are the real
-// boundary, but it would mean a guest occasionally meets a rejection instead of
-// simply not being offered the option.
+// Nothing here touches a stay; Circles apply prospectively.
 //
-// Nothing here touches a stay. Circles apply prospectively: an accepted stay
-// stays accepted, whatever policy lands afterwards.
+// Deploy the new firestore.rules BEFORE running this. Until migration a host has no
+// circles, which the rules read as "nothing restricted".
 //
-// Deploy the new firestore.rules BEFORE running this. Between deploy and
-// migration a host simply has no circles, which the rules read as "nothing
-// configured, nothing restricted" — the behaviour they had before the feature.
-//
-// SAFE BY DEFAULT: targets the Local Emulator Suite only. It refuses to touch
-// the real freebnb-6814a project unless you pass --prod AND set
-// MIGRATE_CONFIRM_PROD=1.
+// Targets the Local Emulator Suite only; it refuses the real freebnb-6814a project
+// unless you pass --prod AND set MIGRATE_CONFIRM_PROD=1.
 //
 // Usage:
 //   node scripts/migrate_circles.js                 # emulator
 //   node scripts/migrate_circles.js --dry-run       # print, write nothing
 //   MIGRATE_CONFIRM_PROD=1 node scripts/migrate_circles.js --prod
 //
-// Idempotent: re-running files only what is missing and never overwrites a
-// circle a host has since renamed or reconfigured, nor a friend they have moved.
+// Idempotent: re-running files only what's missing and never overwrites a renamed
+// or reconfigured circle, nor a friend a host has moved.
 
 "use strict";
 
@@ -69,10 +55,8 @@ if (!useProd) {
   process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "localhost:8080";
 }
 
-// The modular firebase-admin API, resolved the same way seed_test_data.js does:
-// the legacy namespace (admin.firestore.FieldValue) was removed in v13, and the
-// repo root now carries v14. Prefer the root copy; fall back to the one
-// functions/ always depends on.
+// The modular firebase-admin API, resolved as in seed_test_data.js (v13 removed the
+// legacy namespace); prefers the root copy and falls back to functions/'s.
 let adminRequire = require;
 try {
   require.resolve("firebase-admin/app");
@@ -87,26 +71,22 @@ const db = getFirestore();
 
 const PAGE_SIZE = 200;
 
-// The fixed id of the circle that cannot be deleted. Mirrors
-// FriendCircle.defaultID in the Swift client and defaultCircleID() in
-// firestore.rules; rules-tests/mirrors.test.mjs asserts the three agree.
+// The fixed id of the undeletable circle; mirrors FriendCircle.defaultID and
+// defaultCircleID() in firestore.rules (rules-tests/mirrors.test.mjs asserts all three agree).
 const DEFAULT_CIRCLE_ID = "default";
 
 // Mirrors ArrivalWindow in the Swift client.
 const ARRIVAL_OPTIONS = ["flexible", "morning", "afternoon", "evening", "lateNight"];
 
-// What every circle starts as, Default included. A seeded restriction is a
-// decline the host never made, so all three ship permissive and the host
-// tightens the ones they want.
+// What every circle starts as, Default included. All three ship permissive, since a
+// seeded restriction is a decline the host never made.
 const PERMISSIVE_POLICY = {
   allowedArrivalOptions: ARRIVAL_OPTIONS,
   minNoticeHours: 0,
   maxStaysPerPeriod: null,
 };
 
-// Mirrors FriendCircle.seeded(). The two beyond Default are ordinary circles:
-// renameable, deletable, and there only so a host has somewhere obvious to drag
-// people to.
+// Mirrors FriendCircle.seeded(). The two beyond Default are ordinary circles, there so a host has somewhere to drag people.
 const SEEDED_CIRCLES = [
   { id: DEFAULT_CIRCLE_ID, name: "Everyone else", isDefault: true, sortOrder: 0 },
   { id: "closeFriend", name: "Close friend", isDefault: false, sortOrder: 1 },
@@ -200,8 +180,7 @@ async function fileFriends(hostID, defaultPolicy, counters) {
       }
     }
 
-    // The same chain firestore.rules walks and CirclePolicyResolver walks:
-    // override, then the named circle, then Default.
+    // The chain firestore.rules and CirclePolicyResolver walk: override, named circle, Default.
     const resolved =
       membership?.overridePolicy ??
       policyByCircle.get(membership?.circleID) ??

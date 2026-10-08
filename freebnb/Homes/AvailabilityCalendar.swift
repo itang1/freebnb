@@ -2,27 +2,19 @@
 //  AvailabilityCalendar.swift
 //  freebnb
 //
-//  The arithmetic behind the availability month grid (feature 16), kept apart
-//  from the views that draw it so the tricky part — turning a tapped day back
-//  into a set of merged ranges — is unit-tested rather than eyeballed.
+//  The arithmetic behind the availability month grid, apart from the views so the
+//  tricky part (turning a tapped day back into merged ranges) is unit-tested.
 //
-//  A `DateRange` is half-open: `start` is blocked, `end` is not. That is what
-//  `DateRange.overlaps(checkIn:checkOut:)` already assumes (`checkIn < end`), and
-//  what makes a single blocked day the range `[D, D+1)`. Everything here converts
-//  between that representation and a flat set of blocked days, because a set is
-//  the shape a tappable grid actually wants: toggling one day out of the middle of
-//  a range is a split, a merge, or a no-op depending on where it lands, and none
-//  of that survives contact with range surgery.
+//  A `DateRange` is half-open: `start` is blocked, `end` is not, so a single blocked
+//  day is `[D, D+1)`. Everything converts between that and a flat set of days, the
+//  shape a tappable grid wants (toggling a day is a split, merge or no-op).
 //
 
 import Foundation
 
 enum AvailabilityCalendar {
-    /// Every day covered by `ranges`, normalised to the start of its day.
-    ///
-    /// A range whose `end` precedes its `start` contributes nothing rather than
-    /// looping: those documents shouldn't exist, but this runs on data a modified
-    /// client could have written.
+    /// Every day covered by `ranges`, normalised to start of day. A range ending
+    /// before it starts contributes nothing rather than looping (modified clients could write one).
     static func blockedDays(in ranges: [DateRange], calendar: Calendar = .current) -> Set<Date> {
         var days: Set<Date> = []
         for range in ranges {
@@ -37,8 +29,7 @@ enum AvailabilityCalendar {
         return days
     }
 
-    /// The inverse: consecutive days collapse into one half-open range, ordered
-    /// earliest first. `days` is expected to hold start-of-day values.
+    /// The inverse: consecutive days collapse into half-open ranges, earliest first. `days` holds start-of-day values.
     static func ranges(from days: Set<Date>, calendar: Calendar = .current) -> [DateRange] {
         let sorted = days.sorted()
         var ranges: [DateRange] = []
@@ -46,7 +37,7 @@ enum AvailabilityCalendar {
         while index < sorted.count {
             let start = sorted[index]
             var last = start
-            // Walk forward while each day is exactly one after the previous.
+            // Walk forward while each day follows the previous.
             while index + 1 < sorted.count,
                   let next = calendar.date(byAdding: .day, value: 1, to: last),
                   calendar.isDate(sorted[index + 1], inSameDayAs: next) {
@@ -60,26 +51,18 @@ enum AvailabilityCalendar {
         return ranges
     }
 
-    /// `existing` ranges with `added` days folded in — the merge behind "apply to
-    /// all my homes". Additive and deduped by day: a home keeps every date it had
-    /// blocked and gains the new ones, so stamping travel dates across homes can't
-    /// erase a home's own closures. Order-independent, and idempotent, so re-running
-    /// it changes nothing.
+    /// `existing` ranges with `added` days folded in, behind "apply to all my homes".
+    /// Additive, deduped by day, order-independent and idempotent, so a home keeps its own closures.
     static func merging(_ existing: [DateRange], adding added: Set<Date>, calendar: Calendar = .current) -> [DateRange] {
         ranges(from: blockedDays(in: existing, calendar: calendar).union(added), calendar: calendar)
     }
 
-    /// Ranges that have not finished yet. The editor drops the rest on save: a
-    /// blocked week from last year is noise a host has to scroll past, and it can
-    /// no longer affect a request.
+    /// Ranges that haven't finished yet; the editor drops the rest on save as noise that can't affect a request.
     static func upcoming(_ ranges: [DateRange], now: Date = Date()) -> [DateRange] {
         ranges.filter { $0.end > now }.sorted { $0.start < $1.start }
     }
 
-    /// The day cells of `month`, padded with nils for the weekdays before the 1st
-    /// so the first cell lands under the right weekday header. The number of
-    /// leading blanks respects `calendar.firstWeekday`, which is not Sunday
-    /// everywhere.
+    /// The day cells of `month`, nil-padded for weekdays before the 1st per `calendar.firstWeekday`.
     static func monthGrid(for month: Date, calendar: Calendar = .current) -> [Date?] {
         guard let interval = calendar.dateInterval(of: .month, for: month),
               let dayCount = calendar.range(of: .day, in: .month, for: month)?.count
@@ -103,15 +86,12 @@ enum AvailabilityCalendar {
         return (0..<symbols.count).map { symbols[($0 + offset) % symbols.count] }
     }
 
-    /// A day is in the past once the day it belongs to has ended. Today is not
-    /// past: a host can still block tonight.
+    /// A day is past once it has ended; today is not past (a host can still block tonight).
     static func isPast(_ day: Date, now: Date = Date(), calendar: Calendar = .current) -> Bool {
         calendar.startOfDay(for: day) < calendar.startOfDay(for: now)
     }
 
-    /// Adds `day` to the blocked set, or removes it if it was already there.
-    /// Past days are left alone — the grid disables them, and this is the second
-    /// place that promise is kept.
+    /// Adds `day` to the blocked set or removes it. Past days are left alone, a second guard behind the grid.
     static func toggling(
         _ day: Date,
         in days: Set<Date>,
@@ -129,9 +109,8 @@ enum AvailabilityCalendar {
         return updated
     }
 
-    /// The nights a stay actually occupies: every day in `[checkIn, checkOut)`.
-    /// The check-out day is not one of them — the guest leaves that morning — which
-    /// is why a stay may end on a day the host has blocked.
+    /// The nights a stay occupies: every day in `[checkIn, checkOut)`. The check-out
+    /// day isn't one, so a stay may end on a blocked day.
     static func nights(from checkIn: Date, to checkOut: Date, calendar: Calendar = .current) -> [Date] {
         var nights: [Date] = []
         var day = calendar.startOfDay(for: checkIn)
@@ -144,10 +123,8 @@ enum AvailabilityCalendar {
         return nights
     }
 
-    /// Whether a guest could actually stay `[checkIn, checkOut)`: at least one
-    /// night, and no night the host has ruled out. The guest-side grid asks this
-    /// before it will draw a span, so a selection that the request sheet would
-    /// reject can't be made in the first place.
+    /// Whether a guest could stay `[checkIn, checkOut)`: at least one night, none ruled out.
+    /// The guest grid asks before drawing a span.
     static func isStaySelectable(
         checkIn: Date,
         checkOut: Date,
@@ -159,20 +136,15 @@ enum AvailabilityCalendar {
         return !nights.contains(where: unavailableDays.contains)
     }
 
-    /// Days of turnover padding a buffer of `hours` implies, on a day-granular
-    /// calendar. Rounds up, because any positive buffer rules out same-day
-    /// turnover: even an hour means the day a guest checks out is not a day the
-    /// next guest may check in.
+    /// Days of turnover padding for `hours` on a day-granular calendar, rounded up
+    /// since any positive buffer rules out same-day turnover.
     static func bufferDays(forHours hours: Int) -> Int {
         hours > 0 ? (hours + 23) / 24 : 0
     }
 
     /// Each booked range grown by `bufferHours` of turnover on both sides, then
-    /// merged. This is what the published calendar carries in place of the raw
-    /// stays: the day before a check-in and the day after a checkout read as
-    /// unavailable, indistinguishable from any other closed day, so a guest still
-    /// learns only that a date is spoken for and never why. A zero buffer returns
-    /// the ranges untouched, which is exactly the pre-buffer behaviour.
+    /// merged; this is what the published calendar carries instead of raw stays, so
+    /// the padded days read as any closed day. A zero buffer returns the ranges untouched.
     static func buffered(_ ranges: [DateRange], bufferHours: Int, calendar: Calendar = .current) -> [DateRange] {
         let days = bufferDays(forHours: bufferHours)
         guard days > 0 else { return ranges }
@@ -182,13 +154,11 @@ enum AvailabilityCalendar {
                 end: calendar.date(byAdding: .day, value: days, to: range.end) ?? range.end
             )
         }
-        // Round-trip through the day set so overlapping padded ranges merge, the
-        // same normalisation `merging` relies on.
+        // Round-trip through the day set so overlapping padded ranges merge.
         return self.ranges(from: blockedDays(in: padded, calendar: calendar), calendar: calendar)
     }
 
-    /// The next `monthCount` months starting with the one containing `from`, which
-    /// is how far ahead the grid lets a host or guest look.
+    /// The next `monthCount` months from the one containing `from`: how far ahead the grid looks.
     static func months(from: Date = Date(), count: Int, calendar: Calendar = .current) -> [Date] {
         guard let start = calendar.dateInterval(of: .month, for: from)?.start else { return [] }
         return (0..<count).compactMap { calendar.date(byAdding: .month, value: $0, to: start) }

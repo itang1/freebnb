@@ -2,10 +2,9 @@
 //  BookedDatesTests.swift
 //  freebnbTests
 //
-//  The listing-side of booked dates: a server-owned `bookedDateRanges` that the
-//  client only decodes, rides back out on save, and merges with the host's blocked
-//  ranges into one guest-facing "unavailable". The trigger that fills the field is
-//  covered end-to-end against the emulator; these pin the client's half.
+//  The listing side of booked dates: a server-owned `bookedDateRanges` the client
+//  decodes, rides back out on save, and merges with blocked ranges into one
+//  guest-facing "unavailable". The trigger is covered against the emulator; these pin the client's half.
 //
 
 import Testing
@@ -17,11 +16,8 @@ struct BookedDatesTests {
         Calendar.current.startOfDay(for: Date()).addingTimeInterval(Double(offset) * 86_400)
     }
 
-    /// A stored listing carrying only the fields that have always been required,
-    /// plus whatever availability shape the test is exercising. Written as raw
-    /// JSON rather than built from `HomeFixture` because the point of these tests
-    /// is what comes off the wire, and an encoder can only ever produce the
-    /// current shape.
+    /// A stored listing with only the always-required fields plus the availability shape under test.
+    /// Raw JSON, since the point is what comes off the wire and an encoder only emits the current shape.
     private static func legacyListingJSON(extraFields: String = "") -> String {
         """
         {
@@ -43,9 +39,7 @@ struct BookedDatesTests {
         """
     }
 
-    /// The merged field must survive an encode/decode round-trip: the repository
-    /// replaces the whole listing document, so a field that didn't would be wiped
-    /// the next time the host edited anything.
+    /// The merged field must survive an encode/decode round trip; the repository replaces the whole document.
     @Test func unavailableRangesSurviveARoundTrip() throws {
         var home = HomeFixture.make()
         home.unavailableDateRanges = [DateRange(start: day(10), end: day(14))]
@@ -57,9 +51,7 @@ struct BookedDatesTests {
         #expect(restored.unavailableDateRanges?.first?.end == day(14))
     }
 
-    /// The union the private document hands to the public one. Blocked and booked
-    /// land in one list in which nothing marks which was which. Buffer zero here,
-    /// so this pins the pure merge without the turnover padding the next tests own.
+    /// The union the private document hands to the public one: blocked and booked in one list, unmarked. Buffer zero pins the pure merge.
     @Test func availabilityMergesBlockedAndBooked() {
         let availability = ListingAvailability(
             blockedDateRanges: [DateRange(start: day(1), end: day(3))],
@@ -73,13 +65,9 @@ struct BookedDatesTests {
         #expect(ranges.contains(DateRange(start: day(10), end: day(14))))
     }
 
-    /// The turnover buffer grows the booked half by whole days on both sides
-    /// before it merges. A one-day buffer around a stay booked day 10 – 14 closes
-    /// day 9 (the day before check-in) and day 14 (the day after checkout, which
-    /// the raw half-open range left open), while the host's blocked days pass
-    /// through untouched. The published field carries the padded stay, so a guest
-    /// reads it as unavailable with nothing to say it is a buffer rather than a
-    /// booking.
+    /// The buffer grows the booked half by whole days both sides before merging. A
+    /// one-day buffer around a day 10 – 14 stay closes days 9 and 14; blocked days
+    /// pass through, and the result carries no sign it is a buffer.
     @Test func bufferGrowsTheBookedHalfOnBothSides() {
         let availability = ListingAvailability(
             blockedDateRanges: [DateRange(start: day(1), end: day(3))],
@@ -91,8 +79,7 @@ struct BookedDatesTests {
         // The stay's own nights.
         #expect(days.contains(day(10)))
         #expect(days.contains(day(13)))
-        // The buffer: the day before check-in and the checkout day the raw range
-        // would have left bookable.
+        // The buffer: the day before check-in and the checkout day the raw range leaves bookable.
         #expect(days.contains(day(9)))
         #expect(days.contains(day(14)))
         // Just outside the buffer on either side stays open.
@@ -103,9 +90,7 @@ struct BookedDatesTests {
         #expect(!days.contains(day(0)))
     }
 
-    /// A listing written before the buffer existed reads as the default, not zero,
-    /// so it still gets its turnover day. This is the retroactive half of the
-    /// feature: no host has to opt in for the gap to appear.
+    /// A listing predating the buffer reads as the default, not zero, so no host has to opt in.
     @Test func availabilityMissingBufferDecodesAsTheDefault() throws {
         let restored = try JSONDecoder().decode(
             ListingAvailability.self,
@@ -114,9 +99,7 @@ struct BookedDatesTests {
         #expect(restored.bufferHours == ListingAvailability.defaultBufferHours)
     }
 
-    /// Either half being empty must not swallow the other: a listing with only
-    /// bookings is still unavailable on those days, and one with only blocks still
-    /// blocks.
+    /// Either half being empty mustn't swallow the other.
     @Test func availabilityHandlesEitherHalfEmpty() {
         let bookedOnly = ListingAvailability(bookedDateRanges: [DateRange(start: day(10), end: day(14))])
         #expect(bookedOnly.unavailableRanges.count == 1)
@@ -125,9 +108,7 @@ struct BookedDatesTests {
         #expect(blockedOnly.unavailableRanges.count == 1)
     }
 
-    /// A private document that has never been written decodes as an open calendar
-    /// rather than throwing. It doesn't exist until a host blocks a day or a stay
-    /// is accepted, and "no document" has to mean "nothing closed".
+    /// A never-written private document decodes as an open calendar rather than throwing.
     @Test func absentAvailabilityHalvesDecodeAsEmpty() throws {
         let restored = try JSONDecoder().decode(ListingAvailability.self, from: Data("{}".utf8))
         #expect(restored.blockedDateRanges.isEmpty)
@@ -137,11 +118,7 @@ struct BookedDatesTests {
 
     // MARK: - Reading a listing written before the split
 
-    /// The backfill runs after this ships, so for a while the app will read
-    /// listings still carrying the two public arrays. Those have to keep showing
-    /// every day they had closed. The failure this guards against is the quiet
-    /// one: a host's blocked week decoding as nil and the listing accepting
-    /// requests for dates it had ruled out.
+    /// The backfill runs after this ships, so legacy listings with the two public arrays must keep showing every closed day.
     @Test func legacyListingFallsBackToTheUnionOfBothFields() throws {
         let home = try JSONDecoder().decode(Home.self, from: Data(Self.legacyListingJSON(
             extraFields: """
@@ -161,9 +138,7 @@ struct BookedDatesTests {
         )))
     }
 
-    /// The migrated field wins outright. A document carrying both shapes — which
-    /// is what a listing looks like mid-backfill if a write interleaves — must not
-    /// double-count its closed days.
+    /// The migrated field wins outright; a mid-backfill document with both shapes mustn't double-count.
     @Test func migratedFieldWinsOverTheLegacyPair() throws {
         let home = try JSONDecoder().decode(Home.self, from: Data(Self.legacyListingJSON(
             extraFields: """
@@ -176,21 +151,18 @@ struct BookedDatesTests {
         #expect(home.unavailableRanges.count == 1)
     }
 
-    /// Neither shape present is an open calendar, not a decode failure — a listing
-    /// that has never blocked a day has no availability keys at all.
+    /// Neither shape present is an open calendar, not a decode failure.
     @Test func listingWithNoAvailabilityKeysDecodes() throws {
         let home = try JSONDecoder().decode(Home.self, from: Data(Self.legacyListingJSON().utf8))
         #expect(home.unavailableDateRanges == nil)
         #expect(home.unavailableRanges.isEmpty)
     }
 
-    // MARK: - The invariant, enforced rather than asked for politely
+    // MARK: - The invariant, enforced
 
-    /// The files allowed to name the two halves at all. Much shorter than it was
-    /// before the split: the halves now live in one private document, so most of
-    /// the code that used to reach for them goes through `ListingAvailability` or
-    /// the merged `Home.unavailableDateRanges` instead. Adding a file here is a
-    /// claim that no guest can see it.
+    /// The files allowed to name the two halves. Most code goes through
+    /// `ListingAvailability` or the merged `Home.unavailableDateRanges`; adding a
+    /// file here claims no guest can see it.
     private static let mayReadRawRanges: Set<String> = [
         "freebnb/Homes/ListingAvailability.swift",     // defines both halves
         "freebnb/Homes/Home.swift",                    // decodes the pre-split public shape
@@ -200,10 +172,8 @@ struct BookedDatesTests {
         "freebnb/Homes/AvailabilityEditorView.swift",  // the host's editor, the one screen that sees them apart
     ]
 
-    /// Everything from `//` to end of line, removed. The rule is about what the
-    /// code reads, not what the comments discuss: this very file, and the fix that
-    /// prompted it, both name the split fields in prose to explain why not to touch
-    /// them. Block comments aren't stripped because this codebase doesn't use them.
+    /// Everything from `//` to end of line, removed: the rule is about what code
+    /// reads, and comments here name the split fields. Block comments aren't used.
     private static func strippingComments(_ source: String) -> String {
         source
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -214,12 +184,9 @@ struct BookedDatesTests {
             .joined(separator: "\n")
     }
 
-    /// `Home.bookedDateRanges` asks callers to "go through `unavailableRanges`,
-    /// never this", and for a while a comment was the only thing enforcing it —
-    /// which is exactly how `ModifyStaySheet`, a guest-facing sheet, ended up
-    /// validating against `blockedDateRanges` alone and telling any guest which of
-    /// a host's unavailable days were bookings. A comment can't fail a build; this
-    /// can.
+    /// `Home.bookedDateRanges` asks callers to use `unavailableRanges`, but a comment
+    /// alone let `ModifyStaySheet` validate against blocked ranges and leak which days
+    /// were bookings. A comment can't fail a build; this can.
     @Test func onlyHostSurfacesNameTheSplitRanges() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // freebnbTests
