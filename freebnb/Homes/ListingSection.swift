@@ -2,10 +2,7 @@
 //  ListingSection.swift
 //  freebnb
 //
-//  The card container every block on HomeDetailPage sits in. The page used to
-//  be one long column of bare `Text(...).font(.headline)` headings with the
-//  same spacing between a heading and its own rows as between two unrelated
-//  blocks, so nothing looked grouped and the whole page read as one list.
+//  The card container every block on HomeDetailPage sits in, so headings group with their rows instead of the page reading as one long list.
 //
 
 import SwiftUI

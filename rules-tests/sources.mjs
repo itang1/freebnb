@@ -2,12 +2,9 @@
 // the Cloud Functions, the admin console, and the seed/backfill scripts.
 //
 // Several values are deliberately duplicated across those surfaces (caps,
-// enum whitelists, id formats), because rules, Swift, and TypeScript cannot
-// share code. mirrors.test.mjs uses these parsers to assert the copies still
-// agree; messages.test.mjs uses them to drive the rules with the exact event
-// kinds the Swift client can send. Every parser throws when its pattern stops
-// matching, so a refactor that moves a constant fails the suite loudly instead
-// of letting the check rot into a vacuous pass.
+// enum whitelists, id formats), because rules, Swift and TypeScript can't share code. mirrors.test.mjs uses these
+// parsers to assert the copies agree, and messages.test.mjs to drive the rules with the client's real event kinds.
+// Every parser throws when its pattern stops matching, so a moved constant fails loudly instead of rotting into a vacuous pass.
 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

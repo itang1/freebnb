@@ -2,10 +2,7 @@
 //  PreviewData.swift
 //  freebnb
 //
-//  Canonical mock objects for #Preview blocks, so previews stop hand-rolling
-//  model values inline and a model change breaks one file instead of twenty.
-//  Not #if DEBUG-gated: #Preview bodies are compiled (then stripped) in release
-//  configurations, so gating this would break archive builds.
+//  Canonical mock objects for #Preview blocks, so a model change breaks one file. Not #if DEBUG-gated: #Preview bodies compile in release, so gating would break archives.
 //
 
 import Foundation

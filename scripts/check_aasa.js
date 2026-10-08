@@ -3,10 +3,8 @@
 // carries its Team ID placeholder.
 //
 // Wired as the hosting predeploy hook in firebase.json, rather than as a test,
-// because a placeholder in the repo is a normal state (the Team ID isn't in
-// version control) while a placeholder on the live site is not: iOS fetches the
-// file once, finds an app ID that matches nothing, and every invite link opens
-// Safari from then on, with nothing in any log to say why.
+// because a placeholder in the repo is normal (the Team ID isn't in version control) but on the live site it
+// isn't: iOS fetches the file once, finds an app ID matching nothing, and every invite opens Safari with no log saying why.
 //
 // Run directly to check: node scripts/check_aasa.js
 

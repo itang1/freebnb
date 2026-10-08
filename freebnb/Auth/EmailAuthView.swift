@@ -5,10 +5,7 @@
 
 import SwiftUI
 
-/// Email + password sign-in and registration, presented as a sheet from the
-/// welcome screen. Drives `AuthManager` directly; dismisses itself once a signed
-/// in state arrives (ContentView swaps out the whole welcome flow at that point,
-/// so this only needs to close the sheet).
+/// Email + password sign-in and registration, a sheet from the welcome screen driving `AuthManager`; it only needs to close once signed in (ContentView swaps out the welcome flow).
 struct EmailAuthView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
@@ -33,8 +30,7 @@ struct EmailAuthView: View {
 
     private var isRegistering: Bool { mode == .register }
 
-    // Enough to enable the button; Firebase does the authoritative validation and
-    // reports failures back through `authManager.authError`.
+    // Enough to enable the button; Firebase validates authoritatively and reports via `authManager.authError`.
     private var canSubmit: Bool {
         !email.trimmingCharacters(in: .whitespaces).isEmpty
             && password.count >= 6
@@ -119,8 +115,7 @@ struct EmailAuthView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            // ContentView switches away from the welcome flow the moment auth
-            // state flips, so closing the sheet is all that's left to do.
+            // ContentView leaves the welcome flow when auth flips, so closing the sheet is all that's left.
             .onChange(of: authManager.isSignedIn) { _, signedIn in
                 if signedIn { dismiss() }
             }

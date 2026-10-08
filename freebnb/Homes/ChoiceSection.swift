@@ -2,9 +2,7 @@
 //  ChoiceSection.swift
 //  freebnb
 //
-//  A radio-style form section: each option shows a checkmark, its name, and a
-//  caption explaining the tradeoff. The create-listing form uses it for host
-//  motivation and cancellation policy, which were copies of the same layout.
+//  A radio-style form section (checkmark, name, tradeoff caption), used for host motivation and cancellation policy.
 //
 
 import SwiftUI
@@ -23,8 +21,7 @@ struct ChoiceSection<Option: Hashable>: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Image(systemName: selection == option ? "checkmark.circle.fill" : "circle")
-                                // Full strength: the empty circle is the only mark
-                                // saying "not chosen", so it can't be a ghost.
+                                // Full strength: the empty circle is the only "not chosen" mark, so it can't be a ghost.
                                 .foregroundColor(selection == option ? .accent : .secondaryText)
                             Text(name(option))
                                 .font(.body)

@@ -6,11 +6,7 @@
 import AuthenticationServices
 import SwiftUI
 
-/// The Apple / Google / email buttons shared by the welcome screen and the
-/// guest-to-account "Create Account" screen. `appleButtonType` and the two
-/// labels flip between sign-in and sign-up phrasing; the underlying
-/// `AuthManager` calls decide for themselves whether to link an active guest
-/// session or start a fresh one.
+/// The Apple / Google / email buttons shared by the welcome and "Create Account" screens; `appleButtonType` and the labels flip between sign-in and sign-up, while `AuthManager` decides whether to link a guest session.
 struct AuthProviderButtons: View {
     @Environment(AuthManager.self) private var authManager
 

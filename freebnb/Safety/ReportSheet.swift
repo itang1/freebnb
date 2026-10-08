@@ -26,10 +26,7 @@ struct ReportSheet: View {
 
     private var reasonTrimmed: String { reason.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    /// Matches the `reason` cap in `firestore.rules`. Checked here so an
-    /// over-long report is a visible counter rather than a permission denial
-    /// after the fact — a report that bounces at the server reads as the app
-    /// refusing to hear it, which is the last thing this sheet should do.
+    /// Matches the `reason` cap in `firestore.rules`, so an over-long report is a visible counter, not a server bounce that reads as the app refusing to listen.
     private static let reasonMaxLength = 2000
     private var reasonTooLong: Bool { reasonTrimmed.count > Self.reasonMaxLength }
 

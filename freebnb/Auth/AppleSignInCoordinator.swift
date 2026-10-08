@@ -6,13 +6,9 @@
 import AuthenticationServices
 import UIKit
 
-// `ASAuthorizationController` delivers its delegate callbacks on the main queue,
-// and we only call `signIn(nonce:)` from the main actor, so `continuation` is
-// effectively single-threaded. Pinning the class to `@MainActor` makes the
-// compiler enforce that invariant instead of leaving it to call-site discipline.
-// The delegate/presentation protocol requirements aren't `@MainActor`, so they
-// stay `nonisolated` and assert main-actor isolation at runtime (safe because
-// AuthenticationServices always invokes them on the main queue).
+// `ASAuthorizationController` calls back on the main queue and `signIn(nonce:)` is only called from the main actor,
+// so `continuation` is effectively single-threaded; `@MainActor` makes the compiler enforce that. The delegate
+// requirements aren't `@MainActor`, so they stay `nonisolated` and assert main-actor isolation at runtime.
 @MainActor
 final class AppleSignInCoordinator: NSObject,
     ASAuthorizationControllerDelegate,
