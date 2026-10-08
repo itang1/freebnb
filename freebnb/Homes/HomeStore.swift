@@ -12,27 +12,19 @@ import os
 @Observable
 final class HomeStore {
     private(set) var listings: [Home] = []
-    /// The feed the UI renders: `listings` with blocked hosts and unreachable
-    /// friends-only listings removed, ordered friends-first then by recency.
-    /// Derived here (A1) so the filter-and-sort runs once when its inputs change,
-    /// not on every view render as it did when this lived in `ContentView`.
+    /// The feed the UI renders: `listings` minus blocked hosts and unreachable
+    /// listings, friends first then by recency.
     private(set) var visibleListings: [Home] = []
-    /// Listings the signed-in user may manage: the ones they host, and the ones a
-    /// friend has made them a co-host of (feature 14). Ask `Home.isHostedBy(_:)`
-    /// before offering anything only a host may do.
+    /// Listings the user hosts or co-hosts. Check `Home.isHostedBy(_:)` before
+    /// offering host-only actions.
     private(set) var managedListings: [Home] = []
-    /// Street addresses and exact coordinates the current user is allowed to see,
-    /// keyed by listing id. Populated eagerly for the user's own listings and on
-    /// demand elsewhere; a listing absent from this map is one whose address the
-    /// user has not earned (or has not requested yet).
+    /// Addresses the user may see, keyed by listing id. A missing entry means not
+    /// earned or not fetched yet.
     private(set) var listingLocations: [String: ListingLocation] = [:]
-    /// House manuals the current user is allowed to see, keyed by listing id.
-    /// Cached on demand alongside `listingLocations`, gated by the same
-    /// accepted-guest rule.
+    /// House manuals the user may see, keyed by listing id (accepted guests only).
     private(set) var listingManuals: [String: HouseManual] = [:]
-    /// The unmerged calendars of listings this user manages, keyed by listing id.
-    /// Only ever populated for managed listings: a guest is not entitled to this
-    /// document and asking for it is a permission error, not a miss.
+    /// Unmerged calendars of managed listings, keyed by listing id. Guests can't
+    /// read these.
     private(set) var listingAvailability: [String: ListingAvailability] = [:]
     private(set) var isLoading = true
     private(set) var isLoadingMore = false
@@ -41,30 +33,22 @@ final class HomeStore {
 
     @ObservationIgnored private let repository: HomesRepository
     @ObservationIgnored private let photoUploader: PhotoUploader
-    // `nonisolated(unsafe)` because `deinit` is nonisolated and must cancel
-    // the listener. The property is only assigned from @MainActor contexts,
-    // and `RepositoryListener.cancel()` is thread-safe per Firebase's docs
-    // for `ListenerRegistration.remove()`.
+    // `nonisolated(unsafe)` so the nonisolated `deinit` can cancel the listener;
+    // `cancel()` is thread-safe.
     @ObservationIgnored nonisolated(unsafe) private var activeListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var managedListingsListener: RepositoryListener?
     @ObservationIgnored nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
     @ObservationIgnored private let log = AppLog.logger("homes")
     @ObservationIgnored private let pageSize = 25
-    // Live first page (kept fresh by the snapshot listener) and the older pages
-    // fetched on demand via cursor. `listings` is their de-duplicated, ordered
-    // merge, so paging no longer re-downloads earlier pages on each load-more.
+    // Live first page plus older pages fetched by cursor; `listings` is their merge.
     @ObservationIgnored private var livePage: [Home] = []
     @ObservationIgnored private var pagedListings: [Home] = []
-    // Pinned when the listener starts so `loadMore` pages the same partition the
-    // live page came from, even if auth changes mid-scroll.
+    // Pinned at listener start so `loadMore` pages the same partition as the live page.
     @ObservationIgnored private var viewerID: String = ""
-    // Listings whose private location has already been fetched, successfully or
-    // not. A legacy listing has no location document, so caching only the hits
-    // would refetch it on every managed-listings snapshot.
+    // Listings whose location fetch was already attempted. Legacy listings have no
+    // location doc, so caching only hits would refetch them every snapshot.
     @ObservationIgnored private var attemptedLocationIDs: Set<String> = []
-    // Feed derivation context supplied by the surrounding stores (auth, friends,
-    // blocks). Held here so `visibleListings` recomputes only when it or the raw
-    // listings change. See `updateFeedContext`.
+    // Viewer, friends and blocks the feed is derived from; see `updateFeedContext`.
     @ObservationIgnored private var feedContext = FeedContext()
 
     init(
@@ -98,7 +82,7 @@ final class HomeStore {
             listings = []
             visibleListings = []
             managedListings = []
-            // Addresses are entitlements of the signed-in user, not of the device.
+            // Addresses belong to the signed-in user, not the device.
             listingLocations = [:]
             listingManuals = [:]
             listingAvailability = [:]
@@ -109,14 +93,11 @@ final class HomeStore {
             return
         }
         isLoading = true
-        // Re-establishing the live first page invalidates any fetched older
-        // pages, so start paging fresh.
+        // A fresh live page invalidates fetched older pages.
         pagedListings = []
         canLoadMore = true
         viewerID = currentViewerID
-        // The live listener covers only the first page. Fetch one past the page
-        // size so we can tell "more exist beyond the first page" from "that's
-        // all" without an extra round trip.
+        // Fetch one past the page size to learn whether more exist without an extra query.
         activeListener = repository.listenToVisibleListings(viewerID: viewerID, limit: pageSize + 1) { [weak self] result in
             Task { @MainActor [weak self] in
                 self?.apply(result: result)
@@ -131,8 +112,7 @@ final class HomeStore {
         }
     }
 
-    // Guests can never appear in a listing's `allowedViewerIDs` (they cannot be
-    // friends), so they browse as an empty viewer and skip that query entirely.
+    // Guests can't be friends, so they browse as an empty viewer and skip the query.
     private var currentViewerID: String {
         guard let user = Auth.auth().currentUser, !user.isAnonymous else { return "" }
         return user.uid
@@ -144,11 +124,8 @@ final class HomeStore {
             log.error("managed listings snapshot error: \(error.localizedDescription, privacy: .public)")
         case .success(let homes):
             managedListings = homes.filter { $0.deletedAt == nil }
-            // A manager can always read the addresses of the listings they manage,
-            // and every management surface (the listing rows, the dashboard, the
-            // edit form, the incoming request rows) wants them. A co-host is a
-            // manager, so this prefetch now covers their listings too — the rules
-            // admit it (`isListingManager`). Bounded by ownListingsListenerLimit.
+            // Managers can always read their listings' addresses, and every
+            // management surface wants them (co-hosts included).
             let missing = managedListings.map(\.id).filter { !attemptedLocationIDs.contains($0) }
             guard !missing.isEmpty else { return }
             attemptedLocationIDs.formUnion(missing)
@@ -160,9 +137,8 @@ final class HomeStore {
 
     // MARK: - Progressive address disclosure
 
-    /// Fetches and caches the listing's street address. Returns nil when the
-    /// caller isn't entitled to it — a guest without an accepted stay — which is
-    /// the expected answer, not an error worth surfacing.
+    /// Fetches and caches the street address. Nil when the caller isn't entitled
+    /// to it, which is expected rather than an error.
     @discardableResult
     func location(for homeID: String) async -> ListingLocation? {
         if let cached = listingLocations[homeID] { return cached }
@@ -176,9 +152,8 @@ final class HomeStore {
         }
     }
 
-    /// Fetches and caches the listing's house manual. Returns nil when the caller
-    /// isn't an accepted guest or the host hasn't written one — both expected,
-    /// non-error outcomes.
+    /// Fetches and caches the house manual. Nil for non-accepted guests or when
+    /// none was written.
     @discardableResult
     func manual(for homeID: String) async -> HouseManual? {
         if let cached = listingManuals[homeID] { return cached }
@@ -192,8 +167,7 @@ final class HomeStore {
         }
     }
 
-    /// Writes the host's house manual and refreshes the local cache so the editor
-    /// and the guest-facing card reflect it immediately.
+    /// Writes the manual and updates the local cache.
     func saveManual(homeID: String, manual: HouseManual) async throws {
         do {
             try await repository.saveManual(homeID: homeID, manual: manual)
@@ -212,9 +186,8 @@ final class HomeStore {
             isLoading = false
         case .success(let raw):
             self.error = nil
-            // The sentinel (pageSize + 1) tells us whether more listings exist
-            // beyond the live first page. Once older pages have been fetched,
-            // their own paging owns canLoadMore, so don't overwrite it here.
+            // The extra sentinel row says whether more exist; once older pages are
+            // loaded, their paging owns canLoadMore.
             let firstPageHasMore = raw.count > pageSize
             livePage = Array(raw.filter { $0.deletedAt == nil }.prefix(pageSize))
             if pagedListings.isEmpty { canLoadMore = firstPageHasMore }
@@ -223,8 +196,7 @@ final class HomeStore {
         }
     }
 
-    // Merge the live first page with any fetched older pages into one
-    // de-duplicated list in recency order (newest first).
+    // Merges live and older pages, de-duplicated, newest first.
     private func recompute() {
         var seen = Set<String>()
         var merged: [Home] = []
@@ -236,11 +208,10 @@ final class HomeStore {
         recomputeVisible()
     }
 
-    // MARK: - Derived feed (A1)
+    // MARK: - Derived feed
 
-    /// Supplies the viewer identity, friend set, and block set the feed is
-    /// filtered and ranked against. Recomputes `visibleListings` only when the
-    /// context actually changes, so the view layer can call this freely.
+    /// Supplies the viewer, friend and block sets the feed is built from.
+    /// Recomputes only when they change.
     func updateFeedContext(myID: String, friendIDs: Set<String>, blockedIDs: Set<String>) {
         let next = FeedContext(myID: myID, friendIDs: friendIDs, blockedIDs: blockedIDs)
         guard next != feedContext else { return }
@@ -257,19 +228,12 @@ final class HomeStore {
         )
     }
 
-    /// Filters out blocked hosts and listings you can't see, then orders
-    /// friends' listings first, then your own, then everyone else.
+    /// Drops blocked hosts and non-friends, then orders friends' listings first,
+    /// your own next, everyone else last; newest first within a rank.
     ///
-    /// Every listing is friends-only. Firestore rules and the ACL-gated feed
-    /// query are what actually keep a listing out of a stranger's hands; the
-    /// friendship check here is a second line of defence for a stale
-    /// `allowedViewerIDs` (a friend removed since the listing was last written).
-    /// Block filtering, by contrast, is client-only by design — the block list
-    /// is private to the blocker.
-    ///
-    /// Within a rank bucket, newest listings come first (L3). Swift's sort is not
-    /// stable, so the comparator falls through to the listing id: without a total
-    /// order, rows sharing a rank and timestamp reshuffle between recomputes.
+    /// The friendship check backs up a stale `allowedViewerIDs`; block filtering
+    /// is client-only because the block list is private. The id tiebreak keeps
+    /// the order total so equal rows don't reshuffle.
     nonisolated static func feed(
         from listings: [Home],
         myID: String,
@@ -293,7 +257,7 @@ final class HomeStore {
             }
     }
 
-    /// Lower sorts earlier: friends' listings, then your own, then everyone else.
+    /// Lower sorts earlier.
     nonisolated static func feedRank(_ home: Home, myID: String, friendIDs: Set<String>) -> Int {
         if friendIDs.contains(home.hostUserID) { return 0 }
         if home.hostUserID == myID { return 1 }
@@ -303,9 +267,7 @@ final class HomeStore {
     func loadMore() {
         guard !isLoadingMore, canLoadMore else { return }
         isLoadingMore = true
-        // Page after the last loaded listing's (createdAt, id); no earlier pages
-        // are re-downloaded. A listing sourced from the ordered query always has
-        // a createdAt, so this is nil only when the list is empty.
+        // Page after the last listing's (createdAt, id); nil only when the list is empty.
         let cursor = listings.last.flatMap { last in
             last.createdAt.map { ListingCursor(createdAt: $0, id: last.id) }
         }
@@ -330,13 +292,10 @@ final class HomeStore {
 
     // MARK: - Writes
 
-    // Both writes throw on failure so the caller can surface an error in the
-    // UI. The store logs regardless, so failures are never silent.
+    // Writes throw so callers can surface errors; the store logs regardless.
 
-    /// Saves the world-readable listing document and, when `location` is given,
-    /// the private street address alongside it. The public document is written
-    /// first: a listing with no address is recoverable by re-saving, whereas an
-    /// address with no listing is orphaned data the rules can't even reach.
+    /// Saves the listing, then the private address if given. Public doc first:
+    /// a listing missing its address is fixed by re-saving; an orphaned address isn't.
     func save(_ home: Home, location: ListingLocation? = nil) async throws {
         do {
             try await repository.save(home)
@@ -353,30 +312,16 @@ final class HomeStore {
 
     // MARK: - Read ACL upkeep
 
-    /// Rewrites the viewer ACL on the listings this user hosts, so a listing is
-    /// visible to exactly their current friends.
-    ///
-    /// `onFriendEdgeWritten` does this server-side, rebuilding both parties' ACLs
-    /// whenever an edge changes — but it is a Cloud Function, and the production
-    /// project has none deployed. Without this, accepting a friend request granted
-    /// the new friend nothing: every listing kept the roster it was saved with, so
-    /// a friendship made after a listing was created never made that listing
-    /// visible, and nothing ever repaired it.
-    ///
-    /// Each client can only write its own host's listings, so the two sides
-    /// converge separately as each person opens the app rather than both at the
-    /// moment the edge changes. Eventually consistent, where the trigger was
-    /// immediate; a listing that appears on next launch beats one that never does.
-    ///
-    /// Writes only on a real change, so the common case (nothing moved since last
-    /// launch) costs no writes at all — the same reason the trigger checks before
-    /// writing, and what keeps this off the critical path of every friend change.
-    /// Seeds `managedListings` without a listener, for tests that exercise what
-    /// this store does *with* them rather than how they arrive.
+    /// Seeds `managedListings` without a listener, for tests.
     func setManagedListingsForTesting(_ listings: [Home]) {
         managedListings = listings
     }
 
+    /// Rewrites the viewer ACL on hosted listings to match current friends.
+    ///
+    /// Stands in for the `onFriendEdgeWritten` Cloud Function, which prod doesn't
+    /// have. Each client only writes its own listings, so the two sides converge
+    /// as each opens the app. Writes only on a real change.
     func refreshOwnListingACLs(myID: String, friendIDs: some Sequence<String>) async {
         guard !myID.isEmpty else { return }
         let desired = Home.viewerIDs(hostUserID: myID, friendIDs: friendIDs)
@@ -387,35 +332,20 @@ final class HomeStore {
             do {
                 try await repository.save(updated)
             } catch {
-                // Best effort: the next launch tries again, and a failure here
-                // leaves the listing exactly as visible as it already was.
+                // Best effort; the next launch retries.
                 log.error("ACL refresh failed for \(listing.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
     }
 
-    // MARK: - Booked-range reconciliation (the client's onStayRequestWritten)
+    // MARK: - Booked-range reconciliation
 
-    /// Recomputes each hosted listing's booked dates from its accepted stays and
-    /// republishes the calendar, so a booking becomes durably visible without the
-    /// trigger that used to do it.
+    /// Recomputes hosted listings' booked dates from their accepted stays and
+    /// republishes the calendar.
     ///
-    /// `acceptAsHost` records a booking in its own transaction, but that is the
-    /// only place a booking would ever land otherwise: a guest accepting an offer
-    /// cannot write the listing at all, and even the host path's write would be
-    /// undone the next time the host edited blocked dates, since that republish
-    /// unions blocked with a booked half nothing was maintaining. This maintains
-    /// it — from the one source that survives a lost callable, the accepted stays
-    /// themselves — and is idempotent, so the host-path transaction and this
-    /// converge rather than fight.
-    ///
-    /// Driven from the host's incoming-requests listener, so it runs whenever the
-    /// host's app sees a stay accepted (their own, or a guest accepting their
-    /// offer), and on launch to catch anything that changed while they were away.
-    /// Eventually consistent, like the ACL refresh: the durable booking, and the
-    /// double-booking guard for offers, land when the host is next online, which
-    /// is the strongest guarantee available without a server. Writes only on a
-    /// real change.
+    /// Accepted stays are the only source that survives a lost callable (a guest
+    /// accepting an offer can't write the listing). Idempotent, writes only on a
+    /// real change, and runs from the host's incoming-requests listener and on launch.
     func reconcileBookedRanges(hostUserID: String, acceptedStays: [StayRequest]) async {
         guard !hostUserID.isEmpty else { return }
 
@@ -427,10 +357,8 @@ final class HomeStore {
             let booked = Self.normalizedRanges(
                 (byListing[listing.id] ?? []).map { DateRange(start: $0.checkIn, end: $0.checkOut) }
             )
-            // Read through the repository rather than any in-memory calendar cache:
-            // this runs off a snapshot the cache has not necessarily seen, and the
-            // blocked half has to be the stored one or republishing the union would
-            // drop a block the host just made.
+            // Read from the repository, not the cache, which may not have seen this
+            // snapshot; the blocked half must be the stored one or the union drops a new block.
             guard let current = try? await repository.fetchAvailability(homeID: listing.id) else { continue }
             guard Self.rangesDiffer(current.bookedDateRanges, booked) else { continue }
 
@@ -444,15 +372,13 @@ final class HomeStore {
                 published.unavailableDateRanges = union.isEmpty ? nil : union
                 try await repository.save(published)
             } catch {
-                // Best effort: the next accepted-stay change, or the next launch,
-                // recomputes the same value and tries again.
+                // Best effort; the next change or launch recomputes.
                 log.error("booked reconcile failed for \(listing.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
     }
 
-    /// Sorts by start and merges overlapping or touching ranges, so the stored
-    /// booked half is canonical and two runs over the same stays compare equal.
+    /// Sorts by start and merges overlapping or touching ranges so stored ranges are canonical.
     static func normalizedRanges(_ ranges: [DateRange]) -> [DateRange] {
         let sorted = ranges.sorted { $0.start < $1.start }
         var merged: [DateRange] = []
@@ -466,18 +392,15 @@ final class HomeStore {
         return merged
     }
 
-    /// Order-independent inequality, so a reshuffled-but-equal recompute doesn't
-    /// trigger a needless write. Both inputs are normalized before comparison.
+    /// Order-independent inequality, so a reshuffled recompute doesn't trigger a write.
     private static func rangesDiffer(_ a: [DateRange], _ b: [DateRange]) -> Bool {
         normalizedRanges(a) != normalizedRanges(b)
     }
 
     // MARK: - Availability
 
-    /// Fetches and caches a managed listing's calendar with blocked and booked
-    /// still apart. Returns an empty calendar when the caller isn't entitled to it
-    /// or nothing has been closed yet; the editor treats both the same way, since
-    /// neither is a state it can do anything about.
+    /// Fetches and caches a managed listing's calendar, blocked and booked kept
+    /// apart. Empty when not entitled or nothing is closed yet.
     @discardableResult
     func availability(for homeID: String) async -> ListingAvailability {
         if let cached = listingAvailability[homeID] { return cached }
@@ -491,18 +414,9 @@ final class HomeStore {
         }
     }
 
-    /// Writes the host's half of the calendar and republishes the merged copy the
-    /// public listing carries.
-    ///
-    /// Both writes, always, and in this order. The private half is the source of
-    /// truth, so it lands first; the public field is a cache of the union and is
-    /// worth nothing on its own. Skipping the second write would leave a host's
-    /// new blocks invisible to the friends they are hiding the dates from, which
-    /// is the entire job.
-    ///
-    /// The booked half rides through untouched here: it is maintained by
-    /// `reconcileBookedRanges`, and this republishes the union of both so a new
-    /// block doesn't drop a booking (nor the reverse).
+    /// Writes the host's blocked half, then republishes the merged copy the
+    /// public listing carries. The private half is the source of truth, so it
+    /// lands first. The booked half is left untouched.
     func saveBlockedRanges(_ blocked: [DateRange], for home: Home) async throws {
         var updated = await availability(for: home.id)
         do {
@@ -515,17 +429,9 @@ final class HomeStore {
         }
     }
 
-    /// Adds `ranges` to the blocked dates of every other listing this user hosts,
-    /// preserving each one's existing blocks — a union, never a replace, so a host
-    /// stamping travel dates across their homes can't wipe a home's own closures.
-    /// Co-hosted listings are left alone: they are someone else's to block.
-    ///
-    /// A one-time copy, not a link: the homes do not stay in step afterwards, so
-    /// editing a date on one leaves the others as they were. Returns the ids it
-    /// could not update, so a partial failure names the homes still to fix rather
-    /// than undoing the ones that took (re-running is safe — the union is
-    /// idempotent). Each home's booked half rides through untouched: this reads
-    /// that home's own calendar and rewrites only the blocked side of it.
+    /// Adds `ranges` to the blocked dates of every other listing this user hosts
+    /// (a union, never a replace; co-hosted listings are skipped). A one-time
+    /// copy, not a link. Returns ids it couldn't update; safe to re-run.
     func applyBlockedRangesToOtherHostedListings(
         _ ranges: [DateRange],
         excludingID: String,
@@ -547,9 +453,7 @@ final class HomeStore {
         return failed
     }
 
-    /// Uploads any attached images in parallel, then saves the listing with
-    /// the resulting URLs. If `images` is empty the upload step is skipped.
-    /// Errors from either step propagate so the caller can show them.
+    /// Uploads attached images in parallel, then saves the listing with their URLs.
     func createListing(home: Home, images: [Data]) async throws {
         var updated = home
         if !images.isEmpty {
@@ -559,10 +463,7 @@ final class HomeStore {
         try await save(updated)
     }
 
-    /// Uploads in parallel but returns the URLs in the order the images were given.
-    /// A task group yields results as they finish, so appending them as they arrive
-    /// would order a listing's photos by upload speed — and `photoURLs[0]` is the
-    /// card's cover image, which the host chose deliberately.
+    /// Uploads in parallel but returns URLs in the given order, since `photoURLs[0]` is the cover.
     private func uploadImages(_ images: [Data], for home: Home) async throws -> [URL] {
         let uploader = photoUploader
         let listingID = home.id
@@ -579,15 +480,10 @@ final class HomeStore {
         }
     }
 
-    // MARK: - Co-hosts (feature 14)
+    // MARK: - Co-hosts
 
-    /// Adds one friend to the listing's co-host roster.
-    ///
-    /// One at a time, deliberately: `firestore.rules` can check an addition
-    /// against the friend graph only by inspecting a single added id, because the
-    /// rules language cannot loop. A batch of two would be rejected outright, so
-    /// the client must not offer one. `CoHostError` covers the cases the UI can
-    /// see coming; the rules refuse the rest regardless.
+    /// Adds one friend as co-host. One at a time because the rules can only check
+    /// a single added id against the friend graph; a batch would be rejected.
     func addCoHost(_ userID: String, to home: Home, hostUserID: String) async throws {
         guard home.isHostedBy(hostUserID) else { throw CoHostError.notTheHost }
         guard userID != home.hostUserID else { throw CoHostError.hostCannotCoHost }
@@ -599,8 +495,7 @@ final class HomeStore {
         try await saveRoster(updated)
     }
 
-    /// Removes a co-host. Needs no friend edge: taking a capability back is
-    /// always safe, and unfriending someone is exactly when a host would do it.
+    /// Removes a co-host. Needs no friend edge, since revoking is always safe.
     func removeCoHost(_ userID: String, from home: Home, hostUserID: String) async throws {
         guard home.isHostedBy(hostUserID) else { throw CoHostError.notTheHost }
         var updated = home
@@ -608,9 +503,7 @@ final class HomeStore {
         try await saveRoster(updated)
     }
 
-    /// Writes a roster change and nothing else. Goes through `repository.save`
-    /// rather than `save(_:location:)` so it can never carry a stale street
-    /// address from whatever copy of the listing the caller was holding.
+    /// Writes a roster change only, via `repository.save`, so a stale street address is never carried.
     private func saveRoster(_ home: Home) async throws {
         do {
             try await repository.save(home)
@@ -641,10 +534,9 @@ final class HomeStore {
 
 // MARK: - Availability publishing
 extension HomeStore {
-    /// Caches `availability` and rewrites the public listing's merged calendar from
-    /// it: the one place blocked days, an accepted stay's booked days, and the
-    /// turnover buffer collapse into the single `unavailableDateRanges` a guest
-    /// reads, with nothing marking which day was which.
+    /// Caches `availability` and rewrites the public listing's merged calendar:
+    /// blocked days, booked days and the turnover buffer collapse into one
+    /// `unavailableDateRanges`.
     func republishCalendar(_ availability: ListingAvailability, for home: Home) async throws {
         listingAvailability[home.id] = availability
         var published = home
@@ -653,10 +545,7 @@ extension HomeStore {
         try await repository.save(published)
     }
 
-    /// Writes the host's turnover buffer and republishes the merged calendar, since
-    /// the buffer changes how far each booking's closure reaches. Private field
-    /// first, like `saveBlockedRanges`. The union only moves when a booking exists
-    /// to pad, so setting this before the first guest simply stores the preference.
+    /// Writes the turnover buffer and republishes the merged calendar. Private field first.
     func saveBufferHours(_ bufferHours: Int, for home: Home) async throws {
         var updated = await availability(for: home.id)
         do {
@@ -670,9 +559,7 @@ extension HomeStore {
     }
 }
 
-/// Co-host roster failures the UI can anticipate. Everything else — a co-host who
-/// isn't an accepted friend, a co-host trying to add another — is refused by
-/// `firestore.rules`, which is the boundary that actually matters.
+/// Co-host roster failures the UI can anticipate; the rules refuse everything else.
 enum CoHostError: LocalizedError {
     case notTheHost
     case hostCannotCoHost
@@ -690,8 +577,7 @@ enum CoHostError: LocalizedError {
     }
 }
 
-/// The viewer-specific inputs the feed is filtered and ranked against. Equatable
-/// so `HomeStore` can skip recomputing the feed when nothing relevant changed.
+/// Viewer-specific feed inputs; Equatable so unchanged context skips recomputing.
 struct FeedContext: Equatable {
     var myID: String = ""
     var friendIDs: Set<String> = []

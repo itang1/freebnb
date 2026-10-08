@@ -5,8 +5,7 @@
 
 import SwiftUI
 
-// Root of the Stays tab. Shows the signed-in user's outgoing stay requests
-// (as a traveler) and incoming requests (as a host) in one unified view.
+// Root of the Stays tab: outgoing requests (as traveler) and incoming ones (as host).
 struct StaysTab: View {
     @Environment(StayRequestStore.self) private var requestStore
     @Environment(MessageStore.self) private var messageStore
@@ -25,15 +24,10 @@ struct StaysTab: View {
     @State private var sharingStay: StayRequest?
     @State private var modifying: StayRequest?
     @State private var completing: StayRequest?
-    // An accepted stay someone is about to call off. Cancelling a confirmed stay
-    // is consequential for both parties, so unlike a pending request it asks
-    // first; pending cancels stay immediate. This is the guest's side: a simple
-    // confirmation. A host calling off a stay the guest was counting on goes
-    // through `hostCancelling` instead, which carries a way to help them.
+    // An accepted stay about to be called off by the guest; asks first, unlike a pending cancel.
+    // An accepted stay about to be called off by the guest; asks first, unlike a pending cancel.
     @State private var cancelling: StayRequest?
-    // A host about to cancel a confirmed stay. Kept apart from `cancelling`
-    // because the host's flow does more: it says what the guest will be told and
-    // offers an optional note to suggest other dates.
+    // A host cancelling goes through `hostCancelling`, which tells the guest and offers a note.
     @State private var hostCancelling: StayRequest?
     @State private var actionError: String?
     @State private var selectedTab: StaysTabSelection = .trips
@@ -42,8 +36,7 @@ struct StaysTab: View {
 
     enum StaysTabSelection { case trips, listings }
 
-    /// A stay plus the role the signed-in user reviews it in. Carried together so
-    /// the sheet never has to re-derive who is reviewing whom.
+    /// A stay plus the role the signed-in user reviews it in.
     struct ReviewTarget: Identifiable {
         let stay: StayRequest
         let role: ReviewRole
@@ -55,9 +48,7 @@ struct StaysTab: View {
     private var pendingOut:  [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .pending  } }
     private var acceptedOut: [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .accepted } }
     private var pastOut:     [StayRequest] { requestStore.outgoingRequests.filter { !$0.status.isActive   } }
-    /// Offers a friend has made this user, which they owe an answer to
-    /// (feature 43). The only thing in the traveler pane that is waiting on *them*
-    /// rather than on somebody else, which is why it sits at the top.
+    /// Offers a friend has made this user, which they owe an answer to; shown at the top.
     private var offeredOut:  [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .offered  } }
 
     // Incoming (host)
@@ -67,20 +58,14 @@ struct StaysTab: View {
     /// Offers this user has made that a friend hasn't answered yet.
     private var offeredIn:  [StayRequest] { requestStore.incomingRequests.filter { $0.status == .offered  } }
 
-    // The trip timeline splits accepted stays into the one under way right now
-    // and the ones still ahead (feature 21), so a stay you're in the middle of
-    // rises to the top instead of sitting in a flat "confirmed" list.
+    // The trip timeline splits accepted stays into the one under way and those ahead.
     private var inProgressOut: [StayRequest] { acceptedOut.filter { $0.isUnderway() } }
     private var upcomingOut:   [StayRequest] { acceptedOut.filter { !$0.isUnderway() } }
     private var inProgressIn:  [StayRequest] { acceptedIn.filter { $0.isUnderway() } }
     private var upcomingIn:    [StayRequest] { acceptedIn.filter { !$0.isUnderway() } }
 
-    /// The single stay currently live enough to headline (feature 21): an accepted
-    /// stay with a real `StayPhase` — arriving today, under way, or checking out
-    /// today — and among those the soonest check-in. Deliberately the same
-    /// selection the Live Activity uses, so the in-app banner and the Lock Screen
-    /// never point at different stays. Paired with its phase so the banner and the
-    /// activity share one source of truth for the copy.
+    /// The one stay live enough to headline: an accepted stay with a real
+    /// `StayPhase`, soonest check-in first. Same selection as the Live Activity.
     private var liveStay: (stay: StayRequest, phase: StayPhase)? {
         (requestStore.incomingRequests + requestStore.outgoingRequests)
             .filter { $0.status == .accepted }
@@ -92,43 +77,32 @@ struct StaysTab: View {
             .map { (stay: $0.0, phase: $0.1) }
     }
 
-    /// Finished stays this user hasn't reviewed yet (features 1 and 4). Empty
-    /// until `ReviewStore` knows what they've already written, so nobody is asked
-    /// twice for a review they already left.
+    /// Finished stays not yet reviewed; empty until `ReviewStore` knows what's been written.
     private var awaitingReview: [StayRequest] {
         requestStore.completedStays.filter { reviewStore.needsReview(stayRequestID: $0.id) }
     }
 
-    // Gates the empty state for My Trips specifically (traveler side only) — a
-    // host with pending requests but no trips of their own should still see
-    // "No trips yet" here; their requests live under My Listings instead.
+    // Gates the My Trips empty state (traveler side only); a host's requests live under My Listings.
     private var hasTripsContent: Bool {
         !pendingOut.isEmpty || !acceptedOut.isEmpty || !pastOut.isEmpty
     }
 
     var body: some View {
-        // Resolved once per body pass and handed down to the panes. Each read of
-        // `awaitingReview` re-derives `completedStays` — concatenating both
-        // request lists, filtering, and sorting — and the two badges plus each
-        // pane's review section read it three times per render.
+        // Resolved once per body pass; `awaitingReview` re-derives `completedStays` on each read.
         let awaiting = awaitingReview
         let reviewsAsGuest = awaiting.filter { $0.guestUserID == authManager.userID }
         let reviewsAsHost = awaiting.filter { $0.hostUserID == authManager.userID }
         let pendingInCount = pendingIn.count
         VStack(spacing: 0) {
-            // A big, filled pill per pane rather than the system segmented
-            // control: that one sat quietly in the nav bar under a static
-            // "Stays" title and people weren't noticing it moved between two
-            // very different screens. Color plus a badge on whichever pane
-            // owes you something makes the switch itself worth looking at.
+            // Big filled pills rather than the system segmented control, which people
+            // didn't notice switching between two very different screens.
             StaysModeSwitcher(
                 selection: $selectedTab,
                 tripsBadge: reviewsAsGuest.count,
                 listingsBadge: pendingInCount + reviewsAsHost.count
             )
 
-            // Pinned above both panes: a stay you're in the middle of is the one
-            // thing worth seeing before you've even chosen Trips vs Listings.
+            // Pinned above both panes: a live stay is worth seeing before choosing one.
             if let live = liveStay {
                 HappeningNowBanner(
                     stay: live.stay,
@@ -143,9 +117,7 @@ struct StaysTab: View {
 
             Group {
                 if selectedTab == .listings {
-                    // Requests against your properties surface here, above the
-                    // properties themselves — "My Listings" means everything tied
-                    // to homes you host, not just the properties list.
+                    // Requests against your properties surface above the properties list.
                     YourListingsPage(title: "My Listings") {
                         listingsRequestSections(awaitingReview: reviewsAsHost)
                     }
@@ -238,10 +210,8 @@ struct StaysTab: View {
         if let error = requestStore.listenerError {
             listenerErrorState(error)
         } else if requestStore.isLoadingIncoming && !hasTripsContent {
-            // Not the same as having none: the listener clears the lists on an
-            // account switch and refills them a round trip later, and "No trips
-            // yet" shown in that gap tells a host their inbox is empty when it
-            // isn't.
+            // The listener clears the lists on an account switch and refills them a round
+            // trip later; "No trips yet" in that gap would be wrong.
             loadingState
         } else if !hasTripsContent {
             emptyState
@@ -307,11 +277,8 @@ struct StaysTab: View {
         }
     }
 
-    /// First on the page: a stay is freshest the day it ends, and an unreviewed
-    /// stay is the one thing here that both parties are waiting on each other
-    /// for. Called once per pane with that pane's role-filtered stays, so a
-    /// guest-side review prompt never shows up while you're looking at My
-    /// Listings, and vice versa.
+    /// First on the page: an unreviewed stay is something both parties wait on.
+    /// Called once per pane with its role-filtered stays.
     @ViewBuilder
     private func reviewSection(_ items: [StayRequest]) -> some View {
         if !items.isEmpty {
@@ -321,9 +288,7 @@ struct StaysTab: View {
                         request: req,
                         subjectName: subjectName(for: req),
                         onReview: { startReview(req) },
-                        // Guests thank the host first (feature 24); the note is
-                        // optional and the flow leads into the same review. Hosts
-                        // just review.
+                        // Guests thank the host first (optional note), then review. Hosts just review.
                         onThank: req.guestUserID == authManager.userID ? { thanking = req } : nil
                     )
                 }
@@ -333,9 +298,7 @@ struct StaysTab: View {
 
     @ViewBuilder
     private var travelerSections: some View {
-        // Above "Waiting to hear back" on purpose: everything below is this user
-        // waiting on somebody else, and this is the one thing somebody else is
-        // waiting on them for.
+        // Above "Waiting to hear back": this is the one thing others are waiting on them for.
         if !offeredOut.isEmpty {
             Section("A friend offered you a place") {
                 ForEach(offeredOut, id: \.id) { req in
@@ -374,8 +337,7 @@ struct StaysTab: View {
                 ForEach(upcomingOut, id: \.id) { req in
                     outgoingRow(
                         req,
-                        // Plans change; a confirmed trip can be called off, with
-                        // a confirmation because it affects the host too.
+                        // A confirmed trip can be called off, with a confirmation since it affects the host.
                         onCancel: { cancelling = req },
                         onShare: { sharingStay = req },
                         onComplete: req.canBeMarkedComplete() ? { completing = req } : nil
@@ -422,11 +384,8 @@ struct StaysTab: View {
                     incomingRow(
                         req,
                         onComplete: req.canBeMarkedComplete() ? { completing = req } : nil,
-                        // A host can no longer honor a stay sometimes (illness, a
-                        // burst pipe). firestore.rules admits accepted → cancelled
-                        // from the host's side for exactly this. The guest was
-                        // counting on this one, so it routes through the sheet that
-                        // tells them clearly and offers a way back.
+                        // Firestore rules admit accepted → cancelled from the host's side; it routes
+                        // through the sheet that tells the guest and offers a way back.
                         onCancel: { hostCancelling = req }
                     )
                 }
@@ -473,11 +432,8 @@ struct StaysTab: View {
 
     // MARK: - My Listings
 
-    /// Everything about requests against your properties: reviews owed, live
-    /// hosting sections, and past hosting. Injected above the properties list
-    /// in `YourListingsPage` so "My Listings" reads as one coherent screen
-    /// about your homes, requests included, rather than requests hiding under
-    /// "My Trips" while this pane only manages listing settings.
+    /// Requests against your properties: reviews owed, live hosting sections and
+    /// past hosting, injected above the properties list in `YourListingsPage`.
     @ViewBuilder
     private func listingsRequestSections(awaitingReview: [StayRequest]) -> some View {
         reviewSection(awaitingReview)
@@ -486,17 +442,10 @@ struct StaysTab: View {
         pastHostingSection
     }
 
-    /// Stays this host finished and hasn't been asked about yet. Host side only:
-    /// notes are a host's record of their own friends, and there is no guest-side
-    /// twin of this anywhere in the feature.
-    ///
-    /// Deliberately below "Needs your review" and above everything else. A review
-    /// is something the other person is waiting on; this is not, and it should
-    /// never look like it is.
-    ///
-    /// The window and the "already asked" rule live in `FriendNotePrompt`, which
-    /// is pure and tested; this only supplies who is asking and what the store
-    /// already knows.
+    /// Stays this host finished and hasn't been asked about yet. Host side only.
+    /// Below "Needs your review" and above everything else; unlike a review,
+    /// nobody is waiting on it. The window and "already asked" rule live in the
+    /// tested `FriendNotePrompt`.
     private var completedStaysToNoteAbout: [StayRequest] {
         requestStore.completedStays.filter { stay in
             FriendNotePrompt.shouldOffer(
@@ -507,23 +456,15 @@ struct StaysTab: View {
         }
     }
 
-    /// The optional add-a-note moment. Built in `NotePromptSection`, with the
-    /// rest of the feature; this only decides which stays it covers.
+    /// The optional add-a-note moment; this only decides which stays it covers.
     private var noteSection: some View {
         NotePromptSection(stays: completedStaysToNoteAbout, composing: $notingStay)
     }
 
     // MARK: - My Trips: the guest's own post-trip note
 
-    /// Trips this guest finished and hasn't been asked about yet — the mirror of
-    /// `completedStaysToNoteAbout`, from the traveler's side of the same stay.
-    /// Guest side only: this appears under My Trips, never My Listings, and a
-    /// host is never asked here to file anything about a guest (that is the host
-    /// prompt's job, and it lives on the other pane).
-    ///
-    /// The window and the "already asked" rule live in `GuestNotePrompt`, which
-    /// is pure and tested; this only supplies who is asking and what the store
-    /// already knows.
+    /// Trips this guest finished and hasn't been asked about yet; the traveler-side
+    /// mirror of `completedStaysToNoteAbout`. Rules live in the tested `GuestNotePrompt`.
     private var completedTripsToNoteAbout: [StayRequest] {
         requestStore.completedStays.filter { stay in
             GuestNotePrompt.shouldOffer(
@@ -534,25 +475,18 @@ struct StaysTab: View {
         }
     }
 
-    /// The optional add-a-note moment on the traveler's side. Built in
-    /// `GuestNotePromptSection`; this only decides which trips it covers.
-    /// Deliberately below "Needs your review" and above everything else, for the
-    /// same reason the host prompt is: a review is something the other person is
-    /// waiting on, and this is not.
+    /// The optional add-a-note moment on the traveler's side; ordered like the host prompt.
     private var tripNoteSection: some View {
         GuestNotePromptSection(stays: completedTripsToNoteAbout, composing: $notingTrip)
     }
 }
 
-// Actions, row builders, and lookups live in a same-file extension rather than
-// in the struct body: extensions do not count toward SwiftLint's type_body_length,
-// and `private` is file-scoped, so they still see the view's state.
+// Actions, row builders and lookups live in an extension to stay under SwiftLint's
+// type_body_length; `private` is file-scoped so they still see the view's state.
 extension StaysTab {
     // MARK: - Actions
 
-    /// Cancels a request or an accepted stay, from either side. The chat event
-    /// goes to the other party, whoever that is: the host when a guest cancels,
-    /// the guest when a host calls a stay off.
+    /// Cancels a request or accepted stay from either side; the chat event goes to the other party.
     private func cancel(_ request: StayRequest) async {
         actionError = nil
         cancelling = nil
@@ -568,12 +502,9 @@ extension StaysTab {
         }
     }
 
-    /// A host calls off a confirmed stay. The write is the same cancel either side
-    /// makes; what differs is the guest's side of it. The chat event is
-    /// `hostCancelled` rather than a plain `cancelled`, so the guest's card reads
-    /// as the host having to cancel and offers a way back to the listing's other
-    /// dates, and it carries the host's optional note. Returns nil on success or
-    /// the message for the sheet to show, so a failure keeps the sheet open.
+    /// A host calls off a confirmed stay. Sends `hostCancelled` (not `cancelled`)
+    /// so the guest's card offers a way back, with the host's optional note.
+    /// Returns nil on success or the message for the sheet to show.
     private func hostCancel(_ request: StayRequest, note: String?) async -> String? {
         do {
             try await requestStore.cancel(request)
@@ -593,8 +524,7 @@ extension StaysTab {
         }
     }
 
-    /// Change the dates on a pending request, then let the host know in chat with
-    /// the same structured event the other lifecycle actions send (feature 23).
+    /// Changes a pending request's dates, then tells the host in chat.
     private func modify(_ request: StayRequest, checkIn: Date, checkOut: Date) async {
         actionError = nil
         do {
@@ -609,17 +539,13 @@ extension StaysTab {
             )
             modifying = nil
         } catch {
-            // A rejected date change is the one guest write that could still reach
-            // the rules and come back "Missing or insufficient permissions" — a
-            // booking landing, or a notice window arriving, under the open sheet.
-            // Route it through the same neutral mapping the request sheet uses so
-            // the refusal reads as "no longer available" and never names the cause.
+            // A booking or notice window can land under the open sheet; map the
+            // rejection to the neutral "no longer available" so it never names the cause.
             actionError = StayRequestError.guestFacingMessage(for: error)
         }
     }
 
-    /// Returns nil on success, or the failure message for `AcceptSheet` to show.
-    /// The sheet dismisses itself once this returns nil.
+    /// Returns nil on success, or the failure message for `AcceptSheet`.
     private func accept(_ request: StayRequest, hostNote: String?) async -> String? {
         actionError = nil
         do {
@@ -632,12 +558,8 @@ extension StaysTab {
             )
             return nil
         } catch {
-            // A guest accepting a host's offer is the mirror of sending a request:
-            // the offer can be invalidated under the open sheet (a competing stay
-            // lands, the host closes the dates), and a rejection must read as the
-            // same neutral "no longer available" so it never names the cause. A
-            // host accepting a guest's request keeps the raw description, whose
-            // rejections are their own ("already answered"), not the guest's to see.
+            // A guest's accept can be invalidated under the open sheet; map it to the
+            // neutral "no longer available". A host's accept keeps the raw description.
             let viewerIsGuest = request.role(of: authManager.userID) == .guest
             return viewerIsGuest
                 ? StayRequestError.guestFacingMessage(for: error)
@@ -659,10 +581,8 @@ extension StaysTab {
         }
     }
 
-    /// The guest says yes to a host's offer (feature 43). Goes through the same
-    /// callable a host's accept does, so the same transaction guards the same
-    /// room: the offer may have sat for days while another guest was accepted for
-    /// those dates, and only the server can see that.
+    /// The guest says yes to a host's offer. Goes through the same callable as a
+    /// host's accept, since only the server can see competing stays.
     private func acceptOffer(_ request: StayRequest) async {
         actionError = nil
         do {
@@ -706,9 +626,8 @@ extension StaysTab {
         reviewing = ReviewTarget(stay: request, role: role, subjectName: subjectName(for: request))
     }
 
-    /// Sends the optional thank-you note to the host, then hands off to the review
-    /// prompt (feature 24). The brief wait lets the thank-you sheet finish
-    /// dismissing before the review sheet is presented in its place.
+    /// Sends the optional thank-you note, then hands off to the review prompt
+    /// after a brief wait so the thank-you sheet finishes dismissing.
     private func sendThanks(_ request: StayRequest, note: String?) async {
         if let note, !note.isEmpty {
             messageStore.send(
@@ -726,9 +645,7 @@ extension StaysTab {
         userProfileStore.displayName(for: request.guestUserID) ?? "FreeBNB User"
     }
 
-    /// Who a note being composed here is about. Only ever a guest of the host's:
-    /// the prompt is offered on the hosting side alone, so the composition's
-    /// friend id is always the person who stayed.
+    /// Who a note composed here is about: always a guest of the host's.
     private func noteSubjectName(for composition: FriendNoteComposition) -> String {
         switch composition {
         case .new(let friendID, _):
@@ -738,18 +655,15 @@ extension StaysTab {
         }
     }
 
-    /// What a trip note being composed here is about. Only ever a listing the
-    /// guest stayed at: the prompt files against the trip's listing, so the
-    /// composition's subject id is always a listing id, named by its label when
-    /// the listing is cached and by the trip's own denormalized label otherwise.
+    /// What a trip note is about: always a listing the guest stayed at, labelled
+    /// from the cache or else the trip's denormalized label.
     private func tripNoteSubjectName(for composition: GuestNoteComposition) -> String {
         switch composition {
         case .new(_, let subjectID, let stayRequestID):
             if let home = homeStore.listings.first(where: { $0.id == subjectID }) {
                 return home.displayTitle
             }
-            // The listing isn't in the guest's cached set (it is the host's, not
-            // theirs), so fall back to the label the stay snapshotted.
+            // Not in the guest's cached set (it's the host's); use the label the stay snapshotted.
             if let stayRequestID,
                let stay = requestStore.outgoingRequests.first(where: { $0.id == stayRequestID }) {
                 return stay.listingLabel
@@ -763,9 +677,7 @@ extension StaysTab {
         }
     }
 
-    /// The other party's name, seen from the signed-in user. A guest reviews the
-    /// host by their denormalized listing name; a host reviews the guest by their
-    /// profile name.
+    /// The other party's name: the host's listing name for a guest, the guest's profile name for a host.
     private func subjectName(for request: StayRequest) -> String {
         request.hostUserID == authManager.userID
             ? guestName(for: request)
@@ -786,9 +698,7 @@ extension StaysTab {
         onDecline: (() -> Void)? = nil
     ) -> some View {
         Group {
-            // A row carrying inline Yes/No is never wrapped in a NavigationLink,
-            // for the same reason the incoming rows aren't: the full-width tap
-            // target would swallow the buttons.
+            // Rows with inline Yes/No aren't wrapped; the tap target would swallow the buttons.
             if let home = listing(for: request), onAccept == nil {
                 NavigationLink { HomeDetailPage(home: home) } label: {
                     OutgoingRequestRow(request: request, onCancel: onCancel, onModify: onModify, onShare: onShare, onComplete: onComplete)
@@ -811,8 +721,7 @@ extension StaysTab {
     }
 
     /// Wraps an IncomingRequestRow in a NavigationLink if the listing is cached.
-    /// Rows with inline Accept/Decline actions are never wrapped — full-width
-    /// buttons would cover the entire tap area and prevent navigation.
+    /// Rows with inline Accept/Decline aren't wrapped, for the same reason.
     @ViewBuilder
     private func incomingRow(
         _ request: StayRequest,
@@ -823,9 +732,7 @@ extension StaysTab {
         onCancel: (() -> Void)? = nil
     ) -> some View {
         let home = listing(for: request)
-        // Show the street address when the host has more than one listing so the
-        // guest's request can be traced to the right property. This row is only
-        // ever rendered for the host, whose own addresses HomeStore prefetches.
+        // Show the street when the host has several listings, to tell requests apart.
         let multiListing = homeStore.listings.filter {
             $0.hostUserID == authManager.userID
         }.count > 1
@@ -858,19 +765,14 @@ extension StaysTab {
         homeStore.listings.first { $0.id == request.listingID }
     }
 
-    /// Hands the other party's thread to the deep-link router; ContentView
-    /// consumes it, switches to the Messages tab, and pushes the conversation
-    /// (the same route a push-notification tap takes).
+    /// Hands the other party's thread to the deep-link router, as a push tap does.
     private func openConversation(for request: StayRequest) {
         router.pendingConversationUserID =
             request.hostUserID == authManager.userID ? request.guestUserID : request.hostUserID
     }
 }
 
-// The stay/chat link now runs both ways: threads already pin the request banner
-// with accept/decline, and this gives every stay row the reverse jump into the
-// conversation. A swipe for speed plus a context menu for discoverability, the
-// same pairing YourListingsPage uses.
+// Every stay row gets a jump into the conversation: a swipe plus a context menu, as in YourListingsPage.
 private extension View {
     func stayConversationActions(name: String, open: @escaping () -> Void) -> some View {
         self
@@ -890,10 +792,8 @@ private extension View {
 
 // MARK: - Mode switcher
 
-/// Two full-width filled pills standing in for the system segmented control.
-/// The accent fill on whichever pane is active, plus a badge on whichever pane
-/// owes the user something, is meant to be noticed at a glance — the system
-/// segmented control, tucked into the nav bar under a static title, wasn't.
+/// Two full-width filled pills replacing the system segmented control, which
+/// went unnoticed in the nav bar; a badge marks the pane that owes the user something.
 private struct StaysModeSwitcher: View {
     @Binding var selection: StaysTab.StaysTabSelection
     let tripsBadge: Int

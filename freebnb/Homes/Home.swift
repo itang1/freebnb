@@ -6,23 +6,17 @@
 import Foundation
 
 /// The world-readable part of a listing's location. The street lives in
-/// `ListingLocation`, not here, because every signed-in user can read a public
-/// listing document and an anonymous account is one tap away.
-///
-/// Documents written before the split still carry a `street` key; the synthesized
-/// decoder ignores it, and the next host save drops it. Such legacy documents were
-/// cleared by the reset-and-reseed (scripts/seed_test_data.js --reset), so the
-/// decoder's tolerance is now just defensive.
+/// `ListingLocation`, since every signed-in user (anonymous included) can read
+/// a public listing. Legacy `street` keys are ignored by the decoder.
 struct Address: Codable, Hashable {
     var city: String
     var state: String
     var zip: String
 }
 
-/// The part of a listing's location that is disclosed progressively: the host
-/// always sees it, and a guest only once the host has accepted their stay.
-/// Stored at `homes/{id}/private/location`, gated by `firestore.rules` on the
-/// existence of `homes/{id}/accepted/{guestUserID}`.
+/// The progressively disclosed part of a listing's location: always visible to
+/// the host, visible to a guest only once the stay is accepted. Stored at
+/// `homes/{id}/private/location`.
 struct ListingLocation: Codable, Hashable, Sendable {
     var street: String
     /// Exact coordinates. `Home.latitude`/`longitude` are the rounded public copy.
@@ -63,9 +57,7 @@ enum SleepingSurface: String, CaseIterable, Hashable, Codable {
         }
     }
 
-    /// Spelled out rather than assembled. Two of these take -es, and the create
-    /// form's steppers appended a bare -s to all five: a host picking where their
-    /// guest sleeps was offered "0 couchs" and "0 air mattresss".
+    /// Spelled out because two of these take -es and a bare -s gave "couchs".
     var pluralName: String {
         switch self {
         case .bed:         return "beds"
@@ -76,14 +68,11 @@ enum SleepingSurface: String, CaseIterable, Hashable, Codable {
         }
     }
 
-    /// The form the count calls for. The other half of the same bug: the listing
-    /// page's summary never pluralized at all, so two of anything read "2 couch".
+    /// The plural-aware form for a count.
     func name(count: Int) -> String { count == 1 ? displayName : pluralName }
 }
 
-/// The size of a `SleepingSurface.bed` (feature 17). Separate from the surface
-/// because a couch has no size worth naming and an air mattress's is nobody's
-/// deciding factor, whereas "is the bed big enough for two of us" routinely is.
+/// The size of a `SleepingSurface.bed`. Only beds get one; nobody decides on a couch's size.
 enum BedSize: String, CaseIterable, Hashable, Codable {
     case twin  = "twin"
     case full  = "full"
@@ -139,7 +128,7 @@ enum CancellationPolicy: String, CaseIterable, Hashable, Codable {
         }
     }
 
-    /// Sort key for "Most Flexible Cancellation" — higher means more flexible.
+    /// Sort key for "Most Flexible Cancellation"; higher is more flexible.
     var flexibilityRank: Int {
         switch self {
         case .flexible: return 2
@@ -181,8 +170,7 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
         }
     }
 
-    /// Phrased for display on a specific listing, since a host's motivation can
-    /// differ across homes they list.
+    /// Phrased per listing, since motivation can differ across a host's homes.
     var homeText: String {
         switch self {
         case .eager:     return "I'd love to host at this home"
@@ -191,7 +179,7 @@ enum HostMotivation: String, CaseIterable, Hashable, Codable {
         }
     }
 
-    /// Sort key for "Most Eager to Host" — higher means more eager.
+    /// Sort key for "Most Eager to Host"; higher is more eager.
     var rank: Int {
         switch self {
         case .eager:     return 2
@@ -223,14 +211,11 @@ struct Sleeping: Codable, Hashable {
     // Firestore-compatible [String: Int] map; use sleepingCounts for a typed view.
     var arrangements: [String: Int]
 
-    // MARK: Richer capacity (feature 17)
-    // Bathrooms a guest may use, shared or private. Zero means the host never
-    // said — the UI hides the pill rather than guessing at one, since claiming a
-    // bathroom that may not exist is worse than saying nothing.
+    // MARK: Richer capacity
+    // Bathrooms a guest may use. Zero means unsaid; the UI hides the pill rather than guess.
     var numBathrooms: Int = 0
-    // Sizes of the beds counted in `arrangements["bed"]`, keyed by
-    // `BedSize.rawValue`; use `bedSizeCounts` for a typed view. Empty when the
-    // host didn't say, which is also the only thing a legacy document can mean.
+    // Bed sizes counted in `arrangements["bed"]`, keyed by `BedSize.rawValue`;
+    // see `bedSizeCounts`. Empty when the host didn't say.
     var bedSizes: [String: Int] = [:]
 
     var sleepingCounts: [SleepingSurface: Int] {
@@ -277,11 +262,9 @@ struct Sleeping: Codable, Hashable {
     }
 }
 
-// Fields added after the initial schema decode with `decodeIfPresent`, so a
-// listing written before they existed still decodes instead of vanishing from
-// the feed — a decode failure is dropped silently (A5). In an extension so the
-// memberwise initializer survives; its new parameters carry defaults, so existing
-// call sites are unaffected.
+// Fields added after the initial schema use `decodeIfPresent` so older listings
+// still decode (a decode failure silently drops the listing from the feed). In
+// an extension to keep the memberwise initializer.
 extension Sleeping {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -321,12 +304,10 @@ struct Amenities: Codable, Hashable {
     var providesToiletries: Bool
     var foodProvision: FoodProvision
 
-    // MARK: Accessibility (feature 17)
-    // Declared last, and defaulted, so the memberwise initializer keeps working
-    // for every call site written before they existed. False means "the host did
-    // not say it is accessible", never "the host said it isn't" — which is why
-    // these are filters a guest opts into, and why nothing renders a red X for an
-    // absent one.
+    // MARK: Accessibility
+    // Declared last and defaulted to keep the memberwise initializer working.
+    // False means "not stated", never "not accessible", so these are opt-in
+    // filters and nothing renders a red X for an absent one.
     var hasStepFreeEntry: Bool = false
     var hasElevator: Bool = false
     var hasAccessibleBathroom: Bool = false
@@ -334,10 +315,9 @@ struct Amenities: Codable, Hashable {
     /// Whether the host claimed any accessibility attribute at all.
     var hasAnyAccessibility: Bool { hasStepFreeEntry || hasElevator || hasAccessibleBathroom }
 
-    /// Backs the "Most Amenities" sort. Accessibility is deliberately excluded:
-    /// step-free entry is a fact about a home, not a perk it competes on, and
-    /// ranking homes by it would push accessible listings up the feed for guests
-    /// who never asked.
+    /// Backs the "Most Amenities" sort. Accessibility is excluded: it's a fact
+    /// about a home, not a perk, and ranking by it would surface listings for
+    /// guests who never asked.
     var count: Int {
         [hasAC, hasHeating, hasKitchen, hasFridgeSpace, hasMicrowave, hasTV, hasWifi,
          hasPrivateGuestBathroom, hostHasPets, hasInUnitLaundry, hasCoinLaundryNearby,
@@ -355,8 +335,7 @@ struct Amenities: Codable, Hashable {
     }
 }
 
-// Same reasoning as `Sleeping` above: the accessibility keys post-date the schema,
-// so a listing saved without them must still decode.
+// Accessibility keys post-date the schema, so older listings must still decode.
 extension Amenities {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -386,20 +365,15 @@ extension Amenities {
 // MARK: - Home
 
 struct Home: Identifiable, Hashable, Codable {
-    // `var` rather than `let` so the edit path can construct a Home with an
-    // existing listing's id (the memberwise init doesn't expose `let`
-    // properties that have default values). Treat as immutable after
-    // creation; identity-based equality in this file depends on it.
+    // `var` so the edit path can build a Home with an existing id. Treat as
+    // immutable after creation; equality depends on it.
     var id: String = UUID().uuidString
 
     // MARK: Host and location
     var hostUserID: String
     var hostName: String
-    // Optional host-chosen label for the listing ("Guest room by the Rose
-    // Bowl"). A host may run more than one home and they share a single
-    // conversation thread, so a title is what tells two of them apart. Nil (the
-    // default, and every listing created before this field existed) falls back
-    // to "<hostName>'s place" through `displayTitle`.
+    // Optional host-chosen label; a host can run several homes in one thread, so
+    // a title tells them apart. Nil falls back to "<hostName>'s place" via `displayTitle`.
     var title: String? = nil
     var address: Address
     var description: String?
@@ -413,148 +387,113 @@ struct Home: Identifiable, Hashable, Codable {
     var amenities: Amenities
 
     // MARK: Cancellation policy
-    // Optional so listings created before this field was added decode cleanly.
-    // Nil is treated as .flexible in the UI.
+    // Optional so older listings decode; nil is treated as .flexible.
     var cancellationPolicy: CancellationPolicy? = nil
 
     // MARK: Photos
-    // Optional on the wire so documents created before photo support decode
-    // cleanly. Access through `photos` for a non-optional view.
+    // Optional so pre-photo documents decode; use `photos` for a non-optional view.
     var photoURLs: [String]? = nil
 
     // MARK: Availability
-    // Every day a guest cannot have, already merged: the host's closed days and
-    // the days an accepted stay took, in one array with nothing marking which is
-    // which. Nil or empty means the whole calendar is open.
+    // Every day a guest can't have, merged: the host's closed days and accepted
+    // stays in one array with nothing marking which is which. Nil or empty means open.
     //
-    // The two halves live in `homes/{id}/private/availability`, readable only by
-    // the people who manage the listing (`ListingAvailability`). They are merged
-    // *before* they are published because this document is world-readable to the
-    // host's friends and Firestore has no field-level read rules: publishing both
-    // halves let any guest subtract one from the other and learn which nights the
-    // home was occupied, however carefully the UI merged them on screen. A guest
-    // learns a date is taken; they never learn the home is full.
-    //
-    // Written by whoever last changed either half — the host's client on save,
-    // `onStayRequestWritten` when a stay is accepted or falls through. A tampered
-    // value changes nothing that matters: it is a display cache, and the real
+    // The halves live in `homes/{id}/private/availability` (managers only) and
+    // are merged before publishing, because this document is readable by the
+    // host's friends and Firestore has no field-level rules; publishing both
+    // would let a guest learn which nights the home was occupied. Written by
+    // whoever last changed either half. It's a display cache; the real
     // double-booking guard is the `acceptStayRequest` transaction.
     var unavailableDateRanges: [DateRange]? = nil
 
     // MARK: Location coordinates
-    // Geocoded at save time and then deliberately blurred: this document is
-    // world-readable, so the public coordinate is rounded to a neighbourhood
-    // (see `approximate(_:)`). Exact coordinates live in the private location
-    // subdocument. Nil for listings created before this field was added.
+    // Geocoded at save, then blurred to a neighbourhood (see `approximate(_:)`)
+    // since this document is world-readable. Exact coordinates live in the
+    // private location subdocument. Nil for older listings.
     var latitude: Double? = nil
     var longitude: Double? = nil
 
     // MARK: Geohash
-    // A geohash of the public (blurred) coordinate, kept as an indexable key for
-    // proximity range queries (feature 11). Stamped by the client on save
-    // whenever coordinates resolve; nil for listings saved before this field or
-    // whose address wouldn't geocode.
+    // Indexable geohash of the blurred coordinate, for proximity queries. Nil for
+    // older listings or addresses that wouldn't geocode.
     var geohash: String? = nil
 
     // MARK: Visibility
-    // Every listing is friends-only: visible to the host, their co-hosts, and
-    // the host's accepted friends, and to nobody else. A friend-of-a-friend is
-    // shown the host as a friend *suggestion* instead, and sees the listing
-    // only after the host accepts them. (A legacy `visibility` tier field used
-    // to widen this; it is gone from the model and rejected by the rules.)
+    // Every listing is friends-only: visible to the host, co-hosts and accepted
+    // friends. A friend-of-a-friend sees the host as a suggestion only.
     //
-    // Denormalized read ACL: the host plus every accepted friend of the host.
-    // Firestore rules cannot join to `friendEdges` at query time, so friends-only
-    // visibility is enforced by reading this array directly (see firestore.rules)
-    // and by querying `allowedViewerIDs contains me`. Written by the client on
-    // every listing save and kept in sync by the `onFriendEdgeWritten` function.
-    // Nil only on legacy documents (since cleared by reset-and-reseed); treat as
-    // "host only".
+    // Denormalized read ACL (host plus accepted friends): rules can't join to
+    // `friendEdges`, so visibility is enforced by querying `allowedViewerIDs
+    // contains me`. Written on every save and kept in sync by
+    // `onFriendEdgeWritten`. Nil on legacy documents means "host only".
     var allowedViewerIDs: [String]? = nil
 
     // MARK: Co-hosts
-    // Friends the host has deputized to keep this listing accurate (feature 14):
-    // a partner, a roommate. They may edit the listing's description of the home
-    // and read and write its private location and house manual. They may not
-    // change who hosts it, who can see it, who else co-hosts it, or delete it —
-    // and stay requests still go to the host alone. `firestore.rules` is where
-    // that boundary actually lives; this array is only its input.
+    // Friends the host deputized to keep the listing accurate. They may edit its
+    // description and read/write its location and house manual, but not change
+    // the host, visibility, roster or delete it; requests still go to the host.
+    // `firestore.rules` enforces that boundary; this array is its input.
     var coHostUserIDs: [String]? = nil
 
     // MARK: Soft delete
-    // Nil means active. Set by the repository to the server timestamp on delete;
-    // the HomeStore filters out non-nil entries so deleted listings never appear
-    // in the feed while the Firestore document is preserved for history.
+    // Nil means active. Set to the server timestamp on delete; HomeStore filters
+    // these out while the document is kept for history.
     var deletedAt: Date? = nil
 
     // MARK: Creation time
-    // The feed's recency ordering key. Stamped with the server timestamp by the
-    // repository on create and preserved across edits. A document without it is
-    // excluded from the order-by query; legacy listings that lacked it were
-    // cleared by the reset-and-reseed, and the seed stamps every listing, so this
-    // is nil only in defensive theory now.
+    // The feed's recency ordering key, stamped by the repository on create and
+    // kept across edits. Documents without it are excluded from the ordered query.
     var createdAt: Date? = nil
 
-    // Identity-based equality and hashing, kept consistent per Hashable contract.
+    // Identity-based equality and hashing.
     static func == (lhs: Home, rhs: Home) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
-    // Non-optional view of photo URLs for view code.
+    // Non-optional view of photo URLs.
     var photos: [String] { photoURLs ?? [] }
 
-    /// The host's title only when they actually set one (trimmed, non-empty).
-    /// Views that already show the host's name use this to add the title as a
-    /// second line without printing the "<host>'s place" fallback.
+    /// The host's title if set (trimmed, non-empty), for a second line without the fallback.
     var customTitle: String? {
         guard let title else { return nil }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// How the listing names itself where it stands alone (chat banner, request
-    /// sheet): the host's title if they set one, otherwise "<hostName>'s place".
-    /// The single source of truth so those surfaces agree.
+    /// How the listing names itself standing alone: the host's title or "<hostName>'s place".
     var displayTitle: String { customTitle ?? "\(hostName)'s place" }
 
-    /// Every date a guest cannot have. Already merged on the wire, so unlike the
-    /// old version of this property there is nothing left here to merge and no
-    /// way for a caller to reach the halves. A host's own editor pulls them apart
-    /// by reading `ListingAvailability`; nowhere a guest can reach does.
+    /// Every date a guest cannot have, already merged on the wire. Hosts' editors
+    /// read the halves from `ListingAvailability`.
     var unavailableRanges: [DateRange] { unavailableDateRanges ?? [] }
 
     /// Non-optional view of the co-host roster.
     var coHosts: [String] { coHostUserIDs ?? [] }
 
-    /// The most a co-host roster may hold. Mirrored by `isOptionalList(data,
-    /// 'coHostUserIDs', 5)` in `firestore.rules`, which is what enforces it.
+    /// The most a co-host roster may hold; mirrors `isOptionalList` in `firestore.rules`.
     static let maxCoHosts = 5
 
-    /// Whether `userID` may edit this listing's description of the home, and read
-    /// its street address and house manual. The host, or one of their co-hosts.
+    /// Whether `userID` may edit the listing and read its address and manual: the host or a co-host.
     func isManagedBy(_ userID: String) -> Bool {
         guard !userID.isEmpty else { return false }
         return hostUserID == userID || coHosts.contains(userID)
     }
 
-    /// Whether `userID` owns the listing. Distinct from `isManagedBy`: only the
-    /// host may delete the listing, manage the co-host roster, or accept a
-    /// guest into the home.
+    /// Whether `userID` owns the listing. Only the host may delete it, manage
+    /// the roster, or accept a guest.
     func isHostedBy(_ userID: String) -> Bool {
         !userID.isEmpty && hostUserID == userID
     }
 
-    /// The read ACL every listing carries: the host, then their accepted friends,
-    /// de-duplicated. Kept here so the client write path and the seed script agree
-    /// on one definition. `rebuildListingACLs` recomputes the same set server-side
-    /// after every save and friend change, repairing any drift.
+    /// The read ACL every listing carries: the host, then accepted friends,
+    /// de-duplicated. Shared by the client and the seed script;
+    /// `rebuildListingACLs` recomputes it server-side.
     static func viewerIDs(hostUserID: String, friendIDs: some Sequence<String>) -> [String] {
         var seen: Set<String> = []
         return ([hostUserID] + friendIDs).filter { seen.insert($0).inserted }
     }
 
-    /// Decimal places kept on the public coordinate. Two places is on the order of
-    /// a kilometre, which places a listing in a neighbourhood without pointing at
-    /// a front door. `scripts/seed_test_data.js` applies the same rounding.
+    /// Decimal places kept on the public coordinate (about a kilometre).
+    /// `scripts/seed_test_data.js` applies the same rounding.
     static let publicCoordinatePrecision = 2.0
 
     /// Blurs an exact coordinate component for the world-readable document.
@@ -564,10 +503,8 @@ struct Home: Identifiable, Hashable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        // `title` belongs here or it is dropped in both directions: an explicit
-        // CodingKeys drives the synthesized encoder too, so leaving it out meant
-        // a host could name their listing and have the name silently discarded
-        // on save, and every listing decoded with a nil title.
+        // `title` must be listed: an explicit CodingKeys drives the encoder too,
+        // so omitting it silently dropped titles on save.
         case id, hostUserID, hostName, title, address, description
         case contactPreference, hostContactInfo, hostMotivation
         case sleeping, guestPolicy, amenities
@@ -584,28 +521,16 @@ struct Home: Identifiable, Hashable, Codable {
 }
 
 // MARK: - Custom Decodable
-
-// In an extension so the memberwise initializer is preserved. Fields added
-// after the initial schema use decodeIfPresent so existing Firestore documents
-// without those keys decode successfully instead of being silently dropped.
 extension Home {
-    /// The shape this document had before availability was split: two public
-    /// arrays instead of one merged one. Read only by `decodeUnavailable`, and
-    /// deliberately absent from `CodingKeys` so the encoder can never write them
-    /// back — a save is what migrates a listing off the old shape.
+    /// The pre-split shape: two public arrays instead of one merged one. Read
+    /// only by `decodeUnavailable` and absent from `CodingKeys`, so a save migrates the listing.
     private enum LegacyAvailabilityKeys: String, CodingKey {
         case blockedDateRanges, bookedDateRanges
     }
 
-    /// `unavailableDateRanges` if the document has been migrated, otherwise the
-    /// union of the two fields it used to carry.
-    ///
-    /// The fallback is what makes the migration safe to run after the app ships
-    /// rather than in lockstep with it: an un-migrated listing keeps showing every
-    /// day it had closed instead of silently reading as wide open, which is the
-    /// failure mode that would actually hurt (a host's blocked week quietly
-    /// accepting requests). It costs one extra decode attempt on legacy documents
-    /// and nothing at all once the backfill has run.
+    /// `unavailableDateRanges` if migrated, otherwise the union of the two legacy
+    /// fields. The fallback lets the migration run after the app ships without a
+    /// host's blocked week silently reading as open.
     fileprivate static func decodeUnavailable(
         from decoder: Decoder,
         container c: KeyedDecodingContainer<CodingKeys>
