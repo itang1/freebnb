@@ -2,11 +2,8 @@
 //  GeoSearchTests.swift
 //  freebnbTests
 //
-//  Covers the radius filter and the nearest-first sort (feature 11). The cases
-//  that matter are the ones about listings with no coordinate: a radius filter is
-//  a promise about distance, and a listing that cannot prove it is nearby must
-//  not be admitted by one — while an unfiltered sort should still rank it rather
-//  than hide it.
+//  Covers the radius filter and nearest-first sort. The key cases are listings with no
+//  coordinate: a radius filter can't admit one that can't prove it's near, while an unfiltered sort should rank, not hide, it.
 //
 
 import Foundation
@@ -25,8 +22,7 @@ struct GeoDistanceTests {
         #expect(Geo.distanceMiles(from: sanFrancisco, to: sanFrancisco) == 0)
         let there = Geo.distanceMiles(from: sanFrancisco, to: oakland)
         let back = Geo.distanceMiles(from: oakland, to: sanFrancisco)
-        // CLLocation's ellipsoidal geodesic isn't bit-exact symmetric; sub-meter
-        // drift between directions is expected, not a bug.
+        // CLLocation's geodesic isn't bit-exact symmetric; sub-meter drift is expected.
         #expect(abs(there - back) < 0.01)
     }
 
@@ -36,8 +32,7 @@ struct GeoDistanceTests {
         #expect((525.0...545.0).contains(Geo.distanceMiles(from: sanFrancisco, to: portland)))
     }
 
-    /// Under a mile the integer form would read "0 mi away", which is both wrong
-    /// and more precise than the blurred coordinate can support.
+    /// Under a mile the integer form would read "0 mi away", wrong and more precise than the blurred coordinate supports.
     @Test func distanceTextKeepsADecimalOnlyBelowTenMiles() {
         #expect(Geo.distanceText(0.42) == "0.4 mi away")
         #expect(Geo.distanceText(9.94) == "9.9 mi away")
@@ -59,8 +54,7 @@ struct GeoScopeTests {
         #expect(!scope.contains(HomeFixture.make(id: "sanJose", coordinate: sanJose)))
     }
 
-    /// A listing with no coordinate cannot prove it is nearby, so a radius filter
-    /// must drop it rather than quietly admit the one listing the user can't check.
+    /// A listing with no coordinate can't prove it's near, so a radius filter drops it.
     @Test func radiusExcludesListingsWithNoCoordinate() {
         let scope = GeoScope(center: sanFrancisco, radiusMiles: 25)
         #expect(!scope.contains(HomeFixture.make(id: "nowhere")))
@@ -104,8 +98,7 @@ struct FilterAndSortGeoTests {
         #expect(ids(homes, sort: .nearest, scope: scope) == ["oakland", "sanJose", "portland"])
     }
 
-    /// Nothing to be near: the sort must leave the feed's own ordering alone
-    /// rather than shuffle it.
+    /// With nothing to be near, the sort leaves the feed's own ordering alone.
     @Test func nearestWithoutAScopeIsANoOp() {
         #expect(ids(homes, sort: .nearest) == ["portland", "sanJose", "oakland"])
     }
@@ -117,8 +110,7 @@ struct FilterAndSortGeoTests {
         #expect(ids(withUnlocatable, sort: .nearest, scope: scope).last == "nowhere")
     }
 
-    /// Equidistant rows must hold a stable order across recomputes; Swift's sort
-    /// is not stable, so the comparator has to break the tie itself.
+    /// Equidistant rows must hold a stable order; Swift's sort isn't stable, so the comparator breaks the tie.
     @Test func equidistantListingsAreOrderedByIDForATotalOrder() {
         let scope = GeoScope(center: sanFrancisco, radiusMiles: nil)
         let tied = [

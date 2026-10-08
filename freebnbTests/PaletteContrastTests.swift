@@ -2,15 +2,9 @@
 //  PaletteContrastTests.swift
 //  freebnbTests
 //
-//  Measures the real contrast of every (text role, surface) pair the app puts
-//  on screen, in both appearances, the same way AvatarContrastTests guards the
-//  generated avatars: resolve the actual colours and compute the WCAG ratio,
-//  so a palette tweak that dims text below the floor fails here instead of on
-//  someone's phone.
-//
-//  The palette was solved for these floors by targeting a relative luminance
-//  per appearance (not an HSB brightness — equal brightness is nowhere near
-//  equal perceived luminance; see GeneratedAvatar's palette notes).
+//  Measures the real contrast of every (text role, surface) pair on screen, in both appearances,
+//  as AvatarContrastTests does for avatars, so a palette tweak dimming text below the floor
+//  fails here. The palette targets a relative luminance per appearance, not an HSB brightness.
 //
 
 import SwiftUI
@@ -44,8 +38,7 @@ struct PaletteContrastTests {
         return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
     }
 
-    /// `fill` composited over `base` at `alpha` — what a soft chip actually
-    /// shows behind its text.
+    /// `fill` composited over `base` at `alpha`: what a soft chip shows behind its text.
     private func blended(_ fill: UIColor, over base: UIColor, alpha: CGFloat) -> UIColor {
         var fr: CGFloat = 0, fg: CGFloat = 0, fb: CGFloat = 0, fa: CGFloat = 0
         var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
@@ -59,9 +52,7 @@ struct PaletteContrastTests {
         )
     }
 
-    /// A plain list row's own background, which `scrollContentBackground(.hidden)`
-    /// does not restyle — status text in the Stays list sits on this, not on the
-    /// app's own washes.
+    /// A plain list row's own background, which `scrollContentBackground(.hidden)` doesn't restyle; status text in the Stays list sits on it.
     private func systemRow(dark: Bool) -> UIColor {
         UIColor.secondarySystemGroupedBackground.resolvedColor(
             with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
@@ -103,8 +94,7 @@ struct PaletteContrastTests {
         }
     }
 
-    /// StatusBadge and the banners tint their text's own colour to 15% for the
-    /// fill behind it; the text has to survive its own chip.
+    /// StatusBadge and the banners tint their text colour to 15% for the fill, so the text must survive its own chip.
     @Test(arguments: [false, true])
     func statusTextSurvivesItsOwnSoftFill(dark: Bool) {
         for role in [AppColor.success, .danger, .warning] {

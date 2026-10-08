@@ -2,12 +2,9 @@
 //  CoHostTests.swift
 //  freebnbTests
 //
-//  Co-hosts (feature 14). The security boundary is proven against the emulator in
-//  rules-tests/cohosts.test.mjs; this covers the client's side of the same
-//  contract — the model's host-vs-manager distinction, back-compatible decoding,
-//  and the HomeStore guards that keep the app from *attempting* a write the rules
-//  would reject (notably: never batch two additions, because a loop-free rule can
-//  only vet one).
+//  Co-hosts. The boundary is proven against the emulator in rules-tests/cohosts.test.mjs; this
+//  covers the client side: host-vs-manager, back-compatible decoding, and the HomeStore guards
+//  that avoid attempting rejected writes (never batch two additions, as a loop-free rule vets one).
 //
 
 import Foundation
@@ -21,8 +18,7 @@ struct CoHostModelTests {
         #expect(home.isManagedBy("host"))
     }
 
-    /// The load-bearing distinction: a co-host manages the listing but does not
-    /// host it. Everything host-only keys off `isHostedBy`.
+    /// The load-bearing distinction: a co-host manages but doesn't host; host-only things key off `isHostedBy`.
     @Test func coHostManagesButDoesNotHost() {
         let home = HomeFixture.make(hostUserID: "host", coHosts: ["cohost"])
         #expect(home.isManagedBy("cohost"))
@@ -35,8 +31,7 @@ struct CoHostModelTests {
         #expect(!home.isHostedBy("stranger"))
     }
 
-    /// An empty user id is a signed-out viewer, who manages nothing — even a
-    /// listing that somehow carried "" in its roster.
+    /// An empty user id (signed out) manages nothing, even if the roster somehow carried "".
     @Test func emptyUserIDManagesNothing() {
         let home = HomeFixture.make(hostUserID: "", coHosts: [""])
         #expect(!home.isManagedBy(""))
@@ -48,8 +43,7 @@ struct CoHostModelTests {
         #expect(HomeFixture.make(coHosts: ["a", "b"]).coHosts == ["a", "b"])
     }
 
-    /// A listing written before feature 14 has no `coHostUserIDs`; it must still
-    /// decode, or it vanishes from the feed (A5).
+    /// A pre-co-host listing has no `coHostUserIDs` and must still decode or it vanishes from the feed.
     @Test func listingWithoutRosterDecodesWithNoCoHosts() throws {
         let json = """
         {
@@ -92,9 +86,7 @@ struct CoHostStoreTests {
         return try #require(all.first { $0.id == id })
     }
 
-    // Fixtures that are read back through the feed carry `allowedViewerIDs`
-    // naming the host, exactly as CreateListingViewModel stamps on every save —
-    // the feed is a single "ACL contains me" query, with no host fallback.
+    // Fixtures read through the feed carry `allowedViewerIDs` naming the host, as CreateListingViewModel stamps; the feed has no host fallback.
     @Test func addCoHostAppendsOneToTheRoster() async throws {
         let home = HomeFixture.make(allowedViewerIDs: ["host"])
         let (store, repo) = store([home])
@@ -109,8 +101,7 @@ struct CoHostStoreTests {
         #expect(try await fetch(repo, id: home.id).coHosts == ["friend"])
     }
 
-    /// A non-host must not even attempt a roster write; the rules would reject it,
-    /// but the app should not offer it.
+    /// A non-host mustn't even attempt a roster write; the rules would reject it and the app shouldn't offer it.
     @Test func onlyTheHostMayAddCoHosts() async throws {
         let home = HomeFixture.make(coHosts: ["cohost"])
         let (store, _) = store([home])

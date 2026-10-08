@@ -2,8 +2,7 @@
 //  ProfileComponents.swift
 //  freebnb
 //
-//  ProfilePage's supporting pieces, split out so the 600-line settings screen
-//  and its sheets type-check in parallel.
+//  ProfilePage's supporting pieces, split so the settings screen and its sheets type-check in parallel.
 //
 
 import SwiftUI
@@ -16,9 +15,7 @@ struct ExportFile: Identifiable {
     var id: String { url.path }
 }
 
-/// A small sheet presenting the finished export with a ShareLink. Presented
-/// programmatically once the async export completes (ShareLink alone can't be
-/// triggered from code).
+/// A sheet presenting the finished export with a ShareLink, presented from code once the async export completes (ShareLink alone can't be).
 struct DataExportShareSheet: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss
@@ -170,18 +167,11 @@ struct EditNameSheet: View {
             return
         }
 
-        // The name on the user document is the authoritative one, and it is now
-        // saved. Fanning it out to the two denormalized copies — listing cards
-        // (homes.hostName) and trip rows (stayRequests.listingHostName, L7) — is
-        // best effort from here.
-        //
-        // These used to run inside the do above, so a listing that refused the
-        // rewrite (one predating the friends-only migration, whose whole document
-        // the update rule re-validates) reported the rename as failed even though
-        // it had already happened, and took the second fan-out down with it. A
-        // stale denormalized copy is a cosmetic problem; telling someone their
-        // rename failed when it did not is a worse one. Each runs regardless of
-        // the other, and each reports itself rather than the sheet.
+        // The user document's name is authoritative and now saved. Fanning it out to the
+        // denormalized copies (homes.hostName, stayRequests.listingHostName) is best effort
+        // and independent: they once ran inside the `do` above, so a listing that refused the
+        // rewrite reported the rename as failed after it had happened. A stale copy is
+        // cosmetic; a false failure is worse. Each reports itself, not the sheet.
         do {
             try await homeStore.updateHostName(for: authManager.userID, newName: trimmed)
         } catch {

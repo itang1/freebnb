@@ -2,13 +2,9 @@
 //  UserProfileSearchEmulatorTests.swift
 //  freebnbTests
 //
-//  Friend search end to end against the emulator (R1): the terms the write path
-//  stamps, the rules that admit them, and the arrayContains query that reads
-//  them back. The unit tests in UserSearchTermsTests cover the term-building in
-//  isolation; only this proves the three agree on a live Firestore.
-//
-//  Nested in EmulatorBackedTests, which carries the opt-in gate and the
-//  serialization — these share the same Auth session as every other suite there.
+//  Friend search end to end against the emulator: the write path's terms, the rules admitting
+//  them, and the arrayContains query. UserSearchTermsTests covers term-building alone; only
+//  this proves the three agree on live Firestore. Nested in EmulatorBackedTests (gate, shared Auth session).
 //
 
 import FirebaseFirestore
@@ -24,9 +20,7 @@ extension EmulatorBackedTests {
             FirestoreUserProfileRepository(db: EmulatorSupport.firestore)
         }
 
-        /// Signs in a fresh member and gives them a public profile under `name`.
-        /// The rules only let a user write their own document, so each profile
-        /// needs its own account.
+        /// Signs in a fresh member with a public profile under `name`; the rules let a user write only their own document.
         @discardableResult
         private func createMember(named name: String) async throws -> String {
             let uid = try await EmulatorSupport.signInFullMember()
@@ -34,9 +28,7 @@ extension EmulatorBackedTests {
             return uid
         }
 
-        // The write path's terms have to satisfy the rules on a real create. If
-        // isValidSearchTerms and UserSearchTerms ever disagree, every new
-        // account fails to get a profile at all — this is that canary.
+        // The write path's terms must satisfy the rules on a real create; if they disagree, every new account fails to get a profile (the canary).
         @Test func creatingAProfileWritesTermsTheRulesAccept() async throws {
             let uid = try await createMember(named: "SpongeBob SquarePants")
             let doc = try await EmulatorSupport.firestore
@@ -53,8 +45,7 @@ extension EmulatorBackedTests {
             #expect(found.contains { $0.displayName == name })
         }
 
-        // The last-name search a whole-name prefix index could not have served,
-        // and the reason the terms are per word rather than per name.
+        // The last-name search a whole-name prefix index couldn't serve, why terms are per word.
         @Test func findsAMemberByThePrefixOfTheirLastName() async throws {
             let surname = "Tentacles\(UUID().uuidString.prefix(6))"
             let name = "Squidward \(surname)"
@@ -63,8 +54,7 @@ extension EmulatorBackedTests {
             #expect(found.contains { $0.displayName == name })
         }
 
-        // The arrayContains lookup only carries the query's longest word, so
-        // without the client-side pass this would return every other Star.
+        // The arrayContains lookup carries only the longest word, so without the client pass this returns every other Star.
         @Test func everyWordOfAMultiWordQueryHasToLand() async throws {
             let tag = String(UUID().uuidString.prefix(6))
             let patrick = "Patrick Star\(tag)"
@@ -79,7 +69,7 @@ extension EmulatorBackedTests {
             let narrowed = try await repository.searchProfiles(query: "patrick star\(tag)")
             #expect(narrowed.contains { $0.displayName == patrick })
 
-            // Both words are real, but they belong to two different people.
+            // Both words are real but belong to two different people.
             let crossed = try await repository.searchProfiles(query: "sandy star\(tag)")
             #expect(crossed.isEmpty)
         }
@@ -91,8 +81,7 @@ extension EmulatorBackedTests {
 
             let underNew = try await repository.searchProfiles(query: "aftername\(tag)")
             #expect(underNew.contains { $0.id == uid })
-            // The old terms must not linger, or a rename would leave the user
-            // findable under a name they no longer have.
+            // Old terms mustn't linger, or a rename leaves the user findable under a name they no longer have.
             let underOld = try await repository.searchProfiles(query: "beforename\(tag)")
             #expect(!underOld.contains { $0.id == uid })
         }

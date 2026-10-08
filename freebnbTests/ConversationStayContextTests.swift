@@ -2,9 +2,7 @@
 //  ConversationStayContextTests.swift
 //  freebnbTests
 //
-//  The chip on a conversation row: which stay it picks, and — more importantly —
-//  when it stays quiet. A chip that lingers after a trip ends turns into
-//  furniture, so most of these pin the absence.
+//  The chip on a conversation row: which stay it picks and when it stays quiet. A lingering chip becomes furniture, so most cases pin the absence.
 //
 
 import Foundation
@@ -54,8 +52,7 @@ struct ConversationStayContextTests {
         #expect(result?.kind == .underway)
     }
 
-    /// The distinction the chip exists for: a request *I* owe an answer on is
-    /// something to act on, and one I'm waiting to hear back about is not.
+    /// The chip's distinction: a request I owe an answer on is actionable; one I'm waiting on is not.
     @Test func itSaysWhichSideOwesTheAnswer() {
         // They asked to stay at my place, so it waits on me.
         let incoming = context([stay(status: .pending, hostUserID: me, guestUserID: them)])
@@ -84,9 +81,7 @@ struct ConversationStayContextTests {
         }
     }
 
-    /// An accepted stay stays `accepted` in Firestore until the nightly sweep
-    /// completes it, so the chip has to notice checkout itself. Otherwise a
-    /// thread claims a trip is confirmed for hours after the guest went home.
+    /// An accepted stay stays `accepted` until the nightly sweep, so the chip must notice checkout itself.
     @Test func anAcceptedStayStopsShowingOnceCheckoutHasPassed() {
         #expect(context([stay(status: .accepted, checkIn: day(-5), checkOut: day(-2))]) == nil)
     }
@@ -97,8 +92,7 @@ struct ConversationStayContextTests {
         #expect(context([elsewhere]) == nil)
     }
 
-    /// When several are live at once the most urgent wins, so the row never
-    /// shows "confirmed" while a request sits unanswered underneath it.
+    /// When several are live the most urgent wins, so the row never shows "confirmed" over an unanswered request.
     @Test func theMostUrgentStayWins() {
         let stays = [
             stay(status: .accepted),
@@ -137,10 +131,7 @@ struct CheckInKitBannerTimingTests {
         )
     }
 
-    /// The banner is for arrival, so it appears the day before check-in and goes
-    /// away at checkout. Showing it earlier clutters a thread that is still about
-    /// whether the dates work; showing it later leaves someone's address pinned
-    /// above a conversation for no reason.
+    /// The banner is for arrival: it appears the day before check-in and goes at checkout, so it neither clutters date-haggling nor pins an address after.
     @Test func theBannerOnlyAppearsAroundTheStay() {
         let arriving = kit(checkIn: day(1), checkOut: day(4))
         #expect(CheckInKitBanner.isRelevant(arriving))
