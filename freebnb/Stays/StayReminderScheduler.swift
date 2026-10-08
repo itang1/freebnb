@@ -2,12 +2,9 @@
 //  StayReminderScheduler.swift
 //  freebnb
 //
-//  Pre-check-in and pre-checkout reminders (feature 22). These are *local*
-//  notifications scheduled on device from the accepted stays the app already
-//  syncs, so they need no server, no push token, and no Blaze billing — they
-//  fire even offline. The scheduling decisions (which reminders, when, with what
-//  copy) live in a pure `StayReminder.reminders(for:...)` so they can be
-//  unit-tested without touching UNUserNotificationCenter.
+//  Pre-check-in and pre-checkout reminders: local notifications scheduled from the accepted
+//  stays the app syncs, so they need no server or push token and fire offline. The decisions
+//  live in a pure `StayReminder.reminders(for:...)`, unit-tested without UNUserNotificationCenter.
 //
 
 import Foundation
@@ -29,21 +26,17 @@ struct StayReminder: Equatable, Sendable {
     let title: String
     let body: String
 
-    /// Stable per (stay, kind), so re-scheduling replaces rather than duplicates,
-    /// and the `stay-` prefix lets the scheduler prune only its own reminders.
+    /// Stable per (stay, kind), so rescheduling replaces; the `stay-` prefix lets the scheduler prune only its own.
     var identifier: String { "stay-\(kind.rawValue)-\(stayID)" }
 }
 
 extension StayReminder {
-    /// Hour of day (local) each reminder fires at. Check-in the evening before so
-    /// there's time to pack; checkout the morning of, before the day gets away.
+    /// Local hour each fires: check-in the evening before (time to pack), checkout that morning.
     static let checkInHour = 18
     static let checkOutHour = 9
 
-    /// The reminders to schedule for `stays`, from `viewerID`'s point of view.
-    /// Only accepted stays with a fire date still in the future are included, so
-    /// a stay whose check-in already passed schedules only its checkout reminder,
-    /// and a finished-but-not-yet-swept stay schedules nothing.
+    /// The reminders for `stays` from `viewerID`'s view: accepted stays with a future fire date only,
+    /// so a started stay schedules just checkout and a finished-but-unswept one nothing.
     static func reminders(
         for stays: [StayRequest],
         viewerID: String,
@@ -89,10 +82,8 @@ extension StayReminder {
     }
 }
 
-/// Reconciles the on-device notification schedule with the current set of
-/// accepted stays. `@MainActor` because UNUserNotificationCenter is main-actor
-/// friendliest here and the caller is a `@MainActor` store; the work inside is
-/// all async so nothing blocks the main thread.
+/// Reconciles on-device notifications with the current accepted stays. `@MainActor`
+/// for its main-actor store caller; the work is async so nothing blocks the main thread.
 @MainActor
 final class StayReminderScheduler {
     private let center: UNUserNotificationCenter
@@ -102,15 +93,11 @@ final class StayReminderScheduler {
         self.center = center
     }
 
-    /// Makes the scheduled reminders match `stays` exactly: schedules the ones
-    /// that should exist, and cancels any previously-scheduled stay reminder that
-    /// no longer should (a stay was cancelled, completed, or had its dates moved).
-    /// Only reminders this type owns (the `stay-` prefix) are ever removed.
+    /// Makes the scheduled reminders match `stays` exactly, scheduling those that should
+    /// exist and cancelling stale ones (cancelled, completed or moved). Only the `stay-` prefix is removed.
     func sync(acceptedStays stays: [StayRequest], viewerID: String, now: Date = Date()) async {
-        // Signed out: nothing is desired, which cancels every reminder this type
-        // owns. Returning early instead would leave the departed user's "You
-        // check in tomorrow in Lisbon" on the next person's Lock Screen, named
-        // city and all, with no app state left to explain it.
+        // Signed out: nothing desired, which cancels every reminder this type owns. Returning early would leave
+        // the departed user's "You check in tomorrow in Lisbon" on the next person's Lock Screen.
         let desired = viewerID.isEmpty
             ? []
             : StayReminder.reminders(for: stays, viewerID: viewerID, now: now)
@@ -142,8 +129,7 @@ final class StayReminderScheduler {
                 trigger: trigger
             )
             do {
-                // Re-adding an existing identifier replaces it, which is exactly
-                // what we want when a stay's dates change.
+                // Re-adding an identifier replaces it, which handles moved dates.
                 try await center.add(request)
             } catch {
                 log.error("failed to schedule \(reminder.identifier, privacy: .public): \(error.localizedDescription, privacy: .public)")

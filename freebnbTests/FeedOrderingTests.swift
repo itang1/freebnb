@@ -2,10 +2,8 @@
 //  FeedOrderingTests.swift
 //  freebnbTests
 //
-//  Covers HomeStore's feed derivation: block filtering, the friends-only
-//  visibility check, and — the reason this file exists — that the ordering is a
-//  total order. Swift's sort is not stable, so a comparator that reports
-//  "equal" for distinct rows lets them reshuffle between recomputes (L9).
+//  Covers HomeStore's feed derivation: block filtering, the friends-only visibility check,
+//  and that the ordering is a total order (Swift's sort isn't stable, so a comparator reporting "equal" lets rows reshuffle).
 //
 
 import Foundation
@@ -27,13 +25,11 @@ struct FeedOrderingTests {
             from: listings, myID: me, friendIDs: ["friend"], blockedIDs: []
         )
 
-        // The friend leads, then my own listing; the stranger's listing is not
-        // mine to see at all.
+        // The friend leads, then my own listing; the stranger's isn't mine to see.
         #expect(feed.map(\.id) == ["a", "b"])
     }
 
-    /// The bug: equal-ranked rows must break ties on a stable key, or an
-    /// unstable sort reorders them on every recompute.
+    /// Equal-ranked rows must break ties on a stable key, or an unstable sort reorders them every recompute.
     @Test func orderingIsATotalOrderAcrossPermutations() {
         // Six same-rank friends: nothing but the id tiebreak separates them.
         let ids = ["f", "d", "a", "e", "b", "c"]
@@ -72,14 +68,11 @@ struct FeedOrderingTests {
             from: [older, newer], myID: me, friendIDs: ["friend1", "friend2"], blockedIDs: []
         )
 
-        // Both are same-rank friends; recency puts the newer one first even
-        // though its id ("b") sorts after the older one's ("a").
+        // Both are same-rank friends; recency puts the newer first though its id sorts later.
         #expect(feed.map(\.id) == ["b", "a"])
     }
 
-    /// Recency wins over the friend-first grouping only within a bucket, never
-    /// across buckets: your own newer listing still sorts below an older
-    /// friend's.
+    /// Recency wins only within a bucket: your own newer listing still sorts below an older friend's.
     @Test func recencyDoesNotOutrankFriendGrouping() {
         let newerMine = HomeFixture.make(id: "a", hostUserID: me, createdAt: Date(timeIntervalSince1970: 2_000))
         let olderFriend = HomeFixture.make(id: "b", hostUserID: "friend", createdAt: Date(timeIntervalSince1970: 1_000))
@@ -120,10 +113,8 @@ struct FeedOrderingTests {
     }
 }
 
-/// Covers `FeedSearchPaging`, the rule that decides whether a search or filter
-/// keeps pulling pages. Search runs client-side over fetched pages, so without
-/// this the feed reports "no homes found" for matches sitting on a page it never
-/// requested (L3).
+/// Covers `FeedSearchPaging`, which decides whether a search or filter keeps pulling pages. Search runs
+/// client-side, so without it the feed reports "no homes found" for matches on an unrequested page.
 struct FeedSearchPagingTests {
     private func paging(
         isNarrowing: Bool = true,
@@ -148,8 +139,7 @@ struct FeedSearchPagingTests {
         #expect(paging().isSearchingRemainingPages)
     }
 
-    /// The whole point: browsing the unfiltered feed must still page lazily off
-    /// the scroll sentinel, not eagerly download everything.
+    /// Browsing the unfiltered feed must still page lazily off the scroll sentinel.
     @Test func anIdleFeedDoesNotPage() {
         #expect(!paging(isNarrowing: false).shouldFetchNextPage)
         #expect(!paging(isNarrowing: false).isSearchingRemainingPages)
@@ -169,8 +159,7 @@ struct FeedSearchPagingTests {
         #expect(inFlight.isSearchingRemainingPages)
     }
 
-    /// A failed page leaves `canLoadMore` set; retrying it up to the cap would
-    /// hammer a broken query.
+    /// A failed page leaves `canLoadMore` set; retrying to the cap would hammer a broken query.
     @Test func aFailedPageStopsTheLoop() {
         #expect(!paging(hasError: true).shouldFetchNextPage)
     }
@@ -179,8 +168,7 @@ struct FeedSearchPagingTests {
         #expect(paging(pagesLoaded: 19, maxPages: 20).shouldFetchNextPage)
         let capped = paging(pagesLoaded: 20, maxPages: 20)
         #expect(!capped.shouldFetchNextPage)
-        // Cap reached with pages still unread: stop paging, and let the empty
-        // state say so rather than spinning forever.
+        // Cap reached with pages unread: stop paging and let the empty state say so.
         #expect(!capped.isSearchingRemainingPages)
     }
 }
