@@ -2,11 +2,9 @@
 //  SpotlightIndexer.swift
 //  freebnb
 //
-//  Indexes the user's saved listings into iOS Spotlight (feature 40) so a saved
-//  place is searchable from the home screen and, tapped, deep-links back into the
-//  listing. Only *saved* listings are indexed — a private, per-user set — and only
-//  the public card fields (host name, city/state, description) go into the index;
-//  the street address never does. This is entirely on-device and needs no billing.
+//  Indexes the user's saved listings into Spotlight so a saved place is searchable and deep-links back.
+//  Only saved listings (a private set) and public card fields are indexed, never the street address;
+//  entirely on-device.
 //
 
 import CoreSpotlight
@@ -14,20 +12,17 @@ import Foundation
 import UniformTypeIdentifiers
 
 enum SpotlightIndexer {
-    /// Groups every FreeBNB entry under one domain so the whole set can be
-    /// reconciled or cleared in a single call.
+    /// Groups every FreeBNB entry under one domain so the set can be reconciled or cleared in one call.
     static let domainIdentifier = "saved-listings"
 
     // MARK: - Pure attribute builders (unit-tested)
 
-    /// Human title shown in a Spotlight result. Mirrors the listing card: the
-    /// host, then the neighbourhood.
+    /// The result title, mirroring the listing card: host, then neighbourhood.
     static func title(for home: Home) -> String {
         "\(home.hostName) · \(home.address.city), \(home.address.state)"
     }
 
-    /// The result's supporting line: the host's own words if any, otherwise a
-    /// neutral fallback. Never includes the street address.
+    /// The supporting line: the host's own words or a neutral fallback, never the street address.
     static func contentDescription(for home: Home) -> String {
         if let text = home.description?.trimmingCharacters(in: .whitespacesAndNewlines),
            !text.isEmpty {
@@ -36,8 +31,7 @@ enum SpotlightIndexer {
         return "A place to stay in \(home.address.city), \(home.address.state)."
     }
 
-    /// Extra query terms so a search for the city or the host still surfaces the
-    /// listing even when they aren't in the title verbatim.
+    /// Extra query terms so a city or host search surfaces the listing even if absent from the title.
     static func keywords(for home: Home) -> [String] {
         [home.address.city, home.address.state, home.hostName, "FreeBNB"]
     }
@@ -54,8 +48,7 @@ enum SpotlightIndexer {
         return attributes
     }
 
-    /// The searchable item for a listing. Its `uniqueIdentifier` is the listing id
-    /// itself, which is what a tap hands back to the app for deep-linking.
+    /// The searchable item; its `uniqueIdentifier` is the listing id, which a tap hands back for deep-linking.
     static func item(for home: Home) -> CSSearchableItem {
         CSSearchableItem(
             uniqueIdentifier: home.id,
@@ -66,10 +59,8 @@ enum SpotlightIndexer {
 
     // MARK: - Reconciliation
 
-    /// Makes the Spotlight index reflect exactly `homes`: clears the domain, then
-    /// re-adds the current set. Delete-then-index runs inside the delete's
-    /// completion so the two operations can't race. Idempotent, so it is safe to
-    /// call on every change to the saved set. `index` is injectable for tests.
+    /// Makes the index reflect exactly `homes`: clears the domain, then re-adds the set (the
+    /// delete's completion runs the indexing so they can't race). Idempotent; `index` is injectable for tests.
     static func sync(savedHomes homes: [Home], index: CSSearchableIndex = .default()) {
         index.deleteSearchableItems(withDomainIdentifiers: [domainIdentifier]) { _ in
             guard !homes.isEmpty else { return }

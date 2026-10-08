@@ -2,12 +2,9 @@
 //  AuthTests.swift
 //  freebnbTests
 //
-//  Covers the two pure derivations behind sign-in (the SDK-error → AuthError
-//  mapping and the provider → AuthMethod mapping), plus emulator-backed checks
-//  that the real FirebaseAuth SDK still produces the error codes and provider
-//  IDs those mappings expect. The UI above this is thin — EmailAuthView only
-//  gates its button and relays these values — so this is where email and
-//  Google sign-in correctness actually lives.
+//  Covers the pure sign-in derivations (SDK error → AuthError, provider → AuthMethod) plus
+//  emulator checks that the real FirebaseAuth SDK still produces the codes and provider IDs
+//  they expect. The UI is thin, so sign-in correctness lives here.
 //
 
 import FirebaseAuth
@@ -27,8 +24,7 @@ struct AuthErrorMappingTests {
         #expect(map(.invalidEmail) == .invalidEmail)
         #expect(map(.weakPassword) == .weakPassword)
         #expect(map(.wrongPassword) == .wrongPassword)
-        // Firebase reports a bad password as invalidCredential when email
-        // enumeration protection is on, so both must land on the same message.
+        // Bad password reports as invalidCredential when email enumeration protection is on; both must map alike.
         #expect(map(.invalidCredential) == .wrongPassword)
         #expect(map(.userNotFound) == .userNotFound)
     }
@@ -41,9 +37,7 @@ struct AuthErrorMappingTests {
 // MARK: - Auth flows against the emulator
 
 extension EmulatorBackedTests {
-    // Nested in EmulatorBackedTests, which supplies both traits: the opt-in gate
-    // and the serialization these need to not trip over
-    // FirestoreHomesRepositoryEmulatorTests on the shared Auth session.
+    // Nested in EmulatorBackedTests, which supplies the opt-in gate and the serialization for the shared Auth session.
     @Suite
     struct AuthEmulatorTests {
 
@@ -53,25 +47,21 @@ extension EmulatorBackedTests {
             "\(tag)-\(UUID().uuidString.prefix(8))@emulator.test"
         }
 
-        // Registration is create + profile stamp: the account exists, carries the
-        // display name, and derives as an email member (not a guest).
+        // Registration is create + profile stamp: the account carries the display name and derives as an email member.
         @Test func registrationCreatesAnEmailMemberWithADisplayName() async throws {
             try? auth.signOut()
             let result = try await auth.createUser(withEmail: freshEmail("reg"), password: "password123")
             let change = result.user.createProfileChangeRequest()
             change.displayName = "New Member"
             try await change.commitChanges()
-            // commitChanges persists the name to the backend but does not reliably
-            // refresh the in-memory user (especially against the emulator); reload it
-            // before reading the display name back.
+            // commitChanges doesn't reliably refresh the in-memory user (esp. on the emulator); reload before reading the name.
             try await result.user.reload()
 
             #expect(AuthManager.method(for: result.user) == .email)
             #expect(result.user.displayName == "New Member")
         }
 
-        // The real SDK error for a duplicate email must still map to .emailInUse —
-        // this is the integration half of AuthErrorMappingTests.
+        // The real SDK error for a duplicate email must still map to .emailInUse (the integration half of AuthErrorMappingTests).
         @Test func duplicateRegistrationSurfacesEmailInUse() async throws {
             let email = freshEmail("dupe")
             _ = try await auth.createUser(withEmail: email, password: "password123")
@@ -95,9 +85,7 @@ extension EmulatorBackedTests {
             }
         }
 
-        // The Google path minus the GIDSignIn sheet: exchanging a Google credential
-        // yields a user whose providerData derives as .google. The emulator accepts
-        // an unsigned JSON claim set in place of a real ID token.
+        // The Google path minus the GIDSignIn sheet: exchanging a credential yields a .google user; the emulator accepts an unsigned JSON claim set.
         @Test func googleCredentialDerivesTheGoogleMethod() async throws {
             try? auth.signOut()
             let claims = #"{"sub": "google-uid-1", "email": "google-member@emulator.test", "email_verified": true}"#

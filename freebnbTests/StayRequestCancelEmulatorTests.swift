@@ -2,16 +2,10 @@
 //  StayRequestCancelEmulatorTests.swift
 //  freebnbTests
 //
-//  The cancel write, from the real repository against the real rules (R3).
-//
-//  `cancelledBy` is pinned by firestore.rules to the party doing the cancelling,
-//  which means the exact key set the client sends has to line up with what those
-//  rules admit. The Node rules tests cover the rules; they cover them against a
-//  payload written by hand. This covers the payload the app actually sends — the
-//  half that, if it were wrong, would let cancelling fail silently in prod while
-//  every other test stayed green.
-//
-//  Nested in EmulatorBackedTests for the opt-in gate and the serialization.
+//  The cancel write, from the real repository against the real rules. `cancelledBy` is pinned
+//  to the cancelling party, so the exact key set the client sends must match what the rules
+//  admit; the Node tests cover hand-written payloads, this covers the app's own, which if wrong
+//  would let cancelling fail silently in prod. Nested in EmulatorBackedTests for the gate and serialization.
 //
 
 import FirebaseFirestore
@@ -42,10 +36,8 @@ extension EmulatorBackedTests {
             )
         }
 
-        /// A host with a listing shared with `guestUserID`, and a pending request
-        /// from that guest against it — the furthest this can get through the real
-        /// rules without the acceptStayRequest callable, which the emulator-tests
-        /// project has no functions for.
+        /// A host with a listing shared with `guestUserID` and a pending request from that guest: as far as it gets
+        /// through the real rules without the acceptStayRequest callable (the emulator project has no functions).
         private func makePendingRequest() async throws -> (guest: EmulatorSupport.Member, request: StayRequest) {
             let guest = try await EmulatorSupport.createFullMember()
             let hostID = try await EmulatorSupport.signInFullMember()
@@ -63,7 +55,7 @@ extension EmulatorBackedTests {
                 amenities: makeAmenities()
             )
             home.id = UUID().uuidString
-            // The guest has to be in the read ACL to be allowed to knock at all.
+            // The guest must be in the read ACL to knock at all.
             home.allowedViewerIDs = [hostID, guest.uid]
             try await homes.save(home)
 
@@ -86,8 +78,7 @@ extension EmulatorBackedTests {
                 .collection(FirestorePaths.stayRequests).document(id).getDocument().data()
         }
 
-        // The whole point: the repository's own cancel payload is accepted, and
-        // it records who cancelled.
+        // The repository's own cancel payload is accepted and records who cancelled.
         @Test func aGuestCancelIsAcceptedAndNamesTheGuest() async throws {
             let (guest, request) = try await makePendingRequest()
 
@@ -98,9 +89,7 @@ extension EmulatorBackedTests {
             #expect(stored?["cancelledBy"] as? String == guest.uid)
         }
 
-        // The field is only worth reading if it cannot lie: a guest must not be
-        // able to cancel and pin it on the host, which would push the wrong
-        // person and tell them they backed out of their own stay.
+        // The field must not lie: a guest mustn't cancel and pin it on the host, pushing the wrong person.
         @Test func aGuestCannotBlameTheHostForTheirOwnCancellation() async throws {
             let (_, request) = try await makePendingRequest()
 
@@ -111,8 +100,7 @@ extension EmulatorBackedTests {
             }
         }
 
-        // An unattributed cancellation would leave the trigger unable to tell who
-        // already knows, so the rules refuse it rather than let it through silent.
+        // An unattributed cancellation would leave the trigger unable to tell who already knows, so the rules refuse it.
         @Test func aCancelWithNoCancellerIsRejected() async throws {
             let (_, request) = try await makePendingRequest()
 

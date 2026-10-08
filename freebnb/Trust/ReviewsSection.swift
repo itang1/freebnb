@@ -2,9 +2,7 @@
 //  ReviewsSection.swift
 //  freebnb
 //
-//  Renders the reviews and the character references written about one person
-//  (feature 1). Used by the public profile page and by the listing detail page,
-//  which shows the host's.
+//  Renders the reviews and character references about one person, on the profile page and the listing detail page (the host's).
 //
 
 import SwiftUI
@@ -12,8 +10,7 @@ import SwiftUI
 struct ReviewsSection: View {
     let subjectUserID: String
     let subjectName: String
-    /// Caps how many reviews render. Nil shows them all — which is what the
-    /// profile page wants, while a listing shows a taste and points at the profile.
+    /// Caps how many reviews render; nil shows all (profile), a listing shows a taste.
     var limit: Int?
 
     @Environment(ReviewStore.self) private var reviewStore
@@ -35,9 +32,7 @@ struct ReviewsSection: View {
                 }
             }
 
-            // Spells out what a review *is*, so it can't be confused with the
-            // references below it: only a completed stay produces one, and it
-            // runs in both directions (a host reviews their guest too).
+            // Spells out what a review is, apart from references below: only a completed stay produces one, in both directions.
             Text("From people who have actually stayed, in either direction: guests review their host; hosts review their guest.")
                 .font(.caption)
                 .foregroundColor(.secondaryText)
@@ -90,8 +85,7 @@ struct ReviewRow: View {
                     .font(.subheadline)
                     .foregroundColor(.primary)
             }
-            // A rating with no words is still a data point, but say so rather
-            // than leaving an unexplained blank.
+            // A rating with no words is still a data point; say so rather than leave a blank.
             if review.publicComment?.isEmpty ?? true {
                 Text("Rated, no comment left.")
                     .font(.caption)
@@ -108,9 +102,7 @@ struct ReviewRow: View {
 
 // MARK: - Private feedback
 
-/// The notes reviewers left for you and nobody else (feature 1). Shown only on
-/// your own profile: this is the half of a review that never becomes public, and
-/// the whole reason an honest public review is possible at all.
+/// The notes reviewers left for you alone, shown only on your own profile: the half of a review that never becomes public, which makes honest public reviews possible.
 struct PrivateFeedbackSection: View {
     let subjectUserID: String
 
@@ -152,8 +144,7 @@ struct PrivateFeedbackSection: View {
                 }
             }
         }
-        // Depends on the reviews already being loaded, so it runs after
-        // ReviewsSection's own task has populated them.
+        // Depends on the reviews being loaded, so it runs after ReviewsSection's own task.
         .task(id: reviewStore.reviews(about: subjectUserID).count) {
             await reviewStore.loadPrivateFeedback(for: reviewStore.reviews(about: subjectUserID))
         }
@@ -179,9 +170,7 @@ struct ReferencesSection: View {
             Text("References from friends")
                 .font(.headline)
 
-            // The counterpart to the reviews caption above: a reference is a
-            // vouch from someone who *hasn't* stayed, which is why it carries no
-            // rating and can speak to either side of a future stay.
+            // A reference is a vouch from someone who hasn't stayed, so it carries no rating and can speak to either side of a future stay.
             Text("Vouches from friends who haven't stayed with \(subjectName), speaking to them as a guest, a host, or both.")
                 .font(.caption)
                 .foregroundColor(.secondaryText)
@@ -198,8 +187,7 @@ struct ReferencesSection: View {
                     ReferenceRow(
                         reference: reference,
                         authorName: userProfileStore.displayName(for: reference.authorUserID) ?? "FreeBNB User",
-                        // A reference sits on your profile; you may remove one you
-                        // didn't ask for, and its author may retract it.
+                        // A reference sits on your profile; you may remove one you didn't ask for, and its author may retract it.
                         canDelete: authManager.userID == reference.authorUserID
                             || authManager.userID == reference.subjectUserID,
                         onDelete: {

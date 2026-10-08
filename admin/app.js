@@ -2,13 +2,9 @@
 //
 // A triage queue over the `reports` collection. It holds no privileges of its
 // own: every read and write goes through `firestore.rules`, which admits only an
-// account carrying the `admin` custom claim (see scripts/set_admin_claim.js).
-// Serving this page to the wrong person therefore leaks nothing — Firestore
-// simply refuses them. That is the point of putting the check in the rules
-// rather than in this file.
-//
-// No build step and no bundler: ES modules straight from the CDN, so the console
-// is a directory of three files that Firebase Hosting serves as-is.
+// account carrying the `admin` custom claim (see scripts/set_admin_claim.js). Serving
+// this page to the wrong person leaks nothing, since Firestore refuses them; the check
+// is in the rules, not this file. No build step: ES modules from the CDN, three files served as-is.
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
@@ -121,9 +117,7 @@ function subscribe(status) {
     },
     (error) => {
       loading.hidden = true;
-      // The overwhelmingly likely cause is a signed-in account without the
-      // `admin` claim, so say that rather than echoing "Missing or insufficient
-      // permissions" and leaving the moderator to guess.
+      // Most likely a signed-in account without the `admin` claim; say so rather than echoing the raw permissions error.
       teardown();
       consoleEl.hidden = true;
       gate.hidden = false;
@@ -177,8 +171,7 @@ function renderReport(snapshot) {
 
   const actions = document.createElement("div");
   actions.className = "actions";
-  // Only offer the states this report isn't already in. A "mark new" button on a
-  // new report is noise, and a mis-click that re-opens a resolved case is worse.
+  // Only offer states the report isn't already in; a "mark new" on a new report is noise and a mis-click could reopen a case.
   for (const status of STATUSES.filter((s) => s !== data.status)) {
     const button = document.createElement("button");
     button.textContent = label(status);
@@ -195,8 +188,7 @@ async function triage(reportID, status, note, item) {
   for (const button of item.querySelectorAll("button")) button.disabled = true;
   const trimmed = note.trim();
   try {
-    // The rules pin this to exactly these four keys and to `reviewedBy` being the
-    // caller, so nothing here can rewrite what was reported or by whom.
+    // The rules pin these four keys and `reviewedBy` to the caller, so nothing can rewrite what was reported or by whom.
     await updateDoc(doc(db, "reports", reportID), {
       status,
       ...(trimmed ? { moderatorNote: trimmed } : {}),
