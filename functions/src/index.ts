@@ -3,10 +3,7 @@ import * as logger from "firebase-functions/logger";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
-// The auth `onDelete` background trigger has no v2 equivalent (v2 offers only the
-// `beforeUserCreated`/`beforeUserSignedIn` blocking triggers, not a post-delete
-// hook), so that one function stays on the v1 API surface. v1 and v2 functions
-// coexist in the same codebase and deploy together (A4).
+// The auth `onDelete` trigger has no v2 equivalent, so that one function stays on v1; v1 and v2 deploy together.
 import * as functionsV1 from "firebase-functions/v1";
 import {
   Collections,
@@ -27,14 +24,11 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
-// Firestore caps a WriteBatch at 500 operations, and holding an unbounded result
-// set in memory is its own scaling ceiling (A9).
+// Firestore caps a WriteBatch at 500 operations, and holding an unbounded result set in memory doesn't scale.
 const PAGE_SIZE = 500;
 
-// Deletes every document a query matches, one bounded page at a time. Because a
-// deleted document no longer matches, each `get()` returns only outstanding work,
-// so a retry after a mid-run failure resumes where it left off instead of
-// rescanning from the top (A9). The caller must pass a query with no `limit`.
+// Deletes every document a query matches, one bounded page at a time. Deleted
+// documents stop matching, so a retry resumes where it left off. The query must have no `limit`.
 async function deleteQueryInChunks(query: FirebaseFirestore.Query): Promise<void> {
   for (;;) {
     const snap = await query.limit(PAGE_SIZE).get();
@@ -47,10 +41,8 @@ async function deleteQueryInChunks(query: FirebaseFirestore.Query): Promise<void
   }
 }
 
-// Deletes every Storage object under `prefix` from the default bucket. Used to
-// cascade a user's listing photos (listings/{uid}/**) on account deletion:
-// the Firestore listing survives as history, but the binary assets are personal
-// data and a cost leak (S7). A missing bucket or empty prefix is a no-op.
+// Deletes every Storage object under `prefix` (e.g. listings/{uid}/** on account
+// deletion; photos are personal data and a cost leak). A missing bucket or empty prefix is a no-op.
 async function deleteStoragePrefix(prefix: string): Promise<void> {
   await admin.storage().bucket().deleteFiles({ prefix });
 }
@@ -58,10 +50,8 @@ async function deleteStoragePrefix(prefix: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Push notifications
 // Per-category preferences live in the recipient's private profile as a
-// `notificationPrefs` map. A category counts as enabled unless the map stores
-// `false` for it, so an absent map or key means opted-in — clients only persist
-// the categories a user turns off (feature 37). The client mirror is
-// NotificationCategory in NotificationPreferences.swift; keep the keys in sync.
+// `notificationPrefs` map. A category is enabled unless the map stores `false`
+// for it. The client mirror is NotificationCategory in NotificationPreferences.swift.
 // ---------------------------------------------------------------------------
 type NotificationCategory = "messages" | "stayRequests" | "stayUpdates" | "friendRequests";
 
@@ -73,11 +63,9 @@ function notificationEnabled(
   return prefs?.[category] !== false;
 }
 
-// Sends one push to `recipientID` for `category`, gated by their notification
-// preference, block list, and having a registered FCM token — any failed gate
-// is a silent no-op. `senderID`, when given, suppresses the push if the
-// recipient has blocked that user. A missing/unreadable private profile is
-// treated as "opted in with no token", so it simply sends nothing.
+// Sends one push to `recipientID` for `category`, gated by their preference, block
+// list (if `senderID` is given) and FCM token. Any failed gate is a silent no-op,
+// including an unreadable private profile.
 async function sendPush(opts: {
   recipientID: string;
   category: NotificationCategory;
@@ -105,17 +93,13 @@ async function sendPush(opts: {
 }
 
 // ---------------------------------------------------------------------------
-// scheduledFirestoreBackup
-// Exports all Firestore collections to GCS once a day at 03:00 UTC.
+// scheduledFirestoreBackup: exports all collections to GCS daily at 03:00 UTC.
 //
-// One-time setup required:
-//   1. Create a GCS bucket named "${PROJECT_ID}-backups" in the same region.
-//   2. Grant the App Engine default service account
-//      (${PROJECT_ID}@appspot.gserviceaccount.com) the roles:
-//        - storage.admin  (on the backup bucket)
-//        - datastore.importExportAdmin  (on the project)
-//   3. Deploy this function: firebase deploy --only functions
-//
+// One-time setup:
+//   1. Create a GCS bucket "${PROJECT_ID}-backups" in the same region.
+//   2. Grant ${PROJECT_ID}@appspot.gserviceaccount.com storage.admin (on the
+//      bucket) and datastore.importExportAdmin (on the project).
+//   3. firebase deploy --only functions
 // Exports land in gs://${PROJECT_ID}-backups/firestore/YYYY-MM-DD/
 // ---------------------------------------------------------------------------
 export const scheduledFirestoreBackup = onSchedule(
@@ -156,37 +140,20 @@ export const scheduledFirestoreBackup = onSchedule(
 
 // ---------------------------------------------------------------------------
 // onMessageCreated
-// Maintains the denormalized `conversations/{id}` summary and pushes to the
-// recipient. The summary doc (last message, per-user unread counts, mutes) is
-// the source of truth the client's conversation list and unread badge read
-// from, so a chatty thread no longer evicts other conversations from the list
-// (L2), and read/mute state lives server-side and syncs across devices (L4).
+// Maintains the denormalized `conversations/{id}` summary (last message, unread
+// counts, mutes) the client's list and badge read from, and pushes to the recipient.
 // ---------------------------------------------------------------------------
 
-// Counts the user's non-muted conversations that still hold unread messages —
-// the value both the app's tab badge and the APNs badge display.
-//
-// Asks only for the conversations that are already unread for this user, rather
-// than paging over every thread they have and counting in memory. That ran on
-// every single message: a user with 500 conversations cost 500 reads per message
-// received, forever, to compute a number that is usually 1. Now the read count
-// is the badge itself.
-//
-// `unreadCounts` is a map keyed by user ID, so `unreadCounts.{uid} > 0` is an
-// ordinary field-path range query, served by the automatic single-field index —
-// no composite index, and no denormalized field to keep honest. A conversation
-// with no entry for this user simply isn't matched, which is the right answer.
-//
-// Muting is still applied in memory: it lives in a `mutedBy` array, and a second
-// array-contains can't be combined with this filter. That only reads over the
-// already-unread set, not the whole mailbox.
+// Counts the user's unmuted conversations with unread messages (the tab and APNs
+// badge value). It queries only conversations already unread for this user
+// (`unreadCounts.{uid} > 0`, served by the automatic single-field index) instead of
+// paging every thread. Muting is applied in memory, since `mutedBy` is an array
+// and can't combine with this filter.
 async function unreadConversationCount(userID: string): Promise<number> {
   const snap = await db
     .collection(Collections.conversations)
     .where(new admin.firestore.FieldPath("unreadCounts", userID), ">", 0)
-    // A ceiling on the pathological case rather than a real limit: nobody reads
-    // a badge past PAGE_SIZE, and this keeps one absurd mailbox from making
-    // every message to it expensive.
+    // A ceiling on pathological mailboxes; nobody reads a badge past PAGE_SIZE.
     .limit(PAGE_SIZE)
     .get();
 
@@ -213,11 +180,9 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
   const recipientID = msg.participants.find((uid) => uid !== senderID);
   if (!recipientID) return;
 
-  // Upsert the conversation summary. The conversationID mirrors the client's
-  // MessageStore.conversationID: sorted participants joined by "_". merge keeps
-  // the other participant's unread count and any mutedBy list intact; the
-  // sender is caught up (0) and the recipient's counter advances — increment()
-  // treats a missing counter as 0, so the first message lands the count at 1.
+  // Upsert the summary. The conversationID mirrors the client's MessageStore.conversationID
+  // (sorted participants joined by "_"). merge keeps the other side's unread count and
+  // mutedBy; the sender is caught up and the recipient's counter advances (a missing counter counts as 0).
   const participants = [...msg.participants].sort();
   const conversationID = participants.join("_");
   const convRef = db.collection(Collections.conversations).doc(conversationID);
@@ -239,26 +204,23 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
     { merge: true }
   );
 
-  // The recipient's token and block list live in their owner-only private
-  // subdocument; the sender's display name is on the public user doc; the
-  // recipient's mute lives on the conversation doc we just wrote.
+  // The recipient's token and blocks are in their private subdocument; the sender's name is on the public user doc; mute is on the conversation doc.
   const [recipientPrivate, senderDoc, convSnap] = await Promise.all([
     db.doc(privateProfilePath(recipientID)).get(),
     db.collection(Collections.users).doc(senderID).get(),
     convRef.get(),
   ]);
 
-  // A muted conversation gets no push and never counts toward the badge.
+  // A muted conversation gets no push and doesn't count toward the badge.
   const mutedBy: string[] = convSnap.data()?.mutedBy ?? [];
   if (mutedBy.includes(recipientID)) return;
 
   const recipientData = recipientPrivate.data();
 
-  // Respect the recipient's per-category preference: a muted "messages"
-  // category silences the push (the unread count still advanced above).
+  // Respect the per-category preference (the unread count still advanced above).
   if (!notificationEnabled(recipientData, "messages")) return;
 
-  // Never push a notification from someone the recipient has blocked.
+  // No push from someone the recipient has blocked.
   const blocked: string[] = recipientData?.blockedUserIDs ?? [];
   if (blocked.includes(senderID)) return;
 
@@ -267,7 +229,7 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
 
   const senderName: string = senderDoc.data()?.displayName ?? "FreeBNB";
 
-  // Badge the actual number of unread conversations, not a hardcoded 1 (L4).
+  // Badge the actual number of unread conversations.
   const badge = await unreadConversationCount(recipientID);
 
   await admin.messaging().send({
@@ -286,28 +248,18 @@ export const onMessageCreated = onDocumentCreated(messageDocPattern, async (even
 // ---------------------------------------------------------------------------
 // Listing read ACLs and the friend graph
 //
-// `homes.allowedViewerIDs` is the denormalized read ACL that firestore.rules
-// enforces listing visibility with, because rules cannot join to `friendEdges`
-// at query time. Every listing gets the same audience:
-//
-//   host + accepted friends
-//
-// There are no wider tiers. Friends-of-friends never see a listing; they see
-// its host as a friend *suggestion* (see suggestFriends below), and gain access
-// only once the host accepts them. The client stamps the same first-degree
-// array on save (so a listing is correct the instant it is written), and
-// `onHomeWrittenACL` repairs any drift immediately afterwards.
-//
-// Everything below rebuilds the array from the graph rather than applying a
-// delta: a full rebuild is idempotent, which is what makes the retries safe.
-// A legacy `visibility` field may still sit on old documents; it is ignored
-// here and stripped by scripts/migrate_friends_only.js.
+// `homes.allowedViewerIDs` is the denormalized read ACL firestore.rules uses
+// (rules can't join to `friendEdges`). Every listing's audience is host +
+// accepted friends; friends-of-friends see only a friend suggestion (see
+// suggestFriends) and gain access once the host accepts them. The client stamps
+// the same array on save and `onHomeWrittenACL` repairs drift. Everything here
+// rebuilds the array from the graph rather than applying a delta, so retries are
+// idempotent. Legacy `visibility` is ignored (scripts/migrate_friends_only.js strips it).
 // ---------------------------------------------------------------------------
 type FriendEdgeData = { userA: string; userB: string; status?: string; initiator?: string };
 
-// The rules cap `allowedViewerIDs` at 1000 entries, and the whole array is
-// downloaded with every feed document, so a very well-connected host's
-// friend list is truncated rather than allowed to bloat the feed.
+// The rules cap `allowedViewerIDs` at 1000 and the array downloads with every feed
+// document, so a very well-connected host's list is truncated.
 const ACL_CAP = 1000;
 
 /** Accepted friends of one user, read from both halves of the edge. */
@@ -338,11 +290,10 @@ function sameMembers(a: string[], b: string[]): boolean {
 async function rebuildListingACLs(hostID: string, onlyHomeID?: string): Promise<void> {
   const friends = await acceptedFriendsOf(hostID);
 
-  // Every listing carries the same ACL. The host is always in it: the rules
-  // refuse a listing that locks its own host out.
+  // Every listing carries the same ACL; the host is always in it (the rules refuse self-lockout).
   const desired = [...new Set([hostID, ...friends])].slice(0, ACL_CAP);
 
-  // Updating one listing reads one document, not the host's whole catalogue.
+  // Updating one listing reads one document, not the whole catalogue.
   if (onlyHomeID) {
     const ref = db.collection(Collections.homes).doc(onlyHomeID);
     const snap = await ref.get();
@@ -382,17 +333,10 @@ async function rebuildListingACLs(hostID: string, onlyHomeID?: string): Promise<
 
 // ---------------------------------------------------------------------------
 // onFriendEdgeWritten
-// A listing's audience is exactly its host's accepted friends, so an edge
-// changing accepted-ness moves only the two endpoints' own ACLs: accepting
-// admits each user to the other's listings, unfriending revokes both. This is
-// the write that makes "accepting a friend request shares your listings with
-// them" true.
-//
-// It also carries the friend graph's two pushes. Both sit on the critical path
-// of a new user: the whole app is empty until someone accepts them, and neither
-// end of that wait used to be told anything. A request that nobody knows is
-// waiting is the longest stall in the funnel, and an acceptance the requester
-// never hears about is an app they have no reason to reopen.
+// A listing's audience is its host's accepted friends, so an edge changing
+// accepted-ness moves only the two endpoints' ACLs. It also sends the friend
+// graph's two pushes, which sit on a new user's critical path: the app is empty
+// until someone accepts them.
 // ---------------------------------------------------------------------------
 export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async (event) => {
   const change = event.data;
@@ -410,11 +354,9 @@ export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async
 
   await Promise.all([edge.userA, edge.userB].map((hostID) => rebuildListingACLs(hostID)));
 
-  // A new friendship needs a circle membership on each side, because Default is
-  // a real policy-bearing circle and an absent membership is a gap rather than a
-  // representation of being in it. The clients do this themselves when their
-  // Friends screen next appears; this closes the window in between, and covers
-  // the side whose app is not running.
+  // A new friendship needs a circle membership on each side, since an absent one is a
+  // gap rather than being in Default. Clients do this when Friends next appears; this
+  // covers the window in between and the side whose app isn't running.
   if (isFriends) {
     await Promise.all([
       placeInDefaultCircle(edge.userA, edge.userB),
@@ -425,11 +367,8 @@ export const onFriendEdgeWritten = onDocumentWritten(friendEdgeDocPattern, async
 
 // ---------------------------------------------------------------------------
 // Circles
-//
-// The functions' share of Circles is repair, never enforcement: firestore.rules
-// is the boundary, because this project has no functions deployed in production
-// and a rule that only holds where a trigger runs is not a rule. See
-// docs/internal/CIRCLES.md.
+// The functions' share is repair, never enforcement: firestore.rules is the
+// boundary, since no functions are deployed in production. See docs/internal/CIRCLES.md.
 // ---------------------------------------------------------------------------
 
 type BookingPolicyData = {
@@ -457,9 +396,7 @@ async function placeInDefaultCircle(hostID: string, friendID: string): Promise<v
     .doc(friendID);
   if ((await memberRef.get()).exists) return;
 
-  // No Default circle means this host has no circles at all, so there is no
-  // policy to file anyone under yet. Their own client seeds them on next launch,
-  // and until then nothing is restricted — which is what they had before.
+  // No Default circle means no circles at all; their client seeds them on next launch, and until then nothing is restricted.
   const defaultCircle = await circlePath(hostID, Docs.defaultCircle).get();
   const policy = defaultCircle.data()?.policy as BookingPolicyData | undefined;
   if (!policy) return;
@@ -485,10 +422,8 @@ async function displayNameOf(userID: string, fallback: string): Promise<string> 
   return typeof name === "string" && name.length > 0 ? name : fallback;
 }
 
-// The two moments in the friend graph worth a push, and only those: a request
-// arriving, and a request being accepted. A decline or an unfriend is silence
-// on purpose — neither is news the other person is owed, and telling someone
-// they were turned down invites a second ask.
+// The two friend-graph moments worth a push: a request arriving and one being
+// accepted. A decline or unfriend is silence on purpose, since being turned down invites a second ask.
 async function notifyFriendEdge(
   before: FriendEdgeData | undefined,
   after: FriendEdgeData | undefined
@@ -497,15 +432,14 @@ async function notifyFriendEdge(
   const initiator = after.initiator;
   const recipient = after.userA === initiator ? after.userB : after.userA;
 
-  // A new pending edge: the person who was asked has no other way to find out.
+  // A new pending edge: the asked person has no other way to find out.
   if (!before && after.status === "pending") {
     const senderName = await displayNameOf(initiator, "Someone");
     await sendPush({
       recipientID: recipient,
       category: "friendRequests",
       senderID: initiator,
-      // An ask, not a claim on them: the answer is theirs, and declining is a
-      // perfectly good one.
+      // An ask, not a claim; declining is a good answer.
       title: "Friend request",
       body: `${senderName} would like to connect on FreeBNB.`,
       data: { type: "friend_request", senderUserID: initiator },
@@ -513,8 +447,7 @@ async function notifyFriendEdge(
     return;
   }
 
-  // Accepted: tell whoever did the asking, because their feed just changed from
-  // empty to not, and nothing else in the app would tell them.
+  // Accepted: tell the asker, whose feed just went from empty to not.
   if (before?.status === "pending" && after.status === "accepted") {
     const accepterName = await displayNameOf(recipient, "A friend");
     await sendPush({
@@ -529,10 +462,8 @@ async function notifyFriendEdge(
 }
 
 // ---------------------------------------------------------------------------
-// onHomeWrittenACL
-// The client stamps the host's accepted friends on save; this repairs any
-// listing whose ACL drifted (a stale client, a partial write). It is a
-// separate trigger from onHomeDeleted so each stays about one thing.
+// onHomeWrittenACL: repairs any listing whose ACL drifted (stale client, partial
+// write). Separate from onHomeDeleted so each is about one thing.
 // ---------------------------------------------------------------------------
 export const onHomeWrittenACL = onDocumentWritten(homeDocPattern, async (event) => {
   const after = event.data?.after.exists ? event.data.after.data() : undefined;
@@ -544,15 +475,11 @@ export const onHomeWrittenACL = onDocumentWritten(homeDocPattern, async (event) 
 });
 
 // ---------------------------------------------------------------------------
-// Trust stats (feature 2)
-//
-// The reputation numbers on `users/{uid}.trustStats`. They are recomputed from
-// scratch whenever a stay or a review moves, never incremented in place: an
-// increment that runs twice on a retry inflates someone's record permanently,
-// and these are exactly the numbers a stranger decides to sleep in a house on.
-//
-// firestore.rules pins `trustStats` against every client write, so this function
-// (writing with admin credentials) is the only thing that can move them.
+// Trust stats
+// The reputation numbers on `users/{uid}.trustStats`, recomputed from scratch
+// whenever a stay or review moves, never incremented (a retry would inflate a
+// record permanently). firestore.rules pins them against clients, so only this
+// admin-credentialed function moves them.
 // ---------------------------------------------------------------------------
 
 type TrustStats = {
@@ -585,16 +512,14 @@ async function recomputeTrustStats(userID: string): Promise<void> {
     averageRating,
   };
 
-  // Never resurrect a deleted account as a stats-only document: the public user
-  // doc must always carry a displayName for the client to decode it.
+  // Never resurrect a deleted account as a stats-only doc; the public user doc must carry a displayName.
   const userRef = db.collection(Collections.users).doc(userID);
   if (!(await userRef.get()).exists) return;
   await userRef.set({ trustStats: stats }, { merge: true });
 }
 
 // ---------------------------------------------------------------------------
-// onReviewWritten
-// A review changes the reviewed person's rating, so recompute their stats.
+// onReviewWritten: a review changes the reviewed person's rating, so recompute their stats.
 // ---------------------------------------------------------------------------
 export const onReviewWritten = onDocumentWritten(reviewDocPattern, async (event) => {
   const change = event.data;
@@ -605,15 +530,11 @@ export const onReviewWritten = onDocumentWritten(reviewDocPattern, async (event)
 });
 
 // ---------------------------------------------------------------------------
-// Keyword moderation (feature 6)
-// Nothing is blocked or hidden: a hit files a report into the same triage queue
-// a human report lands in, tagged `source: "auto"`. A false positive costs a
-// moderator one click; a false negative that silently ate a real message would
-// cost a user their conversation.
-//
-// The report id is derived from the target, so a retry (or an edit that trips
-// the same terms again) overwrites the open report rather than spamming the
-// queue with duplicates.
+// Keyword moderation
+// Nothing is blocked or hidden: a hit files a report tagged `source: "auto"`.
+// A false positive costs a moderator a click; a silent false negative would cost
+// a user their conversation. The report id derives from the target, so retries
+// and re-edits overwrite the open report rather than duplicating it.
 // ---------------------------------------------------------------------------
 async function fileAutoReport(opts: {
   targetType: "user" | "listing" | "message";
@@ -649,8 +570,7 @@ export const moderateNewMessage = onDocumentCreated(messageDocPattern, async (ev
 export const moderateListingContent = onDocumentWritten(homeDocPattern, async (event) => {
   const after = event.data?.after.exists ? event.data.after.data() : undefined;
   if (!after || after.deletedAt) return;
-  // The free-text fields a host controls. Structured fields are enum-validated
-  // by the rules and cannot carry prose.
+  // The free-text fields a host controls; structured fields are enum-validated by the rules.
   const hit = scanText([after.description, after.hostContactInfo, after.hostName].filter(Boolean).join("\n"));
   if (!hit) return;
   await fileAutoReport({
@@ -693,10 +613,8 @@ const callableOptions = { enforceAppCheck: true } as const;
 
 // ---------------------------------------------------------------------------
 // mutualFriends (callable)
-// "You and Priya have 3 friends in common" (feature 2). Server-side because
-// `friendEdges` documents are readable only by the two users they connect, so a
-// client cannot see anyone else's edges to intersect them.
-// Call from the app: httpsCallable("mutualFriends").call(["userID": id])
+// "You and Priya have 3 friends in common". Server-side because `friendEdges`
+// are readable only by their two users. Call: httpsCallable("mutualFriends").call(["userID": id])
 // ---------------------------------------------------------------------------
 export const mutualFriends = onCall(callableOptions, async (request) => {
   const uid = requireFullMember(request);
@@ -711,8 +629,7 @@ export const mutualFriends = onCall(callableOptions, async (request) => {
   const mineSet = new Set(mine);
   const shared = [...new Set(theirs.filter((id) => mineSet.has(id)))];
 
-  // Only a couple of names are ever rendered ("Priya, Sam and 3 others"), so
-  // resolve only those rather than every mutual friend.
+  // Only a couple of names are rendered, so resolve only those.
   const NAMES_SHOWN = 2;
   const names = await Promise.all(
     shared.slice(0, NAMES_SHOWN).map(async (friendID) => {
@@ -726,17 +643,13 @@ export const mutualFriends = onCall(callableOptions, async (request) => {
 
 // ---------------------------------------------------------------------------
 // onUserDeleted
-// Server-side cascade when a Firebase Auth user is removed.
-// The iOS client soft-deletes listings before calling user.delete(), so this
-// is a safety net for deletions that bypass the client (e.g. console, admin).
-//
-// Stays on the v1 API: v2 has no post-delete auth trigger (see the import note).
+// Server-side cascade when a Firebase Auth user is removed; a safety net for
+// deletions bypassing the client. Stays on v1 (no v2 post-delete auth trigger).
 // ---------------------------------------------------------------------------
 export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
   const uid = user.uid;
 
-  // Soft-delete the user's listings (kept for history), chunked under the
-  // 500-op batch cap for prolific hosts.
+  // Soft-delete the user's listings (kept for history), chunked under the 500-op batch cap.
   const listingsSnap = await db.collection(Collections.homes).where("hostUserID", "==", uid).get();
   for (let i = 0; i < listingsSnap.docs.length; i += PAGE_SIZE) {
     const batch = db.batch();
@@ -747,22 +660,18 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
     await batch.commit();
   }
 
-  // The listing document survives as history, but the street address must not.
-  // Drop each listing's private location and the markers granting guests access
-  // to it, and revoke the addresses this user held as a guest elsewhere.
+  // The listing survives as history but its street address must not: drop each
+  // private location and access marker, and revoke addresses held as a guest.
   await Promise.all([
     ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection(Subcollections.private))),
     ...listingsSnap.docs.map((doc) => deleteQueryInChunks(doc.ref.collection(Subcollections.accepted))),
     deleteQueryInChunks(db.collectionGroup(Subcollections.accepted).where("guestUserID", "==", uid)),
-    // Listing photos live in Storage, not Firestore, so the document cascade
-    // above never reaches them. Drop the whole listings/{uid}/ tree (S7).
+    // Listing photos live in Storage, so the document cascade misses them; drop listings/{uid}/.
     deleteStoragePrefix(listingPhotosPrefix(uid)),
   ]);
 
-  // Reviews and references naming this user go too — both the ones they wrote
-  // and the ones written about them, since a review of a deleted account names a
-  // person who no longer exists and can no longer answer it. Each review carries
-  // a private/feedback subdocument that Firestore would otherwise strand.
+  // Reviews and references naming this user go too (written and received), plus
+  // each review's private/feedback subdocument, which Firestore would strand.
   const reviewAndReferenceDocs = await Promise.all([
     db.collection(Collections.reviews).where("authorUserID", "==", uid).get(),
     db.collection(Collections.reviews).where("subjectUserID", "==", uid).get(),
@@ -772,8 +681,7 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
   const reviewDocs = [...reviewAndReferenceDocs[0].docs, ...reviewAndReferenceDocs[1].docs];
   await Promise.all(reviewDocs.map((doc) => deleteQueryInChunks(doc.ref.collection(Subcollections.private))));
 
-  // Everyone whose reputation was computed partly from this user's stays or
-  // reviews. Collected before the deletions, recomputed after them.
+  // Everyone whose reputation partly came from this user; collected before deleting, recomputed after.
   const [guestStays, hostStays] = await Promise.all([
     db.collection(Collections.stayRequests).where("guestUserID", "==", uid).get(),
     db.collection(Collections.stayRequests).where("hostUserID", "==", uid).get(),
@@ -797,10 +705,8 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
     )
   );
 
-  // Hard-cascade the user's own messages, stay requests (as guest and host),
-  // friend edges, and submitted reports so no personal data is left behind.
-  // Only messages the user authored are removed, preserving the other party's
-  // side of any shared conversation.
+  // Hard-cascade the user's messages (only ones they authored), stay requests,
+  // friend edges and reports so no personal data is left.
   await Promise.all([
     deleteQueryInChunks(db.collection(Collections.messages).where("senderUserID", "==", uid)),
     deleteQueryInChunks(db.collection(Collections.stayRequests).where("guestUserID", "==", uid)),
@@ -808,9 +714,7 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
     deleteQueryInChunks(db.collection(Collections.friendEdges).where("userA", "==", uid)),
     deleteQueryInChunks(db.collection(Collections.friendEdges).where("userB", "==", uid)),
     deleteQueryInChunks(db.collection(Collections.reports).where("reporterUserID", "==", uid)),
-    // Conversation summaries carry the user's name in lastMessage and their
-    // unread/mute state, so drop every summary they took part in. The other
-    // party's own messages survive; their next message rebuilds the summary.
+    // Summaries carry the user's name and unread/mute state; drop them, and the other party's next message rebuilds each.
     deleteQueryInChunks(db.collection(Collections.conversations).where("participants", "array-contains", uid)),
   ]);
 
@@ -818,35 +722,27 @@ export const onUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
   await db.doc(privateProfilePath(uid)).delete();
   await db.collection(Collections.users).doc(uid).delete();
 
-  // Stay-request deletions don't fire `onStayRequestWritten` (it ignores deletes),
-  // so the counterparties' stay counts and response rates would otherwise keep
-  // counting a person who no longer exists. `recomputeTrustStats` skips anyone
-  // whose own user document is already gone.
+  // Stay-request deletions don't fire `onStayRequestWritten`, so counterparties'
+  // stats would keep counting this person; `recomputeTrustStats` skips deleted users.
   await Promise.all([...counterparties].map((id) => recomputeTrustStats(id)));
 });
 
 // ---------------------------------------------------------------------------
 // onHomeDeleted
-// `onUserDeleted` cascades a whole account's photos, but deleting a single
-// listing reached neither its Storage objects nor its subcollections, so both
-// outlived the listing (S7). Storage photos are the sharper leak of the two:
-// storage.rules lets any signed-in user read `listings/{uid}/{homeID}/**`, so a
-// delisted home kept serving its photos to the whole app, and kept billing for
-// them.
+// Deleting a listing reached neither its Storage objects nor subcollections.
+// Photos are the sharper leak: storage.rules lets any signed-in user read
+// `listings/{uid}/{homeID}/**`, so a delisted home kept serving them.
 //
-// A listing goes away two ways, and they are not equivalent:
-//   - Hard delete (the document is removed). firestore.rules permits this, and
-//     Firestore does not delete a document's subcollections with it, so
-//     `private/location` and the `accepted/` markers are stranded. Nothing can
-//     read them once the parent is gone (`isListingHost` fails closed), but the
-//     street address is still sitting there, so drop it along with the photos.
-//   - Soft delete (`deletedAt` goes from unset to set). This is the client's
-//     delete path. Photos go, but `private/location` and `accepted/` stay: a
-//     guest may be mid-stay and still need the address, and `expireCompletedStays`
-//     already owns revoking those markers once the stay is over.
+// Two ways a listing goes away:
+//   - Hard delete: Firestore leaves subcollections behind (`private/location`,
+//     `accepted/`). Unreadable once the parent is gone, but the address still
+//     sits there, so drop it with the photos.
+//   - Soft delete (`deletedAt` unset to set; the client's path): photos go, but
+//     `private/location` and `accepted/` stay, since a guest may be mid-stay and
+//     `expireCompletedStays` revokes those markers afterwards.
 //
-// Every branch is idempotent, so both the retry on a thrown error and the
-// duplicate fire when `onUserDeleted` soft-deletes a host's listings are safe.
+// Every branch is idempotent, so retries and the duplicate fire from
+// `onUserDeleted` are safe.
 // ---------------------------------------------------------------------------
 export const onHomeDeleted = onDocumentWritten(homeDocPattern, async (event) => {
   const change = event.data;
@@ -860,7 +756,7 @@ export const onHomeDeleted = onDocumentWritten(homeDocPattern, async (event) => 
 
   const homeID = event.params.homeID;
   const hostUserID: string | undefined = (after ?? before).hostUserID;
-  // A listing with no host has no photo prefix to target; nothing to do.
+  // A listing with no host has no photo prefix to target.
   if (!hostUserID) return;
 
   const homeRef = db.collection(Collections.homes).doc(homeID);
@@ -879,21 +775,13 @@ export const onHomeDeleted = onDocumentWritten(homeDocPattern, async (event) => 
 
 // ---------------------------------------------------------------------------
 // acceptStayRequest (callable)
-// Owns stay acceptance so the double-booking guard is race-free (L1). The old
-// client path read accepted requests, checked overlap in code, then wrote —
-// two hosts (or one host on two devices) accepting concurrently could both pass
-// the check. This runs the read-check-write inside one Firestore transaction,
-// which the admin SDK (unlike the iOS client) can do over a query. It also owns
-// the address-disclosure marker, so acceptance is atomic end to end.
+// Owns stay acceptance so the double-booking guard is race-free: the read-check-write
+// runs in one Firestore transaction (the admin SDK can query inside one, the iOS
+// client can't), along with the address-disclosure marker.
 //
-// Accepts in both directions (feature 43). A "pending" request is the guest
-// asking and only the host may accept it; an "offered" request is the host
-// offering and only the guest may accept it. Both run the identical overlap
-// transaction, because an offer books the same room as a request — and the guest
-// side needs it *more*, not less: the rules let a guest read only their own stay
-// requests, so a guest cannot see the host's other bookings to check for
-// themselves. This callable, reading as admin, is the only thing that can.
-// Call from the app: httpsCallable("acceptStayRequest").call(["requestID": id])
+// Works both ways: a "pending" request is accepted by the host, an "offered" one
+// by the guest. Both run the same overlap check; the guest needs it more, since
+// the rules let them read only their own requests. Call: httpsCallable("acceptStayRequest").call(["requestID": id])
 // ---------------------------------------------------------------------------
 export const acceptStayRequest = onCall(callableOptions, async (request) => {
   const uid = requireFullMember(request);
@@ -906,9 +794,7 @@ export const acceptStayRequest = onCall(callableOptions, async (request) => {
   if (hostNote !== undefined && typeof hostNote !== "string") {
     throw new HttpsError("invalid-argument", "hostNote must be a string.");
   }
-  // Admin writes bypass firestore.rules, so the rules' 2000-char cap on
-  // hostNote has to be re-enforced here or this callable becomes the one path
-  // that can stuff an unbounded string onto the document.
+  // Admin writes bypass the rules, so re-enforce the 2000-char hostNote cap here.
   if (typeof hostNote === "string" && hostNote.length > 2000) {
     throw new HttpsError("invalid-argument", "hostNote is too long.");
   }
@@ -928,31 +814,24 @@ export const acceptStayRequest = onCall(callableOptions, async (request) => {
       checkIn: admin.firestore.Timestamp;
       checkOut: admin.firestore.Timestamp;
     };
-    // Read before the authorization check, because the host side now includes the
-    // listing's co-hosts and that roster lives on the listing (feature 14). The
-    // read itself is not observable to the caller; the *checks* below still run in
-    // the original order, so an unauthorized caller is refused before learning
-    // anything about the listing's state.
+    // Read before the authorization check because the host side includes co-hosts,
+    // whose roster is on the listing. The checks still run in order, so an
+    // unauthorized caller learns nothing about the listing.
     const listingSnap = await t.get(db.collection(Collections.homes).doc(req.listingID));
     const coHostUserIDs = (listingSnap.data()?.coHostUserIDs ?? []) as string[];
-    // Mirrors isHostSide() in firestore.rules: the named host, or a co-host of the
-    // listing. Kept in step with that rule — the two are one policy in two places.
+    // Mirrors isHostSide() in firestore.rules: the named host or a co-host. Keep them in step.
     const isHostSide = req.hostUserID === uid || coHostUserIDs.includes(uid);
 
-    // Whoever is owed the answer is the one who may say yes: the host side on a
-    // guest's request, the guest on a host's offer. Anyone else — including the
-    // party who *sent* it — is refused, so a host cannot accept their own offer
-    // on the guest's behalf and book them into a stay they never agreed to.
+    // Whoever is owed the answer may say yes (host side on a request, guest on an
+    // offer); anyone else, including the sender, is refused, so a host can't accept
+    // their own offer on the guest's behalf.
     if (req.status === "pending") {
       if (!isHostSide) {
         throw new HttpsError("permission-denied", "Only the host or a co-host can accept this request.");
       }
-      // A co-host may ask to stay at the listing they help run, which would
-      // otherwise leave them on both sides of the same document: the guest who
-      // asked and a host who may answer. Self-acceptance is what the create rule
-      // spends its "pinned together" branch preventing on the other path, and it
-      // would mint a completed stay, and the trust stats that follow, out of one
-      // person agreeing with themselves.
+      // A co-host may ask to stay at a listing they help run, putting them on both
+      // sides of one document. Refuse self-acceptance, which would mint a completed
+      // stay and trust stats from one person agreeing with themselves.
       if (req.guestUserID === uid) {
         throw new HttpsError("permission-denied", "You cannot accept your own request.");
       }
@@ -963,23 +842,19 @@ export const acceptStayRequest = onCall(callableOptions, async (request) => {
     } else {
       throw new HttpsError("failed-precondition", "This stay is no longer awaiting an answer.");
     }
-    // A hostNote is the host's to write. On an offer the host already wrote one
-    // at create time, and the accepting guest must not overwrite it.
+    // A hostNote is the host's to write; on an offer they wrote one at create time, which the guest mustn't overwrite.
     if (req.status === "offered" && typeof hostNote === "string") {
       throw new HttpsError("invalid-argument", "A guest cannot write the host's note.");
     }
 
-    // The listing must still exist and still be live. Accepting a request for a
-    // deleted listing would disclose a street address for a home that is no
-    // longer offered, via a marker under a document nothing cleans up.
+    // The listing must still exist and be live; accepting for a deleted listing would disclose an address nothing cleans up.
     if (!listingSnap.exists || listingSnap.data()?.deletedAt) {
       throw new HttpsError("failed-precondition", "This listing is no longer available.");
     }
 
-    // All reads must precede all writes in a transaction. Re-read the accepted
-    // requests for this listing inside the txn so a concurrent accept that
-    // committed first is seen here and blocks this one. The host's turnover buffer
-    // comes from the same managers-only availability document the client reads.
+    // Reads precede writes in a transaction. Re-read the accepted requests inside it
+    // so a concurrent accept that committed first blocks this one. The turnover buffer
+    // comes from the managers-only availability document.
     const [accepted, availabilitySnap] = await Promise.all([
       t.get(
         db.collection(Collections.stayRequests)
@@ -999,13 +874,9 @@ export const acceptStayRequest = onCall(callableOptions, async (request) => {
       if (doc.id === requestID) continue;
       const other = doc.data() as { checkIn: admin.firestore.Timestamp; checkOut: admin.firestore.Timestamp };
       // Half-open overlap of this stay's raw dates against the other stay grown by
-      // the turnover buffer on both sides: the candidate must clear not just the
-      // other booking but the reset gap around it. Padding one side (the existing
-      // stay) rather than both is deliberate — padding both would double-count the
-      // gap and demand two buffers between neighbours instead of one.
+      // the buffer on both sides. Padding only the existing stay avoids demanding two buffers between neighbours.
       if (other.checkIn.toMillis() - padMs < outMs && inMs < other.checkOut.toMillis() + padMs) {
-        // "aborted" (not "failed-precondition") so the client can distinguish a
-        // double-booking from the not-pending case and show the right message.
+        // "aborted" (not "failed-precondition") lets the client tell a double-booking from not-pending.
         throw new HttpsError(
           "aborted",
           "Those dates overlap a stay already accepted for this listing."
@@ -1031,14 +902,10 @@ export const acceptStayRequest = onCall(callableOptions, async (request) => {
 
 // ---------------------------------------------------------------------------
 // Booked dates
-//
-// The listing publishes the ranges its accepted stays have taken so guests see
-// them as "unavailable" — indistinguishable from a host-blocked day, so a guest
-// learns a date is spoken for without learning the home is occupied. This is a
-// display cache: the authoritative double-booking guard is the acceptStayRequest
-// transaction, which reads the stays themselves. Recomputed from scratch (never
-// incremented) on every accepted-stay change, the same shape as trust stats and
-// ACLs, so a retry can't drift it.
+// The listing publishes the ranges its accepted stays took as "unavailable",
+// indistinguishable from a host-blocked day. A display cache: the real guard is
+// the acceptStayRequest transaction. Recomputed from scratch on every
+// accepted-stay change, like trust stats and ACLs, so retries can't drift it.
 // ---------------------------------------------------------------------------
 
 /** Mirrors isOptionalList(data, 'bookedDateRanges', 100) in firestore.rules. */
@@ -1055,25 +922,20 @@ function sameStoredRanges(a: StoredRange[], b: StoredRange[]): boolean {
   return true;
 }
 
-// The turnover buffer a listing is treated as having when its availability
-// document has never set one. Mirrors ListingAvailability.defaultBufferHours on
-// the client: a listing that predates the feature still holds one turnover day
-// around each booking.
+// The turnover buffer assumed when availability never set one; mirrors
+// ListingAvailability.defaultBufferHours, so older listings still hold a day around bookings.
 const DEFAULT_BUFFER_HOURS = 24;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-// Whole turnover days a buffer of `hours` implies. Rounds up, because the
-// calendar is day-granular and any positive buffer rules out same-day turnover.
-// Mirrors AvailabilityCalendar.bufferDays(forHours:) on the client.
+// Whole turnover days a buffer of `hours` implies, rounded up since the calendar is
+// day-granular. Mirrors AvailabilityCalendar.bufferDays(forHours:).
 function bufferDaysForHours(hours: number): number {
   return hours > 0 ? Math.ceil(hours / 24) : 0;
 }
 
-// Each booked range grown by the turnover buffer on both sides, then merged, so
-// the published calendar closes the day before a check-in and the day after a
-// checkout — indistinguishable from any other unavailable day. Mirrors
-// AvailabilityCalendar.buffered(_:bufferHours:) on the client. A zero buffer
-// returns the ranges unchanged, which is the pre-buffer behaviour.
+// Each booked range grown by the buffer on both sides, then merged, so the
+// published calendar closes the days around a stay like any other unavailable day.
+// Mirrors AvailabilityCalendar.buffered(_:bufferHours:); a zero buffer changes nothing.
 function bufferedStoredRanges(ranges: StoredRange[], bufferHours: number): StoredRange[] {
   const days = bufferDaysForHours(bufferHours);
   if (days <= 0) return ranges;
@@ -1107,13 +969,11 @@ async function recomputeListingBookedRanges(listingID: string): Promise<void> {
       .where("status", "==", "accepted")
       .get(),
   ]);
-  // Nothing to publish onto a listing that's gone, and writing would resurrect
-  // fields on a document onHomeDeleted is retiring.
+  // Nothing to publish onto a deleted listing; writing would resurrect fields onHomeDeleted is retiring.
   if (!listingSnap.exists || listingSnap.data()?.deletedAt) return;
 
-  // One range per accepted stay. Accepted stays for a listing never overlap — the
-  // acceptStayRequest guard forbids it — so there is nothing to merge; sorting
-  // keeps the write stable so the change-check below doesn't fire on reordering.
+  // One range per accepted stay; they never overlap (the accept guard forbids it), so
+  // sorting just keeps the write stable for the change-check below.
   type StayDates = { checkIn: admin.firestore.Timestamp; checkOut: admin.firestore.Timestamp };
   const ranges: StoredRange[] = acceptedSnap.docs
     .map((d) => d.data() as { checkIn?: admin.firestore.Timestamp; checkOut?: admin.firestore.Timestamp })
@@ -1127,30 +987,18 @@ async function recomputeListingBookedRanges(listingID: string): Promise<void> {
   const bufferHours = (availabilitySnap.data()?.bufferHours ?? DEFAULT_BUFFER_HOURS) as number;
   if (sameStoredRanges(existing, ranges)) return;
 
-  // Two writes, because availability is stored twice on purpose: the two halves
-  // privately, where only the listing's managers can read them, and their union
-  // on the world-readable listing. Publishing the halves would let any viewer
-  // subtract one from the other and learn which nights the home was occupied,
-  // which is the one thing "unavailable" is meant never to say.
-  //
-  // Private first. It is the source of truth; the public field is a cache of the
-  // union and is worth nothing on its own, so the order that survives a crash
-  // between the two is the one that leaves the truth written and the cache stale.
-  // The next stay change or availability edit republishes it.
+  // Two writes, since availability is stored twice on purpose: the halves
+  // privately for managers, their union on the readable listing (publishing the
+  // halves would reveal which nights were occupied). Private first: it's the source
+  // of truth, and a crash between the two leaves the truth written and the cache
+  // stale until the next change.
   await availabilityRef.set({ bookedDateRanges: ranges }, { merge: true });
 
-  // A field update, not a set: the listing's other fields and its ACL (which
-  // rebuildListingACLs maintains with its own update) must survive this write.
-  // This fires onHomeWrittenACL and moderateListingContent, but neither writes
-  // back for an availability change, so there is no loop.
-  //
-  // Sorted so the write is stable: the change-check above compares only the
-  // booked half, and an unstable order here would rewrite the public field on
-  // every trigger for no reason. The booked half is grown by the host's turnover
-  // buffer before it is merged with the blocked half, so the published calendar
-  // carries the buffer while the private `bookedDateRanges` stays the raw stays
-  // — the buffer is derived on publish, never stored per stay, which is what lets
-  // a cancellation release it for free (the next recompute simply drops the stay).
+  // A field update, not a set, so the listing's other fields and ACL survive. This
+  // fires onHomeWrittenACL and moderateListingContent, but neither writes back for
+  // an availability change, so there's no loop. Sorted for a stable write. The
+  // booked half is grown by the buffer before merging, so the public calendar carries
+  // it while `bookedDateRanges` stays the raw stays; a cancellation releases it for free.
   const union = [...blocked, ...bufferedStoredRanges(ranges, bufferHours)].sort(
     (a, b) => a.start.toMillis() - b.start.toMillis()
   );
@@ -1159,23 +1007,18 @@ async function recomputeListingBookedRanges(listingID: string): Promise<void> {
 
 // ---------------------------------------------------------------------------
 // onStayRequestWritten
-// Stay-lifecycle push notifications with a deep link into the Stays tab
-// (feature 36): the host hears about a brand-new request, and the guest hears
-// when their pending request is accepted or declined. The chatty courtesy notes
-// the app also posts to the thread ride the separate "messages" category; these
-// use "stayRequests"/"stayUpdates" so each can be muted on its own (feature 37).
+// Stay-lifecycle pushes with a deep link into the Stays tab: the host hears of a
+// new request, the guest of an accept or decline. Courtesy notes in the thread use
+// the "messages" category; these use "stayRequests"/"stayUpdates" so each mutes separately.
 // ---------------------------------------------------------------------------
 export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, async (event) => {
   const change = event.data;
   const before = change?.before.exists ? change.before.data() : undefined;
   const after = change?.after.exists ? change.after.data() : undefined;
 
-  // Keep the listing's published booked dates in step with its accepted stays.
-  // Runs before the notification bail-outs below, and on deletions too (a hard-
-  // deleted accepted stay must not strand its range), so a booked range never
-  // outlives the stay behind it. Any accept, cancel, decline, completion, or
-  // date change touches a stay whose status is 'accepted' on one side of the
-  // write, which is exactly when the listing's booked set can move.
+  // Keep the listing's published booked dates in step with accepted stays. Runs before
+  // the notification bail-outs and on deletions too, so a booked range never outlives
+  // its stay: any accept, cancel, decline, completion or date change touches an 'accepted' status.
   const bookedListingID: string | undefined = after?.listingID ?? before?.listingID;
   if (bookedListingID && (before?.status === "accepted" || after?.status === "accepted")) {
     await recomputeListingBookedRanges(bookedListingID);
@@ -1190,23 +1033,20 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
   const hostUserID: string = after.hostUserID;
   const beforeStatus: string | undefined = before?.status;
   const afterStatus: string = after.status;
-  // Name the specific home when the host titled it ("for Guest room by the Rose
-  // Bowl"), since one host can list several; otherwise fall back to the city.
+  // Name the home when the host titled it (one host can list several); otherwise the city.
   const placeSuffix = listingTitle
     ? ` for ${listingTitle}`
     : listingCity
     ? ` in ${listingCity}`
     : "";
 
-  // Stays hosted and stays taken both count completions and nothing else, so
-  // only a transition into or out of 'completed' can move either number. Every
-  // other status change (and every create) leaves both parties' stats identical,
-  // and a recompute is six collection queries, so it is not worth spending.
+  // Hosted and taken stays count only completions, so only a transition into or out
+  // of 'completed' moves either number; a recompute is six queries, so skip the rest.
   if (beforeStatus !== afterStatus && (beforeStatus === "completed" || afterStatus === "completed")) {
     await Promise.all([recomputeTrustStats(hostUserID), recomputeTrustStats(guestUserID)]);
   }
 
-  // A freshly created pending request → notify the host.
+  // A new pending request: notify the host.
   if (!before && afterStatus === "pending") {
     const guestName =
       (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Someone";
@@ -1221,13 +1061,8 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     return;
   }
 
-  // A freshly created offer → notify the guest (feature 43). The mirror of the
-  // branch above, and the one push in the app that isn't a reply to something the
-  // recipient did. Rides "stayRequests" like a new request does: both are somebody
-  // opening a question, so muting one mutes the other.
-  //
-  // Phrased as an offer, not a summons. The recipient is free to say no, and copy
-  // that implies otherwise would make a friend's invitation feel like a booking.
+  // A new offer: notify the guest. The one push that isn't a reply to something the
+  // recipient did. Rides "stayRequests" like a request, and is phrased as an offer, not a summons.
   if (!before && afterStatus === "offered") {
     const hostName: string = after.listingHostName ?? "A friend";
     await sendPush({
@@ -1241,17 +1076,9 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     return;
   }
 
-  // Either party called the stay off → tell the other one. Both can cancel, and
-  // the document used to read the same either way, so this could not tell whom
-  // to notify and said nothing at all; the only signal was the courtesy note in
-  // the thread, which is silent for anyone who muted it or the "messages"
-  // category. A cancellation is somebody's travel plans changing, so it rides
-  // "stayUpdates" like the accept and the decline it sits beside.
-  //
-  // `cancelledBy` is written in the same update as the status and pinned by the
-  // rules to whichever party made it. Absent on cancellations written before
-  // that field existed: nothing to send, because there is no way to tell who
-  // already knows.
+  // Either party called the stay off: tell the other, on "stayUpdates" like the
+  // accept and decline. `cancelledBy` is written with the status and pinned by the
+  // rules; it's absent on older cancellations, so nothing is sent for those.
   if (beforeStatus !== "cancelled" && afterStatus === "cancelled") {
     const cancelledBy: string | undefined = after.cancelledBy;
     if (!cancelledBy) return;
@@ -1261,12 +1088,9 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     const guestName =
       (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Your guest";
 
-    // A host calling off a *confirmed* stay is the one cancellation the guest had
-    // been counting on, so it gets its own words: it says the host had to, and it
-    // points forward without pressure. The other dates are theirs to look at if
-    // and when they want, which is an offer, not a summons. Every other cancel (a
-    // host withdrawing an unanswered offer, either party dropping a pending
-    // request, a guest backing out) keeps the plain copy below.
+    // A host calling off a confirmed stay is the one cancellation the guest was counting
+    // on, so it gets its own copy (the host had to; other dates are theirs to look at).
+    // Every other cancel keeps the plain copy below.
     if (cancelledByHost && beforeStatus === "accepted") {
       await sendPush({
         recipientID: guestUserID,
@@ -1292,7 +1116,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     return;
   }
 
-  // The host resolved a pending request → notify the guest.
+  // The host resolved a pending request: notify the guest.
   if (beforeStatus === "pending" && afterStatus !== "pending") {
     const hostName: string = after.listingHostName ?? "The host";
     if (afterStatus === "accepted") {
@@ -1317,9 +1141,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
     return;
   }
 
-  // The guest answered a host's offer → notify the host (feature 43). Without
-  // this the host who took the one unprompted action in the app would hear
-  // nothing back, which is the surest way to teach them not to bother again.
+  // The guest answered a host's offer: notify the host, who'd otherwise hear nothing back.
   if (beforeStatus === "offered" && afterStatus !== "offered") {
     const guestName =
       (await db.collection(Collections.users).doc(guestUserID).get()).data()?.displayName ?? "Your friend";
@@ -1333,8 +1155,7 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
         data: { type: "stay_update", requestID, role: "host", status: "accepted" },
       });
     } else if (afterStatus === "declined") {
-      // Neutral by design: a friend passing on an invitation is not a rejection,
-      // and the push should not make it feel like one.
+      // Neutral by design: passing on an invitation isn't a rejection.
       await sendPush({
         recipientID: hostUserID,
         category: "stayUpdates",
@@ -1349,11 +1170,9 @@ export const onStayRequestWritten = onDocumentWritten(stayRequestDocPattern, asy
 
 // ---------------------------------------------------------------------------
 // exportUserData (callable)
-// Returns all data we hold for the calling user: public profile, private
-// profile data, listings, stay requests, full message content, friend edges,
-// and submitted reports. Fulfills GDPR/CCPA right-to-access, and mirrors what
-// onUserDeleted removes so the export is complete relative to what is stored.
-// Call from the app: Functions.functions().httpsCallable("exportUserData")
+// Returns all data held for the caller (profile, private data, listings, stay
+// requests, messages, friend edges, reports) for GDPR/CCPA access, mirroring what
+// onUserDeleted removes. Call: Functions.functions().httpsCallable("exportUserData")
 // ---------------------------------------------------------------------------
 export const exportUserData = onCall(callableOptions, async (request) => {
   const uid = requireFullMember(request);
@@ -1392,8 +1211,7 @@ export const exportUserData = onCall(callableOptions, async (request) => {
 
   const withID = (d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() });
 
-  // The private feedback a user wrote is theirs to export; the private feedback
-  // written *about* them is too, since they are its only other reader.
+  // Private feedback is exportable both written by and about the user, who is its only other reader.
   const privateFeedback = await Promise.all(
     [...reviewsWrittenSnap.docs, ...reviewsReceivedSnap.docs].map(async (doc) => {
       const snap = await doc.ref.collection(Subcollections.private).doc(Docs.feedback).get();
@@ -1420,28 +1238,24 @@ export const exportUserData = onCall(callableOptions, async (request) => {
 
 // ---------------------------------------------------------------------------
 // suggestFriends (callable)
-// "People you may know": friends-of-friends ranked by how many of the caller's
-// friends they share (feature 31). Runs server-side because friendEdges are
-// readable only by their two participants — a client cannot traverse the graph
-// past its own edges. Excludes anyone the caller already has an edge with
-// (friend or pending), has blocked, or who has blocked the caller.
-// Call from the app: Functions.functions().httpsCallable("suggestFriends")
+// "People you may know": friends-of-friends ranked by shared friends. Server-side
+// because friendEdges are readable only by their two participants. Excludes anyone
+// with an edge (friend or pending), blocked either way.
+// Call: Functions.functions().httpsCallable("suggestFriends")
 // ---------------------------------------------------------------------------
 type FriendSuggestion = {
   userID: string;
   displayName: string;
   mutualCount: number;
-  // Up to two of the caller's own friends who connect them to this candidate,
-  // e.g. ["Alice", "Bob"]. Only the caller's existing friends are named — never
-  // the candidate's — so nothing is disclosed the caller couldn't already see.
+  // Up to two of the caller's own friends connecting them to this candidate; never
+  // the candidate's, so nothing is disclosed that the caller couldn't see.
   mutualNames: string[];
 };
 
 export const suggestFriends = onCall(callableOptions, async (request) => {
   const uid = requireFullMember(request);
 
-  // Everyone the caller already has any edge with — friends and pending both —
-  // so a suggestion is never someone they're already connected to or awaiting.
+  // Everyone the caller has any edge with, friend or pending, so suggestions are new people.
   const [myA, myB, myPrivateSnap] = await Promise.all([
     db.collection(Collections.friendEdges).where("userA", "==", uid).get(),
     db.collection(Collections.friendEdges).where("userB", "==", uid).get(),
@@ -1461,9 +1275,7 @@ export const suggestFriends = onCall(callableOptions, async (request) => {
   }
   for (const blocked of (myPrivateSnap.data()?.blockedUserIDs ?? []) as string[]) connected.add(blocked);
 
-  // Tally which of my friends each candidate is connected to. Cap the fan-out
-  // so a user with an enormous friend list can't turn one call into thousands of
-  // reads.
+  // Tally which friends connect to each candidate, capping fan-out so a huge friend list can't cause thousands of reads.
   const FRIEND_CAP = 200;
   const connectors = new Map<string, string[]>();
   await Promise.all(
@@ -1480,9 +1292,8 @@ export const suggestFriends = onCall(callableOptions, async (request) => {
   // Most mutual friends first.
   const ranked = [...connectors.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 10);
 
-  // The cards say "Friends with Alice and Bob", so resolve display names for
-  // the first two connectors of each candidate. These are the caller's own
-  // friends, deduplicated across candidates so each name is fetched once.
+  // Cards say "Friends with Alice and Bob", so resolve names for the first two
+  // connectors, deduplicated so each is fetched once.
   const NAMED_CONNECTORS = 2;
   const connectorIDs = [...new Set(ranked.flatMap(([, ids]) => ids.slice(0, NAMED_CONNECTORS)))];
   const connectorNames = new Map<string, string>();
@@ -1521,50 +1332,30 @@ export const suggestFriends = onCall(callableOptions, async (request) => {
 
 // ---------------------------------------------------------------------------
 // expireCompletedStays (scheduled)
-// Progressive address disclosure is granted by homes/{id}/accepted/{guestUID}
-// and revoked on decline/cancel (client) — but a stay that simply runs its
-// course and ends never revoked it, so a past guest kept the host's street
-// forever (S2). This daily sweep deletes the marker once a stay's checkOut has
-// passed, expiring the guest's access.
+// Address disclosure is granted by homes/{id}/accepted/{guestUID} and revoked on
+// decline/cancel, but a stay that simply ended never revoked it. This daily sweep
+// deletes the marker once checkOut has passed. It also closes the stay out
+// (`accepted` → `completed`), unlocking reviews and trustStats; either party can
+// do so early, so this backstops stays nobody touches.
 //
-// It also closes the stay out: `accepted` → `completed`, which is what unlocks
-// both parties' reviews and what trustStats counts (feature 4). Either party can
-// reach the same state early by tapping "Mark complete" once the stay has begun;
-// this is the backstop for the stays nobody touches.
-//
-// Re-booking safe: if the same guest still has another accepted stay at the same
-// listing whose checkout is in the future, the marker is kept. Idempotent: a
-// request already handled carries accessRevokedAt and is skipped, and deleting an
-// absent marker is a no-op.
+// Re-booking safe: the marker is kept if the same guest has another accepted stay
+// at the listing with a future checkout. Idempotent: handled requests carry
+// accessRevokedAt, and deleting an absent marker is a no-op.
 // ---------------------------------------------------------------------------
-// How far back the nightly sweep looks for stays whose address grant is due to
-// expire. A year of slack on a job that runs every night: long enough that no
-// plausible outage loses a revocation, short enough that the query stops growing
-// with the app's whole history.
+// How far back the sweep looks: a year of slack on a nightly job, so no plausible
+// outage loses a revocation and the query doesn't grow with the app's history.
 const EXPIRY_LOOKBACK_DAYS = 365;
 
 export const expireCompletedStays = onSchedule(
   { schedule: "0 4 * * *", timeZone: "UTC" },
   async () => {
     const nowMs = Date.now();
-    // Both statuses mean the stay was granted: `accepted` is one nobody closed
-    // out, `completed` is one a party already marked done (feature 4) but whose
-    // address grant only expires when the stay is actually over.
-    //
-    // Bounded by checkOut rather than sweeping the whole collection: without the
-    // cutoff this read every accepted-or-completed stay ever taken, every night,
-    // so the nightly cost grew with the app's lifetime history and would
-    // eventually blow the function's memory outright. The window still covers
-    // both halves of the job — everything with a future checkOut (the active
-    // stays that veto a revocation) and the recently-ended ones actually being
-    // revoked. Partitioned in memory below.
-    //
-    // What the cutoff gives up: a stay whose checkOut is older than the window
-    // and was never revoked stays granted forever. That needs this sweep to have
-    // missed it every night for the whole window — the daily run is what keeps
-    // the backlog a day deep. If it is ever off for longer than this (or is
-    // being deployed for the first time onto history that predates it), widen
-    // EXPIRY_LOOKBACK_DAYS for one run to catch the backlog up.
+    // Both statuses were granted: `accepted` (nobody closed it out) and `completed`
+    // (a party did, but the grant only expires when the stay is over). Bounded by
+    // checkOut rather than the whole collection, covering future-checkout stays that
+    // veto a revocation and recently ended ones being revoked; partitioned in memory
+    // below. A stay older than the window and never revoked stays granted, so widen
+    // EXPIRY_LOOKBACK_DAYS for one run after a long outage or a first deploy.
     const cutoff = admin.firestore.Timestamp.fromMillis(
       nowMs - EXPIRY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
     );
@@ -1592,18 +1383,15 @@ export const expireCompletedStays = onSchedule(
       };
       const key = `${req.listingID}__${req.guestUserID}`;
       if (req.checkOut.toMillis() > nowMs) {
-        // A stay whose checkout is still ahead keeps the address alive — but only
-        // if it hasn't been closed out. Marking a stay complete early is a
-        // statement that it's over.
+        // A future checkout keeps the address alive, unless the stay was closed out early.
         if (req.status === "accepted") activeKeys.add(key);
       } else if (!req.accessRevokedAt) {
         expired.push({ ref: doc.ref, listingID: req.listingID, guestUserID: req.guestUserID, status: req.status });
       }
     }
 
-    // Drop any expired stay whose guest still has a future accepted stay at the
-    // same listing — that later stay keeps the marker alive. 250 revocations per
-    // batch (two writes each) stays under the 500-op cap.
+    // Drop any expired stay whose guest has a later accepted stay at the same listing
+    // (it keeps the marker). 250 revocations per batch (two writes each) stays under 500 ops.
     const toRevoke = expired.filter((c) => !activeKeys.has(`${c.listingID}__${c.guestUserID}`));
     let revoked = 0;
     for (let i = 0; i < toRevoke.length; i += 250) {
@@ -1612,11 +1400,9 @@ export const expireCompletedStays = onSchedule(
         batch.delete(
           db.collection(Collections.homes).doc(c.listingID).collection(Subcollections.accepted).doc(c.guestUserID)
         );
-        // Close the stay out in the same commit that withdraws the address, so a
-        // stay is never left "accepted" with no way for either party to review it.
-        // `onStayRequestWritten` sees the status move and recomputes both
-        // reputations. A stay a party already completed keeps its original
-        // completedAt and only loses the address.
+        // Close the stay out in the same commit that withdraws the address, so it's never
+        // left "accepted" unreviewable; `onStayRequestWritten` recomputes reputations.
+        // An already-completed stay keeps its completedAt and only loses the address.
         batch.update(c.ref, {
           accessRevokedAt: admin.firestore.FieldValue.serverTimestamp(),
           ...(c.status === "accepted"
@@ -1635,7 +1421,5 @@ export const expireCompletedStays = onSchedule(
   }
 );
 
-// Message rate limiting is enforced in the write path by firestore.rules: every
-// message create must advance the sender's rateLimits/{uid} counter, which the
-// rules cap at 30 messages per 60s window. The former checkMessageRate callable
-// (an advisory, ignored-result pre-check) has been removed in favour of it.
+// Message rate limiting is enforced by firestore.rules: every message create must
+// advance the sender's rateLimits/{uid} counter (30 messages per 60s window).
