@@ -4,44 +4,31 @@ rules_version = '2';
 // Reads require a full (non-anonymous) member. Storage rules cannot read
 // Firestore, so they cannot mirror a listing's friends-only `allowedViewerIDs`
 // ACL the way firestore.rules does; a full ACL check would need a Cloud
-// Function image proxy. This gate is defense in depth: photo URLs live only on
-// the friends-only home document and so are only ever handed to allowed
-// viewers, and blocking anonymous sessions denies the cheapest path-enumeration
-// attack (an anon session minted from the public web config). Only the host may
-// write, only up to 10 MB per image, and only image content types.
+// Function image proxy. This gate is defense in depth: photo URLs live only on the
+// friends-only home document, and blocking anonymous sessions denies the cheapest
+// enumeration attack. Only the host may write, up to 10 MB, image types only.
 //
-// That defense rests entirely on the object path being unguessable, so `get`
-// and `list` are granted separately below and `list` is never granted at all.
-// `read` would have covered both, and both path segments are already public:
-// `users` is listable by any full member, and `reviews` carries `listingID`.
-// A member who knew a host and a listing could then list the prefix and read
-// back every filename instead of guessing one, which is the whole of what the
-// path secrecy was buying. See docs/internal/TODO.md item 13: the filenames
-// must be random per upload, and the image proxy is still the real fix.
+// That rests on the object path being unguessable, so `get` and `list` are granted
+// separately and `list` never: `read` would let a member who knew a host and a
+// listing (both public path segments) list the prefix and read back every filename.
+// See docs/internal/TODO.md item 13: filenames must be random per upload; the image proxy is the real fix.
 service firebase.storage {
   match /b/{bucket}/o {
     match /listings/{hostUserID}/{listingID}/{allPaths=**} {
-      // Full members only; an anonymous guest cannot read listing photos.
-      // `get`, not `read`: a viewer must arrive with the exact object path,
-      // which only the friends-only listing document hands out. Deliberately no
-      // `list` rule, so the prefix cannot be enumerated.
+      // Full members only. `get`, not `read`: a viewer needs the exact path, which only the
+      // friends-only listing document hands out. No `list` rule, so the prefix can't be enumerated.
       allow get: if request.auth != null
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
-      // Only a full-member host may write their own listing images.
-      //
-      // `create, update`, not `write`: `write` covers delete too, and the size
-      // and content-type checks read `request.resource`, which is null on a
-      // delete. So the whole condition failed there and a host could never
-      // remove a photo from the client — a bug that would have shipped as
-      // "delete silently does nothing".
+      // Only a full-member host writes their own listing images. `create, update`, not
+      // `write`: the size and content-type checks read `request.resource`, null on a delete,
+      // so `write` meant a host could never remove a photo from the client.
       allow create, update: if request.auth != null
         && request.auth.token.firebase.sign_in_provider != 'anonymous'
         && request.auth.uid == hostUserID
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
 
-      // Removing your own photo asks only who you are; there is no incoming
-      // object to measure.
+      // Removing your own photo asks only who you are; there's no incoming object to measure.
       allow delete: if request.auth != null
         && request.auth.token.firebase.sign_in_provider != 'anonymous'
         && request.auth.uid == hostUserID;

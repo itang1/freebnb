@@ -6,13 +6,9 @@
 import SwiftUI
 import UIKit
 
-/// Semantic roles for the "lakeside summer" palette.
-///
-/// Raw values are asset-catalog paths inside the `Color/` namespace of
-/// Assets.xcassets, so every role resolves its light and dark variant
-/// dynamically. Views reference roles (`.accent`, `.primaryBackground`),
-/// never hues; the palette can be retuned in the catalog without touching
-/// call sites.
+/// Semantic roles for the "lakeside summer" palette. Raw values are asset-catalog
+/// paths under `Color/`, so each role resolves light and dark dynamically. Views
+/// reference roles, never hues, so the palette retunes without touching call sites.
 enum AppColor: String, CaseIterable {
     /// Deep lake teal. Primary brand color: tints, buttons, chips, links.
     case accent = "Color/accent"
@@ -35,16 +31,13 @@ enum AppColor: String, CaseIterable {
     /// Pine sage. Positive states and greenery accents.
     case success = "Color/success"
 
-    /// Failures and destructive actions. Replaces system `.red`, which sat at
-    /// 3.2:1 on the sand background in light mode.
+    /// Failures and destructive actions; replaces system `.red` (3.2:1 on sand in light mode).
     case danger = "Color/danger"
 
-    /// Cautions the user can proceed past. Replaces system `.orange` (2.0:1 on
-    /// sand in light mode).
+    /// Cautions the user can proceed past; replaces system `.orange` (2.0:1 on sand).
     case warning = "Color/warning"
 
-    /// Supporting text. Replaces system `.secondary`, which never reaches
-    /// 4.5:1 — not even on white — and fell to 2.6:1 on the sky-blue card wash.
+    /// Supporting text; replaces system `.secondary`, which never reaches 4.5:1 (2.6:1 on the sky-blue wash).
     case secondaryText = "Color/secondaryText"
 
     /// Text and icons placed on `accent` or `callToAction` fills.
@@ -71,9 +64,7 @@ extension Color {
     static let onAccent = Color(AppColor.onAccent)
 }
 
-/// Makes roles available as implicit members wherever SwiftUI expects a
-/// `ShapeStyle` rather than a `Color`, e.g. `.background(.primaryBackground)`
-/// or `.foregroundStyle(.accent)`.
+/// Makes roles available as implicit members wherever SwiftUI expects a `ShapeStyle`, e.g. `.foregroundStyle(.accent)`.
 extension ShapeStyle where Self == Color {
     static var accent: Color { Color(AppColor.accent) }
     static var secondaryAccent: Color { Color(AppColor.secondaryAccent) }
@@ -91,9 +82,7 @@ extension ShapeStyle where Self == Color {
 // MARK: - UIKit
 
 extension UIColor {
-    /// Resolves a semantic role from the asset catalog. The colorsets ship in
-    /// the app bundle, so a miss can only mean a deleted or renamed asset;
-    /// fail loudly in debug builds rather than force-unwrapping.
+    /// Resolves a role from the asset catalog; a miss means a deleted or renamed asset, so fail loudly in debug.
     static func app(_ role: AppColor) -> UIColor {
         guard let color = UIColor(named: role.rawValue) else {
             assertionFailure("Missing colorset for \(role.rawValue) in Assets.xcassets")

@@ -2,13 +2,8 @@
 //  ConversationStayContext.swift
 //  freebnb
 //
-//  The stay chip on a conversation row: what, if anything, is currently going on
-//  between the two people in a thread.
-//
-//  Most conversations in this app orbit a stay, and the list previously gave no
-//  hint of it — a thread about a confirmed trip next week looked exactly like one
-//  about nothing. This is the derivation behind that chip, kept pure so the rule
-//  for "currently going on" is testable without a store or a view.
+//  The stay chip on a conversation row: what, if anything, is going on between the two
+//  people. Pure, so the rule for "currently going on" is testable without a store or view.
 //
 
 import Foundation
@@ -46,26 +41,15 @@ struct ConversationStayContext: Equatable {
         }
     }
 
-    /// Only the chip that means "you are blocking this" earns a colour; the rest
-    /// are context, and a row full of coloured chips would flatten the one that
-    /// actually wants acting on.
+    /// Only the chip meaning "you are blocking this" earns a colour; coloured chips everywhere would flatten it.
     var isActionable: Bool { kind == .awaitingYou }
 }
 
 enum ConversationStay {
-    /// The stay to caption a conversation with, or nil when there is nothing
-    /// live between these two.
-    ///
-    /// "Live" deliberately excludes a settled stay: a trip that finished, or a
-    /// request that was declined, is history, and captioning a thread with it
-    /// forever would turn the chip into decoration. An accepted stay stops
-    /// counting once its checkout has passed, even though the document stays
-    /// `accepted` until the nightly sweep completes it — otherwise a thread would
-    /// claim a stay is "confirmed" for hours after the guest went home.
-    ///
-    /// When several qualify, the most urgent wins, in the order the enum is
-    /// written: something you owe an answer on outranks a stay under way, which
-    /// outranks one merely upcoming.
+    /// The stay to caption a conversation with, or nil when nothing is live. A settled
+    /// stay (finished or declined) is history. An accepted stay stops counting after
+    /// checkout even though the document stays `accepted` until the nightly sweep. When
+    /// several qualify the most urgent wins, in enum order: an answer you owe, then under way, then upcoming.
     static func context(
         between viewerID: String,
         and otherUserID: String,

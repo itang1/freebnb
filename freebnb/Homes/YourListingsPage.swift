@@ -5,9 +5,7 @@
 
 import SwiftUI
 
-/// One sheet, three modes. SwiftUI resolves stacked `.sheet` modifiers on a
-/// single view unreliably, so create, edit, and duplicate share one presentation
-/// keyed by this value rather than getting a modifier each.
+/// One sheet, three modes: stacked `.sheet` modifiers resolve unreliably, so create, edit and duplicate share one presentation keyed by this value.
 private struct ListingSheet: Identifiable, Hashable {
     let mode: ListingFormMode
 
@@ -28,15 +26,10 @@ struct YourListingsPage<LeadingContent: View>: View {
     @State private var isDeleting = false
     @State private var errorMessage: String?
 
-    /// Extra sections rendered above the properties list — the Stays tab uses
-    /// this to fold hosting requests into "My Listings" so the pane covers
-    /// everything tied to your homes, not just property management. Defaults
-    /// to nothing so the Profile entry point is unaffected.
+    /// Extra sections above the properties list; the Stays tab folds hosting requests in here. Defaults to nothing.
     private var leadingContent: () -> LeadingContent
 
-    /// The Stays tab overrides this to "My Listings" so the nav bar (and the
-    /// back-button label on the next pushed view) matches its own switcher
-    /// rather than showing "Your Listings" underneath it.
+    /// The Stays tab overrides this to "My Listings" so the nav bar and back-button label match its switcher.
     private var title: String
 
     init(
@@ -49,9 +42,7 @@ struct YourListingsPage<LeadingContent: View>: View {
 
     private var myID: String { authManager.userID }
 
-    /// Listings this user hosts, and separately the ones a friend made them a
-    /// co-host of (feature 14). Split because the two rows differ in what they
-    /// let you do: only the host may delete, duplicate, or manage the roster.
+    /// Listings this user hosts, and separately those they co-host. Split because only the host may delete, duplicate or manage the roster.
     private var hostedListings: [Home] {
         homeStore.managedListings.filter { $0.isHostedBy(myID) }
     }
@@ -121,8 +112,7 @@ struct YourListingsPage<LeadingContent: View>: View {
                 Section { InlineErrorLabel(message: errorMessage) }
             }
 
-            // A plain list until there is something to co-host; the header would
-            // otherwise label a section that has no counterpart.
+            // A plain list until there is something to co-host; the header would label an empty section.
             if coHostedListings.isEmpty {
                 ForEach(hostedListings) { listing in
                     hostedRow(listing)
@@ -165,9 +155,7 @@ struct YourListingsPage<LeadingContent: View>: View {
             }
             .tint(.accent)
         }
-        // A host with a guest room and a couch at the same address shouldn't
-        // retype it (feature 13). Also reachable by long press, since a swipe
-        // hides its actions until you go looking.
+        // Duplicating saves a host with several rooms retyping an address; also on long press, since swipe actions hide.
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
                 sheet = ListingSheet(mode: .duplicate(listing))
@@ -195,10 +183,8 @@ struct YourListingsPage<LeadingContent: View>: View {
         }
     }
 
-    /// A listing this user co-hosts: they may open and edit it, but deleting,
-    /// duplicating, and roster changes belong to the host alone (feature 14).
-    /// Duplicate is withheld too — it copies someone else's home to a new listing
-    /// the co-host would own, which is not what "co-host" invites.
+    /// A listing this user co-hosts: they may open and edit it, but deleting, duplicating
+    /// and roster changes are the host's alone (duplicating would copy someone else's home).
     private func coHostedRow(_ listing: Home) -> some View {
         NavigationLink {
             ListingDashboardPage(listing: listing)
@@ -260,7 +246,7 @@ private struct ListingRow: View {
     let listing: Home
     /// From the private location doc; nil until it loads.
     let street: String?
-    /// Marks a listing the viewer co-hosts rather than owns (feature 14).
+    /// Marks a listing the viewer co-hosts rather than owns.
     var isCoHost: Bool = false
 
     var body: some View {

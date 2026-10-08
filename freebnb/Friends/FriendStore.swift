@@ -33,28 +33,19 @@ struct FriendEdge: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-/// A "people you may know" candidate returned by the `suggestFriends` callable:
-/// a friend-of-a-friend with the friends they share (feature 31). This is the
-/// only place a friend-of-a-friend surfaces at all — their listings stay hidden
-/// unless a friend request is sent and accepted.
+/// A "people you may know" candidate from the `suggestFriends` callable: a friend-of-a-friend
+/// with shared friends. The only place one surfaces; their listings stay hidden until a friend request is accepted.
 struct FriendSuggestion: Identifiable, Hashable, Sendable {
     let userID: String
     let displayName: String
     let mutualCount: Int
-    /// Up to two of *your own* friends who connect you to this person, resolved
-    /// server-side. Never the candidate's other friends: nothing is shown here
-    /// that you couldn't already see.
+    /// Up to two of your own friends connecting you to this person, resolved server-side; never their other friends.
     let mutualNames: [String]
     var id: String { userID }
 
-    /// "3 mutual friends", or nil when none resolved.
-    ///
-    /// Deliberately the count and not the names. Naming the people who connect
-    /// you to a stranger tells that stranger's row more about your friends than
-    /// the suggestion needs, and the number alone is enough to answer the only
-    /// question being asked here: is this person actually near me in the graph?
-    /// `mutualNames` is still carried for the profile page, which is a place the
-    /// viewer chose to go.
+    /// "3 mutual friends", or nil when none resolved. The count, not names, which
+    /// would tell a stranger's row more about your friends than needed; `mutualNames`
+    /// is still carried for the profile page, which the viewer chose to open.
     var mutualText: String? {
         MutualFriends(count: mutualCount, names: mutualNames).countSummary
     }
@@ -111,9 +102,7 @@ final class FriendStore {
 
     var pendingCount: Int { pendingIncoming.count }
 
-    /// UIDs of everyone the signed-in user is actually friends with. Stamped onto
-    /// a listing's `allowedViewerIDs` on save so the rules can enforce friends-only
-    /// visibility without joining to `friendEdges`.
+    /// UIDs of the signed-in user's actual friends; stamped onto `allowedViewerIDs` on save so the rules can enforce friends-only.
     var friendIDs: [String] {
         guard let uid = Auth.auth().currentUser?.uid else { return [] }
         return friendEdges.map { $0.otherUserID(relativeTo: uid) }
@@ -165,8 +154,7 @@ final class FriendStore {
 
     // MARK: - Actions
 
-    /// Loads "people you may know" from the callable, dropping anyone a live edge
-    /// already covers (the graph may have changed since the server computed it).
+    /// Loads "people you may know", dropping anyone a live edge already covers (the graph may have changed).
     func loadSuggestions() async {
         guard Auth.auth().currentUser?.uid != nil else {
             suggestions = []
@@ -181,8 +169,7 @@ final class FriendStore {
         }
     }
 
-    /// Removes a suggestion locally once acted on, so the card disappears without
-    /// waiting for a re-fetch.
+    /// Removes a suggestion locally once acted on, so its card disappears without a re-fetch.
     func dismissSuggestion(_ userID: String) {
         suggestions.removeAll { $0.userID == userID }
     }

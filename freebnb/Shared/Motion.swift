@@ -2,14 +2,9 @@
 //  Motion.swift
 //  freebnb
 //
-//  One place for the app's animation curves and press feedback, so timings stay
-//  consistent across screens instead of being re-picked at each call site.
-//
-//  Everything here degrades under Settings > Accessibility > Motion > Reduce
-//  Motion: transforms (scale, slide) are dropped and cross-fades are kept, which
-//  is the behaviour Apple's HIG asks for. Reduce Motion is read from the
-//  environment rather than `UIAccessibility.isReduceMotionEnabled` so SwiftUI
-//  re-renders when the user flips the switch while the app is running.
+//  One place for animation curves and press feedback, so timings stay consistent. Under
+//  Reduce Motion, transforms are dropped and cross-fades kept (per the HIG); it's read
+//  from the environment, not `UIAccessibility`, so SwiftUI re-renders when the switch flips.
 //
 
 import SwiftUI
@@ -20,8 +15,7 @@ enum AppAnimation {
     /// Press-in / press-out feedback on tappable surfaces.
     static let press: Animation = .easeInOut(duration: 0.15)
 
-    /// Swapping one piece of content for another in place, e.g. a loading
-    /// skeleton giving way to the thing it stood in for.
+    /// Swapping content in place, e.g. a skeleton giving way to what it stood in for.
     static let contentSwap: Animation = .easeInOut(duration: 0.25)
 
     /// Rows entering, leaving, or reordering within a list.
@@ -30,9 +24,7 @@ enum AppAnimation {
 
 // MARK: - Press feedback
 
-/// Scales a button slightly while held. Under Reduce Motion the scale is
-/// dropped and the label dims instead, so the control still acknowledges the
-/// touch without moving.
+/// Scales a button slightly while held. Under Reduce Motion the label dims instead of scaling.
 struct PressableButtonStyle: ButtonStyle {
     /// How far to scale in. Cards use a subtler value than small controls.
     var pressedScale: CGFloat = 0.97
@@ -67,15 +59,12 @@ extension ButtonStyle where Self == PressableButtonStyle {
 // MARK: - Transitions
 
 extension View {
-    /// Cross-fades this view against whatever replaces it, keyed on `value`.
-    /// Used for placeholder-to-content swaps. A cross-fade carries no motion,
-    /// so it is safe to keep under Reduce Motion.
+    /// Cross-fades this view against its replacement, keyed on `value`; carries no motion, so it's kept under Reduce Motion.
     func crossFades<V: Equatable>(on value: V) -> some View {
         transition(.opacity).animation(AppAnimation.contentSwap, value: value)
     }
 
-    /// Animates row insertions, removals, and reordering in a collection.
-    /// Suppressed under Reduce Motion, where rows would otherwise slide.
+    /// Animates row insertions, removals and reordering; suppressed under Reduce Motion.
     func animatesListChanges<V: Equatable>(on value: V) -> some View {
         modifier(ListChangeAnimation(value: value))
     }
