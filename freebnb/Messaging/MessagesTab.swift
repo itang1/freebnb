@@ -3,13 +3,11 @@
 //  freebnb
 //
 //  The Messages tab: the conversations list and the navigation route it pushes.
-//  Split out of the former 732-line MessagingPage.swift (A2).
 //
 
 import SwiftUI
 
-// Used by MessagesTab's NavigationStack path so deep links can push
-// programmatically without touching the parent's navigation state.
+// Used by MessagesTab's NavigationStack path so deep links can push programmatically.
 struct ConversationRoute: Hashable {
     let otherUserID: String
     let otherName: String
@@ -43,25 +41,17 @@ struct MessagesTab: View {
         return "FreeBNB User"
     }
 
-    /// Which of that person's listings a thread is about, given their outgoing
-    /// requests in the store's newest-first order. Active requests win over
-    /// settled ones. Pure, so the row builder and the deep-link path apply one
-    /// rule rather than two copies of it that can drift.
+    /// Which of that person's listings a thread is about, given their outgoing requests
+    /// newest first; active beats settled. Pure, so the row builder and deep-link path share one rule.
     private static func listingID(fromTheirRequests requests: [StayRequest]) -> String? {
         let request = requests.first { $0.status.isActive } ?? requests.first
         return request?.listingID
     }
 
-    /// Finds the listing associated with this conversation by looking at stay
-    /// requests. Used to pass listing context into the thread.
-    ///
-    /// Only the other person's home qualifies: an incoming request points at one
-    /// of this user's own listings, and attaching that would caption the thread
-    /// with their own home.
-    ///
-    /// The row list does not call this — it uses `rowModels(for:)`, which does
-    /// the same work for every row in one pass. This stays for the deep-link
-    /// path, which resolves a single conversation.
+    /// Finds the listing for this conversation from stay requests, to pass listing
+    /// context into the thread. Only the other person's home qualifies (an incoming
+    /// request points at the user's own). Rows use `rowModels(for:)`; this serves the
+    /// deep-link path.
     private func listing(for otherUserID: String) -> Home? {
         let theirs = requestStore.outgoingRequests.filter { $0.hostUserID == otherUserID }
         guard let listingID = Self.listingID(fromTheirRequests: theirs) else { return nil }
@@ -77,13 +67,9 @@ struct MessagesTab: View {
         var id: String { summary.id }
     }
 
-    /// Builds every row's content in a single pass over the stores.
-    ///
-    /// Each row used to resolve its own listing and stay chip, and both of those
-    /// scanned the full request lists — one of them concatenating both lists
-    /// first, allocating a fresh array per row. That is O(rows x requests) per
-    /// render for data that changes only when a snapshot lands. Grouping once
-    /// and looking up per row makes it O(rows + requests).
+    /// Builds every row's content in one pass over the stores. Resolving per row
+    /// scanned the full request lists each time (O(rows x requests) per render);
+    /// grouping once makes it O(rows + requests).
     private func rowModels(for summaries: [ConversationSummary]) -> [RowModel] {
         let viewerID = authManager.userID
 
@@ -109,9 +95,7 @@ struct MessagesTab: View {
                 summary: summary,
                 name: displayName(for: other),
                 listing: home,
-                // The same pure derivation as before, handed the stays for this
-                // pair instead of every stay; it re-filters, so the chip is
-                // identical.
+                // The same pure derivation, given only this pair's stays.
                 stayContext: ConversationStay.context(
                     between: viewerID,
                     and: other,
@@ -135,14 +119,9 @@ struct MessagesTab: View {
     // MARK: - Body
 
     var body: some View {
-        // Resolved once per body pass. `visibleSummaries` filters and searches
-        // the whole list on every read, and this body reads it from four places
-        // (the skeleton gate, both empty checks, and the list itself), so it ran
-        // four times per render before.
+        // Resolved once per body pass: `visibleSummaries` filters the whole list on every read, and the body reads it four times.
         let summaries = visibleSummaries
-        // Skeletons stand in only for the not-yet-known empty state. Once any
-        // conversation has arrived the real list is the better answer, and a
-        // search that matches nothing is a result rather than a pending load.
+        // Skeletons stand in only for the unknown empty state; a search matching nothing is a result, not a pending load.
         let showingSkeletons = messageStore.isLoadingConversations
             && summaries.isEmpty && searchQuery.isEmpty
         NavigationStack(path: $path) {
@@ -169,8 +148,7 @@ struct MessagesTab: View {
                     ContentUnavailableView.search(text: searchQuery)
                         .background(Color.primaryBackground.ignoresSafeArea())
                 } else {
-                    // Built here rather than above so the empty and loading
-                    // states cost nothing.
+                    // Built here so the empty and loading states cost nothing.
                     let rows = rowModels(for: summaries)
                     List {
                         ForEach(rows) { row in

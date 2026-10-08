@@ -2,10 +2,8 @@
 //  freebnbTests.swift
 //  freebnbTests
 //
-//  Firebase-free tests exercising the repository seam (via the in-memory
-//  doubles) and pure model logic. The @MainActor stores talk to Auth.auth()
-//  in their initializers, so they need a configured Firebase app and are not
-//  unit-testable here; the repository protocols and models are.
+//  Firebase-free tests of the repository seam (via in-memory doubles) and pure model
+//  logic. The @MainActor stores need a configured Firebase app, so they aren't unit-testable here.
 //
 
 import Foundation
@@ -23,9 +21,7 @@ private final class Box<T>: @unchecked Sendable {
 }
 
 
-// Recency-ordered timestamps for feed tests: `t("a")` is newest, `t("e")` older,
-// so a listing set given createdAt = t(id) sorts alphabetically by id (which is
-// also how the pre-recency tests read).
+// Recency-ordered timestamps for feed tests: `t("a")` is newest, so createdAt = t(id) sorts alphabetically by id.
 private func t(_ id: String) -> Date {
     Date(timeIntervalSince1970: 100_000 - Double(id.unicodeScalars.first!.value))
 }
@@ -68,8 +64,7 @@ struct StayRequestRepositoryTests {
     }
 
     @Test func acceptAllowsAdjacentStay() async throws {
-        // Half-open intervals: a checkout on the same day as the next checkin
-        // does not overlap.
+        // Half-open intervals: a checkout on the next check-in's day doesn't overlap.
         let repo = InMemoryStayRequestsRepository()
         let existing = makeRequest(id: "r1", checkIn: day(1), checkOut: day(5), status: .accepted)
         let incoming = makeRequest(id: "r2", checkIn: day(5), checkOut: day(9))
@@ -97,9 +92,7 @@ struct StayRequestRepositoryTests {
         try await repo.accept(incoming, hostNote: nil)  // must not throw
     }
 
-    // The `homes/{id}/accepted/{guestUserID}` marker is the whole capability: its
-    // existence is what firestore.rules checks before handing over the street
-    // address. These pin the two transitions that write and clear it.
+    // The `accepted/{guestUserID}` marker is the capability firestore.rules checks before revealing the street; these pin the transitions that write and clear it.
 
     @Test func acceptingDisclosesTheAddressToTheGuest() async throws {
         let repo = InMemoryStayRequestsRepository()
@@ -121,8 +114,7 @@ struct StayRequestRepositoryTests {
         #expect(!repo.hasAddressAccess(listingID: request.listingID, guestUserID: request.guestUserID))
     }
 
-    // Both parties can cancel, and the document reads the same either way, so
-    // the push trigger has nothing to go on but this field.
+    // Both parties can cancel and the document reads the same either way, so the push trigger relies on this field.
     @Test func cancellingRecordsWhichPartyBackedOut() async throws {
         let repo = InMemoryStayRequestsRepository()
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
@@ -133,8 +125,7 @@ struct StayRequestRepositoryTests {
         #expect(repo.request(id: "r1")?.cancelledBy == request.hostUserID)
     }
 
-    // Only a cancellation carries it: the rules pin the changed keys on every
-    // other transition, so a stray cancelledBy would be rejected outright.
+    // Only a cancellation carries it; the rules pin the changed keys on other transitions.
     @Test func decliningRecordsNoCanceller() async throws {
         let repo = InMemoryStayRequestsRepository()
         let request = makeRequest(id: "r1", checkIn: day(1), checkOut: day(3))
@@ -157,8 +148,7 @@ struct StayRequestRepositoryTests {
 // MARK: - Public coordinate blurring
 
 struct ApproximateCoordinateTests {
-    /// The public coordinate must not resolve to a building. Two decimal places is
-    /// on the order of a kilometre, which is the promise HomeDetailPage's circle makes.
+    /// The public coordinate must not resolve to a building (about a kilometre, per HomeDetailPage's circle).
     @Test func approximateRoundsToTwoDecimalPlaces() {
         #expect(Home.approximate(37.33182) == 37.33)
         #expect(Home.approximate(-122.03118) == -122.03)
@@ -166,8 +156,7 @@ struct ApproximateCoordinateTests {
     }
 
     @Test func approximateDiscardsAtLeastTenMetresOfPrecision() {
-        // 0.0001 degrees is roughly 11 m; rounding must move a coordinate that far
-        // off the exact point for any value not already on the grid.
+        // 0.0001 degrees is about 11 m; rounding must move a coordinate that far off the exact point.
         let exact = 42.36159
         #expect(abs(Home.approximate(exact) - exact) > 0.0001)
     }
@@ -202,13 +191,10 @@ struct HomesRepositoryTests {
         #expect(box.value.allSatisfy { $0.hostName == "New" })
     }
 
-    // The repository — not the view layer — is the visibility boundary, so these
-    // assert on what a viewer can even fetch. Listings are friends-only: they
-    // mirror the ACL clause of the `homes` read rule in firestore.rules; if one
-    // drifts, so must the other.
+    // The repository is the visibility boundary, so these assert what a viewer can fetch. They
+    // mirror the ACL clause of the `homes` read rule; if one drifts, so must the other.
 
-    // createdAt = t(id) so the recency order (newest first) is a, b, c, d, e —
-    // i.e. the visibility and paging assertions below read in id order.
+    // createdAt = t(id), so recency order is a, b, c, d, e.
     private static let friendsOnlyFeed = [
         HomeFixture.make(id: "a", hostUserID: "stranger", allowedViewerIDs: ["stranger"], createdAt: t("a")),
         HomeFixture.make(id: "b", hostUserID: "friend", allowedViewerIDs: ["friend", "me"], createdAt: t("b")),
@@ -265,8 +251,7 @@ struct UserProfileRepositoryTests {
         // The reported bug: a lowercase query must find a mixed-case name.
         #expect(try await repo.searchProfiles(query: "spongebob").map(\.displayName)
             == ["SpongeBob SquarePants"])
-        // You should not have to type from the start of the name: a last-name /
-        // mid-name fragment matches too.
+        // Mid-name fragments match too.
         #expect(try await repo.searchProfiles(query: "square").map(\.displayName)
             == ["SpongeBob SquarePants"])
         #expect(try await repo.searchProfiles(query: "cheeks").map(\.displayName)

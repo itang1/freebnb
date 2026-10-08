@@ -2,20 +2,14 @@
 //  TrustBadges.swift
 //  freebnb
 //
-//  The reputation chips shown on a listing and on a profile (feature 2). One
-//  view so the two surfaces cannot drift apart and start phrasing the same
-//  number differently.
+//  The reputation chips on a listing and a profile, one view so the two never phrase a number differently.
 //
 
 import SwiftUI
 
-/// A single capsule chip. Neutral by default; `tint` marks the earned ones.
-///
-/// Color carries meaning here, so it is spent sparingly: a factual stat stays
-/// grey and quiet, while an *earned* signal takes a semantic tint and a heavier
-/// weight so the eye lands on it first. The three tints each mean one thing —
-/// green for platform assurance, teal for your network, amber for guest ratings —
-/// so no two earned chips ever read as the same kind of signal.
+/// A single capsule chip. Neutral by default; `tint` marks earned ones. Color carries
+/// meaning, so it's spent sparingly: green for platform assurance, teal for your
+/// network, amber for guest ratings.
 struct TrustChip: View {
     let text: String
     let systemImage: String
@@ -35,22 +29,12 @@ struct TrustChip: View {
     }
 }
 
-/// Every trust signal we have for one user.
-///
-/// Two tiers, because the old single row of seven chips ate most of a phone's
-/// first screen before the profile said anything. The *earned* signals — the
-/// ones a person had to do something to get — keep their chips and their colour.
-/// The plain counts drop to one quiet line of text underneath: still every
-/// number, still exact, just no longer seven capsules competing with each other.
-/// Nothing is hidden or collapsed behind a tap.
-///
-/// Signals are omitted rather than zeroed: "0 stays hosted" reads as a warning
-/// about a new host, when it only means the platform has nothing to say yet.
-/// A number that isn't there is honest; a zero is an accusation.
+/// Every trust signal for one user, in two tiers: earned signals keep their chips
+/// and colour, and plain counts drop to one quiet line of text. Signals are omitted
+/// rather than zeroed, since "0 stays hosted" reads as a warning about a new host.
 struct TrustBadgeRow: View {
     let profile: UserProfile?
-    /// Mutual friends between the viewer and this user, when known. Omitted on
-    /// your own profile, where the question is meaningless.
+    /// Mutual friends between the viewer and this user, when known; omitted on your own profile.
     var mutualFriends: MutualFriends?
     /// Set on the host's own listing to leave out the social chips.
     var isSelf: Bool = false
@@ -62,10 +46,7 @@ struct TrustBadgeRow: View {
             if hasEarnedChips {
                 FlowRow(spacing: 6) {
                     if stats.isVerified {
-                        // Green, not brand teal: identity assurance is a safety
-                        // signal, and keeping it distinct from the teal "mutual
-                        // friends" chip means the two never blur into one
-                        // "trusted" colour.
+                        // Green, not brand teal, so identity assurance stays distinct from the teal "mutual friends" chip.
                         TrustChip(text: "ID verified", systemImage: "checkmark.seal.fill", tint: .success)
                     }
                     if let rating = stats.ratingText {
@@ -92,9 +73,7 @@ struct TrustBadgeRow: View {
             || (!isSelf && mutualFriends?.countSummary != nil)
     }
 
-    /// The plain counts, middot-separated: "12 hosted · 3 taken · 3 years on
-    /// FreeBNB". Nil when we know none of them, so a brand-new profile renders
-    /// no empty line.
+    /// The plain counts, middot-separated ("12 hosted · 3 taken · 3 years on FreeBNB"); nil when none are known.
     private var statsStrip: String? {
         var parts: [String] = []
         if let hosted = stats.staysHosted, hosted > 0 { parts.append("\(hosted) hosted") }
@@ -103,9 +82,7 @@ struct TrustBadgeRow: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// The strip read aloud as words. "12 hosted · 3 taken" is compact enough to
-    /// scan but announces as run-together fragments, so VoiceOver gets the
-    /// unabbreviated phrasing the chips used to carry.
+    /// The strip read aloud: the compact form announces as fragments, so VoiceOver gets the full phrasing.
     private var statsAccessibilityLabel: String {
         var parts: [String] = []
         if let hosted = stats.staysHosted, hosted > 0 {
@@ -119,9 +96,7 @@ struct TrustBadgeRow: View {
     }
 }
 
-/// A minimal wrapping HStack. SwiftUI has no built-in flow layout, and chips
-/// that clip off the trailing edge silently hide the very signals the row exists
-/// to show.
+/// A minimal wrapping HStack; SwiftUI has no built-in flow layout, and clipped chips would hide signals.
 struct FlowRow: Layout {
     var spacing: CGFloat = 6
 
@@ -157,8 +132,7 @@ struct FlowRow: Layout {
 
         for index in subviews.indices {
             let size = subviews[index].sizeThatFits(.unspecified)
-            // Wrap before placing, unless this is the first chip on the row —
-            // a single chip wider than the container still has to go somewhere.
+            // Wrap before placing unless first on the row; an over-wide chip still has to go somewhere.
             if x > 0, x + size.width > maxWidth {
                 x = 0
                 y += rowHeight + spacing

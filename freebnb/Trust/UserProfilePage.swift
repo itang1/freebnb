@@ -2,9 +2,8 @@
 //  UserProfilePage.swift
 //  freebnb
 //
-//  Somebody else's profile: who they are, what the platform can vouch for, what
-//  their guests and hosts said, and what their friends say (features 1 and 2).
-//  Reached from a listing, a conversation, or the friends list.
+//  Somebody else's profile: who they are, what the platform vouches for, and what guests,
+//  hosts and friends said. Reached from a listing, a conversation or the friends list.
 //
 
 import SwiftUI
@@ -31,33 +30,22 @@ struct UserProfilePage: View {
     private var displayName: String { profile?.displayName ?? fallbackName }
     private var isSelf: Bool { authManager.userID == userID }
 
-    /// This person's listings that the viewer is allowed to see. `visibleListings`
-    /// is already privacy-filtered to the viewer's network, so filtering it by host
-    /// never exposes a home the viewer couldn't otherwise reach. Keyed on
-    /// `hostUserID` to match the "N homes" count on the Friends list.
+    /// This person's listings the viewer may see; `visibleListings` is already privacy-filtered, keyed on `hostUserID` like the Friends "N homes" count.
     private var hostHomes: [Home] {
         homeStore.visibleListings.filter { $0.hostUserID == userID }
     }
 
-    /// Only an accepted friend may write a reference, which is exactly what the
-    /// rules enforce. Checking the same condition here keeps the button from
-    /// offering a write that would be rejected.
+    /// Only an accepted friend may write a reference (as the rules enforce); checked here so the button doesn't offer a rejected write.
     private var canWriteReference: Bool {
         !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
     }
 
-    /// Notes are a host's record of somebody they actually know, so the entry
-    /// point follows the friendship rather than the profile. Never on your own
-    /// profile: `firestore.rules` refuses a note whose subject is its author,
-    /// and the button's absence and that rule should agree.
+    /// The notes entry point follows the friendship, never your own profile (the rules refuse a self-note).
     private var canKeepNotes: Bool {
         !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
     }
 
-    /// Messaging is friend-gated like the rest of the graph, so the thread opens
-    /// only once the friendship exists. Offering it earlier would hand someone a
-    /// composer whose send the rules refuse, which is the decline this app tries
-    /// not to make people discover by hitting it.
+    /// Messaging is friend-gated, so the thread opens only once the friendship exists; earlier would offer a composer the rules refuse.
     private var canMessage: Bool {
         !isSelf && authManager.authMethod != .guest && friendStore.isFriend(userID)
     }
@@ -78,11 +66,8 @@ struct UserProfilePage: View {
                 )
 
                 if !isSelf && authManager.authMethod != .guest {
-                    // The relationship control only earns space up here when there's
-                    // an action to take (add, or answer a request). Once you're
-                    // friends, status and unfriending move to the bottom, and this
-                    // slot becomes Message instead: the two are alternatives now
-                    // that a thread needs the friendship first.
+                    // The relationship control earns this slot only when there's an action to take;
+                    // once friends it moves to the bottom and this becomes Message.
                     if !friendStore.isFriend(userID) {
                         FriendshipControl(userID: userID, displayName: displayName)
                     }
@@ -121,9 +106,7 @@ struct UserProfilePage: View {
                     .buttonStyle(.pressable)
                 }
 
-                // Deliberately the quietest control on the page: grey rather than
-                // accent, below the two things that reach the other person. What
-                // is private should not look like an invitation to broadcast.
+                // The quietest control on the page (grey, below what reaches the other person): private shouldn't invite broadcast.
                 if canKeepNotes {
                     NavigationLink {
                         FriendNotesPage(friendID: userID, friendName: displayName)
@@ -159,12 +142,8 @@ struct UserProfilePage: View {
 
                 if !isSelf && authManager.authMethod != .guest {
                     Divider()
-                    // Manage section: the friendship status plus the rare, deliberate
-                    // ways to step back from someone. Colour signals severity, so red
-                    // is spent on exactly one action. "Friends" is a positive status
-                    // (accent) that hides unfriending behind a tap; reporting (routes
-                    // to us, costs the other person nothing yet) stays neutral;
-                    // blocking, the one hostile, self-protective cut, is the only red.
+                    // Manage section: friendship status and the rare ways to step back. Color signals
+                    // severity: "Friends" is accent, reporting neutral, blocking the one red.
                     VStack(alignment: .leading, spacing: 16) {
                         FriendStatusButton(userID: userID, displayName: displayName)
 
@@ -199,8 +178,7 @@ struct UserProfilePage: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task {
-            // The public doc carries trustStats, so this one fetch also fills the
-            // badge row. Mutual friends need the callable.
+            // The public doc carries trustStats, so this fetch fills the badge row; mutual friends need the callable.
             _ = await userProfileStore.fetchProfileOnce(userID: userID)
             await reviewStore.loadMutualFriends(with: userID)
         }
@@ -249,11 +227,8 @@ struct UserProfilePage: View {
         }
     }
 
-    /// The person's places, each tapping through to the full listing. Uses the
-    /// same `HomeCard` the feed shows, so a home looks identical wherever it
-    /// appears. Destination-based `NavigationLink` rather than value-based because
-    /// this page is pushed from stacks (the Friends sheet) that don't register a
-    /// `Home` navigation destination.
+    /// The person's places, as the feed's `HomeCard`. A destination-based `NavigationLink`, since
+    /// stacks like the Friends sheet register no `Home` destination.
     private var homesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(isSelf ? "Your homes" : "\(displayName)'s homes")
