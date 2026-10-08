@@ -2,9 +2,7 @@
 //  WriteReferenceSheet.swift
 //  freebnb
 //
-//  A friend vouching for a friend (feature 1). Only offered when an accepted
-//  friend edge exists — `firestore.rules` refuses the write otherwise, so the
-//  button's absence and the rule agree rather than the UI merely hiding it.
+//  A friend vouching for a friend, offered only with an accepted friend edge (the rules refuse otherwise), so the button's absence and the rule agree.
 //
 
 import SwiftUI
@@ -12,8 +10,7 @@ import SwiftUI
 struct WriteReferenceSheet: View {
     let subjectUserID: String
     let subjectName: String
-    /// The reference this friend already wrote, if any: the sheet edits it in
-    /// place rather than silently overwriting it.
+    /// The reference this friend already wrote, if any; the sheet edits it in place.
     let existing: CharacterReference?
 
     @Environment(ReviewStore.self) private var reviewStore
@@ -40,8 +37,7 @@ struct WriteReferenceSheet: View {
                     Text("Your reference")
                 } footer: {
                     VStack(alignment: .leading, spacing: 4) {
-                        // Says which of the two trust surfaces this is, at the
-                        // moment somebody is writing one.
+                        // Says which trust surface this is, as someone writes.
                         Text("A reference vouches for \(subjectName) as a guest, a host, or both. It carries no rating: reviews come from stays that actually happened.")
                         Text("Shown publicly on \(subjectName)'s profile, with your name.")
                         Text("\(trimmed.count) / \(CharacterReference.maxLength)")

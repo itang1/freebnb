@@ -2,11 +2,8 @@
 //  HappeningNowBanner.swift
 //  freebnb
 //
-//  The in-app twin of the current-stay Live Activity (feature 21): a persistent
-//  banner pinned to the top of the Stays tab whenever a stay is live, so the one
-//  stay you're in the middle of is surfaced above everything regardless of which
-//  pane (Trips / Listings) you're on. Reuses the same `StayPhase` the Live
-//  Activity does, so the on-device and on-Lock-Screen states can never disagree.
+//  The in-app twin of the Live Activity: a banner atop the Stays tab whenever a stay is live, whichever pane is showing.
+//  It reuses `StayPhase`, so the app and Lock Screen states can't disagree.
 //
 
 import SwiftUI
@@ -56,9 +53,7 @@ struct HappeningNowBanner: View {
     }
 }
 
-/// A small filled dot that pulses while a stay is under way, echoing the "live"
-/// language of the banner. Static (non-pulsing) on the arrival/checkout days so
-/// only a genuinely in-progress stay animates.
+/// A dot that pulses while a stay is under way, echoing the banner's "live" language; static on arrival/checkout days so only an in-progress stay animates.
 private struct LiveDot: View {
     let animated: Bool
     @State private var pulsing = false

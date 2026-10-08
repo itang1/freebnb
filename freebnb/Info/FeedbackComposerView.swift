@@ -2,10 +2,7 @@
 //  FeedbackComposerView.swift
 //  freebnb
 //
-//  The in-app feedback composer (feature 43). Posts a note to the Google Form in
-//  `FeedbackService`, whose responses feed the team's spreadsheet. Anyone can
-//  send, guests included, since the Form needs no account; the sender's ID rides
-//  along when they are signed in. The same form is public on the web.
+//  The in-app feedback composer: posts to the Google Form in `FeedbackService`. Anyone can send, guests included, since the Form needs no account; the sender's ID rides along if signed in.
 //
 
 import SwiftUI

@@ -2,11 +2,8 @@
 //  Geohash.swift
 //  freebnb
 //
-//  Minimal geohash encoder. A geohash is a short base-32 string whose shared
-//  prefix length grows with geographic proximity, which makes it an index-only
-//  primitive for "listings near here" range queries (feature 11). Listings store
-//  a geohash of their *public* (neighbourhood-rounded) coordinate, so it never
-//  reveals more than the map circle already does.
+//  Minimal geohash encoder: a base-32 string whose shared prefix grows with proximity, an index-only primitive
+//  for "listings near here" queries. Listings store a geohash of their public, blurred coordinate, revealing no more than the map circle.
 //
 
 import CoreLocation
@@ -15,9 +12,7 @@ import Foundation
 enum Geohash {
     private static let base32 = Array("0123456789bcdefghjkmnpqrstuvwxyz")
 
-    /// Encodes a coordinate to a geohash of the given precision (characters).
-    /// Precision 6 is roughly a 1.2 km × 0.6 km cell — a good match for a
-    /// coordinate already blurred to a neighbourhood.
+    /// Encodes a coordinate to a geohash of `precision` characters; 6 is roughly 1.2 km × 0.6 km, a match for a neighbourhood-blurred coordinate.
     static func encode(latitude: Double, longitude: Double, precision: Int = 6) -> String {
         var latRange = (-90.0, 90.0)
         var lonRange = (-180.0, 180.0)

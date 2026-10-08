@@ -2,11 +2,7 @@
 //  GeocodingCache.swift
 //  freebnb
 //
-//  Actor-based cache for CLGeocoder lookups. CLGeocoder has documented
-//  rate limits (~50 requests/minute per app); without a cache, browsing
-//  between listings quickly has the user hitting them for addresses we
-//  already resolved a second ago. Concurrent requests for the same
-//  address are coalesced into a single geocode.
+//  Actor-based cache for CLGeocoder lookups (limited to ~50 requests/minute), so browsing between listings doesn't re-resolve addresses; concurrent requests for one address coalesce.
 //
 
 import CoreLocation
@@ -17,8 +13,7 @@ actor GeocodingCache {
     private var coordinates: [String: Coordinate] = [:]
     private var inflight: [String: Task<Coordinate, Error>] = [:]
 
-    // CLLocationCoordinate2D is a C struct without Sendable conformance on
-    // older SDKs; store the components and rebuild on return.
+    // CLLocationCoordinate2D isn't Sendable on older SDKs; store the components and rebuild on return.
     private struct Coordinate: Sendable {
         let latitude: Double
         let longitude: Double

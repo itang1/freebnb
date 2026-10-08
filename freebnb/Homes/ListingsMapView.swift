@@ -16,9 +16,7 @@ struct ListingsMapView: View {
     // Coordinates resolved at display time; keyed by listing ID.
     @State private var resolvedCoords: [String: CLLocationCoordinate2D] = [:]
     @State private var isGeocoding = false
-    // The region under the camera right now, and the region the user last locked
-    // in with "Search this area". While `appliedRegion` is set, only pins inside
-    // it show, turning the map into a proximity filter (feature 11).
+    // The camera's region and the one locked in with "Search this area"; while `appliedRegion` is set only pins inside it show, making the map a proximity filter.
     @State private var currentRegion: MKCoordinateRegion?
     @State private var appliedRegion: MKCoordinateRegion?
 
@@ -95,9 +93,7 @@ struct ListingsMapView: View {
         }
     }
 
-    // Geocode any listing that doesn't already have stored coordinates. This is a
-    // browse surface for people who have not been given the street address, so it
-    // geocodes the public part only and lands on the city, not the door.
+    // Geocodes listings without stored coordinates, from the public address only, so it lands on the city, not the door.
     private func geocodeMissing() async {
         let missing = listings.filter { $0.latitude == nil || $0.longitude == nil }
         guard !missing.isEmpty else { return }
@@ -119,8 +115,7 @@ struct ListingsMapView: View {
         isGeocoding = false
     }
 
-    // Floating top control that turns the current viewport into a proximity
-    // filter, plus a reset once one is applied.
+    // Floating control turning the viewport into a proximity filter, with a reset once applied.
     private var searchThisAreaButton: some View {
         VStack(spacing: 8) {
             Button {

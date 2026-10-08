@@ -5,14 +5,8 @@
 
 import SwiftUI
 
-/// Guest-to-account upgrade, pushed from the Profile tab. Kept off the
-/// Profile page itself so three sign-up buttons don't dominate a screen
-/// that's mostly settings; this gets its own scroll and its own moment.
-///
-/// Every path here links the active anonymous session instead of starting a
-/// fresh one (see `AuthManager.handleAuthorization`, `signInWithGoogle`, and
-/// `register(withEmail:password:displayName:)`), so guest data carries over
-/// no matter which provider the guest picks.
+/// Guest-to-account upgrade, pushed from Profile (kept off that page so sign-up buttons don't dominate settings).
+/// Every path links the active anonymous session rather than starting a new one, so guest data carries over.
 struct CreateAccountPage: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
@@ -82,8 +76,7 @@ struct CreateAccountPage: View {
             EmailAuthView(initialMode: .register)
                 .environment(authManager)
         }
-        // The guest session upgrades in place; once it's no longer anonymous
-        // there's nothing left to do on this screen but close it.
+        // The guest session upgrades in place; once non-anonymous there's nothing left but to close this screen.
         .onChange(of: authManager.authMethod) { _, method in
             if method != .guest { dismiss() }
         }
