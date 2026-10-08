@@ -25,18 +25,14 @@ enum StayRequestStatus: String, Codable, Hashable, CaseIterable, Sendable {
         }
     }
 
-    /// Not yet resolved either way. An offer is active for the same reason a
-    /// pending request is: nobody has said no, and the address grant that
-    /// `updateStatus` withdraws on every inactive status must not be withdrawn
-    /// from underneath it.
+    /// Not yet resolved either way. An offer is active like a pending request,
+    /// so `updateStatus` doesn't withdraw the address grant from under it.
     var isActive: Bool { self == .pending || self == .offered || self == .accepted }
 
-    /// Whether this is waiting on somebody's answer. The two awaiting statuses
-    /// differ only in which side owes the reply — see `awaitingReply(from:)`.
+    /// Whether this waits on somebody's answer; see `awaitingReply(from:)` for which side.
     var isAwaitingReply: Bool { self == .pending || self == .offered }
 
-    /// True for the statuses that mean the stay actually happened. `accepted`
-    /// counts because a stay in progress has not been cancelled away.
+    /// Statuses meaning the stay happened; `accepted` counts since an in-progress stay isn't cancelled.
     var didHappen: Bool { self == .accepted || self == .completed }
 }
 
@@ -45,8 +41,7 @@ enum StayRequestRole: Sendable {
     case host
 }
 
-/// Roughly when the guest expects to arrive, so the host can plan the handoff
-/// (feature 20). Stored by raw value; the rules validate membership in this set.
+/// Roughly when the guest expects to arrive. Stored by raw value; the rules validate membership.
 enum ArrivalWindow: String, Codable, Hashable, CaseIterable, Sendable {
     case flexible  = "flexible"
     case morning   = "morning"
@@ -79,8 +74,7 @@ enum ArrivalWindow: String, Codable, Hashable, CaseIterable, Sendable {
 enum StayRequestError: LocalizedError {
     case overlappingStay
     case notSignedIn
-    /// The request moved on between the row rendering and the tap landing:
-    /// cancelled by the guest, or already answered on another device.
+    /// The request moved on between rendering and the tap: cancelled, or answered on another device.
     case noLongerPending
     case listingUnavailable
 
@@ -97,14 +91,9 @@ enum StayRequestError: LocalizedError {
         }
     }
 
-    /// What a guest should see when a write fails. A rules rejection arrives as
-    /// Firestore permission-denied (code 7) and becomes the same "no longer
-    /// available" a guest already gets when a night is taken first, because the
-    /// two are indistinguishable and must stay that way: the only writes these
-    /// rules refuse are ones the sheet would not have offered, so reaching here
-    /// means the host's calendar or their rules moved while the sheet was open.
-    /// Either way it is news about the listing, never about the guest. Anything
-    /// that is not a rejection keeps its own description.
+    /// What a guest sees when a write fails. A rules rejection (permission-denied)
+    /// becomes the same "no longer available" as a taken night, since both mean the
+    /// listing's calendar or rules moved under the open sheet. Other errors keep their description.
     static func guestFacingMessage(for error: Error) -> String {
         let nsError = error as NSError
         let isDenied = nsError.domain == "FIRFirestoreErrorDomain" && nsError.code == 7
@@ -197,22 +186,18 @@ struct StayRequest: Identifiable, Codable, Hashable, Sendable {
 }
 
 extension StayRequest {
-    /// How the requested home names itself in trip rows and the chat banner: the
-    /// snapshotted title if there was one, otherwise the city. Mirrors
-    /// `Home.displayTitle`'s intent for the denormalized copy.
+    /// How the home names itself in trip rows and the chat banner: the snapshotted title, else the city.
     var listingLabel: String { namedListingTitle ?? listingCity }
 
-    /// The snapshotted title only when the host actually set one (trimmed,
-    /// non-empty), the denormalized twin of `Home.customTitle`. Surfaces that
-    /// have their own fallback wording, like the chat banner's "your place",
-    /// need to know the difference; `listingLabel` is for the ones that don't.
+    /// The snapshotted title only if the host set one; the twin of `Home.customTitle`,
+    /// for surfaces with their own fallback wording. `listingLabel` is for the rest.
     var namedListingTitle: String? {
         guard let listingTitle else { return nil }
         let trimmed = listingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// "Mar 5 – Mar 9", the form used by every stay row and chat banner.
+    /// "Mar 5 – Mar 9", as used by every stay row and chat banner.
     var dateRangeText: String {
         let f = AppDateFormatters.shortDay
         return "\(f.string(from: checkIn)) – \(f.string(from: checkOut))"
@@ -225,15 +210,13 @@ extension StayRequest {
         return nil
     }
 
-    /// Which side started this: the guest asking, or the host offering. A request
-    /// written before offers existed has no `initiatedBy`, and could only have
-    /// been the guest asking, because that was the only thing the app could do.
+    /// Which side started this: guest asking or host offering. Requests without
+    /// `initiatedBy` predate offers and were the guest's.
     var initiator: StayRequestRole {
         initiatedBy == hostUserID ? .host : .guest
     }
 
-    /// Whose answer the stay is waiting on, or nil if it isn't waiting on anyone.
-    /// A guest's request waits on the host; a host's offer waits on the guest.
+    /// Whose answer the stay waits on (host for a request, guest for an offer), or nil.
     var awaitingParty: String? {
         switch status {
         case .pending: return hostUserID
@@ -242,16 +225,12 @@ extension StayRequest {
         }
     }
 
-    /// Whether `userID` is the one who owes a reply. Backs the "Needs your
-    /// response" section and the tab badge, which now count offers a guest hasn't
-    /// answered alongside requests a host hasn't.
+    /// Whether `userID` owes a reply; backs the "Needs your response" section and tab badge.
     func awaitsReply(from userID: String) -> Bool {
         !userID.isEmpty && awaitingParty == userID
     }
 
-    /// Whether `userID` may accept this right now. Deliberately the mirror of
-    /// `awaitsReply`, minus the statuses that aren't an open question: the person
-    /// who owes the answer is exactly the person who can say yes.
+    /// Whether `userID` may accept right now: the mirror of `awaitsReply`.
     func canBeAccepted(by userID: String) -> Bool {
         status.isAwaitingReply && awaitsReply(from: userID)
     }
@@ -262,34 +241,23 @@ extension StayRequest {
     }
 
     /// Either party may close out an accepted stay once it has begun. Requiring
-    /// checkout to have passed would leave a guest who left early unable to say
-    /// so, and the nightly sweep completes anything nobody touches, so the only
-    /// thing this gate has to stop is marking a future stay complete.
-    /// `firestore.rules` enforces the same `request.time >= checkIn` bound.
+    /// checkout would block a guest who left early; the sweep completes the rest,
+    /// so the gate only stops completing a future stay. Rules enforce `request.time >= checkIn`.
     func canBeMarkedComplete(now: Date = Date()) -> Bool {
         status == .accepted && now >= checkIn
     }
 
-    /// True while an accepted stay is actually happening — from the start of the
-    /// check-in day through the end of the checkout day — so the trip timeline can
-    /// surface it as "happening now" (feature 21). `checkOut` is a local
-    /// start-of-day, so the +1 day keeps the stay live for all of checkout day
-    /// rather than flipping it to "past" at midnight while the guest is still there.
+    /// True while an accepted stay is happening, from the start of check-in day
+    /// through the end of checkout day (`checkOut` is a start-of-day, hence +1 day).
     func isUnderway(now: Date = Date()) -> Bool {
         guard status == .accepted, now >= checkIn else { return false }
         let dayAfterCheckout = Calendar.current.date(byAdding: .day, value: 1, to: checkOut) ?? checkOut
         return now < dayAfterCheckout
     }
 
-    /// True while an accepted stay still has a future: from the moment it is
-    /// accepted through the end of checkout day. `isUnderway` is this minus the
-    /// stays that haven't started yet.
-    ///
-    /// Bounded at checkout rather than at `status == .accepted` alone, because
-    /// the nightly sweep is what moves a finished stay to `.completed` and it
-    /// can be late or, in an environment with no functions deployed, never. A
-    /// gate that waited for the sweep would be a gate that sometimes never
-    /// opens.
+    /// True while an accepted stay still has a future: from acceptance through the
+    /// end of checkout day. Bounded at checkout rather than `status`, since the
+    /// nightly sweep can be late or never run where no functions are deployed.
     func isOutstanding(now: Date = Date()) -> Bool {
         guard status == .accepted else { return false }
         let dayAfterCheckout = Calendar.current.date(byAdding: .day, value: 1, to: checkOut) ?? checkOut
@@ -308,16 +276,9 @@ extension StayRequest {
 }
 
 extension [StayRequest] {
-    /// The outstanding accepted stay between these two people, if there is one.
-    ///
-    /// Backs the unfriend guard. Messaging is friend-gated, so unfriending
-    /// mid-stay takes away the thread the two of them need to sort out a key,
-    /// a late arrival, or a lock-out — and it would do it at the moment that
-    /// thread matters most. Either direction counts: the awkwardness is the
-    /// same whichever of them is the host.
-    ///
-    /// Blocking is deliberately not gated on this. A block is a safety exit and
-    /// has to work at any time, including — especially — during a stay.
+    /// The outstanding accepted stay between these two people, if any. Backs the
+    /// unfriend guard: unfriending mid-stay would remove the thread they need
+    /// for keys and late arrivals. Blocking is deliberately not gated, as a safety exit.
     func outstandingStay(between viewerID: String, and otherID: String, now: Date = Date()) -> StayRequest? {
         first { stay in
             stay.isOutstanding(now: now)
@@ -326,18 +287,13 @@ extension [StayRequest] {
         }
     }
 
-    /// How many of these are waiting on `userID` to answer. Backs the Stays tab
-    /// badge, which means "someone is blocked on you" and nothing looser. Pure,
-    /// so the badge rule is testable without standing up a store and an auth
-    /// session.
+    /// How many are waiting on `userID` to answer; backs the Stays tab badge. Pure, so testable without a store.
     func awaitingReplyCount(from userID: String) -> Int {
-        // An empty userID is a signed-out viewer; `awaitsReply` already refuses
-        // to match one, so this reduces to zero without a special case.
+        // An empty userID is signed out; `awaitsReply` refuses to match it, so this is zero.
         filter { $0.awaitsReply(from: userID) }.count
     }
 
-    /// Newest first. Requests without a server timestamp yet sort to the front
-    /// so newly created pending items appear immediately.
+    /// Newest first; requests without a server timestamp sort to the front.
     func sortedByDate() -> [StayRequest] {
         sorted {
             switch ($0.createdAt, $1.createdAt) {

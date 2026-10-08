@@ -2,8 +2,7 @@
 //  UserProfileRepository.swift
 //  freebnb
 //
-//  Public and private user profiles, blocking, reports, and account deletion.
-//  Split out of the former Repositories.swift (A2).
+//  Public and private user profiles, blocking, reports and account deletion.
 //
 
 import FirebaseAuth
@@ -12,32 +11,20 @@ import FirebaseAuth
 import Foundation
 import os
 
-/// The `searchTerms` index on the public user doc, and the matching rules the
-/// client applies on top of it.
+/// The `searchTerms` index on the public user doc and the client's matching rules.
 ///
-/// Name search has no server-side substring operator in Firestore, so a name is
-/// decomposed on write into the prefixes someone might type, and a search is one
-/// `arrayContains` against that. This is what replaced downloading the first 200
-/// user docs and substring-matching locally, which silently could not find user
-/// 201.
+/// Firestore has no substring operator, so a name is decomposed on write into the
+/// prefixes someone might type, and a search is one `arrayContains`. A query
+/// matches when every query word prefixes some word of the name ("spo", "square"
+/// and "sponge square" all find "SpongeBob SquarePants"); mid-word fragments
+/// don't, since storing every substring is quadratic.
 ///
-/// Semantics: a query matches when **every** query word prefixes **some** word of
-/// the name — "spo", "square", and "sponge square" all find "SpongeBob
-/// SquarePants". A mid-word fragment ("quare") does not, which the old local scan
-/// did handle; storing every substring rather than every prefix is quadratic in
-/// the name's length, and leading-edge typing is what a name search is actually
-/// for.
-///
-/// Keep in step with `scripts/search_terms.js`, the Node twin the seed script
-/// builds the same array from. A profile indexed by one and queried through the
-/// other is a user search cannot find, so a test pins the two outputs together.
+/// Keep in step with `scripts/search_terms.js`; a test pins the two outputs together.
 enum UserSearchTerms {
-    /// Longer prefixes than this aren't stored: a query longer than the cap is
-    /// truncated to it for the lookup, and the client-side pass below re-checks
-    /// the full query anyway.
+    /// Longer prefixes aren't stored; longer queries are truncated for the lookup
+    /// and re-checked in full client-side.
     static let maxPrefixLength = 15
-    /// Bounds both the document and what a modified client can stuff in. The
-    /// rules enforce the same number; see `isValidSearchTerms` in firestore.rules.
+    /// Bounds the document and what a modified client can stuff in; mirrors `isValidSearchTerms` in firestore.rules.
     static let maxTerms = 60
 
     static func words(in name: String) -> [String] {
@@ -46,9 +33,7 @@ enum UserSearchTerms {
             .map(String.init)
     }
 
-    /// Every prefix of every word, plus the whole lowercased name — the rules
-    /// require that last one to be present, so a document cannot claim search
-    /// terms while hiding the name they supposedly came from.
+    /// Every prefix of every word plus the whole lowercased name, which the rules require.
     static func terms(for displayName: String) -> [String] {
         var terms: Set<String> = []
         for word in words(in: displayName) {
@@ -59,22 +44,18 @@ enum UserSearchTerms {
         }
         let fullName = displayName.lowercased()
         terms.remove(fullName)
-        // Sorted so the array is stable across writes: an unordered Set would
-        // rewrite the field (and bill an index update) on every save.
+        // Sorted so the array is stable across writes; a Set would rewrite the field every save.
         return [fullName] + terms.sorted().prefix(maxTerms - 1)
     }
 
-    /// The single term to query on: the longest word, because it is the most
-    /// selective. Everything else about the query is re-checked client-side.
+    /// The single term to query on: the longest word, the most selective.
     static func queryTerm(for query: String) -> String? {
         words(in: query)
             .max(by: { $0.count < $1.count })
             .map { String($0.prefix(maxPrefixLength)) }
     }
 
-    /// True when every word of `query` prefixes some word of `displayName`. The
-    /// `arrayContains` lookup only covers one query word, so this is what makes a
-    /// multi-word query mean all of its words.
+    /// True when every word of `query` prefixes some word of `displayName`; makes multi-word queries mean all words.
     static func matches(displayName: String, query: String) -> Bool {
         let nameWords = words(in: displayName)
         let queryWords = words(in: query)
@@ -96,37 +77,26 @@ protocol UserProfileRepository: Sendable {
     func updateSavedListings(userID: String, listingIDs: [String]) async throws
     func updateBlockedUsers(userID: String, blockedUserIDs: [String]) async throws
     func fetchProfile(userID: String) async throws -> UserProfile?
-    // No `deleteProfile`. Account deletion is the `deleteUser` callable's job and
-    // cannot be done from the client: `firestore.rules` sets `allow delete: if
-    // false` on the public user document, while the owner-only private
-    // subdocument *is* client-deletable. A client-side cascade therefore deletes
-    // the private half, is denied the public half, and — because permission
-    // denied is not a transient error and `withRetry` will not retry it — leaves
-    // the account with its `blockedUserIDs` gone. `hasBlocked()` reads a missing
-    // document as "not blocked", so a failed self-delete would silently lift
-    // every block the user had placed. The method that did this was unreferenced
-    // and has been removed rather than left as a trap.
+    // No `deleteProfile`: account deletion is the `deleteUser` callable's job.
+    // The public user doc is undeletable by clients while the private subdoc is,
+    // so a client cascade would delete `blockedUserIDs`, fail on the rest, and
+    // silently lift every block the user had placed.
     func updateFCMToken(userID: String, token: String) async throws
     func updateNotificationPrefs(userID: String, prefs: NotificationPreferences) async throws
-    /// Stores (or, with nil, clears) the person this user shares their stays with.
-    /// Owner-only data: it never leaves the private subdocument.
+    /// Stores (or with nil clears) the person this user shares stays with; private subdocument only.
     func updateEmergencyContact(userID: String, contact: EmergencyContact?) async throws
     func searchProfiles(query: String) async throws -> [UserProfile]
     func submitReport(reporterUserID: String, targetType: String, targetID: String, reason: String) async throws
-    /// Invokes the `exportUserData` callable and returns the result as
-    /// pretty-printed JSON, fulfilling the GDPR/CCPA right-to-access (L12).
+    /// Invokes the `exportUserData` callable and returns pretty-printed JSON (GDPR/CCPA access).
     func exportUserData() async throws -> Data
 }
 
-// Sensitive profile fields (email, fcmToken, blockedUserIDs, savedListingIDs)
-// live in this owner-only subdocument, split out of the world-readable user
-// doc so they are never exposed to other users. Clients read/write them only
-// for the current user; Cloud Functions reach them via elevated access.
+// Sensitive fields (email, fcmToken, blockedUserIDs, savedListingIDs) live in
+// this owner-only subdocument, split from the world-readable user doc.
 private let privateProfileDocID = FirestorePaths.profileDocID
 
-/// Merges the public user document with the owner-only private subdocument into
-/// one `UserProfile`. Firestore delivers snapshot callbacks on the main queue by
-/// default, so the mutable state below is accessed serially without locking.
+/// Merges the public user document with the owner-only subdocument into one
+/// `UserProfile`. Snapshots arrive on the main queue, so state is accessed serially.
 private final class CurrentProfileMerger: @unchecked Sendable {
     private let handler: @Sendable (Result<UserProfile?, Error>) -> Void
     private var publicProfile: UserProfile?
@@ -208,9 +178,7 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             merger.setPublic(snapshot: snapshot, error: error)
         }
         let privateReg = privateDoc(userID).addSnapshotListener { snapshot, error in
-            // A missing/unreadable private doc is normal for brand-new or
-            // pre-split accounts; treat it as "no private data yet" rather than
-            // failing the whole profile load, which the public listener owns.
+            // A missing private doc is normal for new or pre-split accounts; the public listener owns load failures.
             merger.setPrivate(snapshot: error == nil ? snapshot : nil)
         }
         return CompositeListener(listeners: [
@@ -239,9 +207,7 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
         try await withRetry { [db] in
             try await db.collection(FirestorePaths.users).document(userID).setData([
                 "displayName": newName,
-                // Must move with the name: a stale index would keep finding this
-                // user under the old one, and the rules reject terms that don't
-                // carry the current name.
+                // Must move with the name, or the stale index keeps finding the old one and the rules reject it.
                 "searchTerms": UserSearchTerms.terms(for: newName),
                 "updatedAt": FieldValue.serverTimestamp()
             ], merge: true)
@@ -276,10 +242,7 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             "targetType": targetType,
             "targetID": targetID,
             "reason": reason,
-            // Enters the moderation console's queue at the top (feature 6). The
-            // rules pin both of these on create: a user files a `new` report from
-            // a person, never an `actioned` one or one impersonating the
-            // keyword-moderation triggers.
+            // Enters the moderation queue at the top; the rules pin a `new` report from a person.
             "status": "new",
             "source": "user",
             "createdAt": FieldValue.serverTimestamp()
@@ -333,9 +296,7 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
 
     func exportUserData() async throws -> Data {
         let result = try await functions.httpsCallable("exportUserData").call()
-        // The callable returns a JSON-compatible object graph (dictionaries,
-        // arrays, numbers, strings, and Timestamp maps). Serialize it stably so
-        // the shared file is human-readable.
+        // The callable returns a JSON-compatible graph; serialize stably for a readable file.
         return try JSONSerialization.data(
             withJSONObject: result.data,
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -343,11 +304,8 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
     }
 
     func searchProfiles(query: String) async throws -> [UserProfile] {
-        // One indexed lookup against the `searchTerms` array the write path
-        // maintains (see UserSearchTerms). The predecessor read the first 200
-        // user docs in arbitrary order and matched locally, so user 201 was
-        // unfindable no matter what they typed; this asks the server for the
-        // matches instead, and the directory can grow.
+        // One lookup against the `searchTerms` array (see UserSearchTerms), replacing
+        // a local scan of the first 200 users that couldn't find user 201.
         guard let term = UserSearchTerms.queryTerm(for: query) else { return [] }
         let snap = try await db.collection(FirestorePaths.users)
             .whereField("searchTerms", arrayContains: term)
@@ -355,14 +313,11 @@ struct FirestoreUserProfileRepository: UserProfileRepository {
             .getDocuments()
         return snap.documents
             .compactMap { try? $0.data(as: UserProfile.self) }
-            // The lookup only carried the longest query word. Re-check the whole
-            // query so "sponge square" doesn't match everyone named Square.
+            // The lookup only carried the longest word; re-check the whole query.
             .filter { UserSearchTerms.matches(displayName: $0.displayName, query: query) }
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
-    /// Upper bound on results per search. This one bounds the *result set* of a
-    /// selective query rather than a blind scan of the directory, so a name with
-    /// more matches than this is a reason to type more, not a silent cliff.
+    /// Upper bound on results per search; bounds a selective query's result set.
     private static let searchResultLimit = 50
 }
