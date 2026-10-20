@@ -102,6 +102,13 @@ struct HomesPage: View {
         !citySearch.trimmingCharacters(in: .whitespaces).isEmpty
             || !selectedFilters.isEmpty
             || showSavedOnly
+            || isFeedEmptiedByFiltering
+    }
+
+    // Anyone can name you in a listing's ACL, so a page of strangers' listings
+    // filters to nothing and leaves no row for the load-more sentinel to hang on.
+    private var isFeedEmptiedByFiltering: Bool {
+        listings.isEmpty && !isLoading && canLoadMore
     }
 
     /// Also the id the exhaustion loop restarts on, so the task re-runs for the next page until a
@@ -267,6 +274,7 @@ struct HomesPage: View {
         .onChange(of: citySearch) { _, _ in searchPagesLoaded = 0 }
         .onChange(of: selectedFilters) { _, _ in searchPagesLoaded = 0 }
         .onChange(of: showSavedOnly) { _, _ in searchPagesLoaded = 0 }
+        .onChange(of: isLoading) { _, loading in if loading { searchPagesLoaded = 0 } }
         .task(id: paging) {
             guard paging.shouldFetchNextPage else { return }
             searchPagesLoaded += 1
