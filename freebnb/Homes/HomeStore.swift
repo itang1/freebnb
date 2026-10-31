@@ -453,49 +453,6 @@ final class HomeStore {
         return failed
     }
 
-    // MARK: - Photos
-
-    /// Uploads prepared JPEGs in parallel and returns their URLs in the given order, since `photoURLs[0]` is
-    /// the cover. All or nothing: on any failure the ones that did land are removed again and the error rethrown.
-    func uploadPhotos(_ images: [Data], listingID: String, hostUserID: String) async throws -> [URL] {
-        guard !images.isEmpty else { return [] }
-        let uploader = photoUploader
-        var urls = [URL?](repeating: nil, count: images.count)
-        do {
-            try await withThrowingTaskGroup(of: (offset: Int, url: URL).self) { group in
-                for (offset, data) in images.enumerated() {
-                    group.addTask {
-                        (offset, try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID))
-                    }
-                }
-                for try await (offset, url) in group { urls[offset] = url }
-            }
-        } catch {
-            log.error("photo upload error: \(error.localizedDescription, privacy: .public)")
-            await deletePhotos(urls.compactMap { $0?.absoluteString })
-            throw error
-        }
-        return urls.compactMap { $0 }
-    }
-
-    /// Best-effort removal of photos a listing no longer references. Failures are logged, not thrown: the
-    /// listing already saved, and the listing-deletion cascade sweeps the folder later anyway.
-    func deletePhotos(_ urlStrings: [String]) async {
-        let uploader = photoUploader
-        await withTaskGroup(of: Void.self) { group in
-            for string in urlStrings {
-                guard let url = URL(string: string) else { continue }
-                group.addTask {
-                    do {
-                        try await uploader.delete(photoURL: url)
-                    } catch {
-                        AppLog.logger("homes").info("photo delete failed: \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: - Co-hosts
 
     /// Adds one friend as co-host. One at a time because the rules can only check
@@ -598,4 +555,50 @@ struct FeedContext: Equatable {
     var myID: String = ""
     var friendIDs: Set<String> = []
     var blockedIDs: Set<String> = []
+}
+
+// MARK: - Photos
+
+// An extension, not the class body, so the class stays under SwiftLint's type_body_length limit.
+extension HomeStore {
+    /// Uploads prepared JPEGs in parallel and returns their URLs in the given order, since `photoURLs[0]` is
+    /// the cover. All or nothing: on any failure the ones that did land are removed again and the error rethrown.
+    func uploadPhotos(_ images: [Data], listingID: String, hostUserID: String) async throws -> [URL] {
+        guard !images.isEmpty else { return [] }
+        let uploader = photoUploader
+        var urls = [URL?](repeating: nil, count: images.count)
+        do {
+            try await withThrowingTaskGroup(of: (offset: Int, url: URL).self) { group in
+                for (offset, data) in images.enumerated() {
+                    group.addTask {
+                        (offset, try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID))
+                    }
+                }
+                for try await (offset, url) in group { urls[offset] = url }
+            }
+        } catch {
+            log.error("photo upload error: \(error.localizedDescription, privacy: .public)")
+            await deletePhotos(urls.compactMap { $0?.absoluteString })
+            throw error
+        }
+        return urls.compactMap { $0 }
+    }
+
+    /// Best-effort removal of photos a listing no longer references. Failures are logged, not thrown: the
+    /// listing already saved, and the listing-deletion cascade sweeps the folder later anyway.
+    func deletePhotos(_ urlStrings: [String]) async {
+        let uploader = photoUploader
+        await withTaskGroup(of: Void.self) { group in
+            for string in urlStrings {
+                guard let url = URL(string: string) else { continue }
+                group.addTask {
+                    do {
+                        try await uploader.delete(photoURL: url)
+                    } catch {
+                        AppLog.logger("homes").info("photo delete failed: \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+            }
+        }
+    }
 }
