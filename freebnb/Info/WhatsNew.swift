@@ -51,11 +51,14 @@ enum WhatsNew {
                     title: "Real availability, not just yes or no",
                     detail: "Hosts set exactly which dates are open, and the calendar fills itself in as stays are accepted.",
                     longRead: """
-                    When you pick dates for a stay request, the days a host can't have guests show up greyed out, right there in the date picker. You see them before you send anything, so the dates you ask for are dates that can actually work.
+                    When you pick dates for a stay request, the days a host can't have guests show up greyed out, right there in the date \
+                    picker. You see them before you send anything, so the dates you ask for are dates that can actually work.
 
-                    It's a small thing that saves an awkward back-and-forth. Instead of asking "are you free in June?" and waiting, you can open the request sheet, see what's open, and pick from that.
+                    It's a small thing that saves an awkward back-and-forth. Instead of asking "are you free in June?" and waiting, you can \
+                    open the request sheet, see what's open, and pick from that.
 
-                    Hosting? Keep your blocked dates current from your listing's settings. Blocking a week you'll be traveling, or that you simply want to yourself, is the easiest way to get requests for times you can actually say yes to.
+                    Hosting? Keep your blocked dates current from your listing's settings. Blocking a week you'll be traveling, or that you \
+                    simply want to yourself, is the easiest way to get requests for times you can actually say yes to.
                     """
                 ),
                 ReleaseHighlight(
@@ -93,13 +96,21 @@ enum WhatsNew {
                 ReleaseHighlight(
                     icon: "message.fill",
                     title: "Message and request, all in one chat",
-                    detail: "Reach out to a host and request your stay in the same conversation. They accept or decline right there, and every trip you take and guest you host lives in the Stays tab.",
+                    detail: """
+                        Reach out to a host and request your stay in the same conversation. They accept or decline right there, and every \
+                        trip you take and guest you host lives in the Stays tab.
+                        """,
                     longRead: """
                     FreeBNB doesn't have a "book now" button, and it never will. A stay here starts the way it would in real life: you say hello.
 
-                    Open a listing and tap Message. That drops you into a conversation with the host, and once you're there you'll find a Request a Stay button right in the chat. Pick your dates, send it over, and the host accepts or declines without either of you leaving the thread.
+                    Open a listing and tap Message. That drops you into a conversation with the host, and once you're there you'll find a \
+                    Request a Stay button right in the chat. Pick your dates, send it over, and the host accepts or declines without either \
+                    of you leaving the thread.
 
-                    Why do it this way? Because you're staying with someone you know, or someone a friend knows. A quick message ("hey, would the last week of August work?") is warmer, and it means the details get sorted before anyone commits. Everything about a stay, the request, the yes, the check-in notes, lives in that one conversation, so you never have to go hunting for it later.
+                    Why do it this way? Because you're staying with someone you know, or someone a friend knows. A quick message ("hey, \
+                    would the last week of August work?") is warmer, and it means the details get sorted before anyone commits. Everything \
+                    about a stay, the request, the yes, the check-in notes, lives in that one conversation, so you never have to go hunting \
+                    for it later.
                     """
                 ),
                 ReleaseHighlight(
@@ -107,11 +118,16 @@ enum WhatsNew {
                     title: "See everything before you go",
                     detail: "Check a host's availability, read reviews from past guests, and unlock the exact address and house manual the moment your stay is accepted.",
                     longRead: """
-                    Look at any listing before you've been accepted and you'll see the city and a soft circle on the map, not a street address. That's deliberate.
+                    Look at any listing before you've been accepted and you'll see the city and a soft circle on the map, not a street \
+                    address. That's deliberate.
 
-                    A home someone has opened up to friends isn't a hotel, and its exact location isn't public information. So until a host accepts your stay, FreeBNB shows only the general area, enough to know whether a place is convenient, not enough to find someone's front door.
+                    A home someone has opened up to friends isn't a hotel, and its exact location isn't public information. So until a host \
+                    accepts your stay, FreeBNB shows only the general area, enough to know whether a place is convenient, not enough to find \
+                    someone's front door.
 
-                    The moment your stay is accepted, the exact address unlocks, the map pin snaps to the real spot, and the host's house manual (check-in details, wifi, quirks of the place) becomes available to you. It's the digital version of a friend handing you the keys once you've made a plan.
+                    The moment your stay is accepted, the exact address unlocks, the map pin snaps to the real spot, and the host's house \
+                    manual (check-in details, wifi, quirks of the place) becomes available to you. It's the digital version of a friend \
+                    handing you the keys once you've made a plan.
                     """
                 ),
                 ReleaseHighlight(

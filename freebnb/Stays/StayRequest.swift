@@ -293,6 +293,17 @@ extension [StayRequest] {
         filter { $0.awaitsReply(from: userID) }.count
     }
 
+    /// The one stay live enough to headline: an accepted stay with a real `StayPhase`,
+    /// soonest check-in first. Shared by the Live Activity and the Stays tab banner.
+    func liveStay(now: Date = Date()) -> (stay: StayRequest, phase: StayPhase)? {
+        filter { $0.status == .accepted }
+            .compactMap { stay -> (stay: StayRequest, phase: StayPhase)? in
+                guard let phase = StayPhase.current(checkIn: stay.checkIn, checkOut: stay.checkOut, now: now) else { return nil }
+                return (stay, phase)
+            }
+            .min { $0.stay.checkIn < $1.stay.checkIn }
+    }
+
     /// Newest first; requests without a server timestamp sort to the front.
     func sortedByDate() -> [StayRequest] {
         sorted {

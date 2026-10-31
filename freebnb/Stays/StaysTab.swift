@@ -25,7 +25,6 @@ struct StaysTab: View {
     @State private var modifying: StayRequest?
     @State private var completing: StayRequest?
     // An accepted stay about to be called off by the guest; asks first, unlike a pending cancel.
-    // An accepted stay about to be called off by the guest; asks first, unlike a pending cancel.
     @State private var cancelling: StayRequest?
     // A host cancelling goes through `hostCancelling`, which tells the guest and offers a note.
     @State private var hostCancelling: StayRequest?
@@ -33,16 +32,6 @@ struct StaysTab: View {
     @State private var selectedTab: StaysTabSelection = .trips
     @State private var showPastTrips = false
     @State private var showPastHosting = false
-
-    enum StaysTabSelection { case trips, listings }
-
-    /// A stay plus the role the signed-in user reviews it in.
-    struct ReviewTarget: Identifiable {
-        let stay: StayRequest
-        let role: ReviewRole
-        let subjectName: String
-        var id: String { stay.id }
-    }
 
     // Outgoing (guest / traveler)
     private var pendingOut:  [StayRequest] { requestStore.outgoingRequests.filter { $0.status == .pending  } }
@@ -64,17 +53,9 @@ struct StaysTab: View {
     private var inProgressIn:  [StayRequest] { acceptedIn.filter { $0.isUnderway() } }
     private var upcomingIn:    [StayRequest] { acceptedIn.filter { !$0.isUnderway() } }
 
-    /// The one stay live enough to headline: an accepted stay with a real
-    /// `StayPhase`, soonest check-in first. Same selection as the Live Activity.
+    /// The one stay live enough to headline; same selection as the Live Activity.
     private var liveStay: (stay: StayRequest, phase: StayPhase)? {
-        (requestStore.incomingRequests + requestStore.outgoingRequests)
-            .filter { $0.status == .accepted }
-            .compactMap { stay -> (StayRequest, StayPhase)? in
-                guard let phase = StayPhase.current(checkIn: stay.checkIn, checkOut: stay.checkOut) else { return nil }
-                return (stay, phase)
-            }
-            .min { $0.0.checkIn < $1.0.checkIn }
-            .map { (stay: $0.0, phase: $0.1) }
+        (requestStore.incomingRequests + requestStore.outgoingRequests).liveStay()
     }
 
     /// Finished stays not yet reviewed; empty until `ReviewStore` knows what's been written.
@@ -208,49 +189,16 @@ struct StaysTab: View {
     @ViewBuilder
     private func tripsView(awaitingReview: [StayRequest]) -> some View {
         if let error = requestStore.listenerError {
-            listenerErrorState(error)
+            StaysLoadErrorView(error: error) { requestStore.reload() }
         } else if requestStore.isLoadingIncoming && !hasTripsContent {
             // The listener clears the lists on an account switch and refills them a round
             // trip later; "No trips yet" in that gap would be wrong.
-            loadingState
+            StaysLoadingView()
         } else if !hasTripsContent {
-            emptyState
+            NoTripsView()
         } else {
             staysList(awaitingReview: awaitingReview)
         }
-    }
-
-    private var loadingState: some View {
-        ProgressView()
-            .controlSize(.large)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.primaryBackground.ignoresSafeArea())
-            .accessibilityLabel("Loading stays")
-    }
-
-    private func listenerErrorState(_ error: String) -> some View {
-        ContentUnavailableView {
-            Label("Couldn't load stays", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.danger)
-        } description: {
-            Text(error)
-                .font(.caption)
-            Button("Retry") { requestStore.reload() }
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(Color.accent)
-                .padding(.top, 8)
-        }
-        .background(Color.primaryBackground.ignoresSafeArea())
-    }
-
-    private var emptyState: some View {
-        EmptyStateView(
-            title: "No trips yet",
-            systemImage: "suitcase",
-            message: "Open a listing, message the host, and request to stay. Your trips appear here."
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.primaryBackground.ignoresSafeArea())
     }
 
     private func staysList(awaitingReview: [StayRequest]) -> some View {
@@ -393,23 +341,10 @@ struct StaysTab: View {
         }
     }
 
-    private func pastToggleRow(isShown: Binding<Bool>, label: String) -> some View {
-        Section {
-            Button {
-                withAnimation { isShown.wrappedValue.toggle() }
-            } label: {
-                Label(isShown.wrappedValue ? "Hide \(label)" : "Show \(label)",
-                      systemImage: isShown.wrappedValue ? "chevron.up" : "chevron.down")
-                    .font(.subheadline)
-                    .foregroundColor(.secondaryText)
-            }
-        }
-    }
-
     @ViewBuilder
     private var pastTripsSection: some View {
         if !pastOut.isEmpty {
-            pastToggleRow(isShown: $showPastTrips, label: "past trips")
+            PastStaysToggle(isShown: $showPastTrips, label: "past trips")
             if showPastTrips {
                 Section("Past trips") {
                     ForEach(pastOut, id: \.id) { req in outgoingRow(req) }
@@ -421,7 +356,7 @@ struct StaysTab: View {
     @ViewBuilder
     private var pastHostingSection: some View {
         if !pastIn.isEmpty {
-            pastToggleRow(isShown: $showPastHosting, label: "past hosting")
+            PastStaysToggle(isShown: $showPastHosting, label: "past hosting")
             if showPastHosting {
                 Section("Past hosting") {
                     ForEach(pastIn, id: \.id) { req in incomingRow(req) }
@@ -647,34 +582,13 @@ extension StaysTab {
 
     /// Who a note composed here is about: always a guest of the host's.
     private func noteSubjectName(for composition: FriendNoteComposition) -> String {
-        switch composition {
-        case .new(let friendID, _):
-            return userProfileStore.displayName(for: friendID) ?? "FreeBNB User"
-        case .editing(let note):
-            return userProfileStore.displayName(for: note.subjectUserID) ?? "FreeBNB User"
-        }
+        userProfileStore.displayName(for: composition.subjectUserID) ?? "FreeBNB User"
     }
 
     /// What a trip note is about: always a listing the guest stayed at, labelled
     /// from the cache or else the trip's denormalized label.
     private func tripNoteSubjectName(for composition: GuestNoteComposition) -> String {
-        switch composition {
-        case .new(_, let subjectID, let stayRequestID):
-            if let home = homeStore.listings.first(where: { $0.id == subjectID }) {
-                return home.displayTitle
-            }
-            // Not in the guest's cached set (it's the host's); use the label the stay snapshotted.
-            if let stayRequestID,
-               let stay = requestStore.outgoingRequests.first(where: { $0.id == stayRequestID }) {
-                return stay.listingLabel
-            }
-            return "this listing"
-        case .editing(let note):
-            if let home = homeStore.listings.first(where: { $0.id == note.subjectID }) {
-                return home.displayTitle
-            }
-            return "this listing"
-        }
+        composition.subjectName(listings: homeStore.listings, trips: requestStore.outgoingRequests)
     }
 
     /// The other party's name: the host's listing name for a guest, the guest's profile name for a host.
@@ -769,95 +683,6 @@ extension StaysTab {
     private func openConversation(for request: StayRequest) {
         router.pendingConversationUserID =
             request.hostUserID == authManager.userID ? request.guestUserID : request.hostUserID
-    }
-}
-
-// Every stay row gets a jump into the conversation: a swipe plus a context menu, as in YourListingsPage.
-private extension View {
-    func stayConversationActions(name: String, open: @escaping () -> Void) -> some View {
-        self
-            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                Button(action: open) {
-                    Label("Message", systemImage: "message")
-                }
-                .tint(.accent)
-            }
-            .contextMenu {
-                Button(action: open) {
-                    Label("Message \(name)", systemImage: "message")
-                }
-            }
-    }
-}
-
-// MARK: - Mode switcher
-
-/// Two full-width filled pills replacing the system segmented control, which
-/// went unnoticed in the nav bar; a badge marks the pane that owes the user something.
-private struct StaysModeSwitcher: View {
-    @Binding var selection: StaysTab.StaysTabSelection
-    let tripsBadge: Int
-    let listingsBadge: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            segment(
-                title: "My Trips",
-                systemImage: "suitcase.fill",
-                badge: tripsBadge,
-                isSelected: selection == .trips
-            ) {
-                selection = .trips
-            }
-            segment(
-                title: "My Listings",
-                systemImage: "house.fill",
-                badge: listingsBadge,
-                isSelected: selection == .listings
-            ) {
-                selection = .listings
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
-        .background(Color.primaryBackground)
-    }
-
-    private func segment(
-        title: String,
-        systemImage: String,
-        badge: Int,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            withAnimation(.snappy(duration: 0.2)) { action() }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                Text(title)
-                if badge > 0 {
-                    Text("\(badge)")
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(isSelected ? Color.onAccent.opacity(0.3) : Color.callToAction, in: Capsule())
-                        .foregroundColor(isSelected ? Color.onAccent : .white)
-                }
-            }
-            .font(.subheadline.weight(.semibold))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .foregroundColor(isSelected ? Color.onAccent : .primary)
-            .background(
-                isSelected ? Color.accent : Color.secondaryBackground,
-                in: Capsule()
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityLabel(badge > 0 ? "\(title), \(badge) need\(badge == 1 ? "s" : "") your attention" : title)
     }
 }
 
