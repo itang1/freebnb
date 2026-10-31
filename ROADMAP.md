@@ -30,6 +30,9 @@ The repository seam (`Shared/*Repository.swift`) means a migration is possible l
 
 ## Now: launch blockers
 
+### 0. Get CI green on `main`
+The "Build & test (iOS)" job has failed on every recent push to `main`. SwiftLint reports 11 serious violations (for example `StaysTab.swift` at 869 lines against the 700-line `file_length` error limit, a struct body at 402 lines against the 400-line limit, and several lines over 200 characters), and because lint runs first, the iOS build and tests never run. Fix the violations (splitting `StaysTab.swift` overlaps with item 5) or pin the SwiftLint version, so every later PR gets a real test signal.
+
 ### 1. Ship listing photos
 A home-sharing app without photos is the single largest product gap. Everything around it is already built: `Home.photoURLs` decodes, `storage.rules` is written and scoped per host and listing, and `PhotoUploader` is a protocol with a `NoopPhotoUploader` default that throws.
 - Implement a `FirebaseStoragePhotoUploader` with **random per-upload filenames** (UUIDs). `storage.rules` already relies on unguessable paths and notes this as a requirement.
@@ -93,6 +96,7 @@ The friend graph makes cross-platform reach matter: a friend on Android cannot s
 
 | # | Item | Size | Why first |
 |---|------|------|-----------|
+| 0 | Green CI on main | S | Every PR after it gets a real test signal |
 | 1 | Ship listing photos | M | Biggest product gap; seams already built |
 | 3 | App Check enforcement | S | Console change plus docs; protects the rules |
 | 2 | Lock photos to friends | M | Keeps the friends-only promise once photos exist |
