@@ -41,6 +41,7 @@ struct CreateListingPage: View {
                 }
 
                 titleSection
+                ListingPhotosSection(vm: vm, canEdit: vm.canEditPhotos(userID: authManager.userID))
                 locationSection
                 capacitySection
                 sleepingSection

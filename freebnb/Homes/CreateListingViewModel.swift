@@ -8,6 +8,7 @@
 
 import CoreLocation
 import Observation
+import UIKit
 
 
 @MainActor
@@ -79,6 +80,15 @@ final class CreateListingViewModel {
     // True once an unfinished draft was restored, so the view can say so and offer a way out.
     var restoredDraft = false
 
+    // Photos, in display order; the first is the cover. Not part of the autosaved draft (too large for it).
+    var photos: [ListingPhotoItem] = []
+    var isUploadingPhotos = false
+    // What the stored listing referenced when the form opened, so a save can delete the ones the host removed.
+    let originalPhotoURLs: [String]
+    // A new listing's id, fixed for the life of the form: photos upload under it before the document exists,
+    // so a retry after a failed save must reuse it rather than mint another and strand the first uploads.
+    private let newListingID = UUID().uuidString
+
     init(mode: ListingFormMode = .create) {
         self.mode = mode
         let source = mode.source
@@ -126,6 +136,10 @@ final class CreateListingViewModel {
         hostContactInfo = source?.hostContactInfo ?? ""
         hostMotivation = source?.hostMotivation ?? .open
         cancellationPolicy = source?.cancellationPolicy ?? .flexible
+        // Only an edit keeps photos. A duplicate is a new listing, and its photos must live under its own
+        // Storage folder, or deleting the original would take them with it.
+        originalPhotoURLs = mode.target?.photoURLs ?? []
+        photos = originalPhotoURLs.map { ListingPhotoItem(source: .stored($0)) }
     }
 
     /// Loads the street from the seed listing's private location document (the
@@ -240,6 +254,7 @@ final class CreateListingViewModel {
     /// Empties the form and forgets the draft behind it.
     func discardDraft(from store: ListingDraftStore, userID: String) {
         draft = ListingDraft()
+        photos = []
         restoredDraft = false
         store.clear(userID: userID)
     }
@@ -346,6 +361,7 @@ final class CreateListingViewModel {
 
         let trimmedStreet = street.trimmingCharacters(in: .whitespaces)
         var home = makeHome(hostUserID: hostUserID, hostName: hostName, friendIDs: friendIDs)
+        if mode.target == nil { home.id = newListingID }
 
         // Geocode for the map pin via the shared cache (respecting CLGeocoder's rate
         // limit). The listing carries a rounded copy; the exact one stays private.
@@ -369,9 +385,13 @@ final class CreateListingViewModel {
             }
         }
 
+        let editsPhotos = canEditPhotos(userID: hostUserID)
+        if editsPhotos, !(await attachPhotos(to: &home, homeStore: homeStore)) { return false }
+
         do {
             try await homeStore.save(home, location: location)
             Telemetry.log(.createListingCompleted, parameters: ["is_edit": mode.target != nil])
+            if editsPhotos { deleteRemovedPhotos(keeping: home.photoURLs ?? [], homeStore: homeStore) }
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -474,5 +494,117 @@ final class CreateListingViewModel {
             }
         }
         return home
+    }
+}
+
+// MARK: - Photos
+
+/// One photo in the listing form: already stored (a URL on the listing) or picked and prepared but not yet
+/// uploaded.
+struct ListingPhotoItem: Identifiable, Equatable {
+    enum Source: Equatable {
+        case stored(String)
+        case pending(Data)
+    }
+
+    let id = UUID()
+    var source: Source
+    /// A small decoded copy of a pending photo for the form's thumbnail, made once rather than per render.
+    var preview: UIImage?
+
+    init(source: Source) {
+        self.source = source
+        if case .pending(let data) = source { preview = Self.thumbnail(from: data) }
+    }
+
+    var storedURL: String? {
+        if case .stored(let url) = source { return url }
+        return nil
+    }
+
+    private static func thumbnail(from data: Data) -> UIImage? {
+        guard let image = UIImage(data: data) else { return nil }
+        let longEdge: CGFloat = 240
+        let scale = min(1, longEdge / max(image.size.width, image.size.height))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        return image.preparingThumbnail(of: size) ?? image
+    }
+}
+
+extension CreateListingViewModel {
+    /// Mirrors `isOptionalList(data, 'photoURLs', 10)` in firestore.rules.
+    static let maxPhotos = 10
+
+    var remainingPhotoSlots: Int { max(0, Self.maxPhotos - photos.count) }
+
+    /// Only the host uploads: storage.rules admits writes under `listings/{hostUserID}/` from that uid alone,
+    /// so a co-host's form keeps the stored photos as they are.
+    func canEditPhotos(userID: String) -> Bool {
+        guard let existing = mode.target else { return true }
+        return existing.isHostedBy(userID)
+    }
+
+    /// Appends a photo already run through `ListingPhotoProcessor`. Ignored once the listing is full.
+    func addPhoto(_ preparedJPEG: Data) {
+        guard remainingPhotoSlots > 0 else { return }
+        photos.append(ListingPhotoItem(source: .pending(preparedJPEG)))
+    }
+
+    func removePhotos(at offsets: IndexSet) {
+        photos.remove(atOffsets: offsets)
+    }
+
+    func removePhoto(id: ListingPhotoItem.ID) {
+        photos.removeAll { $0.id == id }
+    }
+
+    func movePhotos(from source: IndexSet, to destination: Int) {
+        photos.move(fromOffsets: source, toOffset: destination)
+    }
+
+    func makeCover(id: ListingPhotoItem.ID) {
+        guard let index = photos.firstIndex(where: { $0.id == id }), index > 0 else { return }
+        photos.insert(photos.remove(at: index), at: 0)
+    }
+
+    /// Uploads pending photos and points `home` at the full ordered list; false (with `errorMessage` set) when an
+    /// upload failed and nothing should be written.
+    func attachPhotos(to home: inout Home, homeStore: HomeStore) async -> Bool {
+        do {
+            let urls = try await uploadPendingPhotos(homeStore: homeStore, listingID: home.id, hostUserID: home.hostUserID)
+            home.photoURLs = urls.isEmpty ? nil : urls
+            return true
+        } catch {
+            errorMessage = "We couldn't upload your photos. Check your connection and tap Save to try again."
+            return false
+        }
+    }
+
+    /// After a save lands, removes from Storage the photos the host took off the listing. Fire and forget: the
+    /// sheet shouldn't wait on cleanup.
+    func deleteRemovedPhotos(keeping kept: [String], homeStore: HomeStore) {
+        let keptSet = Set(kept)
+        let removed = originalPhotoURLs.filter { !keptSet.contains($0) }
+        guard !removed.isEmpty else { return }
+        Task { await homeStore.deletePhotos(removed) }
+    }
+
+    /// Uploads every pending photo and returns the full ordered URL list. Uploaded items become `.stored` so a
+    /// retry after a failed document save doesn't upload them twice.
+    func uploadPendingPhotos(homeStore: HomeStore, listingID: String, hostUserID: String) async throws -> [String] {
+        let pending = photos.enumerated().compactMap { offset, item -> (offset: Int, data: Data)? in
+            if case .pending(let data) = item.source { return (offset, data) }
+            return nil
+        }
+        if !pending.isEmpty {
+            isUploadingPhotos = true
+            defer { isUploadingPhotos = false }
+            let urls = try await homeStore.uploadPhotos(pending.map(\.data), listingID: listingID, hostUserID: hostUserID)
+            for (entry, url) in zip(pending, urls) where photos.indices.contains(entry.offset) {
+                photos[entry.offset].source = .stored(url.absoluteString)
+                photos[entry.offset].preview = nil
+            }
+        }
+        return photos.compactMap(\.storedURL)
     }
 }

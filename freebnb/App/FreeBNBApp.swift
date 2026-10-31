@@ -10,6 +10,7 @@ import FirebaseCore
 import FirebaseFirestore
 import FirebaseFunctions
 import FirebaseMessaging
+import FirebaseStorage
 import GoogleSignIn
 import SwiftUI
 import UserNotifications
@@ -61,7 +62,7 @@ struct FreeBNBApp: App {
         Telemetry.configure()
         Messaging.messaging().isAutoInitEnabled = true
         _authManager = State(initialValue: AuthManager())
-        _homeStore = State(initialValue: HomeStore())
+        _homeStore = State(initialValue: HomeStore(photoUploader: FirebaseStoragePhotoUploader()))
         _messageStore = State(initialValue: MessageStore())
         _userProfileStore = State(initialValue: UserProfileStore())
         _stayRequestStore = State(initialValue: StayRequestStore())
@@ -112,8 +113,8 @@ struct FreeBNBApp: App {
         }
     }
 
-    // Points Auth and Firestore at the emulator (see EmulatorEnvironment) so automated runs never write real
-    // data. DEBUG-only.
+    // Points Auth, Firestore, Functions and Storage at the emulator (see EmulatorEnvironment) so automated runs
+    // never write real data. DEBUG-only.
 #if DEBUG
     private static func configureEmulatorIfRequested() {
         guard EmulatorEnvironment.isActive else { return }
@@ -125,6 +126,7 @@ struct FreeBNBApp: App {
         settings.cacheSettings = MemoryCacheSettings()
         Firestore.firestore().settings = settings
         Functions.functions().useEmulator(withHost: host, port: 5001)
+        Storage.storage().useEmulator(withHost: host, port: 9199)
     }
 #endif
 

@@ -2,7 +2,7 @@
 #
 # dev_emulator.sh — one-touch local backend for FreeBNB.
 #
-# Boots the Firebase Local Emulator Suite (Auth + Firestore, plus Functions when
+# Boots the Firebase Local Emulator Suite (Auth + Firestore + Storage, plus Functions when
 # they build) and seeds the SpongeBob demo data. That demo data includes the two
 # accounts behind the DEBUG-only "Sign in as devna" / "Sign in as guest" buttons
 # on the welcome screen, so after this runs those buttons work without ever
@@ -84,9 +84,9 @@ fi
 
 # Functions are optional for the sign-in buttons; include them only if the
 # TypeScript compiles, so a functions build error can't block local sign-in.
-EMULATORS="auth,firestore"
+EMULATORS="auth,firestore,storage"
 if (cd functions && npm run build) >"$LOG_DIR/functions-build.log" 2>&1; then
-  EMULATORS="auth,firestore,functions"
+  EMULATORS="auth,firestore,storage,functions"
 else
   echo "Functions did not build; starting without them (see .emulator/functions-build.log)."
 fi

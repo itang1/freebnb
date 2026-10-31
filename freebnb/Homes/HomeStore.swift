@@ -453,30 +453,46 @@ final class HomeStore {
         return failed
     }
 
-    /// Uploads attached images in parallel, then saves the listing with their URLs.
-    func createListing(home: Home, images: [Data]) async throws {
-        var updated = home
-        if !images.isEmpty {
-            let urls = try await uploadImages(images, for: home)
-            updated.photoURLs = urls.map(\.absoluteString)
+    // MARK: - Photos
+
+    /// Uploads prepared JPEGs in parallel and returns their URLs in the given order, since `photoURLs[0]` is
+    /// the cover. All or nothing: on any failure the ones that did land are removed again and the error rethrown.
+    func uploadPhotos(_ images: [Data], listingID: String, hostUserID: String) async throws -> [URL] {
+        guard !images.isEmpty else { return [] }
+        let uploader = photoUploader
+        var urls = [URL?](repeating: nil, count: images.count)
+        do {
+            try await withThrowingTaskGroup(of: (offset: Int, url: URL).self) { group in
+                for (offset, data) in images.enumerated() {
+                    group.addTask {
+                        (offset, try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID))
+                    }
+                }
+                for try await (offset, url) in group { urls[offset] = url }
+            }
+        } catch {
+            log.error("photo upload error: \(error.localizedDescription, privacy: .public)")
+            await deletePhotos(urls.compactMap { $0?.absoluteString })
+            throw error
         }
-        try await save(updated)
+        return urls.compactMap { $0 }
     }
 
-    /// Uploads in parallel but returns URLs in the given order, since `photoURLs[0]` is the cover.
-    private func uploadImages(_ images: [Data], for home: Home) async throws -> [URL] {
+    /// Best-effort removal of photos a listing no longer references. Failures are logged, not thrown: the
+    /// listing already saved, and the listing-deletion cascade sweeps the folder later anyway.
+    func deletePhotos(_ urlStrings: [String]) async {
         let uploader = photoUploader
-        let listingID = home.id
-        let hostUserID = home.hostUserID
-        return try await withThrowingTaskGroup(of: (offset: Int, url: URL).self) { group in
-            for (offset, data) in images.enumerated() {
+        await withTaskGroup(of: Void.self) { group in
+            for string in urlStrings {
+                guard let url = URL(string: string) else { continue }
                 group.addTask {
-                    (offset, try await uploader.upload(imageData: data, listingID: listingID, hostUserID: hostUserID))
+                    do {
+                        try await uploader.delete(photoURL: url)
+                    } catch {
+                        AppLog.logger("homes").info("photo delete failed: \(error.localizedDescription, privacy: .public)")
+                    }
                 }
             }
-            var urls = [URL?](repeating: nil, count: images.count)
-            for try await (offset, url) in group { urls[offset] = url }
-            return urls.compactMap { $0 }
         }
     }
 
