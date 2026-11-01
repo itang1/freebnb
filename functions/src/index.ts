@@ -598,8 +598,10 @@ export const moderateListingContent = onDocumentWritten(homeDocPattern, async (e
  * Callables are also declared with `enforceAppCheck`, which is the other half:
  * firestore.rules names App Check as its primary control against a hand-rolled
  * client in two places, and a callable that skipped it would be the way around
- * both. Note that Firestore-side App Check enforcement is a console setting, not
- * anything in this repo — see docs/internal/TODO.md.
+ * both. Firestore- and Storage-side App Check enforcement are console settings,
+ * not anything in this repo; the pre-launch checklist for turning them on, debug
+ * tokens, and verifying it is in README.md under "Before launch: App Check
+ * enforcement".
  */
 function requireFullMember(request: CallableRequest): string {
   const uid = request.auth?.uid;

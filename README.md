@@ -80,6 +80,26 @@ npm run deploy         # deploy functions
 
 Deploy rules and indexes with `firebase deploy --only firestore:rules,firestore:indexes`. The moderation queue in `admin/` is a static page over the `reports` collection; grant access with `scripts/set_admin_claim.js`.
 
+### Before launch: App Check enforcement
+
+Callables enforce App Check in code (`enforceAppCheck: true` in `functions/src/index.ts`). Firestore and Storage do not: their enforcement is a per-project switch in the Firebase console, and nothing in this repo turns it on. `firestore.rules` names App Check as its primary control against hand-rolled clients, so until both switches are on, anyone with a signed-in account and the public API key can call Firestore and Storage directly and only the rules stand in the way.
+
+Work through this list on the production project before launch, in order:
+
+1. **Give the Release build the App Attest capability.** The Release provider is `AppAttestProvider` (`freebnb/App/FreeBNBApp.swift`), which needs the App Attest capability on the App ID and the `com.apple.developer.devicecheck.appattest-environment` entitlement (`production` for App Store and TestFlight builds). `freebnb/freebnb.entitlements` does not have it yet. Without it every Release token request fails, and turning on enforcement would lock out real users.
+2. **Register the app for App Check.** Firebase console → App Check → Apps → the iOS app → App Attest, and enter the Team ID. If Debug builds use the `.debug` bundle ID against the same project, register that app too (it only needs debug tokens, see below).
+3. **Watch the metrics before enforcing.** App Check → APIs shows verified and unverified requests for Cloud Firestore and Cloud Storage. Ship a Release build with the entitlement, and wait until traffic from current builds shows as verified. Anything still unverified at that point is an old build or a client that is not the app.
+4. **Turn on enforcement for Cloud Firestore and Cloud Storage.** App Check → APIs → each service → Enforce. It can take up to 15 minutes to apply. Callables already reject unattested calls, so there is nothing to switch for Functions.
+5. **Verify** (next section).
+
+**Debug tokens for development and CI.** The simulator cannot do App Attest, so Debug builds use `AppCheckDebugProviderFactory`. Set `FIRAAppCheckDebugToken` in your own scheme's environment variables (Edit Scheme → Run → Arguments), or run once and copy the token the SDK logs to the console, then add it under App Check → Apps → the iOS app → Manage debug tokens. Once enforcement is on, a Debug build pointed at the real project without a registered token gets permission errors from every Firestore and Storage call. Treat these tokens as secrets: keep them out of shared schemes and the repo, use one per developer or machine so each can be revoked alone, and revoke any that leaks. CI runs against the local emulators with `.github/ci/GoogleService-Info.ci.plist`, and the emulators do not check App Check, so CI needs no token today. If a job ever talks to a real Firebase project, store its debug token as a GitHub Actions secret and register it like any other.
+
+**Verify enforcement.** After the switches have had time to apply:
+
+- A Release build on a physical device can browse, open a listing with photos, upload a photo, and call a callable without errors.
+- A request without an App Check token is refused. With a valid Firebase ID token for a full account, call the Firestore REST API and the Storage download URL for an object you can normally read, leaving out the `X-Firebase-AppCheck` header. Both should be rejected with an unauthorized or permission error rather than data. The same request was allowed before enforcement, which is how you know the switch, not the rules, is doing the refusing.
+- App Check → APIs now shows unverified requests to Firestore and Storage as rejected rather than allowed.
+
 ### Tests
 
 - **Unit and UI tests**: Cmd-U in Xcode. `freebnbTests` exercises the stores against in-memory repositories, so unit tests never touch Firestore or production data. `freebnbUITests` covers launch and core flows.
