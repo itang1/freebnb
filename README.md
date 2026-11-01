@@ -49,9 +49,17 @@ Stores never talk to Firestore directly. Each one depends on a repository protoc
 
 The backend is intentionally thin. Firestore security rules are the real authorization boundary (guests can read but not write, blocked users cannot message, message sends are rate-limited in the write path, private profile data is owner-only). Cloud Functions handle what clients can't be trusted with: maintaining listing ACLs as the friend graph changes, push notification fan-out, the stay lifecycle, content moderation for listings and messages, friend suggestions, the account-deletion cascade, user data export, and a daily scheduled Firestore backup.
 
-## Design palette
+## Design theme
 
-The visual theme is "summer lakeside cabin": sandy neutrals, lake and sky blues, and a sunset-coral accent. Colorsets live in the `Color/` namespace of `freebnb/Assets.xcassets` with light and dark variants, named by semantic role rather than hue. `Shared/AppColor.swift` is the single Swift interface (`Color.accent`, `UIColor.app(.accent)`), so views reference roles and never hardcode hex values.
+The visual theme is "lagoon lakehouse": a sunny beach-shack vacation, with sun-bleached sand, lagoon teal, reef coral, sunshine yellow and weathered driftwood (a night lagoon in dark mode). Everything lives in a small token layer so the vibe can be retuned without touching screens:
+
+| Layer | Where | What |
+|-------|-------|------|
+| Colour | `Assets.xcassets/Color/`, `Shared/AppColor.swift` | Semantic roles with light and dark variants (`Color.accent`, `UIColor.app(.accent)`); views never hardcode hex values. `PaletteContrastTests` holds every text pairing to WCAG 4.5:1. |
+| Type, shape, chrome | `Shared/Theme/Theme.swift` | Rounded display face plus a serif "postcard" voice (all Dynamic Type text styles), corner radii, card shadow, the `.lagoon` button style, and navigation/tab bar styling. |
+| Motifs | `Shared/Theme/Motifs.swift`, `LakehouseHero.swift` | Original shapes drawn in code: sky flowers, waves, bubbles, dock planks, the page backdrop and the welcome-screen lakehouse. No image assets or third-party artwork. |
+| Motion | `Shared/Theme/ThemeMotion.swift`, `Shared/Motion.swift` | Gentle bobbing and drifting bubbles; all ambient motion stops under Reduce Motion. |
+| Voice | `Shared/Theme/ThemeCopy.swift` | Tab labels, screen titles, onboarding, empty states and status copy in the house voice: plain meaning first, light pun second, never cute about errors or safety. |
 
 ## Getting started
 

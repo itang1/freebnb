@@ -243,7 +243,7 @@ struct HomesPage: View {
                             if paging.isSearchingRemainingPages && filteredListings.isEmpty {
                                 VStack(spacing: 10) {
                                     ProgressView()
-                                    Text("Searching all listings…")
+                                    Text(ThemeCopy.Status.searchingFeed)
                                         .font(.subheadline)
                                         .foregroundColor(.secondaryText)
                                 }
@@ -269,7 +269,7 @@ struct HomesPage: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
-        .background(.primaryBackground)
+        .lagoonBackground()
         // A new query gets a fresh page budget; the fetched pages stay in the store.
         .onChange(of: citySearch) { _, _ in searchPagesLoaded = 0 }
         .onChange(of: selectedFilters) { _, _ in searchPagesLoaded = 0 }
@@ -288,7 +288,7 @@ struct HomesPage: View {
             radiusMiles = nil
             if selectedSort == .nearest { selectedSort = .default }
         }
-        .navigationTitle("Available FreeBNBs")
+        .navigationTitle(ThemeCopy.Title.explore)
         .toolbar { mapToolbarItem }
         .sheet(isPresented: $showMap) {
             ListingsMapView(listings: listings) { home in
@@ -331,10 +331,10 @@ private extension HomesPage {
     var emptyStateView: some View {
         VStack(spacing: 16) {
             Spacer().frame(height: 40)
-            EmptyStateMedallion(systemImage: "house.lodge.fill")
+            EmptyStateMedallion(systemImage: ThemeCopy.Tab.exploreIcon)
             Text(emptyStateTitle)
-                .font(.title3)
-                .fontWeight(.semibold)
+                .font(.display(.title3))
+                .multilineTextAlignment(.center)
             emptyStateMessage
         }
         .padding()
@@ -429,9 +429,9 @@ private extension HomesPage {
 
     var emptyStateTitle: String {
         if isUnfilteredEmptyFeed && friendStore.friendEdges.isEmpty {
-            return "Homes come from friends"
+            return ThemeCopy.Empty.feedNoFriendsTitle
         }
-        return "No homes found"
+        return ThemeCopy.Empty.feedNoMatchesTitle
     }
 
     @ViewBuilder

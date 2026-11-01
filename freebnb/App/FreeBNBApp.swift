@@ -60,6 +60,8 @@ struct FreeBNBApp: App {
         // Enable crash and analytics collection; must follow configure() and the emulator check above.
         Telemetry.configure()
         Messaging.messaging().isAutoInitEnabled = true
+        // Bar fonts and colours are UIKit appearance proxies, so they must be set before the first bar exists.
+        Theme.configureChrome()
         _authManager = State(initialValue: AuthManager())
         _homeStore = State(initialValue: HomeStore())
         _messageStore = State(initialValue: MessageStore())

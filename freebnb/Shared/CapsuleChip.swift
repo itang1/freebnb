@@ -2,9 +2,9 @@
 //  CapsuleChip.swift
 //  freebnb
 //
-//  The accent-tinted pill used by the feed's filter, sort, radius, and saved
-//  controls. `prominent` marks a control whose setting is active, so the row
-//  reads at a glance which chips are doing something.
+//  The pill used by the feed's filter, sort, radius, and saved controls: lagoon-tinted at rest,
+//  sunshine-yellow when `prominent` marks a control whose setting is active, so the row reads at a
+//  glance which chips are doing something (and the teal-on-teal active state no longer dips below 4.5:1).
 //
 
 import SwiftUI
@@ -16,8 +16,9 @@ extension View {
             .fontWeight(.medium)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.accent.opacity(prominent ? 0.3 : 0.15), in: Capsule())
-            .foregroundColor(Color.accent)
+            .background(prominent ? Color.sunshine : Color.accent.opacity(0.15), in: Capsule())
+            .overlay(Capsule().strokeBorder(prominent ? Color.onSunshine.opacity(0.25) : .clear, lineWidth: 1))
+            .foregroundColor(prominent ? Color.onSunshine : Color.accent)
     }
 }
 

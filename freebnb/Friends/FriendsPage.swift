@@ -39,7 +39,7 @@ struct FriendsPage: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.primaryBackground.ignoresSafeArea())
+        .lagoonBackground()
         .searchable(text: $query, prompt: "Search by name to add friends")
         .textInputAutocapitalization(.words)
         .autocorrectionDisabled()
@@ -48,7 +48,7 @@ struct FriendsPage: View {
         .task(id: friendStore.friendIDs) { await circleStore.reconcile(friendIDs: friendStore.friendIDs) }
         .task(id: trimmedQuery) { await performSearch() }
         .task(id: router.pendingInviterID) { await resolveInviter() }
-        .navigationTitle("Friends")
+        .navigationTitle(ThemeCopy.Title.crew)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -228,9 +228,9 @@ struct FriendsPage: View {
         if friendStore.friendEdges.isEmpty && friendStore.pendingIncoming.isEmpty && friendStore.pendingOutgoing.isEmpty {
             Section {
                 EmptyStateView(
-                    title: "No friends yet",
-                    systemImage: "person.2",
-                    message: "Search by name above to find people, or add someone from People you may know."
+                    title: ThemeCopy.Empty.crewTitle,
+                    systemImage: ThemeCopy.Tab.crewIcon,
+                    message: ThemeCopy.Empty.crewMessage
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)

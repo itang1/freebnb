@@ -216,18 +216,17 @@ struct YourListingsPage<LeadingContent: View>: View {
 
     private var emptyState: some View {
         EmptyStateView(
-            title: "No listings yet",
-            systemImage: "house",
-            message: "Create your first listing so friends can find a place to stay."
+            title: ThemeCopy.Empty.listingsTitle,
+            systemImage: "house.lodge.fill",
+            message: ThemeCopy.Empty.listingsMessage
         ) {
-            Button("Create a Listing") {
+            Button(ThemeCopy.Empty.listingsAction) {
                 sheet = ListingSheet(mode: .create)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.accent)
+            .buttonStyle(.lagoon)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.primaryBackground.ignoresSafeArea())
+        .lagoonBackground()
     }
 
     // MARK: - Delete

@@ -11,39 +11,33 @@ struct WelcomePage: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color.accent.opacity(0.15),
-                    .primaryBackground,
-                    Color.accent.opacity(0.3)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            Color.primaryBackground
+                .ignoresSafeArea()
 
-            VStack {
-                Spacer()
+            VStack(spacing: 0) {
+                LakehouseHero(height: 230)
+                    .ignoresSafeArea(edges: .top)
 
-                VStack(spacing: 20) {
-                    Text("Welcome to FreeBNB")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .multilineTextAlignment(.center)
-
-                    Text("A free place to stay with people you know.")
+                VStack(spacing: 8) {
+                    Text(ThemeCopy.Welcome.eyebrow)
+                        .signLabel()
+                        .foregroundStyle(Color.onSunshine)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(Color.sunshine, in: Capsule())
+                    Text(ThemeCopy.Welcome.title)
+                        .font(.display(.largeTitle))
+                        .foregroundStyle(Color.accent)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(ThemeCopy.Welcome.tagline)
                         .font(.headline)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-
-                    Image(systemName: "house.lodge.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 180, height: 150)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(Color.accent)
-                        .accessibilityHidden(true)
+                        .padding(.horizontal, 28)
+                    Text(ThemeCopy.Welcome.postcard)
+                        .font(.postcard())
+                        .foregroundColor(.secondaryText)
                 }
+                .accessibilityElement(children: .combine)
 
                 Spacer()
 
@@ -97,19 +91,19 @@ struct WelcomePage: View {
     private var trustStrip: some View {
         VStack(alignment: .leading, spacing: 14) {
             trustRow(
-                icon: "person.2.fill",
-                title: "Only people you know",
-                subtitle: "No strangers, ever."
+                icon: "person.3.fill",
+                title: ThemeCopy.Welcome.crewTitle,
+                subtitle: ThemeCopy.Welcome.crewSubtitle
             )
             trustRow(
-                icon: "tag.slash.fill",
-                title: "Always free",
-                subtitle: "No booking fees."
+                icon: "wind",
+                title: ThemeCopy.Welcome.freeTitle,
+                subtitle: ThemeCopy.Welcome.freeSubtitle
             )
             trustRow(
                 icon: "lock.shield.fill",
-                title: "Your circle stays yours",
-                subtitle: "We never upload your contacts."
+                title: ThemeCopy.Welcome.privateTitle,
+                subtitle: ThemeCopy.Welcome.privateSubtitle
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)

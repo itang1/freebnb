@@ -74,6 +74,8 @@ struct PaletteContrastTests {
         (.secondaryText, .primaryBackground),
         (.secondaryText, .secondaryBackground),
         (.secondaryText, .tertiaryBackground),
+        (.onSunshine, .sunshine),
+        (.accent, .secondaryAccent),
     ]
 
     /// Status roles also live in plain list rows and on their own soft fills.

@@ -10,10 +10,10 @@ import SwiftUI
 import UIKit
 
 enum WidgetPalette {
-    /// The teal brand accent: 0A6774 light, 5CC1CD dark, as the app's `accent` colour set.
+    /// The lagoon-teal brand accent: 006A78 light, 52D0D6 dark, as the app's `accent` colour set.
     static let accent = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0x5C / 255, green: 0xC1 / 255, blue: 0xCD / 255, alpha: 1)
-            : UIColor(red: 0x0A / 255, green: 0x67 / 255, blue: 0x74 / 255, alpha: 1)
+            ? UIColor(red: 0x52 / 255, green: 0xD0 / 255, blue: 0xD6 / 255, alpha: 1)
+            : UIColor(red: 0x00 / 255, green: 0x6A / 255, blue: 0x78 / 255, alpha: 1)
     })
 }

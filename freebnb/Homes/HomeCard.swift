@@ -16,8 +16,10 @@ struct HomeCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header — photo if available, teal strip otherwise
+            // Header: photo if available, a lagoon-teal strip otherwise; either way it meets the card body
+            // on a wavy hem, like the waterline on a beach-house postcard.
             header
+                .wavyHem(.secondaryBackground)
 
             // Body: the card is for scanning; the full breakdown is on HomeDetailPage.
             VStack(alignment: .leading, spacing: 8) {
@@ -62,8 +64,8 @@ struct HomeCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.secondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(color: Color.accent.opacity(0.15), radius: 8, x: 0, y: 5)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .cardShadow()
     }
 
     // MARK: - Header
@@ -98,19 +100,34 @@ struct HomeCard: View {
 
                 photoHeaderLabel
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 16)
             }
             .frame(height: cardImageHeight)
             .clipShape(UnevenRoundedRectangle(
-                topLeadingRadius: 20, bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0, topTrailingRadius: 20
+                topLeadingRadius: Theme.Radius.card, bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0, topTrailingRadius: Theme.Radius.card
             ))
         } else {
             tealHeaderContent
                 .foregroundColor(.onAccent)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.accent)
+                .padding(.top, 12)
+                .padding(.bottom, 18)
+                .background {
+                    // Lagoon water with a couple of sky flowers drifting on it, so photo-less cards still
+                    // feel like somewhere you'd want to be.
+                    ZStack(alignment: .topTrailing) {
+                        Color.accent
+                        SkyFlowerMark(petalColor: Color.onAccent.opacity(0.14), heartColor: Color.sunshine.opacity(0.5))
+                            .frame(width: 56)
+                            .rotationEffect(.degrees(14))
+                            .offset(x: 14, y: -16)
+                        SkyFlowerMark(petalColor: Color.onAccent.opacity(0.1), heartColor: Color.sunshine.opacity(0.35), petals: 6)
+                            .frame(width: 26)
+                            .offset(x: -64, y: 30)
+                    }
+                    .clipped()
+                }
         }
     }
 
@@ -123,7 +140,7 @@ struct HomeCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(listing.hostName)
-                    .font(.headline)
+                    .font(.display(.headline))
                     .foregroundColor(.white)
                 if let title = listing.customTitle {
                     Text(title)
@@ -146,13 +163,14 @@ struct HomeCard: View {
     private var tealHeaderContent: some View {
         HStack(spacing: 10) {
             // Photo-less cards used to be an identical teal strip; the host's avatar differs per card, on a
-            // light disc since its tints suit the page background.
+            // light disc since its tints suit the page background, ringed in sunshine like a life buoy.
             GeneratedAvatar(seed: listing.hostUserID, size: 36)
                 .background(Circle().fill(Color.primaryBackground))
+                .overlay(Circle().stroke(Color.sunshine, lineWidth: 2))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(listing.hostName)
-                    .font(.headline)
+                    .font(.display(.headline))
                 if let title = listing.customTitle {
                     Text(title)
                         .font(.subheadline)

@@ -99,13 +99,13 @@ struct ContentView: View {
                             HomeDetailPage(home: home)
                         }
                     }
-                    .tabItem { Label("Listings", systemImage: "house") }
+                    .tabItem { Label(ThemeCopy.Tab.explore, systemImage: ThemeCopy.Tab.exploreIcon) }
                     .tag(0)
 
                     NavigationStack {
                         StaysTab()
                     }
-                    .tabItem { Label("Stays", systemImage: "suitcase") }
+                    .tabItem { Label(ThemeCopy.Tab.trips, systemImage: ThemeCopy.Tab.tripsIcon) }
                     .badge(stayRequestStore.pendingStaysTabCount)
                     .tag(1)
 
@@ -114,21 +114,21 @@ struct ContentView: View {
                         listings: homeStore.listings,
                         deepLinkUserID: $messagesDeepLinkUserID
                     )
-                    .tabItem { Label("Messages", systemImage: "message") }
+                    .tabItem { Label(ThemeCopy.Tab.messages, systemImage: ThemeCopy.Tab.messagesIcon) }
                     .badge(messageStore.unreadCount)
                     .tag(2)
 
                     NavigationStack {
                         FriendsPage()
                     }
-                    .tabItem { Label("Friends", systemImage: "person.2") }
+                    .tabItem { Label(ThemeCopy.Tab.crew, systemImage: ThemeCopy.Tab.crewIcon) }
                     .badge(friendStore.pendingCount)
                     .tag(3)
 
                     NavigationStack {
                         ProfilePage()
                     }
-                    .tabItem { Label("Profile", systemImage: "person.fill") }
+                    .tabItem { Label(ThemeCopy.Tab.profile, systemImage: ThemeCopy.Tab.profileIcon) }
                     .tag(4)
                 }
                 .tint(.accent)
@@ -276,6 +276,7 @@ struct ContentView: View {
             }
         }
         .offlineBanner(isOnline: networkMonitor.isOnline)
+        .themedTypography()
         .appliesStoredAppearance()
     }
 }

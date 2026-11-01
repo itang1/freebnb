@@ -11,19 +11,19 @@ import SwiftUI
 struct OfflineBanner: View {
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "wifi.slash")
-            Text("You're offline. Changes will sync when you reconnect.")
+            Image(systemName: "antenna.radiowaves.left.and.right.slash")
+            Text(ThemeCopy.Status.offline)
                 .font(.footnote.weight(.medium))
                 .fixedSize(horizontal: false, vertical: true)
         }
-        // Theme surface and full-strength label; the grey fill left text at 3.5:1 and ignored the palette.
-        .foregroundColor(.primary)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(Color.secondaryBackground)
+        // A sunshine-yellow strip with dark ink (9.7:1 light, 8.5:1 dark): hard to miss, easy to read.
+        .background(Color.sunshine)
+        .foregroundColor(.onSunshine)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("You are offline. Changes will sync when you reconnect.")
+        .accessibilityLabel(ThemeCopy.Status.offlineAccessibility)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 }

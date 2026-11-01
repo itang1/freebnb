@@ -96,8 +96,8 @@ final class freebnbUITests: XCTestCase {
     func testGuestSignInReachesListings() throws {
         let app = launchApp()
         signInAsGuest(app)
-        XCTAssertTrue(app.tabBars.buttons["Listings"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.tabBars.buttons["Stays"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Explore"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabBars.buttons["Trips"].exists)
         XCTAssertTrue(app.tabBars.buttons["Messages"].exists)
     }
 
@@ -127,8 +127,8 @@ final class freebnbUITests: XCTestCase {
             }
         }
 
-        waitAndTap(app.tabBars.buttons["Stays"])
-        // The pane switcher's pill, not the Listings tab, which a bare "Listings" now matches.
+        waitAndTap(app.tabBars.buttons["Trips"])
+        // The pane switcher's pill, by its full label so it can't match a tab.
         waitAndTap(app.buttons["My Listings"])
         waitAndTap(app.buttons["Create listing"])
 
@@ -170,7 +170,7 @@ final class freebnbUITests: XCTestCase {
         let app = launchApp()
         signInAsDev(app)
 
-        waitAndTap(app.tabBars.buttons["Listings"])
+        waitAndTap(app.tabBars.buttons["Explore"])
 
         // It must be someone else's listing, since HomeDetailPage drops the contact
         // section for the host. The feed's first row is the dev-owned listing that
@@ -240,8 +240,8 @@ final class freebnbUITests: XCTestCase {
             }
         }
 
-        waitAndTap(app.tabBars.buttons["Stays"])
-        // The pane switcher's pill, not the Listings tab, which a bare "Listings" now matches.
+        waitAndTap(app.tabBars.buttons["Trips"])
+        // The pane switcher's pill, by its full label so it can't match a tab.
         waitAndTap(app.buttons["My Listings"])
         waitAndTap(app.buttons["Create listing"])
 

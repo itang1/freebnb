@@ -54,10 +54,10 @@ struct MessageBubble: View {
                     .padding(.vertical, 8)
                     .background(bubbleBackground)
                     .foregroundColor(isFromMe ? .onAccent : .primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .clipShape(bubbleShape)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isFailed ? Color.danger.opacity(0.6) : .clear, lineWidth: 1)
+                        bubbleShape
+                            .stroke(bubbleStroke, lineWidth: 1)
                     )
                     .contextMenu {
                         if isFailed {
@@ -78,7 +78,26 @@ struct MessageBubble: View {
 
     private var bubbleBackground: Color {
         if isFailed { return Color.danger.opacity(0.15) }
-        return isFromMe ? Color.accent : Color.secondaryText.opacity(0.15)
+        return isFromMe ? Color.accent : Color.secondaryBackground
+    }
+
+    private var bubbleStroke: Color {
+        if isFailed { return Color.danger.opacity(0.6) }
+        // Their bubbles get a faint lagoon rim so the aqua holds its edge on sand.
+        return isFromMe ? .clear : Color.accent.opacity(0.2)
+    }
+
+    /// A rounded pebble with the corner nearest the sender pinched, so who said what reads at a glance.
+    private var bubbleShape: UnevenRoundedRectangle {
+        let corner = Theme.Radius.bubble
+        let tail = Theme.Radius.bubbleTail
+        return UnevenRoundedRectangle(
+            topLeadingRadius: corner,
+            bottomLeadingRadius: isFromMe ? corner : tail,
+            bottomTrailingRadius: isFromMe ? tail : corner,
+            topTrailingRadius: corner,
+            style: .continuous
+        )
     }
 
     @ViewBuilder

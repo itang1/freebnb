@@ -12,36 +12,11 @@ struct OnboardingPage: View {
     var onChooseHost: () -> Void = {}
     @State private var currentPage = 0
 
-    private struct Slide {
-        let icon: String
-        let title: String
-        let body: String
-    }
+    private typealias Slide = ThemeCopy.Onboarding.Slide
 
     // One slide per differentiator: the promise (free + trusted), trust made visible, privacy (no contacts
-    // grab; the network is friends, not the address book), then how a stay works.
-    private let slides: [Slide] = [
-        Slide(
-            icon: "house.lodge.fill",
-            title: "Stay with people you trust",
-            body: "A free place to crash with friends and friends of friends. No strangers, no booking fees."
-        ),
-        Slide(
-            icon: "person.2.fill",
-            title: "You'll always know your host",
-            body: "You only see places from people in your network, and hosts choose who can view and request their space. You never request a stay from a stranger."
-        ),
-        Slide(
-            icon: "lock.shield.fill",
-            title: "Your circle stays yours",
-            body: "Your network is built only from people you choose to connect with. We never scrape or upload your contacts."
-        ),
-        Slide(
-            icon: "calendar.badge.checkmark",
-            title: "Request and go",
-            body: "Find a place and send a request with your dates. If your host says yes, pack your bags."
-        )
-    ]
+    // grab; the network is friends, not the address book), then how a stay works. Copy lives in ThemeCopy.
+    private let slides = ThemeCopy.Onboarding.slides
 
     /// The hosting-intent ask follows the walkthrough: hosts are the scarce side, so the question to ask
     /// before a possibly thin feed is whether they have a couch to offer.
@@ -49,11 +24,13 @@ struct OnboardingPage: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color.accent.opacity(0.15), .primaryBackground, Color.accent.opacity(0.3)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            LagoonBackdrop()
+
+            // Water along the bottom edge, rolling under the buttons.
+            VStack {
+                Spacer()
+                Shoreline(height: 90, frontColor: .primaryBackground)
+            }
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -64,26 +41,24 @@ struct OnboardingPage: View {
                     hostStepView.tag(slides.count)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .always))
+                // A backing pill so the page dots read on pale sand, not just over dark photos.
+                .indexViewStyle(.page(backgroundDisplayMode: .always))
 
                 VStack(spacing: 12) {
                     Button(action: advance) {
-                        Text(isHostStep ? "List My Place" : "Next")
-                            .font(.headline)
+                        Text(isHostStep ? ThemeCopy.Onboarding.hostAction : ThemeCopy.Onboarding.next)
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.accent)
-                            .foregroundColor(.onAccent)
-                            .cornerRadius(12)
                     }
+                    .buttonStyle(LagoonButtonStyle(kind: isHostStep ? .callToAction : .primary))
                     // Fixed-height slot keeps layout stable: Skip on the walkthrough, the guest-only answer
                     // on the hosting step.
                     Group {
                         if isHostStep {
-                            Button("I'm just looking for now") { isPresented = false }
+                            Button(ThemeCopy.Onboarding.justLooking) { isPresented = false }
                                 .font(.subheadline)
                                 .foregroundColor(.secondaryText)
                         } else {
-                            Button("Skip") { isPresented = false }
+                            Button(ThemeCopy.Onboarding.skip) { isPresented = false }
                                 .font(.subheadline)
                                 .foregroundColor(.secondaryText)
                         }
@@ -100,25 +75,14 @@ struct OnboardingPage: View {
         VStack(spacing: 32) {
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(Color.accent.opacity(0.15))
-                    .frame(width: 140, height: 140)
-                Image(systemName: "sofa.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 64, height: 64)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(Color.accent)
-            }
-            .accessibilityHidden(true)
+            EmptyStateMedallion(systemImage: ThemeCopy.Onboarding.hostIcon)
+                .scaleEffect(1.2)
 
             VStack(spacing: 12) {
-                Text("Got a couch or a guest room?")
-                    .font(.title)
-                    .fontWeight(.bold)
+                Text(ThemeCopy.Onboarding.hostTitle)
+                    .font(.display(.title))
                     .multilineTextAlignment(.center)
-                Text("To one of your friends, that's a free trip. Only friends you approve can ever see your place.")
+                Text(ThemeCopy.Onboarding.hostBody)
                     .font(.body)
                     .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
@@ -134,23 +98,13 @@ struct OnboardingPage: View {
         VStack(spacing: 32) {
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(Color.accent.opacity(0.15))
-                    .frame(width: 140, height: 140)
-                Image(systemName: slide.icon)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 64, height: 64)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(Color.accent)
-            }
-            .accessibilityHidden(true)
+            // The same tide pool as the empty states, a touch larger: the walkthrough is a postcard tour.
+            EmptyStateMedallion(systemImage: slide.icon)
+                .scaleEffect(1.2)
 
             VStack(spacing: 12) {
                 Text(slide.title)
-                    .font(.title)
-                    .fontWeight(.bold)
+                    .font(.display(.title))
                     .multilineTextAlignment(.center)
                 Text(slide.body)
                     .font(.body)
