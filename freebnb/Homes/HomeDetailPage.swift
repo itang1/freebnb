@@ -39,6 +39,12 @@ struct HomeDetailPage: View {
 
     private var isHost: Bool { authManager.userID == home.hostUserID }
 
+    /// What the share sheet sends: who's hosting where, and how to get in touch.
+    private var shareText: String {
+        "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB, "
+            + "a free, friends-only home-sharing app. If you know them, you can connect on the app and request a stay."
+    }
+
     /// The viewer's own confirmed stay here, if any; drives the logistics card.
     private var acceptedStay: StayRequest? {
         requestStore.outgoingRequests.first {
@@ -81,23 +87,23 @@ struct HomeDetailPage: View {
                     }
                 }
 
-                spaceSection
-                whoCanComeSection
-                amenitiesSection
-                provisionsSection
+                ListingSpaceSection(home: home)
+                ListingWhoCanComeSection(home: home)
+                ListingAmenitiesSection(home: home)
+                ListingProvisionsSection(home: home)
 
                 // Only when the host claimed something; a grid of grey crosses would read as "inaccessible".
                 if home.amenities.hasAnyAccessibility {
                     ListingSection("Accessibility", systemImage: "figure.roll") {
                         VStack(alignment: .leading, spacing: 6) {
                             if home.amenities.hasStepFreeEntry {
-                                amenityRow("Step-free Entry", available: true)
+                                ListingAmenityRow("Step-free Entry", available: true)
                             }
                             if home.amenities.hasElevator {
-                                amenityRow("Elevator", available: true)
+                                ListingAmenityRow("Elevator", available: true)
                             }
                             if home.amenities.hasAccessibleBathroom {
-                                amenityRow("Accessible Bathroom", available: true)
+                                ListingAmenityRow("Accessible Bathroom", available: true)
                             }
                         }
                         .font(.subheadline)
@@ -110,7 +116,7 @@ struct HomeDetailPage: View {
                 }
 
                 locationSection
-                cancellationSection
+                ListingCancellationSection(home: home)
 
                 // What past guests said about this host, capped; the rest is on their profile.
                 ReviewsSection(subjectUserID: home.hostUserID, subjectName: home.hostName, limit: 3)
@@ -212,7 +218,7 @@ struct HomeDetailPage: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 ShareLink(
-                    item: "\(home.hostName) is hosting in \(home.address.city), \(home.address.state) on FreeBNB, a free, friends-only home-sharing app. If you know them, you can connect on the app and request a stay.",
+                    item: shareText,
                     subject: Text("FreeBNB Listing")
                 )
             }
@@ -359,94 +365,6 @@ extension HomeDetailPage {
         .accessibilityLabel("\(home.photos.count) photo\(home.photos.count == 1 ? "" : "s") of \(home.displayTitle)")
     }
 
-    // MARK: - The space
-
-    /// Rooms, beds and capacity in one card.
-    private var spaceSection: some View {
-        ListingSection("The space", systemImage: "bed.double") {
-            VStack(alignment: .leading, spacing: 8) {
-                detailRow("Guest rooms", "\(home.sleeping.numGuestRooms)")
-                // Omitted rather than zero: unanswered, not "none".
-                if home.sleeping.numBathrooms > 0 {
-                    detailRow("Bathrooms", "\(home.sleeping.numBathrooms)")
-                }
-                detailRow("Sleeps up to", "\(home.guestPolicy.maxGuests)")
-                detailRow(
-                    "Longest stay",
-                    "\(home.guestPolicy.maxStayDays) night\(home.guestPolicy.maxStayDays == 1 ? "" : "s")"
-                )
-                if !home.sleeping.sleepingCounts.isEmpty {
-                    detailRow("Sleeping arrangements", home.sleeping.arrangementsDescription)
-                }
-                if !home.sleeping.bedSizeCounts.isEmpty {
-                    detailRow("Bed sizes", home.sleeping.bedSizesDescription)
-                }
-            }
-        }
-    }
-
-    private var whoCanComeSection: some View {
-        ListingSection("Who can come", systemImage: "person.2") {
-            VStack(alignment: .leading, spacing: 6) {
-                amenityRow("Kids Allowed", available: home.guestPolicy.kidsAllowed)
-                amenityRow("Guest Can Bring Pets", available: home.guestPolicy.guestPetsAllowed)
-                amenityRow("Host Has Pets", available: home.amenities.hostHasPets)
-            }
-            .font(.subheadline)
-        }
-    }
-
-    /// Amenities and rooms/laundry in one card; parking is a footnote.
-    private var amenitiesSection: some View {
-        ListingSection("Amenities", systemImage: "sparkles") {
-            VStack(alignment: .leading, spacing: 6) {
-                amenityRow("Air Conditioning", available: home.amenities.hasAC)
-                amenityRow("Heating", available: home.amenities.hasHeating)
-                amenityRow("Kitchen", available: home.amenities.hasKitchen)
-                amenityRow("Fridge Space", available: home.amenities.hasFridgeSpace)
-                amenityRow("Microwave", available: home.amenities.hasMicrowave)
-                amenityRow("TV", available: home.amenities.hasTV)
-                amenityRow("Wifi", available: home.amenities.hasWifi)
-                amenityRow("Private Guest Bathroom", available: home.amenities.hasPrivateGuestBathroom)
-                amenityRow("In-unit Laundry", available: home.amenities.hasInUnitLaundry)
-                amenityRow("Coin Laundry Nearby", available: home.amenities.hasCoinLaundryNearby)
-
-                if !home.amenities.parkingDetails.isEmpty {
-                    Divider().padding(.vertical, 2)
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Image(systemName: "car")
-                            .foregroundColor(Color.accent)
-                            .accessibilityHidden(true)
-                        Text(home.amenities.parkingDetails)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Parking: \(home.amenities.parkingDetails)")
-                }
-            }
-            .font(.subheadline)
-        }
-    }
-
-    private var provisionsSection: some View {
-        ListingSection("What's provided", systemImage: "shippingbox") {
-            VStack(alignment: .leading, spacing: 6) {
-                amenityRow("Pillows", available: home.amenities.providesPillows)
-                amenityRow("Blankets", available: home.amenities.providesBlankets)
-                amenityRow("Towels", available: home.amenities.providesTowels)
-                amenityRow("Toiletries", available: home.amenities.providesToiletries)
-                HStack(spacing: 8) {
-                    Image(systemName: "fork.knife")
-                        .foregroundColor(home.amenities.foodProvision == .none ? .secondaryText.opacity(0.75) : .green)
-                        .accessibilityHidden(true)
-                    Text("Food: \(home.amenities.foodProvision.displayName)")
-                        .foregroundColor(home.amenities.foodProvision == .none ? .secondaryText.opacity(0.75) : .primary)
-                }
-                .accessibilityElement(children: .combine)
-            }
-            .font(.subheadline)
-        }
-    }
-
     // MARK: - Location
 
     /// The address, disclosure notice, map and Maps handoff.
@@ -478,19 +396,6 @@ extension HomeDetailPage {
                         .cornerRadius(10)
                 }
                 .disabled(mapState != .loaded || exactLocation == nil)
-            }
-        }
-    }
-
-    private var cancellationSection: some View {
-        let policy = home.cancellationPolicy ?? .flexible
-        return ListingSection("If plans change", systemImage: "arrow.uturn.backward") {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(policy.displayName)
-                    .font(.subheadline).fontWeight(.medium)
-                Text(policy.description)
-                    .font(.subheadline)
-                    .foregroundColor(.secondaryText)
             }
         }
     }
@@ -703,30 +608,6 @@ extension HomeDetailPage {
 
     private func openInMaps() {
         mapItems.first?.openInMaps(launchOptions: nil)
-    }
-
-    /// A label/value pair for non-yes/no facts, so they line up as a table.
-    private func detailRow(_ label: String, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-                .foregroundColor(.secondaryText)
-            Spacer(minLength: 8)
-            Text(value)
-                .multilineTextAlignment(.trailing)
-        }
-        .font(.subheadline)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func amenityRow(_ label: String, available: Bool) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle")
-                .foregroundColor(available ? .success : .secondaryText.opacity(0.75))
-                .accessibilityHidden(true)
-            Text(available ? label : "\(label) (not available)")
-                .foregroundColor(available ? .primary : .secondaryText.opacity(0.75))
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

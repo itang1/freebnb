@@ -163,6 +163,14 @@ enum FriendNoteComposition: Identifiable, Hashable {
         case .editing(let note): return note.text
         }
     }
+
+    /// Who the note is about.
+    var subjectUserID: String {
+        switch self {
+        case .new(let friendID, _): return friendID
+        case .editing(let note): return note.subjectUserID
+        }
+    }
 }
 
 struct FriendNoteComposerSheet: View {

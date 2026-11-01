@@ -13,6 +13,8 @@ jobs:
   ios:
     name: Build & test (iOS)
     runs-on: macos-15
+    # A hung xcodebuild otherwise holds a macOS runner for the 6-hour default.
+    timeout-minutes: 60
     env:
       SCHEME: freebnb
     steps:
@@ -55,6 +57,31 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           echo "Using simulator $UDID"
 
+      # The UI tests sign in with the DEBUG dev/guest accounts, which exist only in
+      # the seeded dev emulator. Locally the scheme's pre-action starts it; on CI
+      # that pre-action is skipped, so start it here. It keeps running in the
+      # background for the test step. The seed and the emulator use the dev
+      # project ID, so point the placeholder plist at it too. The app only talks to
+      # the emulator in these tests (-UseFirebaseEmulator), never the real project.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install firebase-tools
+        run: npm install -g firebase-tools
+
+      - name: Start and seed the dev emulator
+        run: |
+          plutil -replace PROJECT_ID -string freebnb-6814a freebnb/GoogleService-Info.plist
+          ./scripts/dev_emulator.sh
+
+      # Ad-hoc signed, not unsigned: the UI tests sign in, and FirebaseAuth's
+      # keychain write fails with -34018 in an unsigned app (see the emulator job).
       - name: Build & test
         run: |
           xcodebuild test \
@@ -62,7 +89,7 @@ jobs:
             -scheme "$SCHEME" \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -resultBundlePath TestResults.xcresult \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO
 
       - name: Upload test results
         if: always()
@@ -134,6 +161,8 @@ jobs:
   emulator-tests:
     name: Firestore rules regression (emulator)
     runs-on: macos-15
+    # A hung xcodebuild otherwise holds a macOS runner for the 6-hour default.
+    timeout-minutes: 60
     env:
       SCHEME: freebnb
       # Must match EmulatorSupport.projectID so the secondary app and the

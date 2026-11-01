@@ -24,13 +24,7 @@ final class StayLiveActivityController {
         }
 
         // The stay that owns the activity now: has a live phase, soonest check-in among those.
-        let target = stays
-            .filter { $0.status == .accepted }
-            .compactMap { stay -> (StayRequest, StayPhase)? in
-                guard let phase = StayPhase.current(checkIn: stay.checkIn, checkOut: stay.checkOut, now: now) else { return nil }
-                return (stay, phase)
-            }
-            .min { $0.0.checkIn < $1.0.checkIn }
+        let target = stays.liveStay(now: now).map { ($0.stay, $0.phase) }
 
         Task { await reconcile(target: target, viewerID: viewerID) }
     }
