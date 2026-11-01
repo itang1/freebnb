@@ -15,7 +15,7 @@ struct WelcomePage: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                LakehouseHero(height: 230)
+                LakehouseHero(height: showsQuickSignIn ? 150 : 230)
                     .ignoresSafeArea(edges: .top)
 
                 VStack(spacing: 8) {
@@ -42,7 +42,10 @@ struct WelcomePage: View {
                 Spacer()
 
                 VStack(spacing: 16) {
-                    trustStrip
+                    // The debug roster takes the trust strip's place, so neither squeezes the other off screen.
+                    if !showsQuickSignIn {
+                        trustStrip
+                    }
 
                     #if DEBUG
                     if EmulatorEnvironment.isActive {
@@ -84,6 +87,15 @@ struct WelcomePage: View {
             EmailAuthView()
                 .environment(authManager)
         }
+    }
+
+    /// True when the DEBUG one-tap sign-in grid is on screen (an emulator-backed debug build).
+    private var showsQuickSignIn: Bool {
+        #if DEBUG
+        return EmulatorEnvironment.isActive
+        #else
+        return false
+        #endif
     }
 
     // MARK: - Trust strip
@@ -160,7 +172,8 @@ struct WelcomePage: View {
                 }
                 .padding(.horizontal, 2)
             }
-            .frame(maxHeight: 220)
+            // A floor, so the hero and copy above can never squeeze the roster down to nothing.
+            .frame(minHeight: 150, maxHeight: 220)
             .disabled(authManager.isLoading)
         }
         .padding(.horizontal)
