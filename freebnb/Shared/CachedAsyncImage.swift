@@ -18,7 +18,10 @@ enum CachedImagePhase {
 }
 
 struct CachedAsyncImage<Content: View>: View {
-    let url: URL?
+    /// What the decoded image is cached under. A plain URL for ordinary images; for a listing photo, its stored
+    /// reference, which stays put while the signed URL it resolves to changes every hour.
+    private let cacheKey: String?
+    private let resolveURL: @MainActor () async throws -> URL?
     /// The largest dimension in points the image is drawn at; decoded to this times the display scale, no bigger.
     let maxPointSize: CGFloat
     @ViewBuilder let content: (CachedImagePhase) -> Content
@@ -26,17 +29,39 @@ struct CachedAsyncImage<Content: View>: View {
     @Environment(\.displayScale) private var displayScale
     @State private var phase: CachedImagePhase = .empty
 
+    init(url: URL?, maxPointSize: CGFloat, @ViewBuilder content: @escaping (CachedImagePhase) -> Content) {
+        self.cacheKey = url?.absoluteString
+        self.resolveURL = { url }
+        self.maxPointSize = maxPointSize
+        self.content = content
+    }
+
+    /// A listing photo by its stored reference (`Home.photoURLs`). The object can't be read directly, so the
+    /// URL comes from `ListingPhotoLinks`, which asks the server for a short-lived signed one.
+    init(
+        listingPhoto reference: String,
+        homeID: String,
+        maxPointSize: CGFloat,
+        @ViewBuilder content: @escaping (CachedImagePhase) -> Content
+    ) {
+        self.cacheKey = "\(homeID)/\(reference)"
+        self.resolveURL = { try await ListingPhotoLinks.shared.url(for: reference, homeID: homeID) }
+        self.maxPointSize = maxPointSize
+        self.content = content
+    }
+
     var body: some View {
         content(phase)
-            .task(id: url) {
-                guard let url else { return }
+            .task(id: cacheKey) {
+                guard let cacheKey else { return }
                 let maxPixel = maxPointSize * displayScale
-                if let cached = DownsampledImageLoader.cached(url: url, maxPixelSize: maxPixel) {
+                if let cached = DownsampledImageLoader.cached(key: cacheKey, maxPixelSize: maxPixel) {
                     phase = .success(Image(uiImage: cached))
                     return
                 }
                 do {
-                    let image = try await DownsampledImageLoader.load(url: url, maxPixelSize: maxPixel)
+                    guard let url = try await resolveURL() else { return }
+                    let image = try await DownsampledImageLoader.load(url: url, cacheKey: cacheKey, maxPixelSize: maxPixel)
                     phase = .success(Image(uiImage: image))
                 } catch is CancellationError {
                     // Scrolled away mid-download; leave the phase so the next appearance restarts the load.
@@ -47,8 +72,8 @@ struct CachedAsyncImage<Content: View>: View {
     }
 }
 
-/// Downloads and downsamples in one step so the full-resolution bitmap is never decoded; cached by URL and
-/// target size.
+/// Downloads and downsamples in one step so the full-resolution bitmap is never decoded; cached by key (the URL,
+/// or a listing photo's stored reference) and target size.
 enum DownsampledImageLoader {
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
@@ -56,22 +81,22 @@ enum DownsampledImageLoader {
         return cache
     }()
 
-    static func cached(url: URL, maxPixelSize: CGFloat) -> UIImage? {
-        cache.object(forKey: key(url, maxPixelSize))
+    static func cached(key cacheKey: String, maxPixelSize: CGFloat) -> UIImage? {
+        cache.object(forKey: key(cacheKey, maxPixelSize))
     }
 
-    static func load(url: URL, maxPixelSize: CGFloat) async throws -> UIImage {
+    static func load(url: URL, cacheKey: String, maxPixelSize: CGFloat) async throws -> UIImage {
         let (data, _) = try await URLSession.shared.data(from: url)
         // Decode off the caller's actor; ImageIO thumbnailing never materialises the full bitmap.
         let image = try await Task.detached(priority: .userInitiated) {
             try downsample(data: data, maxPixelSize: maxPixelSize)
         }.value
-        cache.setObject(image, forKey: key(url, maxPixelSize), cost: decodedCost(of: image))
+        cache.setObject(image, forKey: key(cacheKey, maxPixelSize), cost: decodedCost(of: image))
         return image
     }
 
-    private static func key(_ url: URL, _ maxPixelSize: CGFloat) -> NSString {
-        "\(url.absoluteString)#\(Int(maxPixelSize))" as NSString
+    private static func key(_ cacheKey: String, _ maxPixelSize: CGFloat) -> NSString {
+        "\(cacheKey)#\(Int(maxPixelSize))" as NSString
     }
 
     private static func decodedCost(of image: UIImage) -> Int {

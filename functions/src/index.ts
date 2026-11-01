@@ -1,8 +1,10 @@
+import { randomUUID } from "crypto";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
+import { onObjectFinalized } from "firebase-functions/v2/storage";
 // The auth `onDelete` trigger has no v2 equivalent, so that one function stays on v1; v1 and v2 deploy together.
 import * as functionsV1 from "firebase-functions/v1";
 import {
@@ -19,6 +21,12 @@ import {
   stayRequestDocPattern,
 } from "./paths";
 import { autoReportReason, scanText } from "./moderation";
+import {
+  MAX_LISTING_PHOTOS,
+  SIGNED_URL_TTL_MS,
+  canViewListingPhotos,
+  ownedObjectPath,
+} from "./listingPhotos";
 
 admin.initializeApp();
 
@@ -641,6 +649,98 @@ export const mutualFriends = onCall(callableOptions, async (request) => {
   );
 
   return { count: shared.length, names };
+});
+
+// ---------------------------------------------------------------------------
+// listingPhotoURLs (callable)
+// Listing photos are private to the listing's audience. storage.rules denies all
+// client reads, so this is the only way to see one: it runs the `homes` read rule's
+// check (host, `allowedViewerIDs`, `coHostUserIDs`) and returns short-lived signed
+// URLs. Call: httpsCallable("listingPhotoURLs").call(["homeID": id])
+// Returns { urls: { [storedRef]: signedURL }, expiresAt: epochMillis }. A stored
+// reference that isn't one of this listing's own uploads is left out.
+//
+// Deploy note: v4 signing uses the runtime service account's signBlob, so that
+// account needs roles/iam.serviceAccountTokenCreator on itself.
+// ---------------------------------------------------------------------------
+export const listingPhotoURLs = onCall(callableOptions, async (request) => {
+  const uid = requireFullMember(request);
+
+  const homeID: unknown = request.data?.homeID;
+  if (typeof homeID !== "string" || homeID.length === 0 || homeID.includes("/")) {
+    throw new HttpsError("invalid-argument", "homeID is required.");
+  }
+
+  const snap = await db.collection(Collections.homes).doc(homeID).get();
+  const listing = snap.data();
+  // One answer for "missing" and "not yours" so the callable can't probe which listings exist.
+  if (!listing || !canViewListingPhotos(listing, uid)) {
+    throw new HttpsError("permission-denied", "You can't see this listing's photos.");
+  }
+  const hostUserID = listing.hostUserID;
+  if (typeof hostUserID !== "string") {
+    throw new HttpsError("failed-precondition", "This listing has no host.");
+  }
+
+  const refs: unknown[] = Array.isArray(listing.photoURLs) ? listing.photoURLs.slice(0, MAX_LISTING_PHOTOS) : [];
+  const expiresAt = Date.now() + SIGNED_URL_TTL_MS;
+  const bucket = admin.storage().bucket();
+  const urls: Record<string, string> = {};
+
+  await Promise.all(
+    refs.map(async (ref) => {
+      const path = ownedObjectPath(ref, hostUserID, homeID);
+      if (!path) return;
+      try {
+        urls[ref as string] = process.env.FIREBASE_STORAGE_EMULATOR_HOST
+          ? await emulatorPhotoURL(bucket.name, path)
+          : (await bucket.file(path).getSignedUrl({ version: "v4", action: "read", expires: expiresAt }))[0];
+      } catch (err) {
+        logger.warn("listingPhotoURLs: could not sign a photo", { homeID, path, err: String(err) });
+      }
+    })
+  );
+
+  return { urls, expiresAt };
+});
+
+// The Storage emulator can't verify v4 signatures and the emulated runtime has no key
+// to sign with, so locally a photo is served by a download token instead. Production
+// never mints or hands out tokens (see onListingPhotoFinalized).
+async function emulatorPhotoURL(bucketName: string, path: string): Promise<string> {
+  const file = admin.storage().bucket(bucketName).file(path);
+  const [metadata] = await file.getMetadata();
+  let token = String(metadata.metadata?.firebaseStorageDownloadTokens ?? "").split(",")[0];
+  if (!token) {
+    token = randomUUID();
+    await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: token } });
+  }
+  const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+  return `http://${host}/v0/b/${bucketName}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
+}
+
+// ---------------------------------------------------------------------------
+// onListingPhotoFinalized
+// A Firebase download token (`?alt=media&token=…`) reads an object regardless of
+// storage.rules, and the client SDK mints one on every upload. Nothing hands
+// listing-photo tokens out any more, but stripping them means a leaked one is dead
+// too and the signed URL from `listingPhotoURLs` really is the only way in.
+// ---------------------------------------------------------------------------
+export const onListingPhotoFinalized = onObjectFinalized(async (event) => {
+  const path = event.data.name;
+  if (!path || !path.startsWith("listings/")) return;
+  if (process.env.FIREBASE_STORAGE_EMULATOR_HOST) return; // the emulator path above relies on tokens
+  if (!event.data.metadata?.firebaseStorageDownloadTokens) return;
+  try {
+    await admin
+      .storage()
+      .bucket(event.data.bucket)
+      .file(path)
+      .setMetadata({ metadata: { firebaseStorageDownloadTokens: null } });
+  } catch (err) {
+    // The object may already be gone (host removed it mid-upload); nothing left to protect.
+    logger.warn("onListingPhotoFinalized: could not strip download token", { path, err: String(err) });
+  }
 });
 
 // ---------------------------------------------------------------------------

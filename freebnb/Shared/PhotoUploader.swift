@@ -9,10 +9,12 @@
 import Foundation
 
 protocol PhotoUploader: Sendable {
-    /// Uploads an already prepared JPEG (see `ListingPhotoProcessor`) and returns its download URL. Paths are
-    /// scoped by host and listing so storage.rules can enforce ownership.
+    /// Uploads an already prepared JPEG (see `ListingPhotoProcessor`) and returns the `gs://` reference the
+    /// listing stores. Never a download URL: those carry a token that reads the object past storage.rules.
+    /// Viewers get a short-lived signed URL from `ListingPhotoLinks` instead. Paths are scoped by host and
+    /// listing so storage.rules can enforce ownership.
     func upload(imageData: Data, listingID: String, hostUserID: String) async throws -> URL
-    /// Removes a previously uploaded photo by its download URL.
+    /// Removes a previously uploaded photo by its stored reference.
     func delete(photoURL: URL) async throws
 }
 
@@ -47,11 +49,28 @@ enum ListingPhotoPath {
         "listings/\(hostUserID)/\(listingID)/"
     }
 
-    /// A fresh object path. The filename is a random UUID on every upload: storage.rules grants `get` without a
-    /// friends check and relies on the path being unguessable, so it must never be derived from anything a
-    /// viewer could know (index, timestamp, original filename).
+    /// A fresh object path. The filename is a random UUID on every upload, so a path is never reused and the
+    /// bytes behind a stored reference never change (which is what lets images be cached by reference).
+    /// No client can read the object directly; see `ListingPhotoLinks`.
     static func newObjectPath(hostUserID: String, listingID: String) -> String {
         folder(hostUserID: hostUserID, listingID: listingID) + UUID().uuidString.lowercased() + ".jpg"
+    }
+
+    /// The `gs://{bucket}/{path}` reference a listing stores for an uploaded photo.
+    static func storedReference(bucket: String, objectPath: String) -> URL? {
+        URL(string: "gs://\(bucket)/\(objectPath)")
+    }
+
+    /// The object path a stored photo reference points at: a `gs://{bucket}/{path}` reference, or a Firebase
+    /// download URL that a listing saved before photos were locked down may still carry. Nil for anything
+    /// else. Mirrors `objectPathFromPhotoRef` in functions/src/listingPhotos.ts.
+    static func objectPath(fromStoredReference url: URL) -> String? {
+        if url.scheme == "gs" {
+            guard url.host?.isEmpty == false else { return nil }
+            let path = String(url.path.drop(while: { $0 == "/" }))
+            return path.isEmpty ? nil : path
+        }
+        return objectPath(fromDownloadURL: url)
     }
 
     /// The object path inside a Firebase Storage download URL

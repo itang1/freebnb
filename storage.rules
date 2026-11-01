@@ -1,24 +1,18 @@
 rules_version = '2';
 
 // Listing photos: organized as /listings/{hostUserID}/{listingID}/{file}.
-// Reads require a full (non-anonymous) member. Storage rules cannot read
-// Firestore, so they cannot mirror a listing's friends-only `allowedViewerIDs`
-// ACL the way firestore.rules does; a full ACL check would need a Cloud
-// Function image proxy. This gate is defense in depth: photo URLs live only on the
-// friends-only home document, and blocking anonymous sessions denies the cheapest
-// enumeration attack. Only the host may write, up to 10 MB, image types only.
-//
-// That rests on the object path being unguessable, so `get` and `list` are granted
-// separately and `list` never: `read` would let a member who knew a host and a
-// listing (both public path segments) list the prefix and read back every filename.
-// See docs/internal/TODO.md item 13: filenames must be random per upload; the image proxy is the real fix.
+// No client reads at all. Storage rules can't read Firestore, so they can't check a
+// listing's friends-only `allowedViewerIDs` the way firestore.rules does. Instead the
+// `listingPhotoURLs` callable runs that check and hands out short-lived signed URLs,
+// which bypass these rules. Download tokens would bypass them too, so
+// `onListingPhotoFinalized` strips the one the SDK mints on upload, and the app never
+// asks for one. Only the host may write, up to 10 MB, image types only.
 service firebase.storage {
   match /b/{bucket}/o {
     match /listings/{hostUserID}/{listingID}/{allPaths=**} {
-      // Full members only. `get`, not `read`: a viewer needs the exact path, which only the
-      // friends-only listing document hands out. No `list` rule, so the prefix can't be enumerated.
-      allow get: if request.auth != null
-        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      // No `get` or `list`: every viewer, the host included, goes through `listingPhotoURLs`.
+      allow read: if false;
+
       // Only a full-member host writes their own listing images. `create, update`, not
       // `write`: the size and content-type checks read `request.resource`, null on a delete,
       // so `write` meant a host could never remove a photo from the client.
