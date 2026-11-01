@@ -3,8 +3,8 @@
 // The cheap, deterministic half of content moderation: a term list that turns a
 // message or listing into an auto-filed report a human then triages in the admin
 // console. Deliberately not a blocker: nothing is deleted or hidden, since a silently dropped real message
-// is worse than a report a moderator dismisses. Image moderation needs the paid Cloud Vision API and is in
-// TODO_MANUAL.md.
+// is worse than a report a moderator dismisses. Listing photos get the same treatment from Cloud Vision
+// SafeSearch in imageModeration.ts.
 
 // Matched case-insensitively against whole words ("assist" doesn't trip "ass"), grouped by what a hit
 // suggests, which tells a moderator how urgent it is.

@@ -20,6 +20,7 @@ venv/
 /pyvenv.cfg
 functions/lib/
 functions/node_modules/
+functions/lib-test/
 
 # Project
 freebnb/Shared/sampleData.swift

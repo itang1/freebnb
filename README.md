@@ -47,7 +47,7 @@ The iOS app is organized by feature (`Auth`, `Homes`, `Stays`, `Messaging`, `Fri
 
 Stores never talk to Firestore directly. Each one depends on a repository protocol (`Shared/Repositories.swift`), with a Firestore-backed implementation for production and in-memory doubles (`Shared/InMemoryRepositories.swift`) for unit tests and SwiftUI previews. Listeners are capped and the feed is cursor-paginated so read costs stay predictable.
 
-The backend is intentionally thin. Firestore security rules are the real authorization boundary (guests can read but not write, blocked users cannot message, message sends are rate-limited in the write path, private profile data is owner-only). Cloud Functions handle what clients can't be trusted with: maintaining listing ACLs as the friend graph changes, push notification fan-out, the stay lifecycle, content moderation for listings and messages, friend suggestions, the account-deletion cascade, user data export, and a daily scheduled Firestore backup.
+The backend is intentionally thin. Firestore security rules are the real authorization boundary (guests can read but not write, blocked users cannot message, message sends are rate-limited in the write path, private profile data is owner-only). Cloud Functions handle what clients can't be trusted with: maintaining listing ACLs as the friend graph changes, push notification fan-out, the stay lifecycle, content moderation for listings, listing photos (Cloud Vision SafeSearch) and messages, friend suggestions, the account-deletion cascade, user data export, and a daily scheduled Firestore backup.
 
 ## Design palette
 
@@ -78,7 +78,7 @@ npm run serve          # build + local emulators (Auth on 9099, Firestore on 808
 npm run deploy         # deploy functions
 ```
 
-Deploy rules and indexes with `firebase deploy --only firestore:rules,firestore:indexes,storage`. The moderation queue in `admin/` is a static page over the `reports` collection; grant access with `scripts/set_admin_claim.js`.
+Deploy rules and indexes with `firebase deploy --only firestore:rules,firestore:indexes,storage`. The moderation queue in `admin/` is a static page over the `reports` collection; grant access with `scripts/set_admin_claim.js`. Photo moderation needs the Cloud Vision API enabled once (`gcloud services enable vision.googleapis.com`); until then uploads still work and the trigger only logs an error.
 
 ### Tests
 

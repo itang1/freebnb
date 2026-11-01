@@ -19,6 +19,7 @@ import {
   stayRequestDocPattern,
 } from "./paths";
 import { autoReportReason, scanText } from "./moderation";
+export { moderateListingPhoto } from "./imageModerationTrigger";
 
 admin.initializeApp();
 
