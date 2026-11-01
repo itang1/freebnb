@@ -9,4 +9,11 @@ module.exports = {
   plugins: ["@typescript-eslint"],
   extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
   ignorePatterns: ["lib/**", "node_modules/**"],
+  overrides: [
+    {
+      // The emulator tests are plain CommonJS that load the compiled lib/.
+      files: ["test/**/*.js"],
+      rules: { "@typescript-eslint/no-var-requires": "off" },
+    },
+  ],
 };

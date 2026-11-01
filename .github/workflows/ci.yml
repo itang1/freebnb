@@ -112,13 +112,21 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: rules-tests/package-lock.json
+          cache-dependency-path: |
+            rules-tests/package-lock.json
+            functions/package-lock.json
 
       - name: Install firebase-tools
         run: npm install -g firebase-tools
 
       - name: Install dependencies
-        run: npm ci --prefix rules-tests
+        run: |
+          npm ci --prefix rules-tests
+          npm ci --prefix functions
+
+      # The functions tests load the compiled lib/, not src/.
+      - name: Build Cloud Functions
+        run: npm run build --prefix functions
 
       # These drive the rules engine directly, so unlike the emulator-tests job
       # below they need neither Xcode nor a simulator. Node is invoked by
@@ -130,6 +138,16 @@ jobs:
             --only firestore \
             --project freebnb-rules-tests \
             "cd rules-tests && $(command -v node) --test"
+
+      # Cloud Functions logic against the same emulator: firebase-functions-test
+      # calls each function directly (no Functions emulator), with Storage and FCM
+      # stubbed. See functions/test/README.md.
+      - name: Run Cloud Functions tests
+        run: |
+          firebase emulators:exec \
+            --only firestore \
+            --project freebnb-functions-tests \
+            "cd functions && $(command -v node) --test test/*.test.js"
 
   emulator-tests:
     name: Firestore rules regression (emulator)
