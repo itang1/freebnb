@@ -217,7 +217,7 @@ struct StaysTab: View {
         }
         .refreshable { requestStore.reload() }
         .scrollContentBackground(.hidden)
-        .background(Color.primaryBackground.ignoresSafeArea())
+        .lagoonBackground()
         .task(id: actionError) {
             guard actionError != nil else { return }
             try? await Task.sleep(for: .seconds(4))

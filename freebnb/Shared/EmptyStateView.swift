@@ -2,41 +2,54 @@
 //  EmptyStateView.swift
 //  freebnb
 //
-//  The app's empty states in seafoam: stock ContentUnavailableView's grey glyph reads as a dead end, while
-//  these are
-//  invitations. One view keeps every quiet screen consistent and seafoam reserved for atmosphere.
+//  The app's empty states as little tide pools: stock ContentUnavailableView's grey glyph reads as a dead
+//  end, while these are invitations. One view keeps every quiet screen consistent.
 //
 
 import SwiftUI
 
-/// The illustration alone: an SF Symbol in brand teal on overlapping seafoam pools, for screens with their
-/// own text layout.
+/// The illustration alone: an SF Symbol floating in a round tide pool, a sky flower blooming behind it
+/// and bubbles rising, for screens with their own text layout. The symbol bobs and the bubbles drift
+/// unless Reduce Motion is on.
 struct EmptyStateMedallion: View {
     let systemImage: String
 
     var body: some View {
         ZStack {
-            // Offset behind the main pool like light on water; opacity, not a second color, so dark mode's
-            // variant carries both.
-            Circle()
-                .fill(Color.secondaryAccent.opacity(0.4))
-                .frame(width: 130, height: 130)
-                .offset(x: 20, y: 12)
+            // A big conch-pink sky flower peeking out from behind the pool, top right.
+            SkyFlowerMark(petalColor: .tertiaryBackground, heartColor: .sunshine)
+                .frame(width: 80, height: 80)
+                .rotationEffect(.degrees(18))
+                .offset(x: 44, y: -34)
+
+            // The pool: seafoam water with a wave rolling across its lower half, rimmed in sand.
             Circle()
                 .fill(Color.secondaryAccent)
-                .frame(width: 104, height: 104)
+                .overlay(alignment: .bottom) {
+                    WaveShape(amplitude: 4, wavelength: 44, phase: 0.2)
+                        .fill(Color.accent.opacity(0.18))
+                        .frame(height: 46)
+                }
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Color.sunshine.opacity(0.9), lineWidth: 5))
+                .frame(width: 112, height: 112)
+
+            BubbleField(count: 5)
+                .frame(width: 96, height: 120)
+                .offset(x: -6, y: -18)
+
             Image(systemName: systemImage)
-                .font(.system(size: 40))
+                .font(.system(size: 40, weight: .semibold))
                 .foregroundStyle(Color.accent)
+                .bobbing(amplitude: 3, period: 3.6, tilt: 3)
         }
-        // Padding absorbs the offset pool so the medallion centers on the main circle.
-        .padding(.trailing, 20)
-        .padding(.bottom, 12)
+        // A fixed frame around the pool, so the flower and bubbles never shift the layout around them.
+        .frame(width: 150, height: 150)
         .accessibilityHidden(true)
     }
 }
 
-/// Title, seafoam medallion, message and optional actions row; sizing and background stay with the call site.
+/// Title, tide-pool medallion, message and optional actions row; sizing and background stay with the call site.
 struct EmptyStateView<Actions: View>: View {
     let title: String
     let systemImage: String
@@ -60,7 +73,8 @@ struct EmptyStateView<Actions: View>: View {
             EmptyStateMedallion(systemImage: systemImage)
                 .padding(.bottom, 8)
             Text(title)
-                .font(.title3.weight(.semibold))
+                .font(.display(.title3))
+                .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
             Text(message)
                 .font(.subheadline)
@@ -75,16 +89,15 @@ struct EmptyStateView<Actions: View>: View {
 
 #Preview("Full screen") {
     EmptyStateView(
-        title: "No trips yet",
-        systemImage: "suitcase",
-        message: "Open a listing, message the host, and request to stay. Your trips appear here."
+        title: ThemeCopy.Empty.tripsTitle,
+        systemImage: ThemeCopy.Tab.tripsIcon,
+        message: ThemeCopy.Empty.tripsMessage
     ) {
         Button("Browse Listings") {}
-            .buttonStyle(.borderedProminent)
-            .tint(Color.accent)
+            .buttonStyle(.lagoon)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color.primaryBackground.ignoresSafeArea())
+    .lagoonBackground()
 }
 
 #Preview("Medallion only") {

@@ -243,8 +243,8 @@ struct ProfilePage: View {
             .frame(maxWidth: 500)
             .frame(maxWidth: .infinity)
         }
-        .background(Color.primaryBackground.ignoresSafeArea())
-        .navigationTitle("Profile")
+        .lagoonBackground()
+        .navigationTitle(ThemeCopy.Title.profile)
         .task { await refreshNotifStatus() }
         .sheet(isPresented: $showEditName) {
             EditNameSheet()

@@ -62,7 +62,7 @@ struct StaysLoadErrorView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label("Couldn't load stays", systemImage: "exclamationmark.triangle")
+            Label(ThemeCopy.Status.staysLoadError, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.danger)
         } description: {
             Text(error)
@@ -79,12 +79,12 @@ struct StaysLoadErrorView: View {
 struct NoTripsView: View {
     var body: some View {
         EmptyStateView(
-            title: "No trips yet",
-            systemImage: "suitcase",
-            message: "Open a listing, message the host, and request to stay. Your trips appear here."
+            title: ThemeCopy.Empty.tripsTitle,
+            systemImage: ThemeCopy.Tab.tripsIcon,
+            message: ThemeCopy.Empty.tripsMessage
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.primaryBackground.ignoresSafeArea())
+        .lagoonBackground()
     }
 }
 

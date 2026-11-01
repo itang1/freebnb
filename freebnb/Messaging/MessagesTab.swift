@@ -140,12 +140,12 @@ struct MessagesTab: View {
                     .transition(.opacity)
                 } else if summaries.isEmpty && searchQuery.isEmpty {
                     EmptyStateView(
-                        title: "No conversations yet",
-                        systemImage: "message",
-                        message: "Open a listing and message the host to get started."
+                        title: ThemeCopy.Empty.conversationsTitle,
+                        systemImage: "envelope.open.fill",
+                        message: ThemeCopy.Empty.conversationsMessage
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.primaryBackground.ignoresSafeArea())
+                    .lagoonBackground()
                 } else if summaries.isEmpty {
                     ContentUnavailableView.search(text: searchQuery)
                         .background(Color.primaryBackground.ignoresSafeArea())
@@ -173,7 +173,7 @@ struct MessagesTab: View {
                         }
                     }
                     .scrollContentBackground(.hidden)
-                    .background(Color.primaryBackground.ignoresSafeArea())
+                    .lagoonBackground()
                     .transition(.opacity)
                     .animatesListChanges(on: rows.map(\.id))
                 }

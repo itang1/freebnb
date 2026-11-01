@@ -6,29 +6,30 @@
 import SwiftUI
 import UIKit
 
-/// Semantic roles for the "lakeside summer" palette. Raw values are asset-catalog
+/// Semantic roles for the "lagoon lakehouse" palette (sun-bleached sand, lagoon teal, coral, sunshine;
+/// a night lagoon in dark mode). See `Theme.swift` for type, shape and motif tokens. Raw values are asset-catalog
 /// paths under `Color/`, so each role resolves light and dark dynamically. Views
 /// reference roles, never hues, so the palette retunes without touching call sites.
 enum AppColor: String, CaseIterable {
-    /// Deep lake teal. Primary brand color: tints, buttons, chips, links.
+    /// Lagoon teal. Primary brand color: tints, buttons, chips, links.
     case accent = "Color/accent"
 
     /// Seafoam. Secondary water tone for subtle fills and illustrations.
     case secondaryAccent = "Color/secondaryAccent"
 
-    /// Sunset coral. High-emphasis calls to action ("Request stay").
+    /// Reef coral. High-emphasis calls to action ("Request stay").
     case callToAction = "Color/callToAction"
 
-    /// Warm sand. App-wide page and sheet background.
+    /// Sun-bleached sand (light) / night lagoon (dark). App-wide page and sheet background.
     case primaryBackground = "Color/primaryBackground"
 
-    /// Sky blue. Card and grouped-content washes over the primary background.
+    /// Shallow-water aqua. Card and grouped-content washes over the primary background.
     case secondaryBackground = "Color/secondaryBackground"
 
-    /// Shell pink. Soft blush fills for badges and highlights.
+    /// Conch pink. Soft blush fills for badges and highlights.
     case tertiaryBackground = "Color/tertiaryBackground"
 
-    /// Pine sage. Positive states and greenery accents.
+    /// Kelp green. Positive states and greenery accents.
     case success = "Color/success"
 
     /// Failures and destructive actions; replaces system `.red` (3.2:1 on sand in light mode).
@@ -42,6 +43,15 @@ enum AppColor: String, CaseIterable {
 
     /// Text and icons placed on `accent` or `callToAction` fills.
     case onAccent = "Color/onAccent"
+
+    /// Sunny yellow. Highlight fills (active chips, the sun, sticky-note callouts); never text.
+    case sunshine = "Color/sunshine"
+
+    /// Text and icons on `sunshine` fills; a dark ink in both appearances, since the fill stays bright.
+    case onSunshine = "Color/onSunshine"
+
+    /// Weathered dock wood. Decorative planks, rope and sign trim; never text.
+    case driftwood = "Color/driftwood"
 }
 
 // MARK: - SwiftUI
@@ -62,6 +72,9 @@ extension Color {
     static let warning = Color(AppColor.warning)
     static let secondaryText = Color(AppColor.secondaryText)
     static let onAccent = Color(AppColor.onAccent)
+    static let sunshine = Color(AppColor.sunshine)
+    static let onSunshine = Color(AppColor.onSunshine)
+    static let driftwood = Color(AppColor.driftwood)
 }
 
 /// Makes roles available as implicit members wherever SwiftUI expects a `ShapeStyle`, e.g.
@@ -78,6 +91,9 @@ extension ShapeStyle where Self == Color {
     static var warning: Color { Color(AppColor.warning) }
     static var secondaryText: Color { Color(AppColor.secondaryText) }
     static var onAccent: Color { Color(AppColor.onAccent) }
+    static var sunshine: Color { Color(AppColor.sunshine) }
+    static var onSunshine: Color { Color(AppColor.onSunshine) }
+    static var driftwood: Color { Color(AppColor.driftwood) }
 }
 
 // MARK: - UIKit
@@ -103,4 +119,7 @@ extension UIColor {
     static let warning = UIColor.app(.warning)
     static let secondaryText = UIColor.app(.secondaryText)
     static let onAccent = UIColor.app(.onAccent)
+    static let sunshine = UIColor.app(.sunshine)
+    static let onSunshine = UIColor.app(.onSunshine)
+    static let driftwood = UIColor.app(.driftwood)
 }

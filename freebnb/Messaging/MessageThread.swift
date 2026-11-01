@@ -84,7 +84,7 @@ struct MessageThread: View {
             // The medallion decorates only a new thread; a search miss stays plain text so it reads as a result.
             VStack(spacing: 16) {
                 EmptyStateMedallion(systemImage: "bubble.left.and.bubble.right")
-                Text("Send \(otherName) a message to get started.")
+                Text(ThemeCopy.Empty.newThread(with: otherName))
                     .font(.subheadline)
                     .foregroundColor(.secondaryText)
                     .multilineTextAlignment(.center)
