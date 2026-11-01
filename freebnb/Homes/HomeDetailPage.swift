@@ -333,7 +333,7 @@ extension HomeDetailPage {
     private var photoCarousel: some View {
         TabView {
             ForEach(Array(home.photos.enumerated()), id: \.offset) { _, urlString in
-                CachedAsyncImage(url: URL(string: urlString), maxPointSize: 900) { phase in
+                CachedAsyncImage(listingPhoto: urlString, homeID: home.id, maxPointSize: 900) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()

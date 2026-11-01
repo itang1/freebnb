@@ -85,6 +85,8 @@ final class AuthManager {
     // MARK: - Single source of truth
 
     private func applyAuthState(_ user: User?) {
+        // Signed photo links were issued to the previous account; never show them to the next one.
+        if (user?.uid ?? "") != userID { ListingPhotoLinks.shared.reset() }
         if let user {
             userID     = user.uid
             userEmail  = user.email ?? ""

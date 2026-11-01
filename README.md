@@ -12,7 +12,7 @@ This README covers technical details for engineers. User-facing documentation li
 
 ## What's in the app
 
-- **Listings**: Hosts create and manage listings with amenities, capacity, availability, house preferences, and co-hosts. Guests browse a paginated feed, a clustered map, or a city search, with saved listings and filtering across every attribute. Hosts add up to 10 photos per listing, reorder them and pick a cover; each is downscaled to 2048 px and re-encoded as a metadata-free JPEG (no EXIF or GPS) on device before it uploads to Firebase Storage under a random filename.
+- **Listings**: Hosts create and manage listings with amenities, capacity, availability, house preferences, and co-hosts. Guests browse a paginated feed, a clustered map, or a city search, with saved listings and filtering across every attribute. Hosts add up to 10 photos per listing, reorder them and pick a cover; each is downscaled to 2048 px and re-encoded as a metadata-free JPEG (no EXIF or GPS) on device before it uploads to Firebase Storage under a random filename. Photos are visible only to the listing's audience: no client reads Storage directly, and the `listingPhotoURLs` Cloud Function checks the viewer against the listing (as `firestore.rules` does) before handing out hour-long signed URLs.
 - **Stays**: Guests request stays for specific dates; hosts confirm or decline from a per-listing dashboard, and a scheduled function closes out completed stays.
 - **Messaging**: Real-time in-app chat between guests and hosts, scoped per listing, with push notifications, rate limiting, and automated content moderation.
 - **Friends**: Friend connections are the visibility model. Every listing is visible to the host's accepted friends only; friends of friends surface solely as friend suggestions.
@@ -78,7 +78,7 @@ npm run serve          # build + local emulators (Auth on 9099, Firestore on 808
 npm run deploy         # deploy functions
 ```
 
-Deploy rules and indexes with `firebase deploy --only firestore:rules,firestore:indexes,storage`. The moderation queue in `admin/` is a static page over the `reports` collection; grant access with `scripts/set_admin_claim.js`.
+Deploy rules and indexes with `firebase deploy --only firestore:rules,firestore:indexes,storage`. `listingPhotoURLs` signs URLs with the functions runtime service account, which needs `roles/iam.serviceAccountTokenCreator` on itself; without it every photo shows its placeholder. The moderation queue in `admin/` is a static page over the `reports` collection; grant access with `scripts/set_admin_claim.js`.
 
 ### Tests
 

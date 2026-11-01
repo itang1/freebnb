@@ -392,6 +392,8 @@ final class CreateListingViewModel {
             try await homeStore.save(home, location: location)
             Telemetry.log(.createListingCompleted, parameters: ["is_edit": mode.target != nil])
             if editsPhotos { deleteRemovedPhotos(keeping: home.photoURLs ?? [], homeStore: homeStore) }
+            // The cached signed links predate this save's photos.
+            ListingPhotoLinks.shared.invalidate(homeID: home.id)
             return true
         } catch {
             errorMessage = error.localizedDescription

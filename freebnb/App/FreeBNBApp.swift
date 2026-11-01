@@ -63,6 +63,7 @@ struct FreeBNBApp: App {
         Messaging.messaging().isAutoInitEnabled = true
         _authManager = State(initialValue: AuthManager())
         _homeStore = State(initialValue: HomeStore(photoUploader: FirebaseStoragePhotoUploader()))
+        ListingPhotoLinks.shared.fetcher = FirebaseListingPhotoLinkFetcher()
         _messageStore = State(initialValue: MessageStore())
         _userProfileStore = State(initialValue: UserProfileStore())
         _stayRequestStore = State(initialValue: StayRequestStore())

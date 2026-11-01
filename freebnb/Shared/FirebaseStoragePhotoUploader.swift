@@ -2,7 +2,8 @@
 //  FirebaseStoragePhotoUploader.swift
 //  freebnb
 //
-//  Uploads listing photos to Firebase Storage under listings/{hostUserID}/{listingID}/{uuid}.jpg.
+//  Uploads listing photos to Firebase Storage under listings/{hostUserID}/{listingID}/{uuid}.jpg and returns
+//  the gs:// reference the listing stores.
 //
 
 import FirebaseStorage
@@ -18,11 +19,15 @@ struct FirebaseStoragePhotoUploader: PhotoUploader {
         // A path is never reused (random name per upload), so the bytes behind a URL never change.
         metadata.cacheControl = "private, max-age=31536000, immutable"
         _ = try await ref.putDataAsync(imageData, metadata: metadata)
-        return try await ref.downloadURL()
+        // Not `downloadURL()`: storage.rules denies client reads, and a token URL would bypass them anyway.
+        guard let stored = ListingPhotoPath.storedReference(bucket: ref.bucket, objectPath: ref.fullPath) else {
+            throw PhotoUploaderError.notAStoragePhoto
+        }
+        return stored
     }
 
     func delete(photoURL: URL) async throws {
-        guard let path = ListingPhotoPath.objectPath(fromDownloadURL: photoURL) else {
+        guard let path = ListingPhotoPath.objectPath(fromStoredReference: photoURL) else {
             throw PhotoUploaderError.notAStoragePhoto
         }
         try await Storage.storage().reference(withPath: path).delete()

@@ -72,10 +72,10 @@ struct HomeCard: View {
 
     @ViewBuilder
     private var header: some View {
-        if let firstPhoto = listing.photos.first, let url = URL(string: firstPhoto) {
+        if let firstPhoto = listing.photos.first {
             ZStack(alignment: .bottomLeading) {
                 // Downsampled to about the drawn width; a full-size photo decoded mid-scroll stutters the feed.
-                CachedAsyncImage(url: url, maxPointSize: 700) { phase in
+                CachedAsyncImage(listingPhoto: firstPhoto, homeID: listing.id, maxPointSize: 700) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()

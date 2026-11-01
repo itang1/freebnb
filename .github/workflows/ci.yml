@@ -93,11 +93,14 @@ jobs:
       - name: TypeScript build
         run: npm run build
 
+      - name: Unit tests
+        run: npm test
+
       - name: Lint
         run: npm run lint
 
   rules-tests:
-    name: Firestore rules (emulator)
+    name: Firestore and Storage rules (emulator)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -127,7 +130,7 @@ jobs:
       - name: Run rules tests
         run: |
           firebase emulators:exec \
-            --only firestore \
+            --only firestore,storage \
             --project freebnb-rules-tests \
             "cd rules-tests && $(command -v node) --test"
 

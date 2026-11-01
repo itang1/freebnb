@@ -110,6 +110,22 @@ struct ListingPhotoPathTests {
         let url = try #require(URL(string: "https://example.com/cover.jpg"))
         #expect(ListingPhotoPath.objectPath(fromDownloadURL: url) == nil)
     }
+
+    @Test func storedReferencesAreGsURLsThatRoundTrip() throws {
+        let path = "listings/host/home-1/abc.jpg"
+        let stored = try #require(ListingPhotoPath.storedReference(bucket: "freebnb.appspot.com", objectPath: path))
+        #expect(stored.absoluteString == "gs://freebnb.appspot.com/listings/host/home-1/abc.jpg")
+        #expect(ListingPhotoPath.objectPath(fromStoredReference: stored) == path)
+    }
+
+    @Test func storedReferenceParsingStillReadsOlderDownloadURLs() throws {
+        let url = try #require(URL(string:
+            "https://firebasestorage.googleapis.com/v0/b/b/o/listings%2Fhost%2Fhome-1%2Fabc.jpg?alt=media&token=t"
+        ))
+        #expect(ListingPhotoPath.objectPath(fromStoredReference: url) == "listings/host/home-1/abc.jpg")
+        #expect(ListingPhotoPath.objectPath(fromStoredReference: try #require(URL(string: "gs://bucket"))) == nil)
+        #expect(ListingPhotoPath.objectPath(fromStoredReference: try #require(URL(string: "https://example.com/a.jpg"))) == nil)
+    }
 }
 
 /// Records uploads; fails the upload whose bytes match `failOn`.

@@ -120,7 +120,8 @@ struct ListingPhotosSection: View {
                 placeholder
             }
         case .stored(let urlString):
-            CachedAsyncImage(url: URL(string: urlString), maxPointSize: 120) { phase in
+            // Stored photos only exist when editing, so the target listing is the one they belong to.
+            CachedAsyncImage(listingPhoto: urlString, homeID: vm.mode.target?.id ?? "", maxPointSize: 120) { phase in
                 switch phase {
                 case .success(let image):
                     image.resizable().scaledToFill()
