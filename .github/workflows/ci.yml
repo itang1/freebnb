@@ -13,6 +13,8 @@ jobs:
   ios:
     name: Build & test (iOS)
     runs-on: macos-15
+    # A hung xcodebuild otherwise holds a macOS runner for the 6-hour default.
+    timeout-minutes: 60
     env:
       SCHEME: freebnb
     steps:
@@ -134,6 +136,8 @@ jobs:
   emulator-tests:
     name: Firestore rules regression (emulator)
     runs-on: macos-15
+    # A hung xcodebuild otherwise holds a macOS runner for the 6-hour default.
+    timeout-minutes: 60
     env:
       SCHEME: freebnb
       # Must match EmulatorSupport.projectID so the secondary app and the
